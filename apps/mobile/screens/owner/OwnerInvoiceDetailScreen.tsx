@@ -1,15 +1,16 @@
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { StyleSheet, Text, View } from 'react-native';
-import { formatMoney } from '@barbercue/shared';
-import type { InvoiceDetailDto } from '@barbercue/shared';
+import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { formatMoney, InvoicePaymentKind, InvoicePaymentMethod, recordInvoicePaymentSchema } from '@barbercue/shared';
+import type { InvoiceDetailDto, InvoicePaymentKind as InvoicePaymentKindType, InvoicePaymentMethod as InvoicePaymentMethodType } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../../lib/api';
-import { ownerInvoiceDetailRequestPath } from '../../lib/owner-invoices';
+import { ownerInvoiceDetailRequestPath, ownerInvoicePaymentsRequestPath } from '../../lib/owner-invoices';
+import { newIdempotencyKey } from '../../lib/idempotency';
 import { dateLocaleFor } from '../../lib/date-locale';
 import { useLanguage } from '../../lib/language-context';
 import { color, font, fontSize, lineHeightFor, radius, space } from '../../lib/theme';
-import { Card, InlineError, Screen, SectionHeader, Skeleton } from '../../components/ui';
+import { Button, Card, InlineError, Screen, SectionHeader, Skeleton } from '../../components/ui';
 import type { OwnerShopStackParamList } from '../../navigation/OwnerShopStack';
 
 type Props = NativeStackScreenProps<OwnerShopStackParamList, 'OwnerInvoiceDetail'>;
@@ -20,6 +21,8 @@ export default function OwnerInvoiceDetailScreen({ route }: Props) {
   const [invoice, setInvoice] = useState<InvoiceDetailDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [paymentKind, setPaymentKind] = useState<InvoicePaymentKindType | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const load = useCallback(() => {
     let cancelled = false;
@@ -39,6 +42,7 @@ export default function OwnerInvoiceDetailScreen({ route }: Props) {
       {loading ? <Skeleton style={styles.skeleton} /> : error ? <InlineError message={error} /> : invoice ? (
         <>
           <SectionHeader eyebrow="Shop invoice" title={invoice.number} subtitle={`${invoice.salonName} · ${new Date(invoice.serviceDate).toLocaleDateString(dateLocaleFor(language))}`} />
+          {notice ? <Text accessibilityRole="alert" style={styles.notice}>{notice}</Text> : null}
           <Card style={styles.card}>
             <Text style={styles.cardTitle}>Services</Text>
             {invoice.lines.map((line) => (
@@ -70,10 +74,134 @@ export default function OwnerInvoiceDetailScreen({ route }: Props) {
               </View>
             ))}
           </Card>
+          {invoice.status === 'ISSUED' && !paymentKind ? (
+            <View style={styles.actions}>
+              {invoice.balanceDue > 0 ? <Button title={language === 'HI' ? 'प्राप्त भुगतान दर्ज करें' : 'Record received payment'} onPress={() => setPaymentKind(InvoicePaymentKind.PAYMENT)} /> : null}
+              {invoice.amountPaid > invoice.amountRefunded ? <Button title={language === 'HI' ? 'वास्तविक रिफंड दर्ज करें' : 'Record paid-out refund'} variant="outline" onPress={() => setPaymentKind(InvoicePaymentKind.REFUND)} /> : null}
+            </View>
+          ) : null}
+          {paymentKind ? (
+            <PaymentEntry
+              invoice={invoice}
+              kind={paymentKind}
+              language={language}
+              onCancel={() => setPaymentKind(null)}
+              onSaved={(updated) => {
+                setInvoice(updated);
+                setPaymentKind(null);
+                setNotice(paymentKind === InvoicePaymentKind.REFUND
+                  ? (language === 'HI' ? 'रिफंड रिकॉर्ड सहेजा गया।' : 'Refund record saved.')
+                  : (language === 'HI' ? 'भुगतान रिकॉर्ड सहेजा गया।' : 'Payment record saved.'));
+              }}
+            />
+          ) : null}
           <Text style={styles.disclaimer}>Amounts reflect payment records entered by the shop. This screen does not collect payments or infer payment from a QR code.</Text>
         </>
       ) : null}
     </Screen>
+  );
+}
+
+const PAYMENT_METHODS: readonly InvoicePaymentMethodType[] = [
+  InvoicePaymentMethod.CASH,
+  InvoicePaymentMethod.UPI,
+  InvoicePaymentMethod.CARD,
+  InvoicePaymentMethod.OTHER,
+];
+
+function PaymentEntry({
+  invoice,
+  kind,
+  language,
+  onCancel,
+  onSaved,
+}: {
+  invoice: InvoiceDetailDto;
+  kind: InvoicePaymentKindType;
+  language: string;
+  onCancel: () => void;
+  onSaved: (invoice: InvoiceDetailDto) => void;
+}) {
+  const isRefund = kind === InvoicePaymentKind.REFUND;
+  const [amount, setAmount] = useState(String(isRefund ? invoice.amountPaid - invoice.amountRefunded : invoice.balanceDue));
+  const [method, setMethod] = useState<InvoicePaymentMethodType>(InvoicePaymentMethod.CASH);
+  const [reference, setReference] = useState('');
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [idempotencyKey] = useState(newIdempotencyKey);
+  const isHindi = language === 'HI';
+  const labels = isHindi
+    ? { paymentTitle: 'दुकान को वास्तव में मिली राशि दर्ज करें', refundTitle: 'दुकान द्वारा वास्तव में लौटाई गई राशि दर्ज करें', amount: 'राशि', method: 'माध्यम', reference: 'संदर्भ (वैकल्पिक)', note: 'नोट (वैकल्पिक)', cancel: 'रद्द करें', save: 'रिकॉर्ड सहेजें', saving: 'सहेज रहे हैं…', invalid: 'राशि और भुगतान विवरण जाँचें।', confirmPayment: 'क्या यह राशि दुकान को वास्तव में प्राप्त हुई?', confirmRefund: 'क्या यह राशि ग्राहक को वास्तव में लौटाई गई?', yes: 'हाँ, रिकॉर्ड करें', no: 'अभी नहीं' }
+    : { paymentTitle: 'Record money the shop actually received', refundTitle: 'Record money the shop actually paid back', amount: 'Amount', method: 'Method', reference: 'Reference (optional)', note: 'Note (optional)', cancel: 'Cancel', save: 'Review record', saving: 'Saving…', invalid: 'Check the amount and payment details.', confirmPayment: 'Was this amount actually received by the shop?', confirmRefund: 'Was this amount actually returned to the customer?', yes: 'Yes, record it', no: 'Not now' };
+
+  const submit = () => {
+    const parsed = recordInvoicePaymentSchema.safeParse({
+      kind,
+      method,
+      amount: Number(amount),
+      reference: reference.trim() || undefined,
+      note: note.trim() || undefined,
+    });
+    const ceiling = isRefund ? invoice.amountPaid - invoice.amountRefunded : invoice.balanceDue;
+    if (!parsed.success || !Number.isFinite(Number(amount)) || Number(amount) > ceiling) {
+      setError(parsed.success ? (isHindi ? 'राशि शेष देय/वापसी योग्य राशि से अधिक नहीं हो सकती।' : 'Amount cannot exceed the remaining balance.') : (parsed.error.issues[0]?.message ?? labels.invalid));
+      return;
+    }
+    setError(null);
+    Alert.alert(
+      isRefund ? labels.refundTitle : labels.paymentTitle,
+      isRefund
+        ? `${labels.confirmRefund} ${formatMoney(Number(amount), invoice.currency)} · ${method}`
+        : `${labels.confirmPayment} ${formatMoney(Number(amount), invoice.currency)} · ${method}`,
+      [
+        { text: labels.no, style: 'cancel' },
+        { text: labels.yes, style: isRefund ? 'destructive' : 'default', onPress: () => { void save(parsed.data); } },
+      ],
+    );
+  };
+
+  const save = async (payload: ReturnType<typeof recordInvoicePaymentSchema.parse>) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const updated = await apiFetch<InvoiceDetailDto>(ownerInvoicePaymentsRequestPath(invoice.salonId, invoice.id), {
+        method: 'POST',
+        headers: { 'Idempotency-Key': idempotencyKey },
+        body: JSON.stringify(payload),
+      });
+      onSaved(updated);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : (isHindi ? 'रिकॉर्ड सहेजा नहीं जा सका।' : 'Could not save the payment record.'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card style={styles.formCard}>
+      <Text style={styles.cardTitle}>{isRefund ? labels.refundTitle : labels.paymentTitle}</Text>
+      <Text style={styles.formHint}>{isHindi ? 'यह भुगतान स्वीकार या भेजता नहीं है—यह केवल वास्तविक लेन-देन का रिकॉर्ड बनाता है।' : 'This does not collect or send money; it records an actual offline transaction only.'}</Text>
+      {error ? <InlineError message={error} /> : null}
+      <Text style={styles.inputLabel}>{labels.amount} · {invoice.currency}</Text>
+      <TextInput accessibilityLabel={labels.amount} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" autoCorrect={false} style={styles.input} />
+      <Text style={styles.inputLabel}>{labels.method}</Text>
+      <View style={styles.methods}>
+        {PAYMENT_METHODS.map((value) => (
+          <Pressable key={value} accessibilityRole="button" accessibilityState={{ selected: method === value }} onPress={() => setMethod(value)} style={[styles.method, method === value && styles.methodSelected]}>
+            <Text style={[styles.methodText, method === value && styles.methodTextSelected]}>{value}</Text>
+          </Pressable>
+        ))}
+      </View>
+      <Text style={styles.inputLabel}>{labels.reference}</Text>
+      <TextInput accessibilityLabel={labels.reference} value={reference} onChangeText={setReference} maxLength={80} style={styles.input} />
+      <Text style={styles.inputLabel}>{labels.note}</Text>
+      <TextInput accessibilityLabel={labels.note} value={note} onChangeText={setNote} maxLength={200} style={styles.input} />
+      <View style={styles.actions}>
+        <Button title={labels.cancel} variant="outline" onPress={onCancel} disabled={busy} />
+        <Button title={busy ? labels.saving : labels.save} onPress={submit} loading={busy} />
+      </View>
+    </Card>
   );
 }
 
@@ -90,4 +218,15 @@ const styles = StyleSheet.create({
   totalRow: { marginTop: space[2] },
   grandTotal: { borderBottomWidth: 0, borderTopWidth: 1, borderTopColor: color.border, marginTop: space[2], paddingTop: space[4] },
   disclaimer: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, lineHeight: lineHeightFor(fontSize.xs), color: color.muted, marginTop: space[2] },
+  actions: { gap: space[2], marginBottom: space[4] },
+  formCard: { marginBottom: space[4] },
+  formHint: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, lineHeight: lineHeightFor(fontSize.xs), color: color.muted, marginTop: space[2], marginBottom: space[3] },
+  inputLabel: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.ink, marginTop: space[3], marginBottom: space[1] },
+  input: { minHeight: 48, borderWidth: 1, borderColor: color.border, borderRadius: radius.sm, paddingHorizontal: space[3], color: color.ink, fontFamily: font.bodyRegular, fontSize: fontSize.base },
+  methods: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2] },
+  method: { borderWidth: 1, borderColor: color.border, borderRadius: radius.sm, paddingVertical: space[2], paddingHorizontal: space[3] },
+  methodSelected: { backgroundColor: color.ink, borderColor: color.ink },
+  methodText: { color: color.ink, fontFamily: font.bodyMedium, fontSize: fontSize.sm },
+  methodTextSelected: { color: color.surface },
+  notice: { color: color.success, fontFamily: font.bodyMedium, fontSize: fontSize.sm, marginBottom: space[3] },
 });

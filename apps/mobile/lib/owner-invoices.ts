@@ -9,3 +9,7 @@ export function ownerInvoicesRequestPath(salonId: string, cursor?: string): stri
 export function ownerInvoiceDetailRequestPath(salonId: string, invoiceId: string): string {
   return `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${encodeURIComponent(salonId)}/${OWNER_OPS_PATHS.invoices}/${encodeURIComponent(invoiceId)}`;
 }
+
+export function ownerInvoicePaymentsRequestPath(salonId: string, invoiceId: string): string {
+  return `${ownerInvoiceDetailRequestPath(salonId, invoiceId)}/payments`;
+}

@@ -1,6 +1,6 @@
 /// <reference types="jest" />
 import { act, createElement } from 'react';
-import { Text } from 'react-native';
+import { Alert, Text, TextInput } from 'react-native';
 import TestRenderer from 'react-test-renderer';
 import type { InvoiceDetailDto, InvoiceListDto } from '@barbercue/shared';
 import OwnerInvoicesScreen from '../OwnerInvoicesScreen';
@@ -8,6 +8,7 @@ import OwnerInvoiceDetailScreen from '../OwnerInvoiceDetailScreen';
 import { apiFetch } from '../../../lib/api';
 
 jest.mock('../../../lib/api', () => ({ apiFetch: jest.fn(), ApiError: class ApiError extends Error {} }));
+jest.mock('../../../lib/idempotency', () => ({ newIdempotencyKey: () => 'invoice-payment-key' }));
 jest.mock('../../../lib/salon-context', () => ({ useSalon: () => ({ selectedSalonId: 'salon-1', selectedSalon: { id: 'salon-1', name: 'Synthetic shop' } }) }));
 jest.mock('../../../lib/language-context', () => ({ useLanguage: () => ({ language: 'EN', t: { loadMore: 'Load more' } }) }));
 jest.mock('../../../lib/date-locale', () => ({ dateLocaleFor: () => 'en-IN' }));
@@ -73,4 +74,100 @@ it('loads detail only through the salon-scoped owner endpoint and renders record
   const output = tree.root.findAll((node: any) => node.type === Text).map(textOf).join(' ');
   expect(output).toContain('Recorded payments');
   expect(output).toContain('This screen does not collect payments');
+});
+
+it('records only a confirmed actual receipt through the salon-scoped idempotent API and trusts its response', async () => {
+  const detail = {
+    ...invoiceSummary, salonName: 'Synthetic shop', customerPhone: null, staffName: null, subtotal: 240,
+    discountTotal: 0, taxTotal: 0, taxLabel: null, taxRatePercent: null, taxMode: null,
+    seller: { legalName: 'Synthetic shop', gstin: null, address: null, phone: null, email: null },
+    lines: [], payments: [], voidReason: null,
+  } as InvoiceDetailDto;
+  const updated = { ...detail, amountPaid: 240, balanceDue: 0, paymentStatus: 'PAID' } as InvoiceDetailDto;
+  (apiFetch as jest.Mock).mockResolvedValueOnce(detail).mockResolvedValueOnce(updated);
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  try {
+    await act(async () => {
+      tree = TestRenderer.create(createElement(OwnerInvoiceDetailScreen, { route: { params: { salonId: 'salon-1', invoiceId: 'invoice-1' } } } as never));
+    });
+    const recordButton = tree.root.findAll((node: any) => typeof node.props.onPress === 'function' && textOf(node).includes('Record received payment'))[0];
+    await act(async () => recordButton.props.onPress());
+    const amount = tree.root.findAllByType(TextInput).find((input: any) => input.props.accessibilityLabel === 'Amount');
+    expect(amount).toBeDefined();
+    await act(async () => amount!.props.onChangeText('140'));
+    const upi = tree.root.findAll((node: any) => node.props.accessibilityRole === 'button' && textOf(node) === 'UPI')[0];
+    await act(async () => upi.props.onPress());
+    const submit = tree.root.findAll((node: any) => typeof node.props.onPress === 'function' && textOf(node).includes('Review record'))[0];
+    await act(async () => submit.props.onPress());
+    expect(alert).toHaveBeenCalledWith(expect.any(String), expect.stringContaining('actually received by the shop'), expect.any(Array));
+    const confirm = alert.mock.calls[0]?.[2]?.[1] as { onPress: () => void };
+    await act(async () => confirm.onPress());
+    expect(apiFetch).toHaveBeenLastCalledWith('dashboard/salons/salon-1/invoices/invoice-1/payments', {
+      method: 'POST',
+      headers: { 'Idempotency-Key': 'invoice-payment-key' },
+      body: JSON.stringify({ kind: 'PAYMENT', method: 'UPI', amount: 140 }),
+    });
+    expect(tree.root.findAll((node: any) => node.type === Text).map(textOf).join(' ')).toContain('Payment record saved.');
+    expect(tree.root.findAll((node: any) => node.type === Text).map(textOf).join(' ')).toContain('Balance due');
+  } finally {
+    alert.mockRestore();
+  }
+});
+
+it('blocks a payment amount greater than the server-reported invoice balance before confirmation', async () => {
+  const detail = {
+    ...invoiceSummary, salonName: 'Synthetic shop', customerPhone: null, staffName: null, subtotal: 240,
+    discountTotal: 0, taxTotal: 0, taxLabel: null, taxRatePercent: null, taxMode: null,
+    seller: { legalName: 'Synthetic shop', gstin: null, address: null, phone: null, email: null },
+    lines: [], payments: [], voidReason: null,
+  } as InvoiceDetailDto;
+  (apiFetch as jest.Mock).mockResolvedValueOnce(detail);
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  try {
+    await act(async () => {
+      tree = TestRenderer.create(createElement(OwnerInvoiceDetailScreen, { route: { params: { salonId: 'salon-1', invoiceId: 'invoice-1' } } } as never));
+    });
+    const recordButton = tree.root.findAll((node: any) => typeof node.props.onPress === 'function' && textOf(node).includes('Record received payment'))[0];
+    await act(async () => recordButton.props.onPress());
+    const amount = tree.root.findAllByType(TextInput).find((input: any) => input.props.accessibilityLabel === 'Amount');
+    await act(async () => amount!.props.onChangeText('141'));
+    const submit = tree.root.findAll((node: any) => typeof node.props.onPress === 'function' && textOf(node).includes('Review record'))[0];
+    await act(async () => submit.props.onPress());
+    expect(alert).not.toHaveBeenCalled();
+    expect(apiFetch).toHaveBeenCalledTimes(1);
+    expect(tree.root.findAll((node: any) => node.type === Text).map(textOf).join(' ')).toContain('Amount cannot exceed the remaining balance.');
+  } finally {
+    alert.mockRestore();
+  }
+});
+
+it('records a refund only after explicit confirmation that the money was actually returned', async () => {
+  const detail = {
+    ...invoiceSummary, salonName: 'Synthetic shop', customerPhone: null, staffName: null, subtotal: 240,
+    discountTotal: 0, taxTotal: 0, taxLabel: null, taxRatePercent: null, taxMode: null,
+    seller: { legalName: 'Synthetic shop', gstin: null, address: null, phone: null, email: null },
+    lines: [], payments: [], voidReason: null,
+  } as InvoiceDetailDto;
+  const updated = { ...detail, amountRefunded: 40, paymentStatus: 'PARTIALLY_PAID' } as InvoiceDetailDto;
+  (apiFetch as jest.Mock).mockResolvedValueOnce(detail).mockResolvedValueOnce(updated);
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  try {
+    await act(async () => {
+      tree = TestRenderer.create(createElement(OwnerInvoiceDetailScreen, { route: { params: { salonId: 'salon-1', invoiceId: 'invoice-1' } } } as never));
+    });
+    const recordRefund = tree.root.findAll((node: any) => typeof node.props.onPress === 'function' && textOf(node).includes('Record paid-out refund'))[0];
+    await act(async () => recordRefund.props.onPress());
+    const amount = tree.root.findAllByType(TextInput).find((input: any) => input.props.accessibilityLabel === 'Amount');
+    await act(async () => amount!.props.onChangeText('40'));
+    const submit = tree.root.findAll((node: any) => typeof node.props.onPress === 'function' && textOf(node).includes('Review record'))[0];
+    await act(async () => submit.props.onPress());
+    expect(alert).toHaveBeenCalledWith(expect.any(String), expect.stringContaining('actually returned to the customer'), expect.any(Array));
+    const confirm = alert.mock.calls[0]?.[2]?.[1] as { onPress: () => void };
+    await act(async () => confirm.onPress());
+    const body = JSON.parse((apiFetch as jest.Mock).mock.calls[1]?.[1]?.body as string);
+    expect(apiFetch).toHaveBeenLastCalledWith('dashboard/salons/salon-1/invoices/invoice-1/payments', expect.objectContaining({ method: 'POST' }));
+    expect(body).toEqual({ kind: 'REFUND', method: 'CASH', amount: 40 });
+  } finally {
+    alert.mockRestore();
+  }
 });

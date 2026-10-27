@@ -1,4 +1,4 @@
-import { ownerInvoiceDetailRequestPath, ownerInvoicesRequestPath } from '../owner-invoices';
+import { ownerInvoiceDetailRequestPath, ownerInvoicePaymentsRequestPath, ownerInvoicesRequestPath } from '../owner-invoices';
 
 describe('owner invoice routes', () => {
   it('builds bounded cursor pages scoped to the selected salon', () => {
@@ -8,5 +8,9 @@ describe('owner invoice routes', () => {
 
   it('encodes the salon and invoice identifiers in the owner-only detail route', () => {
     expect(ownerInvoiceDetailRequestPath('salon/one', 'invoice/one')).toBe('dashboard/salons/salon%2Fone/invoices/invoice%2Fone');
+  });
+
+  it('uses the same salon-scoped invoice route for recorded payment events', () => {
+    expect(ownerInvoicePaymentsRequestPath('salon/one', 'invoice/one')).toBe('dashboard/salons/salon%2Fone/invoices/invoice%2Fone/payments');
   });
 });
