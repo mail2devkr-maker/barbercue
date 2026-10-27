@@ -302,9 +302,12 @@ describe('cards, comparison and hearts', () => {
     let tree;
     act(() => { tree = TestRenderer.create(<SalonResultCard salon={beardSalon({ offers: [] })} />); });
     expect(textOf(tree.root)).not.toContain('Valid till');
-    act(() => { tree.update(<SalonResultCard salon={beardSalon({ offers: [offer(), offer({ id: 'o2', title: 'Flat deal', discountType: 'FLAT', discountValue: 50, appliesTo: null, price: null })] })} />); });
-    const box = tree.root.find((n) => n.type === 'button' && (n.props['aria-label'] ?? '').startsWith('Special Offer'));
-    expect(textOf(box)).toContain('+1 more offer');
+    act(() => { tree.update(<SalonResultCard salon={beardSalon({ offers: [offer(), offer({ id: 'o2', title: 'Flat deal', discountType: 'FLAT', discountValue: 50, appliesTo: null, price: null })], offerHeadline: { count: 2, maxPercent: 20, maxSaving: 50 } })} />); });
+    const box = tree.root.find((n) => n.type === 'button' && (n.props['aria-label'] ?? '').startsWith('2 offers'));
+    expect(textOf(box)).toContain('2 offers at this salon');
+    expect(textOf(box)).toContain('Up to 20% OFF');
+    expect(textOf(box)).toContain('Save up to ₹50 on a service');
+    expect(textOf(tree.root.find((n) => n.type === 'span' && n.props.className === 'offerBadge'))).toBe('Up to 20% OFF');
     act(() => box.props.onClick());
     const dialog = tree.root.find((n) => n.props.role === 'dialog');
     expect(textOf(dialog)).toContain('Flat ₹50 OFF Flat deal');
@@ -383,6 +386,25 @@ describe('cards, comparison and hearts', () => {
     act(() => { tree.update(<SalonResultCard salon={beardSalon({ isOpenNow: false, queueWait: null })} />); });
     expect(textOf(tree.root)).toContain('Queue closed');
     expect(tree.root.findAll((n) => n.type === 'a' && textOf(n).startsWith('Join Queue'))).toHaveLength(0);
+  });
+
+  it('every listed service shows its own best discount; only flat offers → Up to ₹ OFF', () => {
+    useAuth.mockReturnValue({ user: null, status: 'unauthenticated' });
+    let tree;
+    act(() => {
+      tree = TestRenderer.create(<SalonResultCard salon={beardSalon({
+        offers: [offer({ discountType: 'FLAT', discountValue: 100, price: null, conditional: false }), offer({ id: 'o2', discountType: 'FLAT', discountValue: 40 })],
+        offerHeadline: { count: 2, maxPercent: null, maxSaving: 100 },
+        serviceOffers: [{ serviceId: 'beard', offerId: 'o2', offerPrice: 210, saving: 40 }, { serviceId: 'cut', offerId: 'o1', offerPrice: 200, saving: 100 }],
+      })} />);
+    });
+    const text = textOf(tree.root);
+    expect(text).toContain('Beard Styling₹250 ₹210');
+    expect(text).toContain('Haircut₹300 ₹200');
+    expect(text).toContain('Shaving₹150');
+    expect(text).toContain('Up to ₹100 OFF');
+    // Book Now carries the best offer for the selected service.
+    expect(tree.root.find((n) => n.type === 'a' && textOf(n) === 'Book Now').props.href).toContain('offer=o2');
   });
 
   it('orders the favorites page', () => {

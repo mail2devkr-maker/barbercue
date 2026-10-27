@@ -567,6 +567,11 @@ export interface SalonListItemDto extends SalonSummary {
   serviceCount?: number;
   otherServices?: Array<{ id: string; name: string; price: number }>;
   offers?: SalonOfferSummaryDto[];
+  // All current offers together (for the selected service, when one is selected): how many, the
+  // largest percentage, and the largest rupee saving on a single service.
+  offerHeadline?: { count: number; maxPercent: number | null; maxSaving: number } | null;
+  // For each service shown on the card: its best discount that every customer is sure to get.
+  serviceOffers?: Array<{ serviceId: string; offerId: string; offerPrice: number; saving: number }>;
 }
 
 /**

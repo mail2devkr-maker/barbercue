@@ -41,6 +41,8 @@ import {
 } from '../common/timezone/timezone';
 import { estimateQueueWait } from './queue-wait';
 import {
+  bestCertainOfferFor,
+  offerHeadline,
   summarizeOffers,
   type OfferRow,
   type PricedService,
@@ -153,12 +155,20 @@ function comparedPrice(item: SalonListItemDto): number | null {
  * service, or — with no service selected — the lowest of the starting price and a certain offer price.
  */
 export function effectivePrice(item: SalonListItemDto): number | null {
-  const offerPrice = item.offers?.[0]?.price?.offerPrice ?? null;
+  // With a service selected, the card's offers are already narrowed to that service.
   if (item.selectedService !== undefined)
-    return offerPrice ?? item.selectedService?.price ?? null;
-  const prices = [item.priceMin, offerPrice].filter(
-    (p): p is number => p !== null,
-  );
+    return item.selectedService
+      ? (item.serviceOffers?.find(
+          (o) => o.serviceId === item.selectedService!.id,
+        )?.offerPrice ??
+          item.offers?.[0]?.price?.offerPrice ??
+          item.selectedService.price)
+      : null;
+  const prices = [
+    item.priceMin,
+    item.offers?.[0]?.price?.offerPrice ?? null,
+    ...(item.serviceOffers ?? []).map((o) => o.offerPrice),
+  ].filter((p): p is number => p !== null);
   return prices.length ? Math.min(...prices) : null;
 }
 
@@ -1296,11 +1306,20 @@ export class SalonsService {
       const price = priceBy.get(salon.id);
       const match = selectedBy.get(salon.id);
       const salonServices = servicesBy.get(salon.id) ?? [];
+      const salonOffers = offersBy.get(salon.id) ?? [];
       const selectedPriced = selected
         ? match
           ? { id: match.id, name: match.name, price: Number(match.price) }
           : null
         : undefined;
+      const summaries = summarizeOffers(
+        salonOffers,
+        salonServices,
+        selectedPriced,
+      );
+      const otherServices = salonServices
+        .filter((service) => service.id !== match?.id)
+        .slice(0, 3);
       const openNow = salon.isClosedForToday
         ? false
         : isOpenNow(salon.operatingHours, salon);
@@ -1366,14 +1385,19 @@ export class SalonsService {
             : null
           : undefined,
         serviceCount: salonServices.length,
-        otherServices: salonServices
-          .filter((service) => service.id !== match?.id)
-          .slice(0, 3),
-        offers: summarizeOffers(
-          offersBy.get(salon.id) ?? [],
-          salonServices,
-          selectedPriced,
-        ).slice(0, 5),
+        otherServices,
+        offers: summaries.slice(0, 5),
+        offerHeadline: offerHeadline(summaries),
+        // Each service shown on the card with its own best certain discount.
+        serviceOffers: [
+          ...(selectedPriced ? [selectedPriced] : []),
+          ...otherServices,
+        ]
+          .map((service) => {
+            const best = bestCertainOfferFor(salonOffers, service);
+            return best ? { serviceId: service.id, ...best } : null;
+          })
+          .filter((entry) => entry !== null),
       };
     });
   }

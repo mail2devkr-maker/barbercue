@@ -367,7 +367,12 @@ export function CompareTable({ salons, serviceLabel }: { salons: SalonListItemDt
             if (offer) params.set("offer", offer.id);
             const money = (amount: number) => formatMoney(amount, salon.currency, salon.countryCode);
             const service = salon.selectedService;
-            const certain = offer?.price && service && offer.price.serviceId === service.id ? offer.price : null;
+            const best = service ? salon.serviceOffers?.find((o) => o.serviceId === service.id) : undefined;
+            const certain = service && best
+              ? { offerPrice: best.offerPrice }
+              : offer?.price && service && offer.price.serviceId === service.id
+                ? offer.price
+                : null;
             return (
               <tr key={salon.id}>
                 <th scope="row">

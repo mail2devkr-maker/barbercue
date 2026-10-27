@@ -134,3 +134,57 @@ export function summarizeOffers(
       a.validTo.localeCompare(b.validTo),
   );
 }
+
+/**
+ * The best discount every customer is sure to get on one service: the largest saving among the
+ * offers covering it that are certain (all customers, no day/time window, minimum spend met by
+ * this service alone). Null when no certain offer covers it.
+ */
+export function bestCertainOfferFor(
+  offers: OfferRow[],
+  service: PricedService,
+): { offerId: string; offerPrice: number; saving: number } | null {
+  let best: { offerId: string; offerPrice: number; saving: number } | null =
+    null;
+  for (const offer of offers) {
+    if (offer.serviceIds.length && !offer.serviceIds.includes(service.id))
+      continue;
+    if (offer.audience !== 'ALL' || offerHasSchedule(offer)) continue;
+    const minimum =
+      offer.minimumBookingAmount === null
+        ? null
+        : Number(offer.minimumBookingAmount.toString());
+    if (minimum !== null && service.price < minimum) continue;
+    const savingPaise = offerSavingPaise(offer, service.price);
+    if (savingPaise <= 0 || (best && savingPaise / 100 <= best.saving))
+      continue;
+    best = {
+      offerId: offer.id,
+      offerPrice: (paise(service.price) - savingPaise) / 100,
+      saving: savingPaise / 100,
+    };
+  }
+  return best;
+}
+
+/**
+ * The card headline for all of a salon's current offers together: how many there are, the
+ * largest percentage on offer, and the largest rupee saving on any single service.
+ */
+export function offerHeadline(
+  summaries: {
+    discountType: 'PERCENT' | 'FLAT';
+    discountValue: number;
+    saving: number;
+  }[],
+): { count: number; maxPercent: number | null; maxSaving: number } | null {
+  if (summaries.length === 0) return null;
+  const percents = summaries
+    .filter((s) => s.discountType === 'PERCENT')
+    .map((s) => s.discountValue);
+  return {
+    count: summaries.length,
+    maxPercent: percents.length ? Math.max(...percents) : null,
+    maxSaving: Math.max(...summaries.map((s) => s.saving)),
+  };
+}

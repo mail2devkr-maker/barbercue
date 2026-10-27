@@ -1,4 +1,9 @@
-import { summarizeOffers, type OfferRow } from './offer-summary';
+import {
+  bestCertainOfferFor,
+  offerHeadline,
+  summarizeOffers,
+  type OfferRow,
+} from './offer-summary';
 
 const services = [
   { id: 'cut', name: 'Haircut', price: 300 },
@@ -120,5 +125,64 @@ describe('summarizeOffers', () => {
     expect(
       summarizeOffers([offer({})], services, undefined)[0].appliesTo,
     ).toBeNull();
+  });
+});
+
+describe('combined offers on a card', () => {
+  it('each service gets its own best certain discount: the biggest % or the biggest ₹ saving', () => {
+    const offers = [
+      offer({ id: 'pct10', discountValue: 10 }), // all services
+      offer({
+        id: 'flat100',
+        discountType: 'FLAT',
+        discountValue: 100,
+        serviceIds: ['facial'],
+      }),
+      offer({ id: 'pct30-beard', discountValue: 30, serviceIds: ['beard'] }),
+      offer({ id: 'new-only', discountValue: 50, audience: 'NEW' }), // conditional: never used
+    ];
+    // Haircut ₹300: only 10% applies → ₹270.
+    expect(bestCertainOfferFor(offers, services[0])).toEqual({
+      offerId: 'pct10',
+      offerPrice: 270,
+      saving: 30,
+    });
+    // Beard ₹250: 30% (₹75) beats 10% (₹25).
+    expect(bestCertainOfferFor(offers, services[1])).toMatchObject({
+      offerId: 'pct30-beard',
+      offerPrice: 175,
+    });
+    // Facial ₹600: flat ₹100 beats 10% (₹60).
+    expect(bestCertainOfferFor(offers, services[2])).toMatchObject({
+      offerId: 'flat100',
+      offerPrice: 500,
+    });
+    expect(bestCertainOfferFor([offers[3]], services[0])).toBeNull();
+  });
+
+  it('the headline shows how many offers, the largest % and the largest ₹ saving', () => {
+    const summaries = summarizeOffers(
+      [
+        offer({ id: 'a', discountValue: 10 }),
+        offer({ id: 'b', discountValue: 30, serviceIds: ['beard'] }),
+        offer({
+          id: 'c',
+          discountType: 'FLAT',
+          discountValue: 100,
+          serviceIds: ['facial'],
+        }),
+      ],
+      services,
+      undefined,
+    );
+    expect(offerHeadline(summaries)).toEqual({
+      count: 3,
+      maxPercent: 30,
+      maxSaving: 100,
+    });
+    expect(offerHeadline([])).toBeNull();
+    expect(
+      offerHeadline([{ discountType: 'FLAT', discountValue: 50, saving: 50 }]),
+    ).toEqual({ count: 1, maxPercent: null, maxSaving: 50 });
   });
 });

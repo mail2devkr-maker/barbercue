@@ -27,6 +27,21 @@ export function offerBadgeText(offer: SalonOfferSummaryDto, currency: string | n
     : `Flat ${formatMoney(offer.discountValue, currency, countryCode)} OFF`;
 }
 
+/**
+ * Headline for all of a salon's offers together: "Up to 30% OFF" (the largest percentage), or —
+ * when there are only flat-amount offers — "Up to ₹100 OFF" (the largest rupee saving). A salon
+ * with a single offer shows that offer's own text.
+ */
+export function offerHeadlineText(salon: SalonListItemDto): string | null {
+  const offer = salon.offers?.[0];
+  const headline = salon.offerHeadline;
+  if (!offer) return null;
+  if (!headline || headline.count <= 1) return offerBadgeText(offer, salon.currency, salon.countryCode);
+  return headline.maxPercent !== null
+    ? `Up to ${headline.maxPercent}% OFF`
+    : `Up to ${formatMoney(headline.maxSaving, salon.currency, salon.countryCode)} OFF`;
+}
+
 /** Plain-language conditions ("First visit only · Mon–Fri, 14:00–17:00 · On bookings above ₹500"). */
 export function offerConditions(offer: SalonOfferSummaryDto, currency: string | null, countryCode: string): string[] {
   return [
@@ -133,13 +148,19 @@ export function SalonResultCard({ salon, styleName }: { salon: SalonListItemDto;
   const money = (amount: number) => formatMoney(amount, salon.currency, salon.countryCode);
   const photos = salon.photoUrls?.length ? salon.photoUrls : salon.coverPhotoUrl ? [salon.coverPhotoUrl] : [];
   const offer = salon.offers?.[0] ?? null;
-  const moreOffers = (salon.offers?.length ?? 0) - 1;
+  const offerCount = salon.offerHeadline?.count ?? salon.offers?.length ?? 0;
+  const moreOffers = offerCount - 1;
+  const headline = offerHeadlineText(salon);
+  // Each listed service's own best discount every customer gets.
+  const serviceOffer = (serviceId: string) => salon.serviceOffers?.find((o) => o.serviceId === serviceId) ?? null;
 
   const profileHref = `/${country}/${salon.citySlug}/${salon.slug}${styleName ? `?style=${encodeURIComponent(styleName)}` : ""}`;
   const bookingParams = new URLSearchParams({ city: salon.citySlug, country: salon.countryCode });
   if (styleName) bookingParams.set("style", styleName);
   // The card's offer travels into the existing booking journey, which re-checks it on the server.
-  if (offer) bookingParams.set("offer", offer.id);
+  // The best guaranteed offer for the selected service, otherwise the card's top offer.
+  const bookingOffer = (salon.selectedService && serviceOffer(salon.selectedService.id)?.offerId) ?? offer?.id;
+  if (bookingOffer) bookingParams.set("offer", bookingOffer);
   const bookingHref = `/book/${salon.slug}?${bookingParams.toString()}`;
   const queueParams = new URLSearchParams({ city: salon.citySlug, country: salon.countryCode });
   if (styleName) queueParams.set("style", styleName);
@@ -172,7 +193,7 @@ export function SalonResultCard({ salon, styleName }: { salon: SalonListItemDto;
           </Link>
         )}
         <FavoriteButton salonId={salon.id} salonName={salon.name} />
-        {offer && <span className={styles.offerBadge}>{offerBadgeText(offer, salon.currency, salon.countryCode)}</span>}
+        {headline && <span className={styles.offerBadge}>{headline}</span>}
         {photos.length > 1 && (
           <>
             <button type="button" className={`${styles.arrow} ${styles.arrowPrev}`} aria-label="Previous photo" onClick={() => setPhoto((p) => (p - 1 + photos.length) % photos.length)}>‹</button>
@@ -236,21 +257,34 @@ export function SalonResultCard({ salon, styleName }: { salon: SalonListItemDto;
           type="button"
           className={styles.offer}
           onClick={() => setOffersOpen(true)}
-          aria-label={`${offer.title}: ${offerBadgeText(offer, salon.currency, salon.countryCode)}. ${moreOffers > 0 ? `See all ${moreOffers + 1} offers` : "See offer details"}`}
+          aria-label={moreOffers > 0 ? `${offerCount} offers, ${headline}. See all offers` : `${offer.title}: ${headline}. See offer details`}
         >
           <span className={styles.offerIcon} aria-hidden="true">%</span>
-          <span className={styles.offerBody}>
-            <span className={styles.offerTitle}>{offer.title}</span>
-            <span className={styles.offerValue}>
-              <span className={styles.offerHighlight}>{offerBadgeText(offer, salon.currency, salon.countryCode)}</span>{" "}
-              {offer.appliesTo ? `on ${offer.appliesTo}` : "on all services"}
+          {moreOffers > 0 && salon.offerHeadline ? (
+            <span className={styles.offerBody}>
+              <span className={styles.offerTitle}>{offerCount} offers at this salon</span>
+              <span className={styles.offerValue}>
+                <span className={styles.offerHighlight}>{headline}</span>
+              </span>
+              <span className={styles.offerTerms}>
+                Save up to {formatMoney(salon.offerHeadline.maxSaving, salon.currency, salon.countryCode)} on a service
+              </span>
+              <span className={styles.offerValid}>Best: {offer.title}</span>
+              <span className={styles.offerMore}>See all {offerCount} offers</span>
             </span>
-            {offerConditions(offer, salon.currency, salon.countryCode).length > 0 && (
-              <span className={styles.offerTerms}>{offerConditions(offer, salon.currency, salon.countryCode).join(" · ")}</span>
-            )}
-            <span className={styles.offerValid}>Valid till {validTill(offer.validTo)}</span>
-            {moreOffers > 0 && <span className={styles.offerMore}>+{moreOffers} more {moreOffers === 1 ? "offer" : "offers"}</span>}
-          </span>
+          ) : (
+            <span className={styles.offerBody}>
+              <span className={styles.offerTitle}>{offer.title}</span>
+              <span className={styles.offerValue}>
+                <span className={styles.offerHighlight}>{headline}</span>{" "}
+                {offer.appliesTo ? `on ${offer.appliesTo}` : "on all services"}
+              </span>
+              {offerConditions(offer, salon.currency, salon.countryCode).length > 0 && (
+                <span className={styles.offerTerms}>{offerConditions(offer, salon.currency, salon.countryCode).join(" · ")}</span>
+              )}
+              <span className={styles.offerValid}>Valid till {validTill(offer.validTo)}</span>
+            </span>
+          )}
           <span className={styles.offerChevron} aria-hidden="true">›</span>
         </button>
       )}
@@ -261,7 +295,12 @@ export function SalonResultCard({ salon, styleName }: { salon: SalonListItemDto;
         ) : (
           <ul>
             {rows.map((row) => {
-              const discounted = offer?.price && offer.price.serviceId === row.id ? offer.price : null;
+              const best = serviceOffer(row.id);
+              const discounted = best
+                ? { originalPrice: row.price, offerPrice: best.offerPrice }
+                : offer?.price && offer.price.serviceId === row.id
+                  ? offer.price
+                  : null;
               return (
                 <li key={row.id} className={row.selected ? styles.selectedRow : undefined}>
                   <span className={styles.serviceName}>{row.name}</span>
