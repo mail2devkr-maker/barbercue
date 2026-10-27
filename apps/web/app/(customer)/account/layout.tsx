@@ -9,6 +9,7 @@ import styles from "./account-shell.module.css";
 
 const ACCOUNT_LINKS = [
   { href: "/account/bookings", label: "Overview" },
+  { href: "/account/favorites", label: "Favorites" },
   { href: "/account/invoices", label: "Invoices" },
   { href: "/account/credits", label: "FastQue Credits" },
   { href: "/account/profile", label: "Profile & security" },
