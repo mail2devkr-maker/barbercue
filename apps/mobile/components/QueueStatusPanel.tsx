@@ -157,12 +157,14 @@ export function QueueStatusPanel({
     // Phase 15 (Low-Network / Resilience Mode): resync once a dropped connection is restored — a
     // missed queue.entry.called while offline should never leave a customer's screen stale.
     const unsubscribeReconnect = onReconnect(refetch);
+    const guestPoll = guestAccessToken ? setInterval(refetch, 15_000) : null;
     return () => {
       cancelled = true;
       socket.off('queue.updated', onQueueUpdated);
       socket.off('queue.entry.called', onEntryCalled);
       socket.off('queue.entry.wait_alert', onWaitAlert);
       unsubscribeReconnect();
+      if (guestPoll) clearInterval(guestPoll);
     };
   }, [entry.salonId, entry.status, entry.id, entry.turnApproaching, onEntryChange, user?.preferredLanguage, guestAccessToken]);
 
