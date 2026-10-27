@@ -32,6 +32,12 @@ check). Files in `C:\fastque-recovery\rotation\`:
 | Backup taken BEFORE deploy | `p1_expected_schema.json` (75 tables, 69 finished migrations) - unchanged |
 | Post-deploy verification, #317 only | `p1_expected_schema.owner_transfer.json` (76 tables, 70 migrations, md5 `0e869134...`) |
 | Post-deploy verification, #317 + #313 | `p1_expected_schema.owner_transfer_and_change_requests.json` (77 tables, 71 migrations, md5 `e5bb9245...`) |
+| Post-deploy verification, #317 + #313 + #315 (Codex, Apple sign-in) | `p1_expected_schema.owner_transfer_change_requests_apple.json` (78 tables, 72 migrations, md5 `b0ec3438...`) - rehearsal only |
+
+Validated on 27 Oct 2026: the production inventory matches a master-equivalent chain (guard self-test 14/15; its one failure
+is only that the self-test derives the ledger from the checked-out branch, which has the extra migration), and
+`p1_expected_schema.owner_transfer.json` reports MATCH against a chain built with this branch's migration while the
+production inventory correctly rejects that same migrated chain. Run `validate_new_inventory.py` after any migration change.
 
 Regenerate with the script in `C:\fastque-recovery\work\make_inventory_ot.py` if the migration set changes.
 
@@ -41,9 +47,14 @@ Checked on 27 Oct 2026 for the production backend service (names and shapes only
 `re_` prefix), `EMAIL_FROM_ADDRESS` present (display-name form on `mail.fastque.com`), `WEB_BASE_URL` present and **https**
 but pointing at the Railway-generated web domain (`barbercueweb-production.up.railway.app`), `NODE_ENV=production`.
 
-- [ ] Decide whether invitation links should use `https://fastque.com` instead (set `WEB_BASE_URL` only with owner approval;
-      it also changes password-reset links).
-- [ ] The sending domain `mail.fastque.com` is verified at the provider (not checked: it needs the provider dashboard).
+- [x] Sending domain: the provider dashboard reports `mail.fastque.com` VERIFIED with sending enabled, and
+      `EMAIL_FROM_ADDRESS` is on that domain. (`fastque.com` itself is PARTIALLY_FAILED at the provider; it is not used for
+      sending.) This does not prove that the production API key is bound to that domain or that a message is delivered.
+- [x] Web destination: `https://fastque.com` (Let's Encrypt, valid to 30 Nov 2026) and the Railway domain both serve the
+      app and proxy `/api/v1` to the same backend (checked 27 Oct). Neither serves `/accept-owner-invitation` yet - it exists
+      only after this release is deployed. Decision rule: keep the current working HTTPS `WEB_BASE_URL` for the deploy; after
+      the deploy, if `https://fastque.com/accept-owner-invitation` loads and its inspect call works, switching `WEB_BASE_URL`
+      to `https://fastque.com` is an owner-approved config change (it also changes password-reset links).
 - [ ] A real delivery test was done in an **isolated or staging** environment with a mailbox the team controls. Never send
       a test invitation to a real shop or owner. (Not done yet: no staging provider key is available.)
 - [ ] Until the provider works, `POST .../invite` answers 503 and nothing changes (fail-closed).
@@ -101,3 +112,40 @@ invitation, the recipient accepts. Do both shops in one window. Studio 25 Salons
 - After section 7 but before any transfer: `owner-transfer-rollback.sql` on production is possible only with a separate
   authorization and the recovery branch as the fallback.
 - After a transfer: reverse it with a new verified transfer; the recovery branch is the disaster fallback only.
+
+## 10. GO / NO-GO criteria
+
+**GO only if every line is true on the exact release SHA:**
+
+1. Owner has authorized this migration release in writing, naming the SHA (and the combination with #313/#315, if any).
+2. Exact-head CI is green on that SHA; master has not moved (or CI was re-run after merging it).
+3. Fresh `p1-owner45e` backup: checksum, decryption, 75/75 tables verified; disposable restore matches the inventory; the
+   migration, rollback and re-apply rehearsal passed on the restored copy; the disposable copy was dropped.
+4. A new Neon recovery branch is `ready` and the database identity is confirmed.
+5. A real e-mail delivery test succeeded in an isolated/staging environment with a designated test inbox: link received,
+   accepted once, second use refused, expired link refused, cancelled link refused, resend invalidates the previous link.
+6. Rollback targets (backend and web deployment ids) are recorded.
+7. For any ownership transfer: the legally authorized people and their e-mail addresses are confirmed by the owner, and
+   a second administrator (or the documented break-glass) will verify identity and authority. Studio 25 stays SUSPENDED.
+
+**NO-GO (stop, change nothing) if any of:** CI red or SHA differs from the authorized one; backup or restore verification
+fails; the inventory does not MATCH; the recovery branch is not ready; the e-mail delivery test is missing or failed; the
+migration log shows an unexpected number of migrations; any live check after the backend deploy fails; or someone asks to
+reset an existing owner's or customer's credentials, activate Studio 25, or send a test invitation to a real shop.
+
+## 11. Evidence already gathered (all in isolated environments; nothing in production)
+
+- Browser (web): new-account and existing-account acceptance, reused/cancelled/superseded links refused, sign-in, shop
+  isolation, old shared account locked out; **administrator screen driven with synthetic administrators and isolated test
+  TOTP secrets**: prepare, refusal of self-verification (server message shown), phone-only evidence refused, independent
+  verification, send, expiry shown, resend with a required reason, cancel, completed transfer, status and audit history, no
+  token or password visible.
+- E-mail: wire-level tests of the provider request (link only in the body, never in a URL or log); delivery itself is
+  captured by the development sender in the isolated stack. **No real delivery test was run** (no designated test inbox).
+- Android: unit tests for the notice, the handoff and the session gate. A physical device (serial RZCT8100F9Z) was visible
+  to adb at the start of the session and then disconnected; **no device evidence was captured and no physical or emulator
+  certification is claimed**.
+- Cross-PR: #317 + #313 (PR #321, rehearsal) and #317 + #313 + #315 (local scratch merge, discarded): only textual conflicts
+  (keep-both in `schema.prisma`/`app.module.ts`; #315's `schema.prisma` has whole-file line-ending churn that makes git see
+  every line as changed - its three real changes were re-applied by hand in the scratch merge); all migrations apply
+  (77 tables), no drift, 42 e2e + 227 auth unit tests pass.
