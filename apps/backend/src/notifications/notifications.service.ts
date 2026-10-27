@@ -25,6 +25,7 @@ const TYPE_CATEGORY: Record<NotificationType, NotificationCategory> = {
   'booking.reminder': NotificationCategory.REMINDERS,
   'booking.corrected': NotificationCategory.BOOKING_UPDATES,
   'queue.turn_approaching': NotificationCategory.QUEUE_UPDATES,
+  'queue.arrival_check': NotificationCategory.QUEUE_UPDATES,
   'owner.booking.created': NotificationCategory.BOOKING_UPDATES,
   'owner.booking.cancelled': NotificationCategory.BOOKING_UPDATES,
   'owner.booking.no_show': NotificationCategory.BOOKING_UPDATES,
