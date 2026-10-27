@@ -23,6 +23,9 @@ import {
   type SalonSearchQueryInput,
   type SalonWorkplaceDto,
   type TeamMemberDto,
+  SALON_TYPE_FILTER_MATCHES,
+  popularServiceById,
+  type PopularService,
 } from '@barbercue/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { AppException } from '../common/exceptions/app.exception';
@@ -98,6 +101,44 @@ function isOpenNow(
     countryCode: salon.city.countryCode,
   });
   return isOpenAt(hours, timeZone);
+}
+
+// Discovery upgrade: one popular service (catalog/salon-discovery-filters.ts) as a Service filter —
+// any match term in the salon's own service name or category, and no exclusion term in its name.
+function popularServiceRelevance(
+  service: PopularService,
+): Prisma.ServiceWhereInput {
+  return {
+    AND: [
+      {
+        OR: service.match.flatMap((term) => [
+          { name: { contains: term, mode: 'insensitive' as const } },
+          { category: { contains: term, mode: 'insensitive' as const } },
+        ]),
+      },
+      ...(service.exclude ?? []).map((term) => ({
+        NOT: { name: { contains: term, mode: 'insensitive' as const } },
+      })),
+    ],
+  };
+}
+
+/**
+ * Price: cheapest selected-service price first; salons without a matching price last.
+ * Rating: highest average first, unrated salons last, then more reviews first.
+ * Stable sort, so equal values keep their incoming order (nearest-first in distance mode).
+ */
+export function sortListItems(
+  items: SalonListItemDto[],
+  sort: 'price' | 'rating',
+): SalonListItemDto[] {
+  const last = Number.POSITIVE_INFINITY;
+  return [...items].sort((a, b) =>
+    sort === 'price'
+      ? (a.selectedService?.price ?? last) - (b.selectedService?.price ?? last)
+      : (b.ratingAverage ?? -1) - (a.ratingAverage ?? -1) ||
+        b.ratingCount - a.ratingCount,
+  );
 }
 
 type SalonWithListRelations = Prisma.SalonGetPayload<{
@@ -241,7 +282,37 @@ export class SalonsService {
     // set, this would be redundant (the tightened where.services above already fully encodes the
     // price constraint) and is skipped. Uses `where.AND` rather than a second `where.services` key
     // so it never collides with `query.service`'s own key on the same `where` object.
-    if (priceCondition && !query.service) {
+    // Discovery upgrade: salon type (rule in SALON_TYPE_FILTER_MATCHES — Male/Female include Unisex,
+    // "Unisex only" requires an owner-confirmed type) and a popular service to compare by. The
+    // popular service gets the same same-service price treatment as `service`: one matching
+    // service row must satisfy both the match and the price range.
+    if (query.salonType) {
+      const rule = SALON_TYPE_FILTER_MATCHES[query.salonType];
+      where.salonType = { in: [...rule.types] };
+      if (rule.requiresConfirmed) where.salonTypeConfirmed = true;
+    }
+    const popular = popularServiceById(query.popularService);
+    if (popular) {
+      const popularCondition: Prisma.SalonWhereInput = {
+        services: {
+          some: {
+            isActive: true,
+            ...withPrice(popularServiceRelevance(popular)),
+          },
+        },
+      };
+      where.AND = where.AND
+        ? [
+            ...(Array.isArray(where.AND) ? where.AND : [where.AND]),
+            popularCondition,
+          ]
+        : [popularCondition];
+    }
+    const selected = popular
+      ? { service: popular, price: priceCondition }
+      : undefined;
+
+    if (priceCondition && !query.service && !popular) {
       const broadPriceCondition: Prisma.SalonWhereInput = {
         services: { some: { isActive: true, price: priceCondition } },
       };
@@ -252,6 +323,34 @@ export class SalonsService {
           ]
         : [broadPriceCondition];
     }
+
+    // Discovery upgrade: "favorites only" (the client's saved salon IDs) and a minimum average
+    // review score. Unreviewed salons have no average, so they never pass a minimum.
+    const extraConditions: Prisma.SalonWhereInput[] = [];
+    if (query.ids) extraConditions.push({ id: { in: query.ids } });
+    if (query.minRating !== undefined) {
+      const rated = await this.prisma.review.groupBy({
+        by: ['salonId'],
+        _avg: { rating: true },
+        having: { rating: { _avg: { gte: query.minRating } } },
+      });
+      extraConditions.push({ id: { in: rated.map((r) => r.salonId) } });
+    }
+    if (extraConditions.length > 0) {
+      where.AND = [
+        ...(where.AND
+          ? Array.isArray(where.AND)
+            ? where.AND
+            : [where.AND]
+          : []),
+        ...extraConditions,
+      ];
+    }
+    // "Open now" depends on each salon's hours in its own time zone, so it is checked per
+    // candidate after loading — which makes it a bounded, single-page mode like the sorts below.
+    const openNowOnly = query.openNow === true;
+    const keepOpen = (items: SalonListItemDto[]) =>
+      openNowOnly ? items.filter((item) => item.isOpenNow === true) : items;
 
     // "Near Me" (Phase 4): sorting by a computed haversine distance isn't something Prisma/Postgres
     // can do without a geo extension (PostGIS earthdistance), which isn't set up here. Rather than
@@ -272,6 +371,27 @@ export class SalonsService {
     // deterministic) subset of them rather than the exact nearest — the box only guarantees that
     // subset is geographically relevant, not that it's the true top-200-nearest within itself.
     const nearMe = query.lat !== undefined && query.lng !== undefined;
+    // Price and rating sorts need every candidate's value before ordering, so — like "Near me" —
+    // they rank a bounded candidate set in memory and return a single page (nextCursor null).
+    const sort = query.sort ?? (nearMe ? 'distance' : 'relevance');
+    if (!nearMe && (sort === 'price' || sort === 'rating' || openNowOnly)) {
+      const candidates = await this.prisma.salon.findMany({
+        where,
+        orderBy: sort === 'relevance' ? { name: 'asc' } : { id: 'asc' },
+        take: NEAR_ME_CANDIDATE_CAP,
+        include: listInclude,
+      });
+      const items = keepOpen(
+        await this.toListItems(candidates, undefined, selected),
+      );
+      return {
+        items: (sort === 'price' || sort === 'rating'
+          ? sortListItems(items, sort)
+          : items
+        ).slice(0, limit),
+        nextCursor: null,
+      };
+    }
     if (nearMe) {
       const from = { lat: query.lat!, lng: query.lng! };
       // Distance filter (Part 8/9): an explicit radiusKm is a hard cap the caller asked for, not a
@@ -303,21 +423,21 @@ export class SalonsService {
         });
         if (candidates.length >= limit) break;
       }
-      const withDistance = await Promise.all(
-        candidates.map(async (s) => ({
-          item: await this.toListItem(s, from),
-          // SalonListItemDto.distanceKm is deliberately pre-rounded to 1 decimal place for
-          // display — not precise enough for a hard radius cutoff (a salon at exactly 0.15km
-          // rounds to "0.1 km" and would then wrongly pass a 0.1km radius check). The radius
-          // filter below always compares against this unrounded value instead.
-          rawDistanceKm:
-            s.lat !== null && s.lng !== null
-              ? haversineDistanceKm(from.lat, from.lng, s.lat, s.lng)
-              : null,
-        })),
-      );
+      const candidateItems = await this.toListItems(candidates, from, selected);
+      const withDistance = candidates.map((s, index) => ({
+        item: candidateItems[index],
+        // SalonListItemDto.distanceKm is deliberately pre-rounded to 1 decimal place for
+        // display — not precise enough for a hard radius cutoff (a salon at exactly 0.15km
+        // rounds to "0.1 km" and would then wrongly pass a 0.1km radius check). The radius
+        // filter below always compares against this unrounded value instead.
+        rawDistanceKm:
+          s.lat !== null && s.lng !== null
+            ? haversineDistanceKm(from.lat, from.lng, s.lat, s.lng)
+            : null,
+      }));
       const sorted = withDistance
         .filter((w) => w.item.distanceKm !== null)
+        .filter((w) => !openNowOnly || w.item.isOpenNow === true)
         // The bounding box is a rectangle approximation of a circle (see boundingBoxDegrees), so a
         // corner of the box can sit slightly beyond the true requested radius — this is the actual
         // hard cutoff a caller-supplied radiusKm promises, checked against the real, unrounded
@@ -337,9 +457,14 @@ export class SalonsService {
             a.rawDistanceKm! - b.rawDistanceKm! ||
             a.item.id.localeCompare(b.item.id),
         )
-        .map((w) => w.item)
-        .slice(0, limit);
-      return { items: sorted, nextCursor: null };
+        .map((w) => w.item);
+      // Within the distance-sorted, radius-filtered set, price/rating sorts re-rank (stable, so
+      // equal values stay nearest-first).
+      const ranked =
+        sort === 'price' || sort === 'rating'
+          ? sortListItems(sorted, sort)
+          : sorted;
+      return { items: ranked.slice(0, limit), nextCursor: null };
     }
 
     const salons = await this.prisma.salon.findMany({
@@ -352,7 +477,7 @@ export class SalonsService {
 
     const hasMore = salons.length > limit;
     const page = hasMore ? salons.slice(0, limit) : salons;
-    const items = await Promise.all(page.map((s) => this.toListItem(s)));
+    const items = await this.toListItems(page, undefined, selected);
 
     return { items, nextCursor: hasMore ? page[page.length - 1].id : null };
   }
@@ -650,6 +775,11 @@ export class SalonsService {
               // remains backward-compatible during mobile rollout.
               localityText: input.localityText ?? resolvedLocalityName,
               landmark: input.landmark ?? null,
+              // Discovery upgrade: a type chosen at registration is confirmed; an older client that
+              // omits it keeps the UNISEX default, unconfirmed ("type not set" in discovery).
+              ...(input.salonType
+                ? { salonType: input.salonType, salonTypeConfirmed: true }
+                : {}),
               addressLine: input.addressLine,
               postalCode: input.postalCode ?? null,
               // Derived from the country, and only where that mapping is authoritative — an
@@ -879,61 +1009,144 @@ export class SalonsService {
     };
   }
 
-  private async toListItem(
-    salon: SalonWithListRelations,
+  /**
+   * List items for a page of salons, with every per-salon figure (ratings, price span, live queue,
+   * selected-service price) fetched in a handful of grouped queries rather than 3-4 queries per
+   * salon. Order matches `salons`. Public so the favorites list renders the exact same item shape.
+   */
+  async toListItems(
+    salons: SalonWithListRelations[],
     from?: { lat: number; lng: number },
-  ): Promise<SalonListItemDto> {
-    const { ratingAverage, ratingCount, priceMin, priceMax } =
-      await this.aggregate(salon.id);
-    // Issue #13 Mission F — same per-salon-query convention as aggregate() above (see its own
-    // comment: fine at this data volume). Same WAITING/CALLED/IN_SERVICE whitelist
-    // getDashboardQueue/getCapacitySummary already use elsewhere, so an EXPIRED/terminal entry is
-    // never counted here either.
-    const waitingCount = await this.prisma.queueEntry.count({
-      where: {
-        salonId: salon.id,
-        status: {
-          in: [
-            QueueEntryStatus.WAITING,
-            QueueEntryStatus.CALLED,
-            QueueEntryStatus.IN_SERVICE,
-          ],
+    selected?: { service: PopularService; price?: Prisma.DecimalFilter },
+  ): Promise<SalonListItemDto[]> {
+    if (salons.length === 0) return [];
+    const ids = salons.map((salon) => salon.id);
+    const [ratings, prices, waiting, matches] = await Promise.all([
+      this.prisma.review.groupBy({
+        by: ['salonId'],
+        where: { salonId: { in: ids } },
+        _avg: { rating: true },
+        _count: { rating: true },
+      }),
+      this.prisma.service.groupBy({
+        by: ['salonId'],
+        where: { salonId: { in: ids }, isActive: true },
+        _min: { price: true },
+        _max: { price: true },
+      }),
+      // Same WAITING/CALLED/IN_SERVICE whitelist getDashboardQueue/getCapacitySummary use.
+      this.prisma.queueEntry.groupBy({
+        by: ['salonId'],
+        where: {
+          salonId: { in: ids },
+          status: {
+            in: [
+              QueueEntryStatus.WAITING,
+              QueueEntryStatus.CALLED,
+              QueueEntryStatus.IN_SERVICE,
+            ],
+          },
         },
-      },
+        _count: { _all: true },
+      }),
+      selected
+        ? this.prisma.service.findMany({
+            where: {
+              salonId: { in: ids },
+              isActive: true,
+              ...(selected.price
+                ? {
+                    AND: [
+                      popularServiceRelevance(selected.service),
+                      { price: selected.price },
+                    ],
+                  }
+                : popularServiceRelevance(selected.service)),
+            },
+            select: {
+              id: true,
+              salonId: true,
+              name: true,
+              price: true,
+              durationMinutes: true,
+            },
+            orderBy: [{ price: 'asc' }, { name: 'asc' }],
+          })
+        : Promise.resolve([]),
+    ]);
+    const ratingBy = new Map(ratings.map((r) => [r.salonId, r]));
+    const priceBy = new Map(prices.map((p) => [p.salonId, p]));
+    const waitingBy = new Map(waiting.map((w) => [w.salonId, w._count._all]));
+    // Rows arrive cheapest first, so the first row per salon is its compared price.
+    const selectedBy = new Map<string, (typeof matches)[number]>();
+    for (const row of matches)
+      if (!selectedBy.has(row.salonId)) selectedBy.set(row.salonId, row);
+
+    return salons.map((salon) => {
+      const rating = ratingBy.get(salon.id);
+      const price = priceBy.get(salon.id);
+      const match = selectedBy.get(salon.id);
+      const distanceKm =
+        from && salon.lat !== null && salon.lng !== null
+          ? Math.round(
+              haversineDistanceKm(from.lat, from.lng, salon.lat, salon.lng) *
+                10,
+            ) / 10
+          : null;
+      return {
+        id: salon.id,
+        publicId: salon.publicId,
+        name: salon.name,
+        slug: salon.slug,
+        citySlug: salon.city.slug,
+        localitySlug: salon.locality?.slug,
+        addressLine: salon.addressLine,
+        countryCode: salon.city.countryCode,
+        currency: salon.currency,
+        postalCode: salon.postalCode,
+        lat: salon.lat,
+        lng: salon.lng,
+        coverPhotoUrl: salon.photos[0]?.url ?? null,
+        ratingAverage: rating?._avg.rating ?? null,
+        ratingCount: rating?._count.rating ?? 0,
+        priceMin: price?._min.price ? Number(price._min.price) : null,
+        priceMax: price?._max.price ? Number(price._max.price) : null,
+        distanceKm,
+        isOpenNow: salon.isClosedForToday
+          ? false
+          : isOpenNow(salon.operatingHours, salon),
+        isClosedForToday: salon.isClosedForToday,
+        verified: salon.verification?.status === VerificationStatus.APPROVED,
+        waitingCount: waitingBy.get(salon.id) ?? 0,
+        onlineBookingDiscountPercent: salon.onlineBookingDiscountPercent,
+        salonType: salon.salonType,
+        salonTypeConfirmed: salon.salonTypeConfirmed,
+        selectedService: selected
+          ? match
+            ? {
+                id: match.id,
+                name: match.name,
+                price: Number(match.price),
+                durationMinutes: match.durationMinutes,
+              }
+            : null
+          : undefined,
+      };
     });
-    const distanceKm =
-      from && salon.lat !== null && salon.lng !== null
-        ? Math.round(
-            haversineDistanceKm(from.lat, from.lng, salon.lat, salon.lng) * 10,
-          ) / 10
-        : null;
-    return {
-      id: salon.id,
-      publicId: salon.publicId,
-      name: salon.name,
-      slug: salon.slug,
-      citySlug: salon.city.slug,
-      localitySlug: salon.locality?.slug,
-      addressLine: salon.addressLine,
-      countryCode: salon.city.countryCode,
-      currency: salon.currency,
-      postalCode: salon.postalCode,
-      lat: salon.lat,
-      lng: salon.lng,
-      coverPhotoUrl: salon.photos[0]?.url ?? null,
-      ratingAverage,
-      ratingCount,
-      priceMin,
-      priceMax,
-      distanceKm,
-      isOpenNow: salon.isClosedForToday
-        ? false
-        : isOpenNow(salon.operatingHours, salon),
-      isClosedForToday: salon.isClosedForToday,
-      verified: salon.verification?.status === VerificationStatus.APPROVED,
-      waitingCount,
-      onlineBookingDiscountPercent: salon.onlineBookingDiscountPercent,
-    };
+  }
+
+  /** Salons by id, in the given order, as list items (missing or inactive salons are skipped). */
+  async listItemsByIds(ids: string[]): Promise<SalonListItemDto[]> {
+    if (ids.length === 0) return [];
+    const salons = await this.prisma.salon.findMany({
+      where: { id: { in: ids }, status: SalonStatus.ACTIVE },
+      include: listInclude,
+    });
+    const byId = new Map(salons.map((salon) => [salon.id, salon]));
+    const ordered = ids
+      .map((id) => byId.get(id))
+      .filter((s): s is SalonWithListRelations => !!s);
+    return this.toListItems(ordered);
   }
 
   // Computed on read, not stored (no schema change) — see DATABASE.md's existing pattern for
