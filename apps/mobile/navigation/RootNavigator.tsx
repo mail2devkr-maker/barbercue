@@ -12,6 +12,7 @@ import { takePendingGuestIntent } from '../lib/guest-booking-handoff';
 import { resolvePostAuthCustomerNavigation, takePendingCustomerDestination } from '../lib/customer-navigation-intent';
 import { navigationRef } from './navigation-ref';
 import { subscribeToCustomerBookingPushNavigation } from '../lib/push-navigation';
+import { subscribeQueueArrivalNavigation } from '../lib/queue-push-navigation';
 import { isCreditsEnabled } from '../lib/feature-flags';
 import { fastQue, font } from '../lib/theme';
 import { TabIcon, type TabIconName } from '../components/ui/TabIcon';
@@ -84,6 +85,19 @@ function CustomerBookingPushNavigationBridge() {
   return null;
 }
 
+function CustomerQueueArrivalPushNavigationBridge() {
+  useEffect(
+    () => subscribeQueueArrivalNavigation('customer', () => {
+      if (!navigationRef.isReady()) return false;
+      // Queue tab re-fetches authenticated server truth; push payload is never trusted as a ticket.
+      navigationRef.navigate('QueueTab', { screen: 'QueueHome' });
+      return true;
+    }),
+    [],
+  );
+  return null;
+}
+
 // Mounted only when authenticated (see App.tsx) — every screen here assumes a logged-in
 // customer, matching the web app's book/layout.tsx + account/layout.tsx RequireRole gates.
 // Text-only tab labels (no icon library added) — active tab reads via color + weight, matching
@@ -98,6 +112,7 @@ export default function RootNavigator() {
       <GuestBookingHandoffBridge />
       <CustomerDestinationHandoffBridge />
       <CustomerBookingPushNavigationBridge />
+      <CustomerQueueArrivalPushNavigationBridge />
       <Tab.Navigator
         screenOptions={{
         headerShown: false,
