@@ -138,11 +138,26 @@ function popularServiceRelevance(
   };
 }
 
-/** The price the customer would pay for the selected service with the card's offer, if certain. */
+// Without a selected service (selectedService undefined), price sorts use the salon's starting
+// price; with one, that service's price (null when the salon doesn't offer it — ranked last).
+function comparedPrice(item: SalonListItemDto): number | null {
+  return item.selectedService === undefined
+    ? item.priceMin
+    : (item.selectedService?.price ?? null);
+}
+
+/**
+ * What the customer would pay after the card's offer, when that is certain: for the selected
+ * service, or — with no service selected — the lowest of the starting price and a certain offer price.
+ */
 export function effectivePrice(item: SalonListItemDto): number | null {
-  return (
-    item.offers?.[0]?.price?.offerPrice ?? item.selectedService?.price ?? null
+  const offerPrice = item.offers?.[0]?.price?.offerPrice ?? null;
+  if (item.selectedService !== undefined)
+    return offerPrice ?? item.selectedService?.price ?? null;
+  const prices = [item.priceMin, offerPrice].filter(
+    (p): p is number => p !== null,
   );
+  return prices.length ? Math.min(...prices) : null;
 }
 
 export type RankedSort = Exclude<SalonSortOption, 'relevance' | 'distance'>;
@@ -174,14 +189,9 @@ export function sortListItems(
   return [...items].sort((a, b) => {
     switch (sort) {
       case 'price':
-        return (
-          (a.selectedService?.price ?? last) -
-          (b.selectedService?.price ?? last)
-        );
+        return (comparedPrice(a) ?? last) - (comparedPrice(b) ?? last);
       case 'price_desc':
-        return (
-          (b.selectedService?.price ?? -1) - (a.selectedService?.price ?? -1)
-        );
+        return (comparedPrice(b) ?? -1) - (comparedPrice(a) ?? -1);
       case 'effective_price':
         return (effectivePrice(a) ?? last) - (effectivePrice(b) ?? last);
       case 'offer':

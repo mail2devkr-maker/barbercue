@@ -175,7 +175,10 @@ export const SALON_SORT_LABELS: Record<SalonSortOption, string> = {
   reviews: 'Most reviewed',
 };
 
-/** Sorts that compare one service's price, so they need a selected service. */
+/**
+ * Sorts that compare prices: by the selected service's price when a service is selected, otherwise
+ * by each salon's starting price (its cheapest active service).
+ */
 export const SERVICE_PRICE_SORTS: readonly SalonSortOption[] = ['price', 'price_desc', 'effective_price'];
 
 /** Minimum review score choices offered by the discovery filters ("4+ stars" etc.). */

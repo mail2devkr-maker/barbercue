@@ -7,7 +7,7 @@ import {
   priceRangeChange,
   readDiscoveryState,
   searchApiQuery,
-  sortUnavailableReason,
+  sortsByStartingPrice,
 } from '../../../lib/discovery-params';
 import { resetFavoritesForTests, sortFavorites, useFavorites } from '../../../lib/favorites';
 import { CompareTable, FiltersPanel, SortControl } from '../DiscoveryFilters';
@@ -43,10 +43,11 @@ describe('discovery URL rules', () => {
     expect(readDiscoveryState(p('popularService=nope')).popularService).toBeNull();
   });
 
-  it('disables price sort until a service is selected, and never sends it without one', () => {
-    expect(sortUnavailableReason('price', { popularService: null, legacyService: null })).toBe('Select a service first to sort by price.');
-    expect(sortUnavailableReason('price', { popularService: 'haircut', legacyService: null })).toBeNull();
-    expect(searchApiQuery(p('sort=price&salonType=GENTS'))).toBe('salonType=GENTS');
+  it('price sorts work without a service (by starting price) and are always sent', () => {
+    expect(sortsByStartingPrice('price', { popularService: null, legacyService: null })).toBe(true);
+    expect(sortsByStartingPrice('price', { popularService: 'haircut', legacyService: null })).toBe(false);
+    expect(sortsByStartingPrice('rating', { popularService: null, legacyService: null })).toBe(false);
+    expect(searchApiQuery(p('sort=price&salonType=GENTS'))).toBe('salonType=GENTS&sort=price');
     expect(searchApiQuery(p('sort=price&popularService=haircut&view=compare'))).toBe('popularService=haircut&sort=price');
   });
 
@@ -54,16 +55,15 @@ describe('discovery URL rules', () => {
     expect(popularServiceChange(p('priceMax=500'), 'haircut')).toEqual({ popularService: 'haircut' });
   });
 
-  it('resets the price range (and a now-impossible price sort) when the compared service changes', () => {
+  it('resets the price range when the compared service changes, and keeps a price sort', () => {
     expect(popularServiceChange(p('popularService=haircut&priceMin=100&priceMax=300&sort=price'), 'facial')).toEqual({ popularService: 'facial', priceMin: null, priceMax: null });
-    expect(popularServiceChange(p('popularService=haircut&sort=price'), null)).toEqual({ popularService: null, priceMin: null, priceMax: null, sort: null });
+    expect(popularServiceChange(p('popularService=haircut&sort=price'), null)).toEqual({ popularService: null, priceMin: null, priceMax: null });
   });
 
   it('offers only and every service-price sort follow the same URL rules', () => {
     expect(readDiscoveryState(p('offersOnly=true')).offersOnly).toBe(true);
-    expect(searchApiQuery(p('offersOnly=true&sort=price_desc'))).toBe('offersOnly=true');
+    expect(searchApiQuery(p('offersOnly=true&sort=price_desc'))).toBe('sort=price_desc&offersOnly=true');
     expect(searchApiQuery(p('popularService=facial&sort=effective_price'))).toBe('popularService=facial&sort=effective_price');
-    expect(popularServiceChange(p('popularService=facial&sort=price_desc'), null)).toMatchObject({ sort: null });
   });
 
   it('treats the slider ends as "no limit" and counts active filters', () => {
@@ -153,12 +153,14 @@ describe('filter controls', () => {
     expect(onNearMe).toHaveBeenCalledWith(true);
   });
 
-  it('greys out price sort with a reason when no service is selected', () => {
+  it('every sort can be chosen; price sorts say "starting price" until a service is picked', () => {
     let tree;
     act(() => { tree = TestRenderer.create(<SortControl state={state('')} onChange={jest.fn()} />); });
-    const price = tree.root.find((n) => n.type === 'option' && n.props.value === 'price');
-    expect(price.props.disabled).toBe(true);
-    expect(textOf(tree.root)).toContain('Select a service first to sort by price.');
+    const options = tree.root.findAll((n) => n.type === 'option');
+    expect(options.every((o) => !o.props.disabled)).toBe(true);
+    expect(textOf(options.find((o) => o.props.value === 'price_desc'))).toBe('Price — high to low (starting price)');
+    act(() => { tree.update(<SortControl state={state('popularService=haircut')} onChange={jest.fn()} />); });
+    expect(textOf(tree.root.find((n) => n.type === 'option' && n.props.value === 'price_desc'))).toBe('Price — high to low');
   });
 });
 

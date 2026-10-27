@@ -251,20 +251,10 @@ describe('sorting', () => {
     expect(result.nextCursor).toBeNull();
   });
 
-  it('rejects price sort without a service and distance sort without a location', () => {
+  it('accepts a price sort without a service, and rejects distance sort without a location', () => {
     expect(salonSearchQuerySchema.safeParse({ sort: 'price' }).success).toBe(
-      false,
+      true,
     );
-    expect(
-      salonSearchQuerySchema.safeParse({
-        sort: 'price',
-        popularService: 'haircut',
-      }).success,
-    ).toBe(true);
-    expect(
-      salonSearchQuerySchema.safeParse({ sort: 'price', service: 'hair' })
-        .success,
-    ).toBe(true);
     expect(salonSearchQuerySchema.safeParse({ sort: 'distance' }).success).toBe(
       false,
     );
@@ -461,17 +451,37 @@ describe('booking page 3.0: offers filter and new sorts', () => {
     expect(offerClause.offers.some.validTo.gt).toBeInstanceOf(Date);
   });
 
-  it('every service price sort needs a selected service', () => {
+  it('without a service, price sorts rank by starting price', () => {
     for (const sort of ['price', 'price_desc', 'effective_price']) {
-      expect(salonSearchQuerySchema.safeParse({ sort }).success).toBe(false);
-      expect(
-        salonSearchQuerySchema.safeParse({ sort, popularService: 'haircut' })
-          .success,
-      ).toBe(true);
+      expect(salonSearchQuerySchema.safeParse({ sort }).success).toBe(true);
     }
-    expect(salonSearchQuerySchema.safeParse({ sort: 'offer' }).success).toBe(
-      true,
-    );
+    const noService = [
+      item({ id: 'mid', priceMin: 200, selectedService: undefined }),
+      item({ id: 'none', priceMin: null, selectedService: undefined }),
+      item({ id: 'low', priceMin: 90, selectedService: undefined }),
+      // A certain ₹60 offer price makes this the cheapest after offers.
+      item({
+        id: 'offer',
+        priceMin: 150,
+        selectedService: undefined,
+        offers: [{ price: { offerPrice: 60 } } as never],
+      }),
+    ];
+    expect(sortListItems(noService, 'price').map((i) => i.id)).toEqual([
+      'low',
+      'offer',
+      'mid',
+      'none',
+    ]);
+    expect(sortListItems(noService, 'price_desc').map((i) => i.id)).toEqual([
+      'mid',
+      'offer',
+      'low',
+      'none',
+    ]);
+    expect(
+      sortListItems(noService, 'effective_price').map((i) => i.id),
+    ).toEqual(['offer', 'low', 'mid', 'none']);
   });
 });
 

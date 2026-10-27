@@ -24,7 +24,7 @@ import {
   PRICE_SLIDER_STEP,
   TOP_RATED_MIN,
   priceRangeChange,
-  sortUnavailableReason,
+  sortsByStartingPrice,
   type DiscoveryState,
 } from "../../lib/discovery-params";
 import { FavoriteButton } from "./FavoriteButton";
@@ -295,23 +295,20 @@ export function FiltersPanel({
 }
 
 export function SortControl({ state, onChange }: { state: DiscoveryState; onChange: (sort: SalonSortOption) => void }) {
-  const priceReason = sortUnavailableReason("price", state);
   return (
     <div className={styles.sort}>
       <label htmlFor="discovery-sort">Sort by</label>
       <select id="discovery-sort" value={state.sort} onChange={(e) => onChange(e.target.value as SalonSortOption)}>
         {SALON_SORT_OPTIONS.map((option) => {
-          const blocked = !!sortUnavailableReason(option, state);
           return (
-            <option key={option} value={option} disabled={blocked}>
+            <option key={option} value={option}>
               {SALON_SORT_LABELS[option]}
-              {blocked ? " — select a service first" : ""}
+              {sortsByStartingPrice(option, state) ? " (starting price)" : ""}
               {option === "distance" && !state.nearMe ? " (uses your location)" : ""}
             </option>
           );
         })}
       </select>
-      {priceReason && <span className={styles.sortHint}>{priceReason}</span>}
     </div>
   );
 }

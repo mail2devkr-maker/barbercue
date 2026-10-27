@@ -80,10 +80,9 @@ export function readDiscoveryState(params: URLSearchParams): DiscoveryState {
   };
 }
 
-/** Why a sort option is unavailable right now, or null when it can be used. */
-export function sortUnavailableReason(option: SalonSortOption, state: Pick<DiscoveryState, "popularService" | "legacyService">): string | null {
-  if (SERVICE_PRICE_SORTS.includes(option) && !state.popularService && !state.legacyService) return "Select a service first to sort by price.";
-  return null;
+/** Price sorts compare the selected service's price; with no service, each salon's starting price. */
+export function sortsByStartingPrice(option: SalonSortOption, state: Pick<DiscoveryState, "popularService" | "legacyService">): boolean {
+  return SERVICE_PRICE_SORTS.includes(option) && !state.popularService && !state.legacyService;
 }
 
 /** Search API query string for the current URL (only known params, empty values dropped). */
@@ -93,9 +92,7 @@ export function searchApiQuery(params: URLSearchParams, favoriteIds?: Iterable<s
     const value = params.get(key);
     if (value) out.set(key, value);
   }
-  // The API rejects price sort without a service; drop it rather than show an error page.
   const state = readDiscoveryState(params);
-  if (sortUnavailableReason(state.sort, state)) out.delete("sort");
   if (state.favoritesOnly && favoriteIds) out.set("ids", [...favoriteIds].slice(0, SALON_SEARCH_MAX_IDS).join(","));
   return out.toString();
 }
@@ -112,8 +109,8 @@ export function withParams(params: URLSearchParams, changes: Record<string, stri
 
 /**
  * Switching from one compared service to another (or clearing it) resets the price range — a
- * ₹100–₹300 haircut range means nothing for a facial — and a price sort that no longer has a
- * service. Picking a first service keeps a range set for "any service", now applied to that service.
+ * ₹100–₹300 haircut range means nothing for a facial. Picking a first service keeps a range set
+ * for "any service", now applied to that service. A price sort stays (it falls back to starting price).
  */
 export function popularServiceChange(params: URLSearchParams, serviceId: string | null): Record<string, string | null> {
   const state = readDiscoveryState(params);
@@ -121,7 +118,6 @@ export function popularServiceChange(params: URLSearchParams, serviceId: string 
   return {
     popularService: serviceId,
     ...(keepRange ? {} : { priceMin: null, priceMax: null }),
-    ...(serviceId === null && SERVICE_PRICE_SORTS.includes(state.sort) && !state.legacyService ? { sort: null } : {}),
   };
 }
 

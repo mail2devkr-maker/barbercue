@@ -357,13 +357,6 @@ export const salonSearchQuerySchema = z
       .optional(),
   })
   .refine(
-    (data) =>
-      !(data.sort === "price" || data.sort === "price_desc" || data.sort === "effective_price") ||
-      data.popularService !== undefined ||
-      data.service !== undefined,
-    { message: "Select a service first to sort by price.", path: ["sort"] },
-  )
-  .refine(
     (data) => data.sort !== "distance" || (data.lat !== undefined && data.lng !== undefined),
     { message: "Sorting by distance needs your location.", path: ["sort"] },
   )
