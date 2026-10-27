@@ -416,6 +416,26 @@ export class QueueService {
     return this.getDetailOrThrow(entryId);
   }
 
+  async registerGuestPush(
+    entryId: string, guestAccessToken: string, expoPushToken: string,
+  ): Promise<{ registered: boolean }> {
+    // Explicitly accepts Expo's public device-delivery token, never a raw FCM/APNs credential.
+    if (!/^(Expo(nent)?PushToken)\\[[A-Za-z0-9_-]{10,240}\\]$/.test(expoPushToken)) {
+      throw new BadRequestException('Invalid Expo push token.');
+    }
+    await this.getGuestEntry(entryId, guestAccessToken);
+    const claim = await this.prisma.queueEntry.updateMany({
+      where: {
+        id: entryId,
+        guestAccessHash: this.guestHash(guestAccessToken),
+        guestAccessExpiresAt: { gt: new Date() },
+        status: { in: [QueueEntryStatus.WAITING, QueueEntryStatus.CALLED] },
+      },
+      data: { guestExpoPushToken: expoPushToken },
+    });
+    return { registered: claim.count === 1 };
+  }
+
   async cancelGuestEntry(entryId: string, guestAccessToken: string): Promise<QueueEntryDetailDto> {
     await this.getGuestEntry(entryId, guestAccessToken);
     const row = await this.prisma.queueEntry.findUniqueOrThrow({
