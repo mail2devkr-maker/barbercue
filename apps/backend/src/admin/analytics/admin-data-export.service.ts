@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { createHmac, randomUUID } from 'crypto';
 import {
   normalizeContactPhone,
@@ -101,6 +101,10 @@ export class AdminDataExportService {
       case 'CUSTOMER_REPORT':
       case 'CUSTOMER_CONTACTS': {
         const withContact = category === 'CUSTOMER_CONTACTS';
+        // Do not read, format or release contacts when opt-out suppression cannot be enforced.
+        if (withContact && !process.env.CONTACT_LEDGER_HASH_KEY) {
+          throw new ServiceUnavailableException('Customer contact export unavailable: suppression verification is not configured.');
+        }
         const { overview, contacts } = await this.customers.exportRows(
           query,
           withContact,
@@ -237,7 +241,9 @@ export class AdminDataExportService {
     phones: Array<string | null>,
   ): Promise<{ checked: boolean; blocked: Set<string> }> {
     const key = process.env.CONTACT_LEDGER_HASH_KEY;
-    if (!key) return { checked: false, blocked: new Set() };
+    if (!key) {
+      throw new ServiceUnavailableException('Customer contact export unavailable: suppression verification is not configured.');
+    }
     const byHash = new Map<string, string>();
     for (const phone of phones) {
       const e164 = phone ? normalizeContactPhone(phone) : null;
