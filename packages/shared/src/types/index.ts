@@ -1183,6 +1183,10 @@ export interface QueueEntryDetailDto extends QueueEntryDto {
   // appointment check-in creates the entry, when staff mark a remote join as arrived, or implicitly
   // when staff assign it to a chair. Null = remote join not yet acknowledged.
   arrivedAt: string | null; // ISO 8601
+  /** Queue arrival prompt reached estimated T-10 (nullable on old Android builds). */
+  arrivalPromptSentAt?: string | null;
+  /** Customer self-report, not a verified physical check-in. */
+  customerArrivalResponse?: boolean | null;
   assignedStaffName: string | null;
   assignedChairLabel: string | null;
   // Booking/queue resource-reservation mission (Part 7) — the customer's own barber preference at
