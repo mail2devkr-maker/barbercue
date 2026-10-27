@@ -5,6 +5,7 @@ import OwnerCustomerDetailScreen from '../screens/owner/OwnerCustomerDetailScree
 import OwnerInvoicesScreen from '../screens/owner/OwnerInvoicesScreen';
 import OwnerInvoiceDetailScreen from '../screens/owner/OwnerInvoiceDetailScreen';
 import OwnerAnalyticsScreen from '../screens/owner/OwnerAnalyticsScreen';
+import OwnerRevenueReportScreen from '../screens/owner/OwnerRevenueReportScreen';
 import OwnerInventoryScreen from '../screens/owner/OwnerInventoryScreen';
 import OwnerCancellationsScreen from '../screens/owner/OwnerCancellationsScreen';
 import OwnerReviewsScreen from '../screens/owner/OwnerReviewsScreen';
@@ -18,6 +19,7 @@ export type OwnerShopStackParamList = {
   OwnerInvoices: undefined;
   OwnerInvoiceDetail: { salonId: string; invoiceId: string };
   OwnerAnalytics: undefined;
+  OwnerRevenueReport: undefined;
   OwnerInventory: undefined;
   OwnerCancellations: undefined;
   OwnerReviews: undefined;
@@ -48,6 +50,17 @@ export default function OwnerShopStack() {
         options={{
           headerShown: true,
           title: language === 'HI' ? 'विश्लेषण' : 'Analytics',
+          headerStyle: { backgroundColor: fastQue.backgroundRaised },
+          headerTintColor: fastQue.text,
+          headerTitleStyle: { fontFamily: font.bodySemiBold },
+        }}
+      />
+      <Stack.Screen
+        name="OwnerRevenueReport"
+        component={OwnerRevenueReportScreen}
+        options={{
+          headerShown: true,
+          title: language === 'HI' ? 'आय रिपोर्ट' : 'Revenue report',
           headerStyle: { backgroundColor: fastQue.backgroundRaised },
           headerTintColor: fastQue.text,
           headerTitleStyle: { fontFamily: font.bodySemiBold },

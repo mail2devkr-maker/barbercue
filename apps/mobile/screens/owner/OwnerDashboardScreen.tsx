@@ -329,6 +329,13 @@ export default function OwnerDashboardScreen() {
         <Pressable
           accessibilityRole="button"
           style={styles.quickLink}
+          onPress={() => navigation.navigate('OwnerShopTab', { screen: 'OwnerRevenueReport' })}
+        >
+          <Text style={styles.quickLinkText}>{language === 'HI' ? 'आय रिपोर्ट' : 'Revenue report'}</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          style={styles.quickLink}
           onPress={() => navigation.navigate('OwnerShopTab', { screen: 'OwnerInventory' })}
         >
           <Text style={styles.quickLinkText}>{language === 'HI' ? 'इन्वेंटरी' : 'Inventory'}</Text>
