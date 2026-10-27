@@ -57,6 +57,30 @@ jobs:
           psql -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE nitesh_gate"
           cd apps/backend
           DATABASE_URL="$CHAIN_DATABASE_URL" bash scripts/verify-migration-chain.sh
+      - name: Cross-PR additive DDL coexistence (synthetic database, pinned sources)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          fetch_migration() {
+            local sha="$1" folder="$2" outfile="$3"
+            curl --fail --silent --show-error --location \
+              -H "Authorization: Bearer $GITHUB_TOKEN" \
+              -H "Accept: application/vnd.github.raw+json" \
+              "https://api.github.com/repos/mail2devkr-maker/barbercue/contents/apps/backend/prisma/migrations/$folder/migration.sql?ref=$sha" \
+              -o "$outfile"
+          }
+          fetch_migration "3e9b533ffeddf7d9c2edc24c1b1cd07bb04990c8" "20261027100000_add_apple_auth" "$RUNNER_TEMP/apple.sql"
+          fetch_migration "33b9f0017a32242f84d94414b227e1a32e01a238" "20261027100000_salon_change_requests" "$RUNNER_TEMP/shop-change.sql"
+          fetch_migration "e33f1aad99e3710d79af5ca77243952a60419f71" "20261027140000_owner_transfer_password_gate" "$RUNNER_TEMP/owner-transfer.sql"
+          for sql in "$RUNNER_TEMP/apple.sql" "$RUNNER_TEMP/shop-change.sql" "$RUNNER_TEMP/owner-transfer.sql"; do
+            psql -d nitesh_gate -v ON_ERROR_STOP=1 -f "$sql"
+          done
+          psql -d nitesh_gate -v ON_ERROR_STOP=1 -c "
+            SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name = 'customer_favorites') AS nitesh_favorites,
+                   EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name = 'apple_auth_nonces') AS apple_auth,
+                   EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name = 'salon_change_requests') AS change_requests,
+                   EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name = 'salon_owner_transfers') AS owner_transfer;"
       - name: Strict new admin and discovery regression tests (no baseline allowance)
         working-directory: apps/backend
         run: |
