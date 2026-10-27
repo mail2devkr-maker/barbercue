@@ -64,6 +64,19 @@ export class QueueGuestController {
     return this.queueService.respondArrival(id, body.arrived, { guestAccessToken: guestToken });
   }
 
+  @Post('queue-entries/:id/guest-device')
+  @Throttle(GUEST_MUTATION_LIMIT)
+  registerGuestDevice(
+    @Param('id') id: string,
+    @Headers('x-queue-guest-token') guestToken: string,
+    @Body() body: { expoPushToken?: unknown },
+  ) {
+    if (typeof body?.expoPushToken !== 'string') {
+      throw new BadRequestException('Expo push token is required.');
+    }
+    return this.queueService.registerGuestPush(id, guestToken ?? '', body.expoPushToken);
+  }
+
   @Get('queue-entries/:id/guest-shop-contact')
   @Throttle(GUEST_READ_LIMIT)
   async getShopContact(
