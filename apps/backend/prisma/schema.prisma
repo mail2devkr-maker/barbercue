@@ -1687,6 +1687,14 @@ model QueueEntry {
   // own customer; never by the public queue status APIs, realtime payloads or logs.
   contactName          String?
   contactPhone         String?
+  // Anonymous queue tickets are controlled by an unguessable 256-bit capability.
+  // Only its SHA-256 digest is stored. No login account is created from an unverified number.
+  guestAccessHash      String?    @unique @db.VarChar(64)
+  guestAccessExpiresAt DateTime?  @db.Timestamptz(6)
+  // Durable once-only queue arrival prompt. Customer claims are NOT verified shop arrivals.
+  arrivalPromptSentAt       DateTime? @db.Timestamptz(6)
+  customerArrivalResponse   Boolean?
+  customerArrivalResponseAt DateTime? @db.Timestamptz(6)
   // Owner-operations mission — an operator-created Live Queue entry for someone at the shop who
   // has no FastQue account (customerId stays NULL; contactName/contactPhone hold what the shop
   // typed in). createdByUserId is the operator; preferredStaffId is an optional soft request that
