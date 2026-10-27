@@ -345,6 +345,11 @@ export const salonSearchQuerySchema = z
       .enum(["true", "false"])
       .transform((value) => value === "true")
       .optional(),
+    // Only salons with a current published offer (for the selected service, when one is selected).
+    offersOnly: z
+      .enum(["true", "false"])
+      .transform((value) => value === "true")
+      .optional(),
     ids: z
       .string()
       .transform((value) => value.split(",").map((id) => id.trim()).filter(Boolean))
@@ -352,7 +357,10 @@ export const salonSearchQuerySchema = z
       .optional(),
   })
   .refine(
-    (data) => data.sort !== "price" || data.popularService !== undefined || data.service !== undefined,
+    (data) =>
+      !(data.sort === "price" || data.sort === "price_desc" || data.sort === "effective_price") ||
+      data.popularService !== undefined ||
+      data.service !== undefined,
     { message: "Select a service first to sort by price.", path: ["sort"] },
   )
   .refine(

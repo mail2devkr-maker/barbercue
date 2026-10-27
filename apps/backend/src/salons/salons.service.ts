@@ -21,6 +21,7 @@ import {
   type PublicSalonStatusDto,
   type ServiceSuggestionDto,
   type SalonSearchQueryInput,
+  type SalonSortOption,
   type SalonWorkplaceDto,
   type TeamMemberDto,
   SALON_TYPE_FILTER_MATCHES,
@@ -32,7 +33,16 @@ import { AppException } from '../common/exceptions/app.exception';
 import { SalonAccessService } from '../common/salon-access/salon-access.service';
 import { TokenService } from '../auth/services/token.service';
 import { CitiesService } from './cities.service';
-import { isOpenAt, resolveSalonTimeZone } from '../common/timezone/timezone';
+import {
+  isOpenAt,
+  resolveSalonTimeZone,
+  zonedDayAndMinutes,
+} from '../common/timezone/timezone';
+import {
+  summarizeOffers,
+  type OfferRow,
+  type PricedService,
+} from './offer-summary';
 import { resolveAutoTimezone } from '../common/timezone/timezone-resolution';
 
 const DEFAULT_PAGE_SIZE = 20;
@@ -77,7 +87,12 @@ const MAX_SLUG_ATTEMPTS = 5;
 const listInclude = {
   city: true,
   locality: true,
-  photos: { where: { type: 'COVER' as const }, take: 1 },
+  // Cover first (PhotoType declares COVER before GALLERY), then the owner's order — the card's
+  // carousel/thumbnails. coverPhotoUrl still only ever uses a COVER photo.
+  photos: {
+    orderBy: [{ type: 'asc' as const }, { sortOrder: 'asc' as const }],
+    take: 6,
+  },
   operatingHours: true,
   // Phase 18 — status only; a salon with no row at all (never submitted) is simply not verified.
   verification: { select: { status: true } },
@@ -123,22 +138,84 @@ function popularServiceRelevance(
   };
 }
 
+/** The price the customer would pay for the selected service with the card's offer, if certain. */
+export function effectivePrice(item: SalonListItemDto): number | null {
+  return (
+    item.offers?.[0]?.price?.offerPrice ?? item.selectedService?.price ?? null
+  );
+}
+
+export type RankedSort = Exclude<SalonSortOption, 'relevance' | 'distance'>;
+export const RANKED_SORTS: readonly SalonSortOption[] = [
+  'price',
+  'price_desc',
+  'effective_price',
+  'offer',
+  'rating',
+  'reviews',
+];
+
 /**
- * Price: cheapest selected-service price first; salons without a matching price last.
- * Rating: highest average first, unrated salons last, then more reviews first.
+ * Price: selected-service price, low→high or high→low; salons without one last either way.
+ * Effective price: the same, after the card's certain offer. Offer: certain offers first, then the
+ * largest saving; salons without an offer last. Rating: highest average first, unrated last, then
+ * more reviews. Reviews: most reviews first, then rating.
  * Stable sort, so equal values keep their incoming order (nearest-first in distance mode).
  */
 export function sortListItems(
   items: SalonListItemDto[],
-  sort: 'price' | 'rating',
+  sort: RankedSort,
 ): SalonListItemDto[] {
   const last = Number.POSITIVE_INFINITY;
-  return [...items].sort((a, b) =>
-    sort === 'price'
-      ? (a.selectedService?.price ?? last) - (b.selectedService?.price ?? last)
-      : (b.ratingAverage ?? -1) - (a.ratingAverage ?? -1) ||
-        b.ratingCount - a.ratingCount,
-  );
+  const offerRank = (item: SalonListItemDto) => {
+    const offer = item.offers?.[0];
+    return offer ? (offer.conditional ? 1 : 0) : 2;
+  };
+  return [...items].sort((a, b) => {
+    switch (sort) {
+      case 'price':
+        return (
+          (a.selectedService?.price ?? last) -
+          (b.selectedService?.price ?? last)
+        );
+      case 'price_desc':
+        return (
+          (b.selectedService?.price ?? -1) - (a.selectedService?.price ?? -1)
+        );
+      case 'effective_price':
+        return (effectivePrice(a) ?? last) - (effectivePrice(b) ?? last);
+      case 'offer':
+        return (
+          offerRank(a) - offerRank(b) ||
+          (b.offers?.[0]?.saving ?? 0) - (a.offers?.[0]?.saving ?? 0)
+        );
+      case 'reviews':
+        return (
+          b.ratingCount - a.ratingCount ||
+          (b.ratingAverage ?? -1) - (a.ratingAverage ?? -1)
+        );
+      default:
+        return (
+          (b.ratingAverage ?? -1) - (a.ratingAverage ?? -1) ||
+          b.ratingCount - a.ratingCount
+        );
+    }
+  });
+}
+
+// Today's salon-local closing time ("HH:mm") while the salon is open; null otherwise.
+function closesAtToday(
+  hours: { dayOfWeek: number; isClosed: boolean; closeTime: string }[],
+  salon: { timezone: string | null; city: { countryCode: string } },
+): string | null {
+  const timeZone = resolveSalonTimeZone({
+    timezone: salon.timezone,
+    countryCode: salon.city.countryCode,
+  });
+  if (!timeZone) return null;
+  const { dayOfWeek } = zonedDayAndMinutes(new Date(), timeZone);
+  const today = hours.find((entry) => entry.dayOfWeek === dayOfWeek);
+  return today && !today.isClosed ? today.closeTime : null;
 }
 
 type SalonWithListRelations = Prisma.SalonGetPayload<{
@@ -328,6 +405,27 @@ export class SalonsService {
     // review score. Unreviewed salons have no average, so they never pass a minimum.
     const extraConditions: Prisma.SalonWhereInput[] = [];
     if (query.ids) extraConditions.push({ id: { in: query.ids } });
+    // Offers only: a published offer valid now that covers the selected service (an offer with
+    // no linked services covers all of them), or any active service when none is selected.
+    if (query.offersOnly) {
+      const now = new Date();
+      const coveredService: Prisma.ServiceWhereInput = popular
+        ? { isActive: true, ...popularServiceRelevance(popular) }
+        : { isActive: true };
+      extraConditions.push({
+        offers: {
+          some: {
+            status: 'ACTIVE',
+            validFrom: { lte: now },
+            validTo: { gt: now },
+            OR: [
+              { services: { none: {} } },
+              { services: { some: { service: coveredService } } },
+            ],
+          },
+        },
+      });
+    }
     if (query.minRating !== undefined) {
       const rated = await this.prisma.review.groupBy({
         by: ['salonId'],
@@ -374,7 +472,8 @@ export class SalonsService {
     // Price and rating sorts need every candidate's value before ordering, so — like "Near me" —
     // they rank a bounded candidate set in memory and return a single page (nextCursor null).
     const sort = query.sort ?? (nearMe ? 'distance' : 'relevance');
-    if (!nearMe && (sort === 'price' || sort === 'rating' || openNowOnly)) {
+    const ranked = RANKED_SORTS.includes(sort) ? (sort as RankedSort) : null;
+    if (!nearMe && (ranked || openNowOnly)) {
       const candidates = await this.prisma.salon.findMany({
         where,
         orderBy: sort === 'relevance' ? { name: 'asc' } : { id: 'asc' },
@@ -385,10 +484,7 @@ export class SalonsService {
         await this.toListItems(candidates, undefined, selected),
       );
       return {
-        items: (sort === 'price' || sort === 'rating'
-          ? sortListItems(items, sort)
-          : items
-        ).slice(0, limit),
+        items: (ranked ? sortListItems(items, ranked) : items).slice(0, limit),
         nextCursor: null,
       };
     }
@@ -460,11 +556,13 @@ export class SalonsService {
         .map((w) => w.item);
       // Within the distance-sorted, radius-filtered set, price/rating sorts re-rank (stable, so
       // equal values stay nearest-first).
-      const ranked =
-        sort === 'price' || sort === 'rating'
-          ? sortListItems(sorted, sort)
-          : sorted;
-      return { items: ranked.slice(0, limit), nextCursor: null };
+      return {
+        items: (ranked ? sortListItems(sorted, ranked) : sorted).slice(
+          0,
+          limit,
+        ),
+        nextCursor: null,
+      };
     }
 
     const salons = await this.prisma.salon.findMany({
@@ -1021,59 +1119,77 @@ export class SalonsService {
   ): Promise<SalonListItemDto[]> {
     if (salons.length === 0) return [];
     const ids = salons.map((salon) => salon.id);
-    const [ratings, prices, waiting, matches] = await Promise.all([
-      this.prisma.review.groupBy({
-        by: ['salonId'],
-        where: { salonId: { in: ids } },
-        _avg: { rating: true },
-        _count: { rating: true },
-      }),
-      this.prisma.service.groupBy({
-        by: ['salonId'],
-        where: { salonId: { in: ids }, isActive: true },
-        _min: { price: true },
-        _max: { price: true },
-      }),
-      // Same WAITING/CALLED/IN_SERVICE whitelist getDashboardQueue/getCapacitySummary use.
-      this.prisma.queueEntry.groupBy({
-        by: ['salonId'],
-        where: {
-          salonId: { in: ids },
-          status: {
-            in: [
-              QueueEntryStatus.WAITING,
-              QueueEntryStatus.CALLED,
-              QueueEntryStatus.IN_SERVICE,
-            ],
+    const now = new Date();
+    const [ratings, prices, waiting, matches, activeServices, offerRows] =
+      await Promise.all([
+        this.prisma.review.groupBy({
+          by: ['salonId'],
+          where: { salonId: { in: ids } },
+          _avg: { rating: true },
+          _count: { rating: true },
+        }),
+        this.prisma.service.groupBy({
+          by: ['salonId'],
+          where: { salonId: { in: ids }, isActive: true },
+          _min: { price: true },
+          _max: { price: true },
+        }),
+        // Same WAITING/CALLED/IN_SERVICE whitelist getDashboardQueue/getCapacitySummary use.
+        this.prisma.queueEntry.groupBy({
+          by: ['salonId'],
+          where: {
+            salonId: { in: ids },
+            status: {
+              in: [
+                QueueEntryStatus.WAITING,
+                QueueEntryStatus.CALLED,
+                QueueEntryStatus.IN_SERVICE,
+              ],
+            },
           },
-        },
-        _count: { _all: true },
-      }),
-      selected
-        ? this.prisma.service.findMany({
-            where: {
-              salonId: { in: ids },
-              isActive: true,
-              ...(selected.price
-                ? {
-                    AND: [
-                      popularServiceRelevance(selected.service),
-                      { price: selected.price },
-                    ],
-                  }
-                : popularServiceRelevance(selected.service)),
-            },
-            select: {
-              id: true,
-              salonId: true,
-              name: true,
-              price: true,
-              durationMinutes: true,
-            },
-            orderBy: [{ price: 'asc' }, { name: 'asc' }],
-          })
-        : Promise.resolve([]),
-    ]);
+          _count: { _all: true },
+        }),
+        selected
+          ? this.prisma.service.findMany({
+              where: {
+                salonId: { in: ids },
+                isActive: true,
+                ...(selected.price
+                  ? {
+                      AND: [
+                        popularServiceRelevance(selected.service),
+                        { price: selected.price },
+                      ],
+                    }
+                  : popularServiceRelevance(selected.service)),
+              },
+              select: {
+                id: true,
+                salonId: true,
+                name: true,
+                price: true,
+                durationMinutes: true,
+              },
+              orderBy: [{ price: 'asc' }, { name: 'asc' }],
+            })
+          : Promise.resolve([]),
+        // Every active service (cheapest first): the card's other prices and offer coverage.
+        this.prisma.service.findMany({
+          where: { salonId: { in: ids }, isActive: true },
+          select: { id: true, salonId: true, name: true, price: true },
+          orderBy: [{ price: 'asc' }, { name: 'asc' }],
+        }),
+        this.prisma.offer.findMany({
+          where: {
+            salonId: { in: ids },
+            status: 'ACTIVE',
+            validFrom: { lte: now },
+            validTo: { gt: now },
+          },
+          include: { services: { select: { serviceId: true } } },
+          orderBy: [{ validTo: 'asc' }, { id: 'asc' }],
+        }),
+      ]);
     const ratingBy = new Map(ratings.map((r) => [r.salonId, r]));
     const priceBy = new Map(prices.map((p) => [p.salonId, p]));
     const waitingBy = new Map(waiting.map((w) => [w.salonId, w._count._all]));
@@ -1081,11 +1197,32 @@ export class SalonsService {
     const selectedBy = new Map<string, (typeof matches)[number]>();
     for (const row of matches)
       if (!selectedBy.has(row.salonId)) selectedBy.set(row.salonId, row);
+    const servicesBy = new Map<string, PricedService[]>();
+    for (const row of activeServices) {
+      const list = servicesBy.get(row.salonId) ?? [];
+      list.push({ id: row.id, name: row.name, price: Number(row.price) });
+      servicesBy.set(row.salonId, list);
+    }
+    const offersBy = new Map<string, OfferRow[]>();
+    for (const row of offerRows) {
+      const list = offersBy.get(row.salonId) ?? [];
+      list.push({ ...row, serviceIds: row.services.map((s) => s.serviceId) });
+      offersBy.set(row.salonId, list);
+    }
 
     return salons.map((salon) => {
       const rating = ratingBy.get(salon.id);
       const price = priceBy.get(salon.id);
       const match = selectedBy.get(salon.id);
+      const salonServices = servicesBy.get(salon.id) ?? [];
+      const selectedPriced = selected
+        ? match
+          ? { id: match.id, name: match.name, price: Number(match.price) }
+          : null
+        : undefined;
+      const openNow = salon.isClosedForToday
+        ? false
+        : isOpenNow(salon.operatingHours, salon);
       const distanceKm =
         from && salon.lat !== null && salon.lng !== null
           ? Math.round(
@@ -1106,15 +1243,16 @@ export class SalonsService {
         postalCode: salon.postalCode,
         lat: salon.lat,
         lng: salon.lng,
-        coverPhotoUrl: salon.photos[0]?.url ?? null,
+        coverPhotoUrl:
+          salon.photos.find((photo) => photo.type === 'COVER')?.url ?? null,
+        photoUrls: salon.photos.map((photo) => photo.url),
         ratingAverage: rating?._avg.rating ?? null,
         ratingCount: rating?._count.rating ?? 0,
         priceMin: price?._min.price ? Number(price._min.price) : null,
         priceMax: price?._max.price ? Number(price._max.price) : null,
         distanceKm,
-        isOpenNow: salon.isClosedForToday
-          ? false
-          : isOpenNow(salon.operatingHours, salon),
+        isOpenNow: openNow,
+        closesAt: openNow ? closesAtToday(salon.operatingHours, salon) : null,
         isClosedForToday: salon.isClosedForToday,
         verified: salon.verification?.status === VerificationStatus.APPROVED,
         waitingCount: waitingBy.get(salon.id) ?? 0,
@@ -1131,6 +1269,15 @@ export class SalonsService {
               }
             : null
           : undefined,
+        serviceCount: salonServices.length,
+        otherServices: salonServices
+          .filter((service) => service.id !== match?.id)
+          .slice(0, 3),
+        offers: summarizeOffers(
+          offersBy.get(salon.id) ?? [],
+          salonServices,
+          selectedPriced,
+        ).slice(0, 5),
       };
     });
   }

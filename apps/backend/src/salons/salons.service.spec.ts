@@ -54,6 +54,7 @@ describe('SalonsService', () => {
     review: { aggregate: jest.Mock; groupBy: jest.Mock };
     service: { aggregate: jest.Mock; findMany: jest.Mock; groupBy: jest.Mock };
     queueEntry: { count: jest.Mock; groupBy: jest.Mock };
+    offer: { findMany: jest.Mock };
     locality: { findUnique: jest.Mock };
     userRole: { upsert: jest.Mock; findMany: jest.Mock };
     user: { findUniqueOrThrow: jest.Mock };
@@ -95,6 +96,7 @@ describe('SalonsService', () => {
         count: jest.fn().mockResolvedValue(0),
         groupBy: jest.fn().mockResolvedValue([]),
       },
+      offer: { findMany: jest.fn().mockResolvedValue([]) },
       locality: { findUnique: jest.fn() },
       userRole: {
         upsert: jest.fn(),

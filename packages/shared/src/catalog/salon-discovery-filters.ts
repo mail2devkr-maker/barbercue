@@ -153,14 +153,30 @@ export function matchesPopularService(service: PopularService, text: string): bo
  *   unrelated services); clients disable it otherwise ("Select a service first to sort by price")
  * - rating: highest average first, salons without reviews last, then by review count
  */
-export const SALON_SORT_OPTIONS = ['relevance', 'distance', 'price', 'rating'] as const;
+export const SALON_SORT_OPTIONS = [
+  'relevance',
+  'distance',
+  'price',
+  'price_desc',
+  'effective_price',
+  'offer',
+  'rating',
+  'reviews',
+] as const;
 export type SalonSortOption = (typeof SALON_SORT_OPTIONS)[number];
 export const SALON_SORT_LABELS: Record<SalonSortOption, string> = {
   relevance: 'Recommended',
-  distance: 'Distance',
-  price: 'Price (selected service)',
-  rating: 'Reviews',
+  distance: 'Distance — nearest first',
+  price: 'Price — low to high',
+  price_desc: 'Price — high to low',
+  effective_price: 'Lowest price after offer',
+  offer: 'Best offer',
+  rating: 'Highest rated',
+  reviews: 'Most reviewed',
 };
+
+/** Sorts that compare one service's price, so they need a selected service. */
+export const SERVICE_PRICE_SORTS: readonly SalonSortOption[] = ['price', 'price_desc', 'effective_price'];
 
 /** Minimum review score choices offered by the discovery filters ("4+ stars" etc.). */
 export const MIN_RATING_OPTIONS = [3, 3.5, 4, 4.5] as const;

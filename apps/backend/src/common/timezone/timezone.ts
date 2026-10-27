@@ -92,6 +92,18 @@ export function utcToZonedDateStr(date: Date, timeZone: string): string {
   return `${parts.year}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}`;
 }
 
+/** Salon-local weekday (0 = Sunday) and minute of the day for an instant. */
+export function zonedDayAndMinutes(
+  date: Date,
+  timeZone: string,
+): { dayOfWeek: number; minutes: number } {
+  const parts = partsFor(date, timeZone);
+  return {
+    dayOfWeek: zonedDateToDayOfWeek(utcToZonedDateStr(date, timeZone)),
+    minutes: parts.hour * 60 + parts.minute,
+  };
+}
+
 export function zonedHourOf(date: Date, timeZone: string): number {
   return partsFor(date, timeZone).hour;
 }

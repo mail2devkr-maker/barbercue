@@ -551,6 +551,40 @@ export interface SalonListItemDto extends SalonSummary {
   // Only when a popular service was selected: the cheapest active matching service at this salon,
   // with its own salon-specific name. This — never priceMin — is what price comparison uses.
   selectedService?: { id: string; name: string; price: number; durationMinutes: number } | null;
+  // Booking page 3.0 cards: up to 6 photos (cover first) for the carousel/thumbnails, today's
+  // closing time ("HH:mm", salon-local) while open, up to 3 more services with prices, and the
+  // salon's current published offers — best first (offers[0] is the one shown on the card).
+  photoUrls?: string[];
+  closesAt?: string | null;
+  serviceCount?: number;
+  otherServices?: Array<{ id: string; name: string; price: number }>;
+  offers?: SalonOfferSummaryDto[];
+}
+
+/**
+ * A published offer as shown on a search result. `price` is only present when the discount is
+ * certain for anyone (all customers, no day/time window, no unmet minimum spend); otherwise
+ * `conditional` is true and clients must not present a discounted price as guaranteed. The
+ * booking flow always recalculates and revalidates on the server.
+ */
+export interface SalonOfferSummaryDto {
+  id: string;
+  title: string;
+  description: string | null;
+  discountType: "PERCENT" | "FLAT";
+  discountValue: number;
+  validTo: string;
+  audience: "ALL" | "NEW" | "REPEAT" | "INACTIVE";
+  /** "Mon–Fri, 14:00–17:00" when the offer has a schedule. */
+  schedule: string | null;
+  minimumBookingAmount: number | null;
+  maximumDiscountAmount: number | null;
+  /** Which services it covers: the selected service's name, a short list, or null for all services. */
+  appliesTo: string | null;
+  conditional: boolean;
+  /** Largest saving on one eligible service (the selected one when a service is selected). */
+  saving: number;
+  price: { serviceId: string; serviceName: string; originalPrice: number; offerPrice: number } | null;
 }
 
 // GET favorites — a customer's saved salons, newest first.

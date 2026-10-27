@@ -57,6 +57,7 @@ function makeSearchService(
       findMany: jest.fn().mockResolvedValue(matches),
     },
     queueEntry: { groupBy: jest.fn().mockResolvedValue([]) },
+    offer: { findMany: jest.fn().mockResolvedValue([]) },
   };
   return {
     prisma,
@@ -173,7 +174,12 @@ describe('popular services', () => {
   it('leaves selectedService out entirely when no popular service is chosen', async () => {
     const { service, prisma } = makeSearchService([salonRow('a')]);
     const result = await service.search({});
-    expect(prisma.service.findMany).not.toHaveBeenCalled();
+    // Only the card's all-services lookup runs — no selected-service lookup.
+    expect(prisma.service.findMany).toHaveBeenCalledTimes(1);
+    expect(prisma.service.findMany.mock.calls[0][0].where).toEqual({
+      salonId: { in: ['a'] },
+      isActive: true,
+    });
     expect(result.items[0].selectedService).toBeUndefined();
     expect(result.items[0]).toMatchObject({
       salonType: 'UNISEX',
@@ -356,6 +362,111 @@ describe('rating, favorites-only and open-now filters', () => {
     );
     expect(salonSearchQuerySchema.safeParse({ openNow: 'yes' }).success).toBe(
       false,
+    );
+  });
+});
+
+describe('booking page 3.0: offers filter and new sorts', () => {
+  const priced = (
+    id: string,
+    price: number | null,
+    over: Partial<SalonListItemDto> = {},
+  ) =>
+    item({
+      id,
+      selectedService:
+        price === null
+          ? null
+          : { id, name: 'Haircut', price, durationMinutes: 30 },
+      ...over,
+    });
+  const offerOn = (
+    saving: number,
+    offerPrice: number | null,
+    conditional = false,
+  ) => ({
+    offers: [
+      {
+        saving,
+        conditional,
+        price: offerPrice === null ? null : { offerPrice },
+      } as never,
+    ],
+  });
+
+  it('price high→low, lowest price after offer, best offer and most reviewed', () => {
+    const items = [
+      priced('a', 300),
+      priced('b', 250, offerOn(100, 150)),
+      priced('c', 200, offerOn(150, null, true)),
+      priced('none', null),
+    ];
+    expect(sortListItems(items, 'price_desc').map((i) => i.id)).toEqual([
+      'a',
+      'b',
+      'c',
+      'none',
+    ]);
+    // b: ₹150 after its certain offer beats c's ₹200 (c's offer is conditional).
+    expect(sortListItems(items, 'effective_price').map((i) => i.id)).toEqual([
+      'b',
+      'c',
+      'a',
+      'none',
+    ]);
+    // A certain offer ranks above a bigger conditional one; no offer last.
+    expect(sortListItems(items, 'offer').map((i) => i.id)).toEqual([
+      'b',
+      'c',
+      'a',
+      'none',
+    ]);
+    expect(
+      sortListItems(
+        [
+          item({ id: 'few', ratingCount: 2, ratingAverage: 5 }),
+          item({ id: 'many', ratingCount: 40, ratingAverage: 4.1 }),
+        ],
+        'reviews',
+      ).map((i) => i.id),
+    ).toEqual(['many', 'few']);
+  });
+
+  it('offers only: a current published offer covering the selected service', async () => {
+    const { service, prisma } = makeSearchService([]);
+    await service.search(
+      salonSearchQuerySchema.parse({
+        offersOnly: 'true',
+        popularService: 'haircut',
+      }),
+    );
+    const offerClause = prisma.salon.findMany.mock.calls[0][0].where.AND.find(
+      (c: Record<string, unknown>) => 'offers' in c,
+    );
+    expect(offerClause.offers.some).toMatchObject({
+      status: 'ACTIVE',
+      OR: [
+        { services: { none: {} } },
+        {
+          services: {
+            some: { service: expect.objectContaining({ isActive: true }) },
+          },
+        },
+      ],
+    });
+    expect(offerClause.offers.some.validTo.gt).toBeInstanceOf(Date);
+  });
+
+  it('every service price sort needs a selected service', () => {
+    for (const sort of ['price', 'price_desc', 'effective_price']) {
+      expect(salonSearchQuerySchema.safeParse({ sort }).success).toBe(false);
+      expect(
+        salonSearchQuerySchema.safeParse({ sort, popularService: 'haircut' })
+          .success,
+      ).toBe(true);
+    }
+    expect(salonSearchQuerySchema.safeParse({ sort: 'offer' }).success).toBe(
+      true,
     );
   });
 });
