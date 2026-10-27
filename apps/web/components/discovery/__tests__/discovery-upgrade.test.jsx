@@ -12,6 +12,7 @@ import {
 import { resetFavoritesForTests, sortFavorites, useFavorites } from '../../../lib/favorites';
 import { CompareTable, FiltersPanel, SortControl } from '../DiscoveryFilters';
 import { SalonCard } from '../SalonCard';
+import { SalonResultCard, clockText } from '../SalonResultCard';
 import { useAuth } from '../../../lib/auth-context';
 import { apiFetch } from '../../../lib/api';
 
@@ -52,6 +53,13 @@ describe('discovery URL rules', () => {
   it('resets the price range (and a now-impossible price sort) when the compared service changes', () => {
     expect(popularServiceChange(p('popularService=haircut&priceMin=100&priceMax=300&sort=price'), 'facial')).toEqual({ popularService: 'facial', priceMin: null, priceMax: null });
     expect(popularServiceChange(p('popularService=haircut&sort=price'), null)).toEqual({ popularService: null, priceMin: null, priceMax: null, sort: null });
+  });
+
+  it('offers only and every service-price sort follow the same URL rules', () => {
+    expect(readDiscoveryState(p('offersOnly=true')).offersOnly).toBe(true);
+    expect(searchApiQuery(p('offersOnly=true&sort=price_desc'))).toBe('offersOnly=true');
+    expect(searchApiQuery(p('popularService=facial&sort=effective_price'))).toBe('popularService=facial&sort=effective_price');
+    expect(popularServiceChange(p('popularService=facial&sort=price_desc'), null)).toMatchObject({ sort: null });
   });
 
   it('treats the slider ends as "no limit" and counts active filters', () => {
@@ -96,18 +104,34 @@ describe('filter controls', () => {
     expect(textOf(priceFieldset)).toContain('for Haircut');
   });
 
-  it('rating, open-now and favorites controls report their changes', () => {
+  it('open now, offers only, top rated and favorites checkboxes report their changes', () => {
     const onChange = jest.fn();
     let tree;
-    act(() => { tree = TestRenderer.create(<FiltersPanel state={state('openNow=true')} onChange={onChange} onClearAll={jest.fn()} activeCount={1} />); });
-    act(() => tree.root.find((n) => n.props.role === 'radio' && n.props['aria-label'] === '4 stars and up').props.onClick());
-    expect(onChange).toHaveBeenLastCalledWith({ minRating: '4' });
-    const openNow = tree.root.find((n) => n.type === 'button' && textOf(n) === 'Open now');
-    expect(openNow.props['aria-pressed']).toBe(true);
-    act(() => openNow.props.onClick());
+    act(() => { tree = TestRenderer.create(<FiltersPanel state={state('openNow=true&popularService=beard-styling')} onChange={onChange} onClearAll={jest.fn()} activeCount={1} />); });
+    const box = (label) => tree.root.find((n) => n.type === 'label' && textOf(n).startsWith(label)).findByType('input');
+    expect(box('Open now only').props.checked).toBe(true);
+    act(() => box('Open now only').props.onChange({ target: { checked: false } }));
     expect(onChange).toHaveBeenLastCalledWith({ openNow: null });
-    act(() => tree.root.find((n) => n.type === 'button' && textOf(n).includes('My favorites')).props.onClick());
+    act(() => box('Offers only').props.onChange({ target: { checked: true } }));
+    expect(onChange).toHaveBeenLastCalledWith({ offersOnly: 'true' });
+    expect(textOf(tree.root)).toContain('Offers that cover beard styling');
+    act(() => box('Top rated (4.0+)').props.onChange({ target: { checked: true } }));
+    expect(onChange).toHaveBeenLastCalledWith({ minRating: '4' });
+    act(() => box('My favorites').props.onChange({ target: { checked: true } }));
     expect(onChange).toHaveBeenLastCalledWith({ favorites: '1' });
+  });
+
+  it('distance needs location: picking a distance or Near me goes through the page', () => {
+    const onRadius = jest.fn();
+    const onNearMe = jest.fn();
+    let tree;
+    act(() => { tree = TestRenderer.create(<FiltersPanel state={state('')} onChange={jest.fn()} onClearAll={jest.fn()} activeCount={0} location={{ nearMe: false, radiusKm: null, locating: false, onRadius, onNearMe }} />); });
+    const select = tree.root.find((n) => n.type === 'select' && n.props['aria-label'] === 'Distance');
+    expect(select.findAllByType('option').map((o) => textOf(o))).toEqual(['Any distance', 'Within 1 km', 'Within 3 km', 'Within 5 km', 'Within 10 km', 'Within 20 km']);
+    act(() => select.props.onChange({ target: { value: '5' } }));
+    expect(onRadius).toHaveBeenCalledWith(5);
+    act(() => tree.root.find((n) => n.type === 'label' && textOf(n).startsWith('Near me')).findByType('input').props.onChange({ target: { checked: true } }));
+    expect(onNearMe).toHaveBeenCalledWith(true);
   });
 
   it('greys out price sort with a reason when no service is selected', () => {
@@ -195,6 +219,73 @@ describe('cards, comparison and hearts', () => {
     expect(apiFetch).toHaveBeenCalledWith('favorites/s1', { method: 'POST' });
     expect(textOf(tree.root)).toBe('true');
     expect(window.sessionStorage.getItem('fastque.pendingFavorite')).toBeNull();
+  });
+
+  const offer = (over = {}) => ({
+    id: 'o1', title: 'Special Offer', description: null, discountType: 'PERCENT', discountValue: 20,
+    validTo: '2026-11-30T00:00:00.000Z', audience: 'ALL', schedule: null, minimumBookingAmount: null,
+    maximumDiscountAmount: null, appliesTo: 'Beard Styling', conditional: false, saving: 50,
+    price: { serviceId: 'beard', serviceName: 'Beard Styling', originalPrice: 250, offerPrice: 200 }, ...over,
+  });
+  const beardSalon = (over = {}) => salon({
+    selectedService: { id: 'beard', name: 'Beard Styling', price: 250, durationMinutes: 20 },
+    otherServices: [{ id: 'cut', name: 'Haircut', price: 300 }, { id: 'shave', name: 'Shaving', price: 150 }],
+    serviceCount: 6, closesAt: '22:00', photoUrls: ['a.jpg', 'b.jpg', 'c.jpg'], offers: [offer()], ...over,
+  });
+
+  it('result card: certain offer shows the struck-through and offer price, and Book Now carries the offer', () => {
+    useAuth.mockReturnValue({ user: null, status: 'unauthenticated' });
+    let tree;
+    act(() => { tree = TestRenderer.create(<SalonResultCard salon={beardSalon()} />); });
+    const text = textOf(tree.root);
+    expect(text).toContain('20% OFF on Beard Styling');
+    expect(text).toContain('Beard Styling₹250 ₹200');
+    expect(text).toContain('Haircut₹300');
+    expect(text).toContain('Open now · Closes 10:00 PM');
+    expect(text).toContain('View all services (3 more)');
+    expect(text).toContain('1/3');
+    const book = tree.root.find((n) => n.type === 'a' && textOf(n) === 'Book Now');
+    expect(book.props.href).toBe('/book/alpha?city=pune&country=IN&offer=o1');
+  });
+
+  it('result card: a conditional offer never shows a discounted price, and terms are spelled out', () => {
+    useAuth.mockReturnValue({ user: null, status: 'unauthenticated' });
+    let tree;
+    act(() => {
+      tree = TestRenderer.create(<SalonResultCard salon={beardSalon({ offers: [offer({ audience: 'NEW', conditional: true, price: null, schedule: 'Mon–Fri, 14:00–17:00', minimumBookingAmount: 500 })] })} />);
+    });
+    const text = textOf(tree.root);
+    expect(text).toContain('Beard Styling₹250');
+    expect(text).not.toContain('₹200');
+    expect(text).toContain('First visit only · Mon–Fri, 14:00–17:00 · On bookings above ₹500');
+    expect(text).toContain('Offer may apply at booking');
+  });
+
+  it('result card: no offer means no offer box, and View all offers opens the list', () => {
+    useAuth.mockReturnValue({ user: null, status: 'unauthenticated' });
+    let tree;
+    act(() => { tree = TestRenderer.create(<SalonResultCard salon={beardSalon({ offers: [] })} />); });
+    expect(textOf(tree.root)).not.toContain('Valid till');
+    act(() => { tree.update(<SalonResultCard salon={beardSalon({ offers: [offer(), offer({ id: 'o2', title: 'Flat deal', discountType: 'FLAT', discountValue: 50, appliesTo: null, price: null })] })} />); });
+    act(() => tree.root.find((n) => n.type === 'button' && textOf(n) === 'View all 2 offers').props.onClick());
+    const dialog = tree.root.find((n) => n.props.role === 'dialog');
+    expect(textOf(dialog)).toContain('Flat ₹50 OFF Flat deal');
+    expect(textOf(dialog)).toContain('On all services');
+  });
+
+  it('compare table shows the offer and what you pay only when certain', () => {
+    useAuth.mockReturnValue({ user: null, status: 'unauthenticated' });
+    let tree;
+    act(() => {
+      tree = TestRenderer.create(<CompareTable serviceLabel="Beard Styling" salons={[beardSalon(), beardSalon({ id: 's2', offers: [offer({ conditional: true, price: null })] })]} />);
+    });
+    const rows = tree.root.findByType('tbody').findAllByType('tr').map(textOf);
+    expect(rows[0]).toContain('20% OFF');
+    expect(rows[0]).toContain('₹200');
+    expect(rows[1]).toContain('Conditions apply');
+    expect(rows[1]).toContain('Offer checked at booking');
+    expect(rows[1]).not.toContain('₹200');
+    expect(clockText('09:30')).toBe('9:30 AM');
   });
 
   it('orders the favorites page', () => {

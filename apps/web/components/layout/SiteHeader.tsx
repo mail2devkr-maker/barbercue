@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { DISCOVERY_PATHS } from "@barbercue/shared";
 import type { SalonWorkplaceDto } from "@barbercue/shared";
 import { useAuth } from "../../lib/auth-context";
+import { useFavorites } from "../../lib/favorites";
 import { apiFetch } from "../../lib/api";
 import {
   isWorkspaceUser,
@@ -26,12 +27,30 @@ const PRIMARY_LINKS: ReadonlyArray<{
   label: string;
   aboutOnly?: boolean;
 }> = [
-  { href: "/search", label: "Find a barber" },
+  { href: "/search", label: "Find Salons" },
+  { href: "/#book-or-queue", label: "How It Works" },
   { href: "/#services", label: "Services" },
-  { href: "/#book-or-queue", label: "How it works" },
-  { href: "/#for-shops", label: "For shops" },
+  { href: "/offers", label: "Offers" },
+  { href: "/#for-shops", label: "For Salon Owners" },
   { href: "/about-us", label: "About Us", aboutOnly: true },
 ];
+
+/** Signed-in customers: a heart linking to their saved salons, with how many they have saved. */
+function FavoritesLink() {
+  const { savedIds, isCustomer, loaded } = useFavorites();
+  if (!isCustomer) return null;
+  const count = loaded ? savedIds.size : 0;
+  return (
+    <Link
+      href="/account/favorites"
+      className={styles.headerFavorites}
+      aria-label={count > 0 ? `Favorite salons (${count})` : "Favorite salons"}
+    >
+      <span aria-hidden="true">♡</span>
+      {count > 0 && <span className={styles.headerFavoritesCount}>{count}</span>}
+    </Link>
+  );
+}
 
 export function SiteHeader() {
   const pathname = usePathname();
@@ -170,6 +189,7 @@ export function SiteHeader() {
                   href={link.href}
                   className={
                     (link.href === "/search" && pathname === "/search") ||
+                    (link.href === "/offers" && pathname === "/offers") ||
                     (link.href === "/about-us" && pathname === "/about-us")
                       ? styles.headerNavActive
                       : link.aboutOnly
@@ -184,6 +204,7 @@ export function SiteHeader() {
 
             <div className={styles.headerWideRow}>
               <ShopSwitcher />
+              <FavoritesLink />
               {authenticatedUser && <NotificationBell />}
               <Link href={workspaceHref} className={styles.headerSignIn}>
                 {workspaceLabel}

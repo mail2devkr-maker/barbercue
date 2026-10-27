@@ -52,6 +52,7 @@
 
 .sort { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--fq-text-muted, #c9bfc6); font-size: 0.85rem; font-weight: 700; }
 .sort select {
+  max-width: 260px;
   min-height: 40px; padding: 0 10px; border: 1px solid var(--fq-hairline, rgba(255, 255, 255, 0.16)); border-radius: 10px;
   background: var(--fq-charcoal, #17141a); color: var(--fq-text, #fff); font: 600 0.9rem var(--font-body); color-scheme: dark;
 }
@@ -71,3 +72,18 @@
 .rowActions { display: flex; align-items: center; gap: 10px; justify-content: flex-end; white-space: nowrap; }
 .book { display: inline-flex; align-items: center; min-height: 36px; padding: 0 14px; border-radius: 999px; background: var(--fq-gradient, #f20a83); color: #fff; font-weight: 800; text-decoration: none; }
 .srOnly { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* Booking page 3.0 sidebar additions */
+.select {
+  min-height: 40px; padding: 0 10px; border: 1px solid var(--fq-hairline, rgba(255, 255, 255, 0.16)); border-radius: 10px;
+  background: var(--fq-charcoal, #17141a); color: var(--fq-text, #fff); font: 600 0.9rem var(--font-body); color-scheme: dark;
+}
+.serviceGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.serviceGrid .chip { border-radius: 10px; padding: 0 10px; text-align: left; }
+.check { display: flex; align-items: flex-start; gap: 10px; color: var(--fq-text, #fff); font-size: 0.9rem; font-weight: 600; cursor: pointer; }
+.check input { width: 18px; height: 18px; margin: 1px 0 0; accent-color: var(--fq-pink, #f20a83); }
+.check small { display: block; color: var(--fq-text-faint, #9b8f98); font-size: 0.75rem; font-weight: 500; }
+.offerTag { display: inline-block; padding: 2px 8px; border-radius: 999px; background: var(--fq-gradient, #f20a83); color: #fff; font-size: 0.75rem; font-weight: 800; }
+.pay { color: var(--fq-pink, #f20a83); }
+.open { color: #72d59a; font-weight: 700; }
+.table { min-width: 980px; }

@@ -2,6 +2,7 @@ import {
   MIN_RATING_OPTIONS,
   SALON_SEARCH_MAX_IDS,
   SALON_SORT_OPTIONS,
+  SERVICE_PRICE_SORTS,
   popularServiceById,
   type SalonSortOption,
   type SalonTypeFilter,
@@ -13,8 +14,14 @@ import {
 /** Every query param the search API understands, forwarded as-is. */
 export const SEARCH_API_PARAMS = [
   "q", "shopName", "city", "countryCode", "locality", "service", "lat", "lng", "radiusKm",
-  "priceMin", "priceMax", "salonType", "popularService", "sort", "minRating", "openNow",
+  "priceMin", "priceMax", "salonType", "popularService", "sort", "minRating", "openNow", "offersOnly",
 ] as const;
+
+/** Distance choices in the filter sidebar (km). Any value needs the customer's location. */
+export const DISTANCE_CHOICES_KM = [1, 3, 5, 10, 20] as const;
+
+/** "Top rated" means an average review score of at least this. */
+export const TOP_RATED_MIN = 4;
 
 export const PRICE_SLIDER_MIN = 0;
 export const PRICE_SLIDER_MAX = 2000;
@@ -30,6 +37,7 @@ export interface DiscoveryState {
   nearMe: boolean;
   minRating: number | null;
   openNow: boolean;
+  offersOnly: boolean;
   /** `favorites=1`: only the customer's saved salons (their IDs are sent, never put in the URL). */
   favoritesOnly: boolean;
 }
@@ -52,13 +60,14 @@ export function readDiscoveryState(params: URLSearchParams): DiscoveryState {
     nearMe,
     minRating: (MIN_RATING_OPTIONS as readonly number[]).includes(num("minRating") ?? NaN) ? num("minRating") : null,
     openNow: params.get("openNow") === "true",
+    offersOnly: params.get("offersOnly") === "true",
     favoritesOnly: params.get("favorites") === "1",
   };
 }
 
 /** Why a sort option is unavailable right now, or null when it can be used. */
 export function sortUnavailableReason(option: SalonSortOption, state: Pick<DiscoveryState, "popularService" | "legacyService">): string | null {
-  if (option === "price" && !state.popularService && !state.legacyService) return "Select a service first to sort by price.";
+  if (SERVICE_PRICE_SORTS.includes(option) && !state.popularService && !state.legacyService) return "Select a service first to sort by price.";
   return null;
 }
 
@@ -71,7 +80,7 @@ export function searchApiQuery(params: URLSearchParams, favoriteIds?: Iterable<s
   }
   // The API rejects price sort without a service; drop it rather than show an error page.
   const state = readDiscoveryState(params);
-  if (state.sort === "price" && sortUnavailableReason("price", state)) out.delete("sort");
+  if (sortUnavailableReason(state.sort, state)) out.delete("sort");
   if (state.favoritesOnly && favoriteIds) out.set("ids", [...favoriteIds].slice(0, SALON_SEARCH_MAX_IDS).join(","));
   return out.toString();
 }
@@ -96,7 +105,7 @@ export function popularServiceChange(params: URLSearchParams, serviceId: string 
     popularService: serviceId,
     priceMin: null,
     priceMax: null,
-    ...(serviceId === null && state.sort === "price" && !state.legacyService ? { sort: null } : {}),
+    ...(serviceId === null && SERVICE_PRICE_SORTS.includes(state.sort) && !state.legacyService ? { sort: null } : {}),
   };
 }
 
@@ -117,6 +126,7 @@ export function activeFilterCount(state: DiscoveryState): number {
     state.priceMin !== null || state.priceMax !== null ? "price" : null,
     state.minRating,
     state.openNow,
+    state.offersOnly,
     state.favoritesOnly,
   ].filter(Boolean).length;
 }

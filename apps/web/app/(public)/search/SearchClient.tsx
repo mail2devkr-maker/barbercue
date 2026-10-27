@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
-import type { RefObject } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type {
   CitySearchResultDto,
@@ -10,9 +9,9 @@ import type {
   SalonListItemDto,
   SalonSortOption,
 } from "@barbercue/shared";
-import { COUNTRY_PATHS, DISCOVERY_PATHS, formatPriceFilterLabel, popularServiceById } from "@barbercue/shared";
+import { COUNTRY_PATHS, DISCOVERY_PATHS, POPULAR_SERVICES, formatPriceFilterLabel, popularServiceById } from "@barbercue/shared";
 import { SERVICE_CATEGORIES } from "../../../lib/editorial/manifest";
-import { SalonCard } from "../../../components/discovery/SalonCard";
+import { SalonResultCard } from "../../../components/discovery/SalonResultCard";
 import { CompareTable, FiltersPanel, SortControl } from "../../../components/discovery/DiscoveryFilters";
 import {
   activeFilterCount,
@@ -29,132 +28,6 @@ import { useFavorites } from "../../../lib/favorites";
 import styles from "./search.module.css";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api/v1";
-
-// Part 8/9 correction — same canonical km values and semantics as apps/mobile's
-// SalonSearchScreen.tsx (kept in sync by hand; there's no shared cross-platform UI layer to derive
-// this from). `null` = "Any" (clears the filter). Distance is only meaningful alongside lat/lng —
-// see salonSearchQuerySchema's own doc comment — so those chips only render when nearMeActive.
-const DISTANCE_OPTIONS: { value: number | null; label: string }[] = [
-  { value: null, label: "Any distance" },
-  { value: 0.1, label: "100 m" },
-  { value: 0.2, label: "200 m" },
-  { value: 0.5, label: "500 m" },
-  { value: 1, label: "1 km" },
-  { value: 2, label: "2 km" },
-  { value: 3, label: "3 km" },
-  { value: 5, label: "5 km" },
-];
-
-/** Shared outside-click/Escape dismissal for every dropdown below — factored out once both
- * FilterDropdown and PriceFilterDropdown needed the identical behavior. */
-function useDropdownDismiss(
-  open: boolean,
-  close: () => void,
-  rootRef: RefObject<HTMLDivElement | null>,
-  triggerRef: RefObject<HTMLButtonElement | null>,
-) {
-  useEffect(() => {
-    if (!open) return undefined;
-    function dismiss(event: PointerEvent) {
-      if (!rootRef.current?.contains(event.target as Node)) close();
-    }
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        close();
-        triggerRef.current?.focus();
-      }
-    }
-    document.addEventListener("pointerdown", dismiss);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("pointerdown", dismiss);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
-}
-
-type DropdownOption = {
-  id: string;
-  label: string;
-  selected: boolean;
-  disabled?: boolean;
-  onSelect: () => void;
-};
-
-function FilterDropdown({ label, value, options }: { label: string; value: string; options: DropdownOption[] }) {
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const menuId = useId();
-  useDropdownDismiss(open, () => setOpen(false), rootRef, triggerRef);
-
-  function moveFocus(event: React.KeyboardEvent<HTMLButtonElement>) {
-    if (event.key !== "ArrowDown" && event.key !== "ArrowUp" && event.key !== "Home" && event.key !== "End") return;
-    const items = Array.from(rootRef.current?.querySelectorAll<HTMLButtonElement>("[role=option]:not(:disabled)") ?? []);
-    const current = items.indexOf(event.currentTarget);
-    if (!items.length) return;
-    event.preventDefault();
-    const nextIndex = event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : (current + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
-    items[nextIndex].focus();
-  }
-
-  function openAndFocusOption(direction: "first" | "last") {
-    setOpen(true);
-    requestAnimationFrame(() => {
-      const items = Array.from(rootRef.current?.querySelectorAll<HTMLButtonElement>("[role=option]:not(:disabled)") ?? []);
-      if (!items.length) return;
-      const selected = items.find((item) => item.getAttribute("aria-selected") === "true");
-      (direction === "first" ? selected ?? items[0] : selected ?? items[items.length - 1]).focus();
-    });
-  }
-
-  return (
-    <div className={styles.filterDropdown} ref={rootRef}>
-      <span className={styles.filterDropdownLabel}>{label}</span>
-      <button
-        type="button"
-        className={styles.filterDropdownTrigger}
-        ref={triggerRef}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-controls={menuId}
-        onClick={() => setOpen((current) => !current)}
-        onKeyDown={(event) => {
-          if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-            event.preventDefault();
-            openAndFocusOption(event.key === "ArrowDown" ? "first" : "last");
-          }
-        }}
-      >
-        <span>{value}</span>
-        <span className={styles.filterDropdownChevron} aria-hidden="true">⌄</span>
-      </button>
-      {open && (
-        <div id={menuId} className={styles.filterDropdownMenu} role="listbox" aria-label={`${label} options`}>
-          {options.map((option) => (
-            <button
-              key={option.id}
-              type="button"
-              role="option"
-              className={`${styles.filterDropdownOption} ${option.selected ? styles.filterDropdownOptionSelected : ""}`}
-              aria-selected={option.selected}
-              disabled={option.disabled}
-              onClick={() => {
-                option.onSelect();
-                setOpen(false);
-              }}
-              onKeyDown={moveFocus}
-            >
-              <span>{option.label}</span>
-              {option.selected && <span aria-hidden="true">✓</span>}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
 
 export default function SearchClient() {
   const router = useRouter();
@@ -223,7 +96,7 @@ export default function SearchClient() {
   function clearAllFilters() {
     applyChanges({
       salonType: null, __popularService: null, service: null, priceMin: null, priceMax: null, view: null,
-      minRating: null, openNow: null, favorites: null,
+      minRating: null, openNow: null, offersOnly: null, favorites: null,
     });
   }
 
@@ -378,11 +251,14 @@ export default function SearchClient() {
   return (
     <main className={styles.page}>
       <section className={styles.intro} aria-labelledby="search-heading">
-        <p className={styles.eyebrow}>Barbershop discovery</p>
-        <h1 id="search-heading">Find the right chair for your next cut.</h1>
-        <p className={styles.lead}>
-          Browse local barbershops, compare services, then book ahead or join a live queue.
-        </p>
+        <div className={styles.heroCopy}>
+          <h1 id="search-heading">
+            Look Good. <span className={styles.heroAccent}>Book Fast.</span>
+          </h1>
+          <p className={styles.lead}>
+            Compare salon services, prices, offers and reviews. Find your perfect salon in minutes.
+          </p>
+        </div>
 
         <form className={styles.searchForm} onSubmit={handleSubmit} role="search">
           <div className={styles.field}>
@@ -395,7 +271,7 @@ export default function SearchClient() {
             />
           </div>
           <div className={styles.field}>
-            <span id="search-city-label">City</span>
+            <span id="search-city-label">City / location</span>
             {defaultCountryId ? (
               <CitySearchField
                 countryId={defaultCountryId}
@@ -408,37 +284,32 @@ export default function SearchClient() {
               <input type="search" placeholder="Loading cities…" disabled />
             )}
           </div>
-          <Button type="submit" variant="primary">
-            Find shops
-          </Button>
-          <Button type="button" variant="outline" className={styles.outlineOnDark} onClick={handleNearMe} disabled={locating}>
+          <Button type="button" variant="outline" className={styles.outlineOnDark} onClick={nearMeActive ? clearNearMe : handleNearMe} disabled={locating} aria-pressed={nearMeActive}>
             {locating ? "Locating…" : nearMeActive ? "Near me ✓" : "Near me"}
+          </Button>
+          <Button type="submit" variant="primary">
+            Find salons
           </Button>
         </form>
         {locationError && <p className={styles.locationNotice}>{locationError}</p>}
-        {nearMeActive && (
-          <button type="button" className={styles.textLink} onClick={clearNearMe}>
-            Clear &ldquo;Near me&rdquo; and sort by name instead
-          </button>
-        )}
 
-        <div className={styles.filterBar} role="group" aria-label="Search filters">
-          <FilterDropdown
-            label="Distance"
-            value={DISTANCE_OPTIONS.find((option) => option.value === activeRadiusKm)?.label ?? "Any distance"}
-            options={DISTANCE_OPTIONS.map((option) => ({
-              id: String(option.value),
-              label: option.label,
-              selected: activeRadiusKm === option.value,
-              disabled: locating,
-              onSelect: () => selectRadius(option.value),
-            }))}
-          />
-          <button type="button" className={styles.filtersToggle} aria-expanded={filtersOpen} aria-controls="discovery-filters" onClick={() => setFiltersOpen((open) => !open)}>
-            Filters{filterCount > 0 ? ` (${filterCount})` : ""}
-          </button>
+        <div className={styles.serviceStrip} role="group" aria-label="Popular services">
+          <span className={styles.serviceStripLabel}>Popular services:</span>
+          {POPULAR_SERVICES.map((service) => {
+            const on = discovery.popularService === service.id;
+            return (
+              <button
+                key={service.id}
+                type="button"
+                aria-pressed={on}
+                className={`${styles.serviceChip} ${on ? styles.serviceChipOn : ""}`}
+                onClick={() => applyChanges({ __popularService: on ? null : service.id })}
+              >
+                {service.label}
+              </button>
+            );
+          })}
         </div>
-        {!nearMeActive && <p className={styles.filterBarHint}>Choose a distance to use your current location.</p>}
       </section>
 
       {styleName && (
@@ -453,7 +324,19 @@ export default function SearchClient() {
 
       <div className={styles.discoveryLayout}>
       <aside id="discovery-filters" className={`${styles.filtersAside} ${filtersOpen ? styles.filtersAsideOpen : ""}`} aria-label="Search filters">
-        <FiltersPanel state={discovery} onChange={applyChanges} onClearAll={clearAllFilters} activeCount={filterCount} />
+        <FiltersPanel
+          state={discovery}
+          onChange={applyChanges}
+          onClearAll={clearAllFilters}
+          activeCount={filterCount}
+          location={{
+            nearMe: nearMeActive,
+            radiusKm: activeRadiusKm,
+            locating,
+            onRadius: selectRadius,
+            onNearMe: (on) => (on ? handleNearMe() : clearNearMe()),
+          }}
+        />
       </aside>
       <section className={styles.results} aria-labelledby="results-heading" aria-live="polite">
         {(activeService || ((activePriceMin !== null || activePriceMax !== null) && !comparedService)) && (
@@ -473,23 +356,22 @@ export default function SearchClient() {
           </div>
         )}
         <div className={styles.resultsHeading}>
-          <div>
-            <p className={styles.eyebrow}>Nearby possibilities</p>
-            <h2 id="results-heading">
-              {loading
-                ? "Finding shops"
-                : error
-                  ? "Shops unavailable"
-                  : "Available shops"}
-            </h2>
-          </div>
+          <h2 id="results-heading" className={styles.resultsTitle}>
+            {loading
+              ? "Finding salons…"
+              : error
+                ? "Salons unavailable"
+                : (
+                  <>
+                    {results.length}{hasMore ? "+" : ""} {results.length === 1 ? "salon" : "salons"} found
+                    {comparedService && <> for <span className={styles.heroAccent}>{comparedService.label}</span></>}
+                  </>
+                )}
+          </h2>
           <div className={styles.resultsTools}>
-            {!loading && !error && (
-              <p className={styles.resultCount}>
-                {results.length}{hasMore ? "+" : ""} {results.length === 1 ? "shop" : "shops"}
-                {comparedService ? ` offering ${comparedService.label.toLowerCase()}` : ""}
-              </p>
-            )}
+            <button type="button" className={styles.filtersToggle} aria-expanded={filtersOpen} aria-controls="discovery-filters" onClick={() => setFiltersOpen((open) => !open)}>
+              Filters{filterCount > 0 ? ` (${filterCount})` : ""}
+            </button>
             <SortControl state={discovery} onChange={selectSort} />
             {comparedService && (
               <div className={styles.viewToggle} role="group" aria-label="Result view">
@@ -577,9 +459,9 @@ export default function SearchClient() {
           <CompareTable salons={results} serviceLabel={comparedService.label} />
         )}
         {!loading && !error && results.length > 0 && view === "cards" && (
-          <div className={styles.grid}>
+          <div className={styles.cardList}>
             {results.map((salon) => (
-              <SalonCard key={salon.id} salon={salon} styleName={styleName} />
+              <SalonResultCard key={salon.id} salon={salon} styleName={styleName} />
             ))}
           </div>
         )}

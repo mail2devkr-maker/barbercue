@@ -565,3 +565,142 @@
   .resultsTools { justify-content: flex-start; }
   .resultsHeading { flex-wrap: wrap; align-items: start; }
 }
+
+/* ---- Booking page 3.0: compact hero, search row, popular services strip, horizontal cards ---- */
+.intro {
+  width: min(1440px, calc(100% - 40px));
+  margin-top: 16px;
+  padding: clamp(28px, 4vw, 48px) clamp(20px, 3vw, 40px) 24px;
+  border: 1px solid var(--fq-hairline);
+  border-radius: 24px;
+  background:
+    linear-gradient(90deg, var(--fq-void) 30%, rgba(9, 9, 12, 0.7) 58%, rgba(9, 9, 12, 0.25) 100%),
+    url("/editorial/hero/barbercue-hero.webp") right center / cover no-repeat,
+    var(--fq-charcoal);
+}
+
+.heroCopy h1 {
+  max-width: 720px;
+  font-size: clamp(2.2rem, 4.6vw, 3.8rem);
+}
+
+.heroAccent {
+  background: var(--fq-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.heroCopy .lead {
+  margin-top: 12px;
+}
+
+.searchForm {
+  grid-template-columns: minmax(200px, 1.3fr) minmax(180px, 1fr) auto auto;
+  max-width: 1120px;
+  margin-top: 24px;
+  background: rgba(13, 13, 18, 0.88);
+  backdrop-filter: blur(6px);
+}
+
+.serviceStrip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.serviceStripLabel {
+  margin-right: 4px;
+  color: var(--fq-text-muted);
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.serviceChip {
+  min-height: 38px;
+  padding: 0 16px;
+  border: 1px solid var(--fq-hairline);
+  border-radius: 999px;
+  background: rgba(13, 13, 18, 0.8);
+  color: var(--fq-text);
+  font: 600 0.88rem var(--font-body);
+  cursor: pointer;
+}
+
+.serviceChip:hover {
+  border-color: var(--fq-pink);
+}
+
+.serviceChipOn {
+  border-color: transparent;
+  background: var(--fq-gradient);
+  color: #fff;
+}
+
+.serviceChip:focus-visible {
+  outline: 2px solid var(--fq-orange);
+  outline-offset: 2px;
+}
+
+.discoveryLayout {
+  width: min(1440px, calc(100% - 40px));
+  margin-top: 24px;
+}
+
+/* Sidebar about a quarter of the width; below 961px the filters collapse behind the Filters button. */
+@media (min-width: 961px) {
+  .discoveryLayout {
+    grid-template-columns: minmax(250px, 1fr) minmax(0, 3fr);
+  }
+}
+
+.discoveryLayout .resultsHeading {
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 14px;
+}
+
+.resultsTitle {
+  font-size: clamp(1.25rem, 2.2vw, 1.6rem) !important;
+}
+
+.cardList {
+  display: grid;
+  gap: 14px;
+}
+
+@media (max-width: 860px) {
+  .searchForm {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  .intro {
+    width: calc(100% - 32px);
+    padding: 24px 16px 18px;
+    background:
+      linear-gradient(180deg, rgba(9, 9, 12, 0.72), var(--fq-void) 75%),
+      url("/editorial/hero/barbercue-hero.webp") center top / cover no-repeat,
+      var(--fq-charcoal);
+  }
+  .searchForm {
+    grid-template-columns: 1fr;
+  }
+  /* One swipeable row of chips instead of a tall wrapped block. */
+  .serviceStrip {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    margin-right: -16px;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+  .serviceChip {
+    flex: 0 0 auto;
+  }
+  .discoveryLayout {
+    width: calc(100% - 32px);
+  }
+}

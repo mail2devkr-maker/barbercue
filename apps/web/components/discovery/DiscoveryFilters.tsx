@@ -3,7 +3,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import {
-  MIN_RATING_OPTIONS,
   POPULAR_SERVICES,
   SALON_SORT_LABELS,
   SALON_SORT_OPTIONS,
@@ -16,14 +15,17 @@ import {
   type SalonTypeFilter,
 } from "@barbercue/shared";
 import {
+  DISTANCE_CHOICES_KM,
   PRICE_SLIDER_MAX,
   PRICE_SLIDER_MIN,
   PRICE_SLIDER_STEP,
+  TOP_RATED_MIN,
   priceRangeChange,
   sortUnavailableReason,
   type DiscoveryState,
 } from "../../lib/discovery-params";
 import { FavoriteButton } from "./FavoriteButton";
+import { offerBadgeText } from "./SalonResultCard";
 import styles from "./discovery-filters.module.css";
 
 type Changes = Record<string, string | null>;
@@ -73,7 +75,7 @@ export function ServicePriceSlider({ state, onChange }: { state: DiscoveryState;
   return (
     <fieldset className={styles.section} disabled={!enabled} aria-describedby={`${id}-help`}>
       <legend className={styles.legend}>
-        Price {service ? <span className={styles.legendSub}>for {service.label}</span> : null}
+        Price range {service ? <span className={styles.legendSub}>(for {service.label})</span> : null}
       </legend>
       <p className={styles.rangeValue} aria-live="polite">{enabled ? label : "Any price"}</p>
       <div className={`${styles.slider} ${enabled ? "" : styles.sliderDisabled}`}>
@@ -116,17 +118,41 @@ export function ServicePriceSlider({ state, onChange }: { state: DiscoveryState;
   );
 }
 
+/** Distance needs the customer's location; the page owns the geolocation flow. */
+export interface LocationControls {
+  nearMe: boolean;
+  radiusKm: number | null;
+  locating: boolean;
+  onRadius: (km: number | null) => void;
+  onNearMe: (on: boolean) => void;
+}
+
+function Check({ label, checked, onChange, hint }: { label: string; checked: boolean; onChange: (on: boolean) => void; hint?: string }) {
+  return (
+    <label className={styles.check}>
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      <span>
+        {label}
+        {hint && <small>{hint}</small>}
+      </span>
+    </label>
+  );
+}
+
 export function FiltersPanel({
   state,
   onChange,
   onClearAll,
   activeCount,
+  location,
 }: {
   state: DiscoveryState;
   onChange: (changes: Changes) => void;
   onClearAll: () => void;
   activeCount: number;
+  location?: LocationControls;
 }) {
+  const topRated = state.minRating !== null && state.minRating >= TOP_RATED_MIN;
   return (
     <div className={styles.panel}>
       <div className={styles.panelHead}>
@@ -161,9 +187,34 @@ export function FiltersPanel({
         <p className={styles.help}>{TYPE_OPTIONS.find((o) => o.value === state.salonType)?.hint}</p>
       </fieldset>
 
+      <ServicePriceSlider state={state} onChange={onChange} />
+
+      {location && (
+        <fieldset className={styles.section}>
+          <legend className={styles.legend}>Distance</legend>
+          <select
+            className={styles.select}
+            aria-label="Distance"
+            value={location.radiusKm === null ? "" : String(location.radiusKm)}
+            disabled={location.locating}
+            onChange={(e) => location.onRadius(e.target.value === "" ? null : Number(e.target.value))}
+          >
+            <option value="">Any distance</option>
+            {DISTANCE_CHOICES_KM.map((km) => (
+              <option key={km} value={km}>Within {km} km</option>
+            ))}
+            {location.radiusKm !== null && !(DISTANCE_CHOICES_KM as readonly number[]).includes(location.radiusKm) && (
+              <option value={location.radiusKm}>Within {location.radiusKm} km</option>
+            )}
+          </select>
+          <Check label={location.locating ? "Finding your location…" : "Near me"} checked={location.nearMe} onChange={location.onNearMe} />
+          {!location.nearMe && <p className={styles.help}>Distance uses your current location.</p>}
+        </fieldset>
+      )}
+
       <fieldset className={styles.section}>
         <legend className={styles.legend}>Popular services</legend>
-        <div className={styles.chips}>
+        <div className={styles.serviceGrid}>
           {POPULAR_SERVICES.map((service) => {
             const on = state.popularService === service.id;
             return (
@@ -182,51 +233,17 @@ export function FiltersPanel({
         <p className={styles.help}>Pick one to compare its price across salons.</p>
       </fieldset>
 
-      <ServicePriceSlider state={state} onChange={onChange} />
-
       <fieldset className={styles.section}>
-        <legend className={styles.legend}>Rating</legend>
-        <div className={styles.segmented} role="radiogroup" aria-label="Minimum rating">
-          {[null, ...MIN_RATING_OPTIONS].map((value) => {
-            const checked = state.minRating === value;
-            return (
-              <button
-                key={value ?? "any"}
-                type="button"
-                role="radio"
-                aria-checked={checked}
-                aria-label={value === null ? "Any rating" : `${value} stars and up`}
-                className={`${styles.segment} ${checked ? styles.segmentOn : ""}`}
-                onClick={() => onChange({ minRating: value === null ? null : String(value) })}
-              >
-                {value === null ? "Any" : `${value}★+`}
-              </button>
-            );
-          })}
-        </div>
-        <p className={styles.help}>{state.minRating === null ? "Average customer review score." : "Salons without reviews are hidden."}</p>
-      </fieldset>
-
-      <fieldset className={styles.section}>
-        <legend className={styles.legend}>Show only</legend>
-        <div className={styles.chips}>
-          <button
-            type="button"
-            aria-pressed={state.openNow}
-            className={`${styles.chip} ${state.openNow ? styles.chipOn : ""}`}
-            onClick={() => onChange({ openNow: state.openNow ? null : "true" })}
-          >
-            Open now
-          </button>
-          <button
-            type="button"
-            aria-pressed={state.favoritesOnly}
-            className={`${styles.chip} ${state.favoritesOnly ? styles.chipOn : ""}`}
-            onClick={() => onChange({ favorites: state.favoritesOnly ? null : "1" })}
-          >
-            ♥ My favorites
-          </button>
-        </div>
+        <legend className={styles.srOnly}>Show only</legend>
+        <Check label="Open now only" checked={state.openNow} onChange={(on) => onChange({ openNow: on ? "true" : null })} />
+        <Check
+          label="Offers only"
+          checked={state.offersOnly}
+          onChange={(on) => onChange({ offersOnly: on ? "true" : null })}
+          hint={state.popularService ? `Offers that cover ${popularServiceById(state.popularService)?.label.toLowerCase()}` : undefined}
+        />
+        <Check label={`Top rated (${TOP_RATED_MIN.toFixed(1)}+)`} checked={topRated} onChange={(on) => onChange({ minRating: on ? String(TOP_RATED_MIN) : null })} />
+        <Check label="My favorites" checked={state.favoritesOnly} onChange={(on) => onChange({ favorites: on ? "1" : null })} />
       </fieldset>
     </div>
   );
@@ -238,20 +255,26 @@ export function SortControl({ state, onChange }: { state: DiscoveryState; onChan
     <div className={styles.sort}>
       <label htmlFor="discovery-sort">Sort by</label>
       <select id="discovery-sort" value={state.sort} onChange={(e) => onChange(e.target.value as SalonSortOption)}>
-        {SALON_SORT_OPTIONS.map((option) => (
-          <option key={option} value={option} disabled={option === "price" && !!priceReason}>
-            {SALON_SORT_LABELS[option]}
-            {option === "price" && priceReason ? " — select a service first" : ""}
-            {option === "distance" && !state.nearMe ? " (uses your location)" : ""}
-          </option>
-        ))}
+        {SALON_SORT_OPTIONS.map((option) => {
+          const blocked = !!sortUnavailableReason(option, state);
+          return (
+            <option key={option} value={option} disabled={blocked}>
+              {SALON_SORT_LABELS[option]}
+              {blocked ? " — select a service first" : ""}
+              {option === "distance" && !state.nearMe ? " (uses your location)" : ""}
+            </option>
+          );
+        })}
       </select>
       {priceReason && <span className={styles.sortHint}>{priceReason}</span>}
     </div>
   );
 }
 
-/** Same-service comparison: one row per salon, the selected service's own name and price. */
+/**
+ * Same-service comparison: one row per salon, the selected service's own name and price, its best
+ * offer, and the price after that offer only when the offer is certain (otherwise "at booking").
+ */
 export function CompareTable({ salons, serviceLabel }: { salons: SalonListItemDto[]; serviceLabel: string }) {
   return (
     <div className={styles.tableWrap}>
@@ -260,10 +283,14 @@ export function CompareTable({ salons, serviceLabel }: { salons: SalonListItemDt
         <thead>
           <tr>
             <th scope="col">Salon</th>
-            <th scope="col">{serviceLabel} price</th>
+            <th scope="col">{serviceLabel}</th>
+            <th scope="col">Price</th>
+            <th scope="col">Offer</th>
+            <th scope="col">You pay</th>
             <th scope="col">Rating</th>
             <th scope="col">Distance</th>
             <th scope="col">Type</th>
+            <th scope="col">Now</th>
             <th scope="col"><span className={styles.srOnly}>Actions</span></th>
           </tr>
         </thead>
@@ -271,20 +298,39 @@ export function CompareTable({ salons, serviceLabel }: { salons: SalonListItemDt
           {salons.map((salon) => {
             const country = salon.countryCode.toLowerCase();
             const params = new URLSearchParams({ city: salon.citySlug, country: salon.countryCode });
+            const offer = salon.offers?.[0] ?? null;
+            if (offer) params.set("offer", offer.id);
+            const money = (amount: number) => formatMoney(amount, salon.currency, salon.countryCode);
+            const service = salon.selectedService;
+            const certain = offer?.price && service && offer.price.serviceId === service.id ? offer.price : null;
             return (
               <tr key={salon.id}>
                 <th scope="row">
                   <Link href={`/${country}/${salon.citySlug}/${salon.slug}`} className={styles.salonLink}>{salon.name}</Link>
                   <small>{salon.addressLine}</small>
                 </th>
+                <td>{service ? <>{service.name}<small>{service.durationMinutes} min</small></> : <span className={styles.muted}>Not on menu</span>}</td>
+                <td>{service ? (certain ? <s className={styles.muted}>{money(service.price)}</s> : <strong>{money(service.price)}</strong>) : <span className={styles.muted}>—</span>}</td>
                 <td>
-                  {salon.selectedService ? (
+                  {offer ? (
                     <>
-                      <strong>{formatMoney(salon.selectedService.price, salon.currency, salon.countryCode)}</strong>
-                      <small>{salon.selectedService.name} · {salon.selectedService.durationMinutes} min</small>
+                      <span className={styles.offerTag}>{offerBadgeText(offer, salon.currency, salon.countryCode)}</span>
+                      <small>{offer.conditional ? "Conditions apply" : offer.title}</small>
                     </>
                   ) : (
-                    <span className={styles.muted}>Not on menu</span>
+                    <span className={styles.muted}>—</span>
+                  )}
+                </td>
+                <td>
+                  {certain ? (
+                    <strong className={styles.pay}>{money(certain.offerPrice)}</strong>
+                  ) : service ? (
+                    <>
+                      <strong>{money(service.price)}</strong>
+                      {offer?.conditional && <small>Offer checked at booking</small>}
+                    </>
+                  ) : (
+                    <span className={styles.muted}>—</span>
                   )}
                 </td>
                 <td>
@@ -296,6 +342,7 @@ export function CompareTable({ salons, serviceLabel }: { salons: SalonListItemDt
                 </td>
                 <td>{salon.distanceKm === null ? <span className={styles.muted}>—</span> : formatDistance(salon.distanceKm, salon.countryCode)}</td>
                 <td>{salon.salonType && salon.salonTypeConfirmed ? SALON_TYPE_LABELS[salon.salonType] : <span className={styles.muted}>Not set</span>}</td>
+                <td>{salon.isClosedForToday ? "Closed today" : salon.isOpenNow === true ? <span className={styles.open}>Open</span> : salon.isOpenNow === false ? "Closed" : <span className={styles.muted}>—</span>}</td>
                 <td className={styles.rowActions}>
                   <FavoriteButton salonId={salon.id} salonName={salon.name} variant="inline" />
                   {salon.isClosedForToday ? (

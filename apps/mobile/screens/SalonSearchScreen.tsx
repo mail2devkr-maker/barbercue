@@ -115,7 +115,10 @@ const SALON_TYPE_LABEL_KEYS: Record<SalonTypeFilter, 'salonTypeMale' | 'salonTyp
   LADIES: 'salonTypeFemale',
   UNISEX: 'salonTypeUnisex',
 };
-const SORT_LABEL_KEYS: Record<SalonSortOption, 'sortRecommended' | 'sortDistance' | 'sortPrice' | 'sortRating'> = {
+// The phone screen offers these four of the search API's sorts.
+const MOBILE_SORTS = ['relevance', 'distance', 'price', 'rating'] as const;
+type MobileSort = (typeof MOBILE_SORTS)[number];
+const SORT_LABEL_KEYS: Record<MobileSort, 'sortRecommended' | 'sortDistance' | 'sortPrice' | 'sortRating'> = {
   relevance: 'sortRecommended',
   distance: 'sortDistance',
   price: 'sortPrice',
@@ -520,7 +523,7 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
   ];
   const comparedService = POPULAR_SERVICES.find((entry) => entry.id === discovery.popularService) ?? null;
   // Distance sort only once a location is known; price sort only once a service is compared.
-  const sortOptions: FilterDropdownOption[] = (['relevance', 'distance', 'price', 'rating'] as const)
+  const sortOptions: FilterDropdownOption[] = MOBILE_SORTS
     .filter((option) => option !== 'distance' || nearMe)
     .filter((option) => option !== 'price' || comparedService || service)
     .map((option) => ({ id: option, label: t[SORT_LABEL_KEYS[option]] }));
@@ -528,7 +531,10 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
     { id: ANY_ID, label: t.ratingFilterAny },
     ...MIN_RATING_OPTIONS.map((value) => ({ id: String(value), label: `${value}★+` })),
   ];
-  const activeSort = discovery.sort === 'distance' && !nearMe ? 'relevance' : discovery.sort;
+  const activeSort: MobileSort =
+    (discovery.sort === 'distance' && !nearMe) || !(MOBILE_SORTS as readonly string[]).includes(discovery.sort)
+      ? 'relevance'
+      : (discovery.sort as MobileSort);
   const activeServiceCategory = SALON_DISCOVERY_CATEGORIES.find((category) => category.query === service);
   const activeDistanceOption = DISTANCE_OPTIONS.find((option) => option.value === radiusKm);
   const distanceValueLabel = activeDistanceOption ? t[activeDistanceOption.labelKey] : t.distanceFilterAny;
