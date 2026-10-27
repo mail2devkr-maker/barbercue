@@ -1,12 +1,13 @@
 /// <reference types="jest" />
 import { act, createElement } from 'react';
-import { Text } from 'react-native';
+import { Alert, Text, TextInput } from 'react-native';
 import TestRenderer from 'react-test-renderer';
 import type { InventoryMovementDto, InventoryPageDto, InventoryProductDto, InventoryReportDto } from '@barbercue/shared';
 import OwnerInventoryScreen from '../OwnerInventoryScreen';
 import { apiFetch } from '../../../lib/api';
 
 jest.mock('../../../lib/api', () => ({ apiFetch: jest.fn(), ApiError: class ApiError extends Error {} }));
+jest.mock('../../../lib/idempotency', () => ({ newIdempotencyKey: () => 'synthetic-stock-movement-key' }));
 let mockSelectedShop = { id: 'shop/id', name: 'Synthetic shop' };
 jest.mock('../../../lib/salon-context', () => ({ useSalon: () => ({ selectedSalonId: mockSelectedShop.id, selectedSalon: mockSelectedShop }) }));
 jest.mock('../../../lib/language-context', () => ({ useLanguage: () => ({ language: 'EN', t: {} }) }));
@@ -110,4 +111,75 @@ it('does not append an old shop page after the selected shop changes mid-request
 
   expect(renderedText()).toContain('New shop product');
   expect(renderedText()).not.toContain('Old shop next page');
+});
+
+it('records a purchase only after confirmation, with server idempotency and a refresh from the selected shop', async () => {
+  (apiFetch as jest.Mock).mockImplementation(async (path: string, options?: RequestInit) => {
+    if (options?.method === 'POST') return { created: true, movement: movements.items[0] };
+    if (path.endsWith('/report')) return report;
+    if (path.includes('/products?')) return products;
+    return movements;
+  });
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  try {
+    await act(async () => { tree = TestRenderer.create(createElement(OwnerInventoryScreen, {} as never)); });
+    const record = tree.root.findAll((node: any) => node.props.accessibilityRole === 'button' && textOf(node).includes('Record stock movement'))[0];
+    await act(async () => record.props.onPress());
+    const quantity = tree.root.findAllByType(TextInput).find((input: any) => input.props.accessibilityLabel === 'Quantity');
+    const cost = tree.root.findAllByType(TextInput).find((input: any) => input.props.accessibilityLabel === 'Cost per unit');
+    await act(async () => { quantity!.props.onChangeText('2'); cost!.props.onChangeText('125.50'); });
+    const review = tree.root.findAll((node: any) => node.props.accessibilityRole === 'button' && textOf(node) === 'Review movement')[0];
+    await act(async () => review.props.onPress());
+
+    expect(alert).toHaveBeenCalledWith('Confirm stock movement', expect.stringContaining('Shampoo'), expect.any(Array));
+    expect(apiFetch).toHaveBeenCalledTimes(3);
+    const confirm = alert.mock.calls[0]?.[2]?.[1] as { onPress: () => void };
+    await act(async () => confirm.onPress());
+    expect(apiFetch).toHaveBeenNthCalledWith(4, 'dashboard/salons/shop%2Fid/inventory/products/p1/movements', {
+      method: 'POST',
+      headers: { 'Idempotency-Key': 'synthetic-stock-movement-key' },
+      body: JSON.stringify({ kind: 'PURCHASE', quantity: 2, unitCost: 125.5 }),
+    });
+    expect((apiFetch as jest.Mock).mock.calls.filter(([path]) => path.endsWith('/report'))).toHaveLength(2);
+    expect(renderedText()).toContain('Stock movement recorded. Inventory refreshed.');
+  } finally {
+    alert.mockRestore();
+  }
+});
+
+it('requires an adjustment reason and does not call the mutation API without one', async () => {
+  await act(async () => { tree = TestRenderer.create(createElement(OwnerInventoryScreen, {} as never)); });
+  const record = tree.root.findAll((node: any) => node.props.accessibilityRole === 'button' && textOf(node).includes('Record stock movement'))[0];
+  await act(async () => record.props.onPress());
+  const adjustment = tree.root.findAll((node: any) => node.props.accessibilityRole === 'tab' && textOf(node) === 'Adjustment')[0];
+  await act(async () => adjustment.props.onPress());
+  const quantity = tree.root.findAllByType(TextInput).find((input: any) => input.props.accessibilityLabel === 'Quantity');
+  await act(async () => quantity!.props.onChangeText('1'));
+  const review = tree.root.findAll((node: any) => node.props.accessibilityRole === 'button' && textOf(node) === 'Review movement')[0];
+  await act(async () => review.props.onPress());
+  expect(renderedText()).toContain('A reason is required for stock adjustments');
+  expect(apiFetch).toHaveBeenCalledTimes(3);
+});
+
+it('does not submit a confirmation that belongs to a shop scope which is no longer selected', async () => {
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  try {
+    await act(async () => { tree = TestRenderer.create(createElement(OwnerInventoryScreen, {} as never)); });
+    const record = tree.root.findAll((node: any) => node.props.accessibilityRole === 'button' && textOf(node).includes('Record stock movement'))[0];
+    await act(async () => record.props.onPress());
+    const quantity = tree.root.findAllByType(TextInput).find((input: any) => input.props.accessibilityLabel === 'Quantity');
+    const cost = tree.root.findAllByType(TextInput).find((input: any) => input.props.accessibilityLabel === 'Cost per unit');
+    await act(async () => { quantity!.props.onChangeText('2'); cost!.props.onChangeText('125.50'); });
+    const review = tree.root.findAll((node: any) => node.props.accessibilityRole === 'button' && textOf(node) === 'Review movement')[0];
+    await act(async () => review.props.onPress());
+    const confirm = alert.mock.calls[0]?.[2]?.[1] as { onPress: () => void };
+
+    mockSelectedShop = { id: 'shop-2', name: 'Other synthetic shop' };
+    await act(async () => { tree.update(createElement(OwnerInventoryScreen, {} as never)); await Promise.resolve(); });
+    await act(async () => confirm.onPress());
+
+    expect((apiFetch as jest.Mock).mock.calls.some(([, options]) => options?.method === 'POST')).toBe(false);
+  } finally {
+    alert.mockRestore();
+  }
 });
