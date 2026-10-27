@@ -208,7 +208,7 @@ describe('AdminDataExportService', () => {
     );
   });
 
-  it('says so — in the file and the audit — when the suppression list cannot be checked', async () => {
+  it('fails closed and audits when suppression cannot be checked', async () => {
     delete process.env.CONTACT_LEDGER_HASH_KEY;
     const contacts = new Map([
       [
@@ -216,14 +216,19 @@ describe('AdminDataExportService', () => {
         { phone: '+919876543210', email: null, createdAt: new Date() },
       ],
     ]);
-    const { service, prisma } = makeService(contacts);
-    const [meta] = lines(
-      (await service.export('admin-1', 'CUSTOMER_CONTACTS', QUERY)).body,
-    );
-    expect(meta).toContain('could not be checked');
-    expect(
-      prisma.auditLog.create.mock.calls[0][0].data.metadata.phoneSuppression,
-    ).toEqual({ checked: false, withheld: 0 });
+    const { service, prisma, customers } = makeService(contacts);
+
+    await expect(
+      service.export('admin-1', 'CUSTOMER_CONTACTS', QUERY),
+    ).rejects.toThrow('Customer contact export unavailable');
+
+    // No contact rows should even be queried while opt-out suppression is unavailable.
+    expect(customers.exportRows).not.toHaveBeenCalled();
+    expect(prisma.contactSuppression.findMany).not.toHaveBeenCalled();
+    expect(prisma.auditLog.create.mock.calls[0][0].data.metadata).toMatchObject({
+      category: 'CUSTOMER_CONTACTS',
+      outcome: 'FAILED',
+    });
   });
 
   it('keeps staff performance and staff contact exports apart', async () => {
