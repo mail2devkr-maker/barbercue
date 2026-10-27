@@ -86,7 +86,7 @@ async function render() {
   await act(async () => {
     const props = { navigation: { navigate: jest.fn() }, route: { params: {} } };
     tree = TestRenderer.create(
-      createElement(SalonSearchScreen as ComponentType<typeof props>, props),
+      createElement(SalonSearchScreen as unknown as ComponentType<typeof props>, props),
     );
   });
 }
