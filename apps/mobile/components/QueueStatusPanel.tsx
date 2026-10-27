@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Alert, Linking, Pressable, StyleSheet, Text, Vibration, View } from 'react-native';
+import { Alert, Linking, Modal, Pressable, StyleSheet, Text, Vibration, View } from 'react-native';
 import * as Speech from 'expo-speech';
 import { Language, QUEUE_ENTRIES_PATH, SPEECH_LOCALE, voiceAnnouncementsFor, type QueueEntryDetailDto, type UiStrings } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
@@ -28,14 +28,42 @@ function statusLabel(t: UiStrings, entry: QueueEntryDetailDto): string {
 export function QueueStatusPanel({
   entry,
   onEntryChange,
+  guestAccessToken,
 }: {
   entry: QueueEntryDetailDto;
   onEntryChange: (entry: QueueEntryDetailDto | null) => void;
+  guestAccessToken?: string | null;
 }) {
   const { user } = useAuth();
   const { t } = useLanguage();
   const [turnAlert, setTurnAlert] = useState(false);
   const [shopPhone, setShopPhone] = useState<string | null>(null);
+  const [responding, setResponding] = useState(false);
+  const [arrivalError, setArrivalError] = useState<string | null>(null);
+  const guestHeaders = guestAccessToken ? { 'X-Queue-Guest-Token': guestAccessToken } : undefined;
+  const guestMode = Boolean(guestAccessToken);
+  const statusPath = guestMode
+    ? `${QUEUE_ENTRIES_PATH}/${entry.id}/guest-status`
+    : `${QUEUE_ENTRIES_PATH}/mine/active`;
+  const arrivalOpen = Boolean(
+    entry.arrivalPromptSentAt && !entry.arrivedAt &&
+    entry.customerArrivalResponse == null && entry.status === 'WAITING'
+  );
+  async function replyArrival(arrived: boolean) {
+    if (responding) return;
+    setResponding(true); setArrivalError(null);
+    try {
+      const next = await apiFetch<QueueEntryDetailDto>(
+        `${QUEUE_ENTRIES_PATH}/${entry.id}/${guestMode ? 'guest-arrival-response' : 'arrival-response'}`,
+        { method: 'POST', headers: guestHeaders, body: JSON.stringify({ arrived }) },
+      );
+      onEntryChange(next);
+    } catch (err) {
+      setArrivalError(err instanceof ApiError ? err.message : 'Could not send your arrival response.');
+    } finally {
+      setResponding(false);
+    }
+  }
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
   const canCancel = entry.bookingId === null && (entry.status === 'WAITING' || entry.status === 'CALLED');
@@ -46,23 +74,28 @@ export function QueueStatusPanel({
       return;
     }
     let cancelled = false;
-    apiFetch<{ shopPhone: string | null }>(`${QUEUE_ENTRIES_PATH}/${entry.id}/shop-contact`)
+    apiFetch<{ shopPhone: string | null }>(
+      `${QUEUE_ENTRIES_PATH}/${entry.id}/${guestMode ? 'guest-shop-contact' : 'shop-contact'}`,
+      { headers: guestHeaders },
+    )
       .then((result) => { if (!cancelled) setShopPhone(result.shopPhone); })
       .catch(() => { if (!cancelled) setShopPhone(null); });
     return () => { cancelled = true; };
-  }, [entry.id, entry.status]);
+  }, [entry.id, entry.status, guestAccessToken]);
 
   async function cancelQueue(): Promise<void> {
     if (!canCancel || cancelling) return;
     setCancelling(true);
     setCancelError(null);
     try {
-      await apiFetch(`${QUEUE_ENTRIES_PATH}/${entry.id}/cancel`, { method: 'POST' });
+      await apiFetch(`${QUEUE_ENTRIES_PATH}/${entry.id}/${guestMode ? 'guest-cancel' : 'cancel'}`, {
+        method: 'POST', headers: guestHeaders,
+      });
       onEntryChange(null);
     } catch (error) {
       setCancelError(error instanceof ApiError ? error.message : t.couldNotCancelLiveQueue);
       // Shop action may have started the service concurrently: refresh instead of hiding it.
-      void apiFetch<QueueEntryDetailDto | null>(`${QUEUE_ENTRIES_PATH}/mine/active`)
+      void apiFetch<QueueEntryDetailDto | null>(statusPath, { headers: guestHeaders })
         .then(onEntryChange)
         .catch(() => undefined);
     } finally {
@@ -90,7 +123,7 @@ export function QueueStatusPanel({
 
     let cancelled = false;
     function refetch() {
-      apiFetch<QueueEntryDetailDto | null>(`${QUEUE_ENTRIES_PATH}/mine/active`)
+      apiFetch<QueueEntryDetailDto | null>(statusPath, { headers: guestHeaders })
         .then((next) => {
           if (!cancelled) onEntryChange(next);
         })
@@ -131,10 +164,27 @@ export function QueueStatusPanel({
       socket.off('queue.entry.wait_alert', onWaitAlert);
       unsubscribeReconnect();
     };
-  }, [entry.salonId, entry.status, entry.id, entry.turnApproaching, onEntryChange, user?.preferredLanguage]);
+  }, [entry.salonId, entry.status, entry.id, entry.turnApproaching, onEntryChange, user?.preferredLanguage, guestAccessToken]);
 
   return (
     <View style={styles.card}>
+      <Modal visible={arrivalOpen} transparent animationType="fade" onRequestClose={() => undefined}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,.92)', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <View style={{ backgroundColor: '#fff', borderRadius: 18, padding: 26, width: '100%' }}>
+            <Text style={{ fontSize: 23, fontWeight: 'bold', color: '#111' }}>Have you arrived at the shop?</Text>
+            <Text style={{ marginTop: 12, marginBottom: 18, color: '#222' }}>Your estimated service time is around 10 minutes away.</Text>
+            <Pressable accessibilityRole="button" disabled={responding}
+              onPress={() => void replyArrival(true)} style={styles.cancelQueueButton}>
+              <Text style={styles.cancelQueueText}>Yes, I am here</Text>
+            </Pressable>
+            <Pressable accessibilityRole="button" disabled={responding}
+              onPress={() => void replyArrival(false)} style={styles.cancelQueueButton}>
+              <Text style={styles.cancelQueueText}>Not yet</Text>
+            </Pressable>
+            {arrivalError && <Text accessibilityRole="alert" style={styles.cancelError}>{arrivalError}</Text>}
+          </View>
+        </View>
+      </Modal>
       {turnAlert && (
         <Pressable style={styles.turnAlertBanner} onPress={() => setTurnAlert(false)}>
           <Text style={styles.turnAlertText}>
