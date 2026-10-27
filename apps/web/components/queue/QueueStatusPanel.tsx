@@ -35,12 +35,19 @@ function statusBadgeClass(status: string): string {
 export function QueueStatusPanel({
   entry,
   onEntryChange,
+  guestAccessToken,
 }: {
   entry: QueueEntryDetailDto;
   onEntryChange: (entry: QueueEntryDetailDto | null) => void;
+  guestAccessToken?: string | null;
 }) {
   const [turnAlert, setTurnAlert] = useState(false);
   const [shopPhone, setShopPhone] = useState<string | null>(null);
+  const [responding, setResponding] = useState(false);
+  const [arrivalError, setArrivalError] = useState<string | null>(null);
+  const guestHeaders = guestAccessToken ? { 'X-Queue-Guest-Token': guestAccessToken } : undefined;
+  const statusPath = guestAccessToken ? `${QUEUE_ENTRIES_PATH}/${entry.id}/guest-status` : `${QUEUE_ENTRIES_PATH}/mine/active`;
+  const guestMode = Boolean(guestAccessToken);
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
   const canCancel = entry.bookingId === null && (entry.status === "WAITING" || entry.status === "CALLED");
@@ -51,11 +58,11 @@ export function QueueStatusPanel({
       return;
     }
     let cancelled = false;
-    apiFetch<{ shopPhone: string | null }>(`${QUEUE_ENTRIES_PATH}/${entry.id}/shop-contact`)
+    apiFetch<{ shopPhone: string | null }>(`${QUEUE_ENTRIES_PATH}/${entry.id}/${guestMode ? 'guest-shop-contact' : 'shop-contact'}`, { headers: guestHeaders })
       .then((result) => { if (!cancelled) setShopPhone(result.shopPhone); })
       .catch(() => { if (!cancelled) setShopPhone(null); });
     return () => { cancelled = true; };
-  }, [entry.id, entry.status]);
+  }, [entry.id, entry.status, guestAccessToken]);
 
   async function cancelMyQueue(): Promise<void> {
     if (cancelling || !canCancel) return;
@@ -63,17 +70,39 @@ export function QueueStatusPanel({
     setCancelling(true);
     setCancelError(null);
     try {
-      await apiFetch(`${QUEUE_ENTRIES_PATH}/${entry.id}/cancel`, { method: "POST" });
+      await apiFetch(`${QUEUE_ENTRIES_PATH}/${entry.id}/${guestMode ? 'guest-cancel' : 'cancel'}`, { method: "POST", headers: guestHeaders });
       onEntryChange(null);
     } catch (error) {
       setCancelError(error instanceof ApiError ? error.message : "Could not cancel your Live Queue token. Please try again.");
       // A race with the shop calling/starting the service may make the token ineligible.
       // Refresh server truth; never pretend a failed cancellation succeeded.
-      void apiFetch<QueueEntryDetailDto | null>(`${QUEUE_ENTRIES_PATH}/mine/active`).then(onEntryChange).catch(() => undefined);
+      void apiFetch<QueueEntryDetailDto | null>(statusPath, { headers: guestHeaders }).then(onEntryChange).catch(() => undefined);
     } finally {
       setCancelling(false);
     }
   }
+  const arrivalPromptOpen = Boolean(
+    entry.arrivalPromptSentAt && !entry.arrivedAt &&
+    entry.customerArrivalResponse == null && entry.status === 'WAITING'
+  );
+
+  async function replyArrival(arrived: boolean) {
+    if (responding) return;
+    setResponding(true);
+    setArrivalError(null);
+    try {
+      const result = await apiFetch<QueueEntryDetailDto>(
+        `${QUEUE_ENTRIES_PATH}/${entry.id}/${guestMode ? 'guest-arrival-response' : 'arrival-response'}`,
+        { method: "POST", headers: guestHeaders, body: JSON.stringify({ arrived }) },
+      );
+      onEntryChange(result);
+    } catch (err) {
+      setArrivalError(err instanceof ApiError ? err.message : "Could not send your arrival response.");
+    } finally {
+      setResponding(false);
+    }
+  }
+
   const audioContextRef = useRef<AudioContext | null>(null);
 
   function playChime() {
@@ -106,7 +135,7 @@ export function QueueStatusPanel({
 
     let cancelled = false;
     function refetch() {
-      apiFetch<QueueEntryDetailDto | null>(`${QUEUE_ENTRIES_PATH}/mine/active`)
+      apiFetch<QueueEntryDetailDto | null>(statusPath, { headers: guestHeaders })
         .then((next) => {
           if (!cancelled) onEntryChange(next);
         })
@@ -143,7 +172,7 @@ export function QueueStatusPanel({
       socket.off("queue.entry.wait_alert", onWaitAlert);
       unsubscribeReconnect();
     };
-  }, [entry.salonId, entry.status, entry.id, onEntryChange]);
+  }, [entry.salonId, entry.status, entry.id, onEntryChange, guestAccessToken]);
 
   return (
     <div className={styles.ticket}>
@@ -153,6 +182,20 @@ export function QueueStatusPanel({
           <button type="button" onClick={() => setTurnAlert(false)}>
             Dismiss
           </button>
+        </div>
+      )}
+      {arrivalPromptOpen && (
+        <div role="alertdialog" aria-modal="true" aria-label="Live Queue arrival confirmation"
+          style={{ position: 'fixed', inset: 0, zIndex: 1200, background: 'rgba(0,0,0,.88)', display: 'grid', placeItems: 'center', padding: 20 }}>
+          <div style={{ background: '#fff', color: '#181818', borderRadius: 16, padding: 28, width: 'min(95vw, 480px)' }}>
+            <h2>Have you arrived at the shop?</h2>
+            <p>Your estimated service time is around 10 minutes away. Your response helps the shop prepare.</p>
+            <div style={{ display: 'flex', gap: 12, marginTop: 24 }}>
+              <button type="button" disabled={responding} onClick={() => void replyArrival(true)}>Yes, I am here</button>
+              <button type="button" disabled={responding} onClick={() => void replyArrival(false)}>Not yet</button>
+            </div>
+            {arrivalError && <p role="alert">{arrivalError}</p>}
+          </div>
         </div>
       )}
       <div className={styles.ticketHead}>
