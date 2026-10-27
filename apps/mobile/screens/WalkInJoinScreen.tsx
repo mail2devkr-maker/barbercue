@@ -13,6 +13,7 @@ import { newIdempotencyKey } from '../lib/idempotency';
 import { useAuth } from '../lib/auth-context';
 import { useLanguage } from '../lib/language-context';
 import { getItem, setItem } from '../lib/secure-storage';
+import { registerGuestQueuePushDevice } from '../lib/push-notifications';
 import { QueueStatusPanel } from '../components/QueueStatusPanel';
 import { color, font, fontSize, radius, space } from '../lib/theme';
 import { Screen, SectionHeader, Button, Skeleton, InlineError } from '../components/ui';
@@ -110,6 +111,8 @@ export default function WalkInJoinScreen({ route }: Props) {
       });
       if (created.guestAccessToken) {
         setGuestAccessToken(created.guestAccessToken);
+        // Best-effort OS push; a denied permission does not block queue admission.
+        void registerGuestQueuePushDevice(created.id, created.guestAccessToken);
         await setItem(`fastque_guest_queue_${salonId}`,
           JSON.stringify({ id: created.id, token: created.guestAccessToken }));
       }
