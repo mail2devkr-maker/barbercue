@@ -6,6 +6,10 @@ import { uiStringsFor } from '@barbercue/shared';
 import { LiveQueuePanel } from '../LiveQueuePanel';
 import { apiFetch } from '../../../lib/api';
 
+// The first test of this file pays the cold import/render cost of the whole panel; on a busy CI runner that alone can pass the 5 s
+// default (seen once at exact head f5a1d8a4, passing on every other run). A genuine hang still fails at the 20 s ceiling.
+jest.setTimeout(20_000);
+
 jest.mock('../../../lib/api', () => ({
   apiFetch: jest.fn(),
   ApiError: class ApiError extends Error {
