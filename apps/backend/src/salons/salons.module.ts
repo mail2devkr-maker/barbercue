@@ -9,6 +9,8 @@ import { SalonsController } from './salons.controller';
 import { CitiesService } from './cities.service';
 import { CountriesService } from './countries.service';
 import { SalonsService } from './salons.service';
+import { FavoritesController } from './favorites.controller';
+import { FavoritesService } from './favorites.service';
 
 // AuthModule provides TokenService — SalonsService.registerSalon uses it to mint a fresh
 // STAFF-audience session the instant a customer becomes a shop owner (see that method's own doc
@@ -20,12 +22,14 @@ import { SalonsService } from './salons.service';
     CountriesController,
     SalonsController,
     CustomerAssistantSearchController,
+    FavoritesController,
   ],
   providers: [
     CitiesService,
     CountriesService,
     SalonsService,
     CustomerAssistantSearchService,
+    FavoritesService,
   ],
 })
 export class SalonsModule {}

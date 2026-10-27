@@ -221,3 +221,18 @@
   font-size: 0.8rem;
   color: var(--bc-muted);
 }
+
+/* Discovery upgrade: heart over the photo, salon-type chip. */
+.media { position: relative; }
+.typeChip,
+.typeChipUnset {
+  display: inline-flex;
+  margin-top: 6px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.typeChip { color: var(--bc-ink); background: color-mix(in srgb, var(--bc-accent, #e5195f) 10%, #fff); border: 1px solid color-mix(in srgb, var(--bc-accent, #e5195f) 25%, transparent); }
+.typeChipUnset { color: var(--bc-muted, #6b6560); background: #f4f1ec; border: 1px dashed var(--bc-border); }
