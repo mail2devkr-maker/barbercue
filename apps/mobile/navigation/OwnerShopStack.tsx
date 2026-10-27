@@ -4,6 +4,7 @@ import OwnerCustomersScreen from '../screens/owner/OwnerCustomersScreen';
 import OwnerCustomerDetailScreen from '../screens/owner/OwnerCustomerDetailScreen';
 import OwnerInvoicesScreen from '../screens/owner/OwnerInvoicesScreen';
 import OwnerInvoiceDetailScreen from '../screens/owner/OwnerInvoiceDetailScreen';
+import OwnerBillingProfileScreen from '../screens/owner/OwnerBillingProfileScreen';
 import OwnerAnalyticsScreen from '../screens/owner/OwnerAnalyticsScreen';
 import OwnerRevenueReportScreen from '../screens/owner/OwnerRevenueReportScreen';
 import OwnerInventoryScreen from '../screens/owner/OwnerInventoryScreen';
@@ -19,6 +20,7 @@ export type OwnerShopStackParamList = {
   OwnerCustomerDetail: { customerId: string };
   OwnerInvoices: undefined;
   OwnerInvoiceDetail: { salonId: string; invoiceId: string };
+  OwnerBillingProfile: { salonId: string };
   OwnerAnalytics: undefined;
   OwnerRevenueReport: undefined;
   OwnerInventory: undefined;
@@ -46,6 +48,7 @@ export default function OwnerShopStack() {
       />
       <Stack.Screen name="OwnerInvoices" component={OwnerInvoicesScreen} options={{ headerShown: true, title: 'Shop invoices' }} />
       <Stack.Screen name="OwnerInvoiceDetail" component={OwnerInvoiceDetailScreen} options={{ headerShown: true, title: 'Invoice details' }} />
+      <Stack.Screen name="OwnerBillingProfile" component={OwnerBillingProfileScreen} options={{ headerShown: true, title: language === 'HI' ? 'बिलिंग प्रोफ़ाइल' : 'Billing profile' }} />
       <Stack.Screen
         name="OwnerAnalytics"
         component={OwnerAnalyticsScreen}

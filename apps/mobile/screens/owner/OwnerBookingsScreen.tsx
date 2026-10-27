@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
+import type { NavigatorScreenParams } from '@react-navigation/native';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
@@ -20,9 +21,11 @@ import { getRealtimeSocket, joinSalonRoom, onReconnect } from '../../lib/realtim
 import { useSalon } from '../../lib/salon-context';
 import { speakBooking } from '../../lib/voice-announce';
 import { claimBookingVoiceEvent } from '../../lib/booking-voice-dedupe';
+import { CompletedBookingInvoiceAction } from './CompletedBookingInvoiceAction';
 import { color, font, fontSize, lineHeightFor, radius, space } from '../../lib/theme';
 import { Screen, SectionHeader, Card, Button, EmptyState, Skeleton, InlineError } from '../../components/ui';
 import type { OwnerTabParamList } from '../../navigation/OwnerNavigator';
+import type { OwnerShopStackParamList } from '../../navigation/OwnerShopStack';
 
 type Props = BottomTabScreenProps<OwnerTabParamList, 'OwnerBookingsTab'>;
 
@@ -66,7 +69,7 @@ function formatSlot(iso: string, language: Language): string {
   });
 }
 
-function BookingRow({ booking, isNew }: { booking: OwnerBookingDetailDto; isNew: boolean }) {
+function BookingRow({ booking, isNew, salonId, onOpenInvoice }: { booking: OwnerBookingDetailDto; isNew: boolean; salonId: string; onOpenInvoice: (invoiceId: string) => void }) {
   const { t, language } = useLanguage();
   return (
     <Card style={styles.card}>
@@ -89,6 +92,7 @@ function BookingRow({ booking, isNew }: { booking: OwnerBookingDetailDto; isNew:
       <Text style={styles.priceText}>
         {booking.currency ?? ''} {booking.servicePrice} · {t.bookingRefPrefix}{booking.id.slice(0, 8)}
       </Text>
+      {booking.status === 'COMPLETED' ? <CompletedBookingInvoiceAction salonId={salonId} bookingId={booking.id} language={language} onOpenInvoice={onOpenInvoice} /> : null}
     </Card>
   );
 }
@@ -402,7 +406,13 @@ export default function OwnerBookingsScreen({ route }: Props) {
             <EmptyState title={t.noBookingsTitle} message={t.noBookingsHint} />
           ) : (
             items.map((booking) => (
-              <BookingRow key={booking.id} booking={booking} isNew={newIds.includes(booking.id)} />
+              <BookingRow
+                key={booking.id}
+                booking={booking}
+                isNew={newIds.includes(booking.id)}
+                salonId={selectedSalonId}
+                onOpenInvoice={(invoiceId) => navigation.navigate('OwnerShopTab', { screen: 'OwnerInvoiceDetail', params: { salonId: selectedSalonId, invoiceId } } as NavigatorScreenParams<OwnerShopStackParamList>)}
+              />
             ))
           )}
           {nextCursor && (

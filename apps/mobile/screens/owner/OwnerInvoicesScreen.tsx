@@ -10,7 +10,7 @@ import { dateLocaleFor } from '../../lib/date-locale';
 import { useLanguage } from '../../lib/language-context';
 import { useSalon } from '../../lib/salon-context';
 import { color, font, fontSize, lineHeightFor, radius, space } from '../../lib/theme';
-import { EmptyState, InlineError, Screen, SectionHeader, Skeleton } from '../../components/ui';
+import { Button, EmptyState, InlineError, Screen, SectionHeader, Skeleton } from '../../components/ui';
 import type { OwnerShopStackParamList } from '../../navigation/OwnerShopStack';
 
 type Props = NativeStackScreenProps<OwnerShopStackParamList, 'OwnerInvoices'>;
@@ -77,6 +77,7 @@ export default function OwnerInvoicesScreen({ navigation }: Props) {
   return (
     <Screen scroll={false} contentStyle={styles.screenContent}>
       <SectionHeader eyebrow="Billing" title="Shop invoices" subtitle={selectedSalon?.name ? `Recorded invoices for ${selectedSalon.name}.` : 'Recorded invoices for your selected shop.'} />
+      {selectedSalonId ? <Button title={language === 'HI' ? 'बिलिंग प्रोफ़ाइल संपादित करें' : 'Edit billing profile'} variant="outline" onPress={() => navigation.navigate('OwnerBillingProfile', { salonId: selectedSalonId })} /> : null}
       {loading ? (
         <View style={styles.skeletons}><Skeleton style={styles.skeleton} /><Skeleton style={styles.skeleton} /></View>
       ) : error && items.length === 0 ? (

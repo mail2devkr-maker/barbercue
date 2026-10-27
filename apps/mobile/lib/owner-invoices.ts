@@ -13,3 +13,20 @@ export function ownerInvoiceDetailRequestPath(salonId: string, invoiceId: string
 export function ownerInvoicePaymentsRequestPath(salonId: string, invoiceId: string): string {
   return `${ownerInvoiceDetailRequestPath(salonId, invoiceId)}/payments`;
 }
+
+export function ownerInvoiceVoidRequestPath(salonId: string, invoiceId: string): string {
+  return `${ownerInvoiceDetailRequestPath(salonId, invoiceId)}/void`;
+}
+
+export function ownerBillingProfileRequestPath(salonId: string): string {
+  return `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${encodeURIComponent(salonId)}/billing-profile`;
+}
+
+export function ownerInvoiceByBookingRequestPath(salonId: string, bookingId: string): string {
+  const query = new URLSearchParams({ bookingId });
+  return `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${encodeURIComponent(salonId)}/${OWNER_OPS_PATHS.invoices}/by-source?${query.toString()}`;
+}
+
+export function ownerInvoiceIssueRequestPath(salonId: string): string {
+  return `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${encodeURIComponent(salonId)}/${OWNER_OPS_PATHS.invoices}`;
+}

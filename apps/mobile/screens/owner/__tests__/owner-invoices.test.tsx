@@ -188,3 +188,65 @@ it('records a refund only after explicit confirmation that the money was actuall
     alert.mockRestore();
   }
 });
+
+it('voids an invoice only after a reason and explicit confirmation, preserving server response and idempotency', async () => {
+  const detail = {
+    ...invoiceSummary, amountPaid: 0, balanceDue: 240, paymentStatus: 'UNPAID', salonName: 'Synthetic shop', customerPhone: null, staffName: null, subtotal: 240,
+    discountTotal: 0, taxTotal: 0, taxLabel: null, taxRatePercent: null, taxMode: null,
+    seller: { legalName: 'Synthetic shop', gstin: null, address: null, phone: null, email: null },
+    lines: [], payments: [], voidReason: null,
+  } as InvoiceDetailDto;
+  const updated = { ...detail, status: 'VOID', paymentStatus: 'VOID', voidReason: 'Duplicate issued in error' } as InvoiceDetailDto;
+  (apiFetch as jest.Mock).mockResolvedValueOnce(detail).mockResolvedValueOnce(updated);
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  try {
+    await act(async () => {
+      tree = TestRenderer.create(createElement(OwnerInvoiceDetailScreen, { route: { params: { salonId: 'salon-1', invoiceId: 'invoice-1' } } } as never));
+    });
+    const openVoid = tree.root.findAll((node: any) => typeof node.props.onPress === 'function' && textOf(node) === 'Void invoice')[0];
+    await act(async () => openVoid.props.onPress());
+    const reason = tree.root.findAllByType(TextInput).find((input: any) => input.props.accessibilityLabel === 'Reason');
+    expect(reason).toBeDefined();
+    await act(async () => reason!.props.onChangeText('Duplicate issued in error'));
+    const review = tree.root.findAll((node: any) => typeof node.props.onPress === 'function' && textOf(node) === 'Review void')[0];
+    await act(async () => review.props.onPress());
+    expect(alert).toHaveBeenCalledWith(expect.any(String), expect.stringContaining('keep its number on record'), expect.any(Array));
+    expect(apiFetch).toHaveBeenCalledTimes(1);
+    const confirm = alert.mock.calls[0]?.[2]?.[1] as { onPress: () => void };
+    await act(async () => confirm.onPress());
+    expect(apiFetch).toHaveBeenLastCalledWith('dashboard/salons/salon-1/invoices/invoice-1/void', {
+      method: 'POST',
+      headers: { 'Idempotency-Key': 'invoice-payment-key' },
+      body: JSON.stringify({ reason: 'Duplicate issued in error' }),
+    });
+    expect(tree.root.findAll((node: any) => node.type === Text).map(textOf).join(' ')).toContain('Invoice voided. Its number and audit history remain on record.');
+    expect(tree.root.findAll((node: any) => node.type === Text).map(textOf).join(' ')).toContain('Voided: Duplicate issued in error. The invoice number remains on record.');
+  } finally {
+    alert.mockRestore();
+  }
+});
+
+it('rejects an invalid void reason locally and never calls the mutation endpoint', async () => {
+  const detail = {
+    ...invoiceSummary, salonName: 'Synthetic shop', customerPhone: null, staffName: null, subtotal: 240,
+    discountTotal: 0, taxTotal: 0, taxLabel: null, taxRatePercent: null, taxMode: null,
+    seller: { legalName: 'Synthetic shop', gstin: null, address: null, phone: null, email: null },
+    lines: [], payments: [], voidReason: null,
+  } as InvoiceDetailDto;
+  (apiFetch as jest.Mock).mockResolvedValueOnce(detail);
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  try {
+    await act(async () => {
+      tree = TestRenderer.create(createElement(OwnerInvoiceDetailScreen, { route: { params: { salonId: 'salon-1', invoiceId: 'invoice-1' } } } as never));
+    });
+    const openVoid = tree.root.findAll((node: any) => typeof node.props.onPress === 'function' && textOf(node) === 'Void invoice')[0];
+    await act(async () => openVoid.props.onPress());
+    const review = tree.root.findAll((node: any) => typeof node.props.onPress === 'function' && textOf(node) === 'Review void')[0];
+    await act(async () => review.props.onPress());
+    expect(alert).not.toHaveBeenCalled();
+    expect(apiFetch).toHaveBeenCalledTimes(1);
+    expect(tree.root.findAll((node: any) => node.type === Text).map(textOf).join(' ')).toContain('String must contain at least 3 character(s)');
+  } finally {
+    alert.mockRestore();
+  }
+});

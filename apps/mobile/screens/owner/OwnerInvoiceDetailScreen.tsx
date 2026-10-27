@@ -2,10 +2,10 @@ import { useCallback, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { formatMoney, InvoicePaymentKind, InvoicePaymentMethod, recordInvoicePaymentSchema } from '@barbercue/shared';
+import { formatMoney, InvoicePaymentKind, InvoicePaymentMethod, recordInvoicePaymentSchema, voidInvoiceSchema } from '@barbercue/shared';
 import type { InvoiceDetailDto, InvoicePaymentKind as InvoicePaymentKindType, InvoicePaymentMethod as InvoicePaymentMethodType } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../../lib/api';
-import { ownerInvoiceDetailRequestPath, ownerInvoicePaymentsRequestPath } from '../../lib/owner-invoices';
+import { ownerInvoiceDetailRequestPath, ownerInvoicePaymentsRequestPath, ownerInvoiceVoidRequestPath } from '../../lib/owner-invoices';
 import { newIdempotencyKey } from '../../lib/idempotency';
 import { dateLocaleFor } from '../../lib/date-locale';
 import { useLanguage } from '../../lib/language-context';
@@ -23,6 +23,10 @@ export default function OwnerInvoiceDetailScreen({ route }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [paymentKind, setPaymentKind] = useState<InvoicePaymentKindType | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [voidMode, setVoidMode] = useState(false);
+  const [voidReason, setVoidReason] = useState('');
+  const [voidBusy, setVoidBusy] = useState(false);
+  const [voidIdempotencyKey] = useState(newIdempotencyKey);
 
   const load = useCallback(() => {
     let cancelled = false;
@@ -37,12 +41,50 @@ export default function OwnerInvoiceDetailScreen({ route }: Props) {
 
   useFocusEffect(useCallback(() => load(), [load]));
 
+  const saveVoid = async (reason: string) => {
+    setVoidBusy(true);
+    setError(null);
+    try {
+      const updated = await apiFetch<InvoiceDetailDto>(ownerInvoiceVoidRequestPath(salonId, invoiceId), {
+        method: 'POST',
+        headers: { 'Idempotency-Key': voidIdempotencyKey },
+        body: JSON.stringify({ reason }),
+      });
+      setInvoice(updated);
+      setVoidMode(false);
+      setNotice(language === 'HI' ? 'इनवॉइस रद्द किया गया।' : 'Invoice voided. Its number and audit history remain on record.');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : (language === 'HI' ? 'इनवॉइस रद्द नहीं किया जा सका।' : 'Could not void this invoice. Any recorded payments must be refunded first.'));
+    } finally {
+      setVoidBusy(false);
+    }
+  };
+
+  const submitVoid = () => {
+    const parsed = voidInvoiceSchema.safeParse({ reason: voidReason });
+    if (!parsed.success) {
+      setError(parsed.error.issues[0]?.message ?? (language === 'HI' ? 'कारण जाँचें।' : 'Enter a valid reason.'));
+      return;
+    }
+    setError(null);
+    const isHindi = language === 'HI';
+    Alert.alert(
+      isHindi ? 'इनवॉइस रद्द करने की पुष्टि करें' : 'Confirm invoice void',
+      isHindi ? `यह इनवॉइस रद्द करेगा: ${parsed.data.reason}` : `This will void the invoice and keep its number on record: ${parsed.data.reason}`,
+      [
+        { text: isHindi ? 'अभी नहीं' : 'Not now', style: 'cancel' },
+        { text: isHindi ? 'हाँ, रद्द करें' : 'Yes, void invoice', style: 'destructive', onPress: () => { void saveVoid(parsed.data.reason); } },
+      ],
+    );
+  };
+
   return (
     <Screen contentStyle={styles.screenContent}>
       {loading ? <Skeleton style={styles.skeleton} /> : error ? <InlineError message={error} /> : invoice ? (
         <>
           <SectionHeader eyebrow="Shop invoice" title={invoice.number} subtitle={`${invoice.salonName} · ${new Date(invoice.serviceDate).toLocaleDateString(dateLocaleFor(language))}`} />
           {notice ? <Text accessibilityRole="alert" style={styles.notice}>{notice}</Text> : null}
+          {invoice.status === 'VOID' ? <Text style={styles.muted}>{language === 'HI' ? 'रद्द किया गया' : 'Voided'}{invoice.voidReason ? `: ${invoice.voidReason}` : ''}. {language === 'HI' ? 'इनवॉइस नंबर रिकॉर्ड में सुरक्षित है।' : 'The invoice number remains on record.'}</Text> : null}
           <Card style={styles.card}>
             <Text style={styles.cardTitle}>Services</Text>
             {invoice.lines.map((line) => (
@@ -78,7 +120,28 @@ export default function OwnerInvoiceDetailScreen({ route }: Props) {
             <View style={styles.actions}>
               {invoice.balanceDue > 0 ? <Button title={language === 'HI' ? 'प्राप्त भुगतान दर्ज करें' : 'Record received payment'} onPress={() => setPaymentKind(InvoicePaymentKind.PAYMENT)} /> : null}
               {invoice.amountPaid > invoice.amountRefunded ? <Button title={language === 'HI' ? 'वास्तविक रिफंड दर्ज करें' : 'Record paid-out refund'} variant="outline" onPress={() => setPaymentKind(InvoicePaymentKind.REFUND)} /> : null}
+              {!voidMode ? <Button title={language === 'HI' ? 'इनवॉइस रद्द करें' : 'Void invoice'} variant="outline" onPress={() => { setError(null); setVoidMode(true); }} /> : null}
             </View>
+          ) : null}
+          {voidMode && invoice.status === 'ISSUED' ? (
+            <Card style={styles.formCard}>
+              <Text style={styles.cardTitle}>{language === 'HI' ? 'इनवॉइस रद्द करें' : 'Void invoice'}</Text>
+              <Text style={styles.formHint}>{language === 'HI' ? 'कारण आवश्यक है। दर्ज भुगतान होने पर पहले वास्तविक रिफंड रिकॉर्ड करना होगा।' : 'A reason is required. Any recorded payment must be refunded first; voiding never deletes payment history.'}</Text>
+              {error ? <InlineError message={error} /> : null}
+              <Text style={styles.inputLabel}>{language === 'HI' ? 'कारण' : 'Reason'}</Text>
+              <TextInput
+                accessibilityLabel={language === 'HI' ? 'कारण' : 'Reason'}
+                value={voidReason}
+                onChangeText={setVoidReason}
+                maxLength={300}
+                multiline
+                style={[styles.input, styles.reasonInput]}
+              />
+              <View style={styles.actions}>
+                <Button title={language === 'HI' ? 'वापस' : 'Cancel'} variant="outline" onPress={() => setVoidMode(false)} disabled={voidBusy} />
+                <Button title={voidBusy ? (language === 'HI' ? 'सहेज रहे हैं…' : 'Voiding…') : (language === 'HI' ? 'रद्द करने की समीक्षा' : 'Review void')} onPress={submitVoid} loading={voidBusy} />
+              </View>
+            </Card>
           ) : null}
           {paymentKind ? (
             <PaymentEntry
@@ -223,6 +286,7 @@ const styles = StyleSheet.create({
   formHint: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, lineHeight: lineHeightFor(fontSize.xs), color: color.muted, marginTop: space[2], marginBottom: space[3] },
   inputLabel: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.ink, marginTop: space[3], marginBottom: space[1] },
   input: { minHeight: 48, borderWidth: 1, borderColor: color.border, borderRadius: radius.sm, paddingHorizontal: space[3], color: color.ink, fontFamily: font.bodyRegular, fontSize: fontSize.base },
+  reasonInput: { minHeight: 84, textAlignVertical: 'top', paddingVertical: space[3] },
   methods: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2] },
   method: { borderWidth: 1, borderColor: color.border, borderRadius: radius.sm, paddingVertical: space[2], paddingHorizontal: space[3] },
   methodSelected: { backgroundColor: color.ink, borderColor: color.ink },
