@@ -3,8 +3,8 @@ import TestRenderer from 'react-test-renderer';
 import SearchClient from '../../../app/(public)/search/SearchClient';
 import { apiFetch } from '../../../lib/api';
 
-// When the country catalogue is empty or unavailable (e.g. a fresh local database), the City field
-// must not sit on "Loading cities…" forever: it offers the cities that actually have salons.
+// The City field lists every city with an active salon (GET cities), alphabetically — never a
+// global catalogue, and never stuck on "Loading cities…".
 const push = jest.fn();
 let query = '';
 let params = new URLSearchParams();
@@ -15,19 +15,17 @@ jest.mock('next/link', () => ({ __esModule: true, default: ({ children, href }) 
 jest.mock('../../../lib/auth-context', () => ({ useAuth: () => ({ user: null, status: 'unauthenticated' }) }));
 jest.mock('../../../lib/api', () => ({ apiFetch: jest.fn(), ApiError: class extends Error {} }));
 jest.mock('../../discovery/ShopNameSearchField', () => ({ ShopNameSearchField: () => null }));
-jest.mock('../../salons/CitySearchField', () => ({ CitySearchField: () => <span>city-autocomplete</span> }));
 jest.mock('../../ui/SalonImage', () => ({ SalonImage: () => null }));
 
 const cities = [
-  { id: 'c1', name: 'Bengaluru', slug: 'bengaluru', countryCode: 'IN', regionCode: null, state: 'Karnataka', country: 'India' },
   { id: 'c2', name: 'Pune', slug: 'pune', countryCode: 'IN', regionCode: null, state: 'Maharashtra', country: 'India' },
+  { id: 'c3', name: 'Greater Noida', slug: 'greater-noida', countryCode: 'IN', regionCode: null, state: 'Uttar Pradesh', country: 'India' },
+  { id: 'c1', name: 'Bengaluru', slug: 'bengaluru', countryCode: 'IN', regionCode: null, state: 'Karnataka', country: 'India' },
 ];
 const textOf = (node) => (typeof node === 'string' ? node : (node.children ?? []).map(textOf).join(''));
 
-async function render(countries) {
-  apiFetch.mockImplementation((path) =>
-    path === 'countries' ? (countries instanceof Error ? Promise.reject(countries) : Promise.resolve(countries)) : Promise.resolve(cities),
-  );
+async function render(fail = false) {
+  apiFetch.mockImplementation((path) => (path === 'cities' ? (fail ? Promise.reject(new Error('down')) : Promise.resolve(cities)) : Promise.reject(new Error(path))));
   let tree;
   await act(async () => { tree = TestRenderer.create(<SearchClient />); });
   await act(async () => {});
@@ -43,30 +41,31 @@ beforeEach(() => {
 });
 afterEach(() => { delete globalThis.window; });
 
-it('offers the cities with salons when the country catalogue is empty, and searches the chosen one', async () => {
-  const tree = await render([]);
+it('lists every city with salons alphabetically, and searches the chosen one', async () => {
+  const tree = await render();
   const select = tree.root.find((n) => n.type === 'select' && n.props['aria-labelledby'] === 'search-city-label');
-  expect(select.findAllByType('option').map(textOf)).toEqual(['Any city', 'Bengaluru, Karnataka', 'Pune, Maharashtra']);
+  expect(select.findAllByType('option').map(textOf)).toEqual(['All cities', 'Bengaluru, Karnataka', 'Greater Noida, Uttar Pradesh', 'Pune, Maharashtra']);
   expect(textOf(tree.root)).not.toContain('Loading cities');
+  expect(apiFetch).not.toHaveBeenCalledWith('countries');
   await act(async () => select.props.onChange({ target: { value: 'pune' } }));
   await act(async () => tree.root.findByProps({ role: 'search' }).props.onSubmit({ preventDefault() {} }));
   expect(push).toHaveBeenLastCalledWith('/search?city=pune&countryCode=IN');
 });
 
-it('also falls back when the country request fails, and keeps the city from the link selected', async () => {
+it('keeps the city from the link selected, and "All cities" clears it', async () => {
   query = 'city=bengaluru&countryCode=IN';
   window.location.search = '?city=bengaluru&countryCode=IN';
-  const tree = await render(new Error('down'));
+  const tree = await render();
   const select = tree.root.find((n) => n.type === 'select' && n.props['aria-labelledby'] === 'search-city-label');
   expect(select.props.value).toBe('bengaluru');
-  // "Any city" really clears the city.
+  // "All cities" really clears the city.
   await act(async () => select.props.onChange({ target: { value: '' } }));
   await act(async () => tree.root.findByProps({ role: 'search' }).props.onSubmit({ preventDefault() {} }));
   expect(push).toHaveBeenLastCalledWith('/search');
 });
 
-it('uses the type-to-search city field when the catalogue has India', async () => {
-  const tree = await render([{ id: 'in', isoCode2: 'IN', name: 'India' }]);
-  expect(textOf(tree.root)).toContain('city-autocomplete');
-  expect(tree.root.findAll((n) => n.type === 'select' && n.props['aria-labelledby'] === 'search-city-label')).toHaveLength(0);
+it('never sits on "Loading cities…" if the city list fails', async () => {
+  const tree = await render(true);
+  const select = tree.root.find((n) => n.type === 'select' && n.props['aria-labelledby'] === 'search-city-label');
+  expect(select.findAllByType('option').map(textOf)).toEqual(['No cities yet']);
 });

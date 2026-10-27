@@ -5,12 +5,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import type {
   CityDto,
   CitySearchResultDto,
-  CountryDto,
   PaginatedResult,
   SalonListItemDto,
   SalonSortOption,
 } from "@barbercue/shared";
-import { COUNTRY_PATHS, DISCOVERY_PATHS, POPULAR_SERVICES, formatPriceFilterLabel, popularServiceById } from "@barbercue/shared";
+import { DISCOVERY_PATHS, POPULAR_SERVICES, formatPriceFilterLabel, popularServiceById } from "@barbercue/shared";
 import { SERVICE_CATEGORIES } from "../../../lib/editorial/manifest";
 import { SalonResultCard } from "../../../components/discovery/SalonResultCard";
 import { CompareTable, FiltersPanel, SortControl } from "../../../components/discovery/DiscoveryFilters";
@@ -22,7 +21,6 @@ import {
   withParams,
 } from "../../../lib/discovery-params";
 import { ShopNameSearchField } from "../../../components/discovery/ShopNameSearchField";
-import { CitySearchField } from "../../../components/salons/CitySearchField";
 import { Button } from "../../../components/ui/Button";
 import { apiFetch } from "../../../lib/api";
 import { useFavorites } from "../../../lib/favorites";
@@ -38,14 +36,9 @@ export default function SearchClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [q, setQ] = useState(searchParams.get("shopName") ?? "");
-  // Issue #13 Mission D: real city autocomplete needs a country to scope the search to (the
-  // backend's cities/search endpoint is deliberately country-scoped — see CitySearchField's own
-  // doc comment on why an unscoped ~100K-row global search isn't safe to ship). This product's
-  // real data is India-only today, so that's the working default; a genuine multi-country
-  // catalog would need an actual country selector here, not a silent guess at that point.
-  const [defaultCountryId, setDefaultCountryId] = useState("");
   const [selectedCity, setSelectedCity] = useState<CitySearchResultDto | null>(null);
-  // Fallback city list (cities with salons) when the country catalogue isn't available.
+  // Every city with at least one active salon (GET cities) — customers pick from where FastQue
+  // actually has salons, never from a global catalogue full of cities with no results.
   const [salonCities, setSalonCities] = useState<CityDto[] | null>(null);
   const [results, setResults] = useState<SalonListItemDto[]>([]);
   const [loading, setLoading] = useState(true);
@@ -181,25 +174,14 @@ export default function SearchClient() {
   }
 
   useEffect(() => {
-    // City autocomplete needs the country catalogue. When it isn't available (an empty catalogue,
-    // as on a fresh local database, or a failed request), fall back to a plain list of the cities
-    // that actually have salons, so a customer can always pick a city without sharing location.
-    const fallBackToSalonCities = () =>
-      apiFetch<CityDto[]>(DISCOVERY_PATHS.cities)
-        .then((cities) => {
-          setSalonCities(cities);
-          // Keep a city that is already in the link selected.
-          const fromLink = cities.find((c) => c.slug === new URLSearchParams(window.location.search).get("city"));
-          if (fromLink) setSelectedCity({ id: fromLink.id, name: fromLink.name, slug: fromLink.slug, countryCode: fromLink.countryCode, region: null });
-        })
-        .catch(() => setSalonCities([]));
-    apiFetch<CountryDto[]>(COUNTRY_PATHS.countries)
-      .then((countries) => {
-        const india = countries.find((c) => c.isoCode2 === "IN");
-        if (india) setDefaultCountryId(india.id);
-        else void fallBackToSalonCities();
+    apiFetch<CityDto[]>(DISCOVERY_PATHS.cities)
+      .then((cities) => {
+        setSalonCities([...cities].sort((a, b) => a.name.localeCompare(b.name)));
+        // Keep a city that is already in the link selected.
+        const fromLink = cities.find((c) => c.slug === new URLSearchParams(window.location.search).get("city"));
+        if (fromLink) setSelectedCity({ id: fromLink.id, name: fromLink.name, slug: fromLink.slug, countryCode: fromLink.countryCode, region: null });
       })
-      .catch(() => void fallBackToSalonCities());
+      .catch(() => setSalonCities([]));
   }, []);
 
   useEffect(() => {
@@ -258,7 +240,7 @@ export default function SearchClient() {
       params.set("city", selectedCity.slug);
       params.set("countryCode", selectedCity.countryCode);
     } else if (salonCities) {
-      // The fallback list's "Any city" really means any city.
+      // "All cities" really means any city.
       params.delete("city");
       params.delete("countryCode");
     }
@@ -312,15 +294,7 @@ export default function SearchClient() {
           </div>
           <div className={styles.field}>
             <span id="search-city-label">City / location</span>
-            {defaultCountryId ? (
-              <CitySearchField
-                countryId={defaultCountryId}
-                regionId=""
-                selectedCity={selectedCity}
-                onSelect={setSelectedCity}
-                labelledBy="search-city-label"
-              />
-            ) : salonCities ? (
+            {salonCities ? (
               <select
                 className={styles.citySelect}
                 aria-labelledby="search-city-label"
@@ -330,7 +304,7 @@ export default function SearchClient() {
                   setSelectedCity(city ? { id: city.id, name: city.name, slug: city.slug, countryCode: city.countryCode, region: null } : null);
                 }}
               >
-                <option value="">{salonCities.length ? "Any city" : "No cities yet"}</option>
+                <option value="">{salonCities.length ? "All cities" : "No cities yet"}</option>
                 {salonCities.map((city) => (
                   <option key={city.id} value={city.slug}>{city.name}{city.state ? `, ${city.state}` : ""}</option>
                 ))}

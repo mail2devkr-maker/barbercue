@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import type { SalonListItemDto, SalonOfferSummaryDto } from "@barbercue/shared";
 import { SALON_TYPE_LABELS, SHOP_CLOSED_TODAY_MESSAGE, VERIFICATION_BADGE_CAPTION, formatDistance, formatMoney } from "@barbercue/shared";
 import { SalonImage } from "../ui/SalonImage";
 import { FavoriteButton } from "./FavoriteButton";
+import { Lightbox } from "./PhotoGallery";
 import styles from "./salon-result-card.module.css";
 
 // Booking page 3.0: the horizontal marketplace card on /search. Every value here comes from the
@@ -44,6 +45,22 @@ function validTill(iso: string): string {
 export function clockText(time: string): string {
   const [h, m] = time.split(":").map(Number);
   return `${((h + 11) % 12) + 1}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
+}
+
+/** Open/closed line for a salon card, with today's hours where the salon has listed them. */
+export function salonStatus(salon: SalonListItemDto): { tone: "open" | "closed" | "unknown"; text: string } {
+  const hours = salon.todayHours;
+  const todayText = hours && !hours.isClosed ? `${clockText(hours.openTime)} – ${clockText(hours.closeTime)}` : null;
+  if (salon.isClosedForToday) return { tone: "closed", text: SHOP_CLOSED_TODAY_MESSAGE };
+  if (salon.isOpenNow === true) {
+    const closes = salon.closesAt ?? hours?.closeTime;
+    return { tone: "open", text: closes ? `Open now · Closes ${clockText(closes)}` : "Open now" };
+  }
+  if (salon.isOpenNow === false) {
+    if (hours?.isClosed) return { tone: "closed", text: "Closed today" };
+    return { tone: "closed", text: todayText ? `Closed now · Today ${todayText}` : "Closed now" };
+  }
+  return { tone: "unknown", text: "Hours not listed" };
 }
 
 function OffersDialog({ salon, onClose }: { salon: SalonListItemDto; onClose: () => void }) {
@@ -87,6 +104,15 @@ function OffersDialog({ salon, onClose }: { salon: SalonListItemDto; onClose: ()
 export function SalonResultCard({ salon, styleName }: { salon: SalonListItemDto; styleName?: string }) {
   const [photo, setPhoto] = useState(0);
   const [offersOpen, setOffersOpen] = useState(false);
+  // Gallery viewer (the same one as the salon profile page), opened from a thumbnail.
+  const [viewing, setViewing] = useState<number | null>(null);
+  const [failedPhotos, setFailedPhotos] = useState<Set<number>>(new Set());
+  const openerRef = useRef<HTMLElement | null>(null);
+  const markFailed = useCallback((index: number) => setFailedPhotos((prev) => new Set(prev).add(index)), []);
+  const openViewer = (index: number, opener: HTMLElement) => {
+    openerRef.current = opener;
+    setViewing(index);
+  };
   const country = salon.countryCode.toLowerCase();
   const money = (amount: number) => formatMoney(amount, salon.currency, salon.countryCode);
   const photos = salon.photoUrls?.length ? salon.photoUrls : salon.coverPhotoUrl ? [salon.coverPhotoUrl] : [];
@@ -106,13 +132,7 @@ export function SalonResultCard({ salon, styleName }: { salon: SalonListItemDto;
   ].slice(0, 4);
   const hiddenServices = Math.max(0, (salon.serviceCount ?? 0) - rows.length);
 
-  const status = salon.isClosedForToday
-    ? { tone: styles.closed, text: SHOP_CLOSED_TODAY_MESSAGE }
-    : salon.isOpenNow === true
-      ? { tone: styles.open, text: salon.closesAt ? `Open now · Closes ${clockText(salon.closesAt)}` : "Open now" }
-      : salon.isOpenNow === false
-        ? { tone: styles.closed, text: "Closed now" }
-        : null;
+  const status = salonStatus(salon);
 
   return (
     <article className={styles.card} aria-labelledby={`salon-${salon.id}`}>
@@ -157,14 +177,24 @@ export function SalonResultCard({ salon, styleName }: { salon: SalonListItemDto;
         {photos.length > 1 && (
           <div className={styles.thumbs}>
             {photos.slice(1, 4).map((url, index) => (
-              <button key={url} type="button" className={styles.thumb} onClick={() => setPhoto(index + 1)} aria-label={`Show photo ${index + 2}`}>
+              <button
+                key={url}
+                type="button"
+                className={styles.thumb}
+                onClick={(event) => openViewer(index + 1, event.currentTarget)}
+                aria-label={`View photo ${index + 2} of ${photos.length}`}
+              >
                 <SalonImage url={url} alt="" aspectRatio="4 / 3" rounded={6} />
               </button>
             ))}
-            {photos.length > 4 && <span className={styles.thumbMore}>+{photos.length - 4}</span>}
+            {photos.length > 4 && (
+              <button type="button" className={styles.thumbMore} onClick={(event) => openViewer(4, event.currentTarget)} aria-label={`View all ${photos.length} photos`}>
+                +{photos.length - 4}
+              </button>
+            )}
           </div>
         )}
-        {status && <p className={`${styles.status} ${status.tone}`}>{status.text}</p>}
+        <p className={`${styles.status} ${styles[status.tone]}`}>{status.text}</p>
       </div>
 
       {offer && (
@@ -227,6 +257,17 @@ export function SalonResultCard({ salon, styleName }: { salon: SalonListItemDto;
       </div>
 
       {offersOpen && <OffersDialog salon={salon} onClose={() => setOffersOpen(false)} />}
+      {viewing !== null && (
+        <Lightbox
+          photos={photos.map((url) => ({ url, altText: null }))}
+          salonName={salon.name}
+          openIndex={viewing}
+          setOpenIndex={setViewing}
+          failedIndices={failedPhotos}
+          markFailed={markFailed}
+          openerRef={openerRef}
+        />
+      )}
     </article>
   );
 }

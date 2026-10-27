@@ -203,11 +203,17 @@ export function sortListItems(
   });
 }
 
-// Today's salon-local closing time ("HH:mm") while the salon is open; null otherwise.
-function closesAtToday(
-  hours: { dayOfWeek: number; isClosed: boolean; closeTime: string }[],
+// Today's salon-local opening hours ("HH:mm"), or null when the salon has no hours for today or
+// no trustworthy time zone (never guessed — same convention as isOpenNow).
+function todayHoursOf(
+  hours: {
+    dayOfWeek: number;
+    isClosed: boolean;
+    openTime: string;
+    closeTime: string;
+  }[],
   salon: { timezone: string | null; city: { countryCode: string } },
-): string | null {
+): { isClosed: boolean; openTime: string; closeTime: string } | null {
   const timeZone = resolveSalonTimeZone({
     timezone: salon.timezone,
     countryCode: salon.city.countryCode,
@@ -215,7 +221,13 @@ function closesAtToday(
   if (!timeZone) return null;
   const { dayOfWeek } = zonedDayAndMinutes(new Date(), timeZone);
   const today = hours.find((entry) => entry.dayOfWeek === dayOfWeek);
-  return today && !today.isClosed ? today.closeTime : null;
+  return today
+    ? {
+        isClosed: today.isClosed,
+        openTime: today.openTime,
+        closeTime: today.closeTime,
+      }
+    : null;
 }
 
 type SalonWithListRelations = Prisma.SalonGetPayload<{
@@ -1223,6 +1235,7 @@ export class SalonsService {
       const openNow = salon.isClosedForToday
         ? false
         : isOpenNow(salon.operatingHours, salon);
+      const todayHours = todayHoursOf(salon.operatingHours, salon);
       const distanceKm =
         from && salon.lat !== null && salon.lng !== null
           ? Math.round(
@@ -1252,7 +1265,8 @@ export class SalonsService {
         priceMax: price?._max.price ? Number(price._max.price) : null,
         distanceKm,
         isOpenNow: openNow,
-        closesAt: openNow ? closesAtToday(salon.operatingHours, salon) : null,
+        closesAt: openNow ? (todayHours?.closeTime ?? null) : null,
+        todayHours,
         isClosedForToday: salon.isClosedForToday,
         verified: salon.verification?.status === VerificationStatus.APPROVED,
         waitingCount: waitingBy.get(salon.id) ?? 0,

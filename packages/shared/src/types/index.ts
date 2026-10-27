@@ -556,6 +556,8 @@ export interface SalonListItemDto extends SalonSummary {
   // salon's current published offers — best first (offers[0] is the one shown on the card).
   photoUrls?: string[];
   closesAt?: string | null;
+  // Today's salon-local hours ("HH:mm"); null when the salon hasn't listed hours for today.
+  todayHours?: { isClosed: boolean; openTime: string; closeTime: string } | null;
   serviceCount?: number;
   otherServices?: Array<{ id: string; name: string; price: number }>;
   offers?: SalonOfferSummaryDto[];

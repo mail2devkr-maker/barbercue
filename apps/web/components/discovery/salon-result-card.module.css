@@ -207,6 +207,9 @@
 }
 
 .thumbMore {
+  background: none;
+  color: inherit;
+  cursor: pointer;
   padding: 6px 9px;
   border: 1px solid var(--fq-hairline);
   border-radius: 7px;
@@ -232,6 +235,7 @@
 
 .open { color: #72d59a; }
 .closed { color: #ff8b9a; }
+.unknown { color: var(--fq-text-faint); font-weight: 600; }
 
 /* ── Offer ── */
 .offer {

@@ -15,7 +15,10 @@ import {
   type SalonTypeFilter,
 } from "@barbercue/shared";
 import {
-  DISTANCE_CHOICES_KM,
+  DISTANCE_SLIDER_ANY,
+  DISTANCE_SLIDER_MIN,
+  distanceFromSlider,
+  sliderFromDistance,
   PRICE_SLIDER_MAX,
   PRICE_SLIDER_MIN,
   PRICE_SLIDER_STEP,
@@ -25,7 +28,7 @@ import {
   type DiscoveryState,
 } from "../../lib/discovery-params";
 import { FavoriteButton } from "./FavoriteButton";
-import { offerBadgeText } from "./SalonResultCard";
+import { offerBadgeText, salonStatus } from "./SalonResultCard";
 import styles from "./discovery-filters.module.css";
 
 type Changes = Record<string, string | null>;
@@ -118,6 +121,68 @@ export function ServicePriceSlider({ state, onChange }: { state: DiscoveryState;
   );
 }
 
+/** One-thumb distance slider, styled like the price slider. Applies when the thumb is released. */
+function DistanceSlider({ location }: { location: LocationControls }) {
+  const [position, setPosition] = useState(sliderFromDistance(location.radiusKm));
+  // Follow the URL (back/forward, Clear all, Near me turned off).
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- the URL is the source of truth
+    setPosition(sliderFromDistance(location.radiusKm));
+  }, [location.radiusKm]);
+  const latest = useRef(position);
+  useEffect(() => {
+    latest.current = position;
+  }, [position]);
+  const commit = () => {
+    const km = distanceFromSlider(latest.current);
+    if (km !== location.radiusKm) location.onRadius(km);
+  };
+  const keyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const commitSoon = () => {
+    if (keyTimer.current) clearTimeout(keyTimer.current);
+    keyTimer.current = setTimeout(commit, 450);
+  };
+  useEffect(() => () => {
+    if (keyTimer.current) clearTimeout(keyTimer.current);
+  }, []);
+  const km = distanceFromSlider(position);
+  const fill = ((position - DISTANCE_SLIDER_MIN) / (DISTANCE_SLIDER_ANY - DISTANCE_SLIDER_MIN)) * 100;
+  // An older link may carry a radius under 1 km; say so rather than rounding it silently.
+  const label = km === null ? "Any distance" : location.radiusKm !== null && location.radiusKm < 1 && position === DISTANCE_SLIDER_MIN ? `Within ${location.radiusKm * 1000} m` : `Within ${km} km`;
+
+  return (
+    <fieldset className={styles.section}>
+      <legend className={styles.legend}>Distance</legend>
+      <p className={styles.rangeValue} aria-live="polite">{location.locating ? "Finding your location…" : label}</p>
+      <div className={styles.slider}>
+        <div className={styles.track} aria-hidden="true">
+          <div className={styles.trackFill} style={{ left: 0, width: `${fill}%` }} />
+        </div>
+        <input
+          type="range"
+          aria-label="Distance"
+          aria-valuetext={label}
+          min={DISTANCE_SLIDER_MIN}
+          max={DISTANCE_SLIDER_ANY}
+          step={1}
+          value={position}
+          disabled={location.locating}
+          onChange={(e) => setPosition(Number(e.target.value))}
+          onPointerUp={commit}
+          onKeyUp={commitSoon}
+          onBlur={commit}
+        />
+      </div>
+      <div className={styles.rangeEnds} aria-hidden="true">
+        <span>1 km</span>
+        <span>Any</span>
+      </div>
+      <Check label="Near me" checked={location.nearMe} onChange={location.onNearMe} />
+      {!location.nearMe && <p className={styles.help}>Distance uses your current location.</p>}
+    </fieldset>
+  );
+}
+
 /** Distance needs the customer's location; the page owns the geolocation flow. */
 export interface LocationControls {
   nearMe: boolean;
@@ -189,28 +254,7 @@ export function FiltersPanel({
 
       <ServicePriceSlider state={state} onChange={onChange} />
 
-      {location && (
-        <fieldset className={styles.section}>
-          <legend className={styles.legend}>Distance</legend>
-          <select
-            className={styles.select}
-            aria-label="Distance"
-            value={location.radiusKm === null ? "" : String(location.radiusKm)}
-            disabled={location.locating}
-            onChange={(e) => location.onRadius(e.target.value === "" ? null : Number(e.target.value))}
-          >
-            <option value="">Any distance</option>
-            {DISTANCE_CHOICES_KM.map((km) => (
-              <option key={km} value={km}>Within {km} km</option>
-            ))}
-            {location.radiusKm !== null && !(DISTANCE_CHOICES_KM as readonly number[]).includes(location.radiusKm) && (
-              <option value={location.radiusKm}>Within {location.radiusKm} km</option>
-            )}
-          </select>
-          <Check label={location.locating ? "Finding your location…" : "Near me"} checked={location.nearMe} onChange={location.onNearMe} />
-          {!location.nearMe && <p className={styles.help}>Distance uses your current location.</p>}
-        </fieldset>
-      )}
+      {location && <DistanceSlider location={location} />}
 
       <fieldset className={styles.section}>
         <legend className={styles.legend}>Popular services</legend>
@@ -342,7 +386,12 @@ export function CompareTable({ salons, serviceLabel }: { salons: SalonListItemDt
                 </td>
                 <td>{salon.distanceKm === null ? <span className={styles.muted}>—</span> : formatDistance(salon.distanceKm, salon.countryCode)}</td>
                 <td>{salon.salonType && salon.salonTypeConfirmed ? SALON_TYPE_LABELS[salon.salonType] : <span className={styles.muted}>Not set</span>}</td>
-                <td>{salon.isClosedForToday ? "Closed today" : salon.isOpenNow === true ? <span className={styles.open}>Open</span> : salon.isOpenNow === false ? "Closed" : <span className={styles.muted}>—</span>}</td>
+                <td>
+                  {(() => {
+                    const status = salonStatus(salon);
+                    return <span className={status.tone === "open" ? styles.open : status.tone === "unknown" ? styles.muted : undefined}>{status.text}</span>;
+                  })()}
+                </td>
                 <td className={styles.rowActions}>
                   <FavoriteButton salonId={salon.id} salonName={salon.name} variant="inline" />
                   {salon.isClosedForToday ? (

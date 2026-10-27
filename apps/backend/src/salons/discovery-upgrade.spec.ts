@@ -343,6 +343,10 @@ describe('rating, favorites-only and open-now filters', () => {
       take: 200,
     });
     expect(result.items.map((i) => i.id)).toEqual(['open']);
+    expect(result.items[0]).toMatchObject({
+      closesAt: '21:00',
+      todayHours: { isClosed: false, openTime: '09:00', closeTime: '21:00' },
+    });
     expect(result.nextCursor).toBeNull();
   });
 

@@ -17,8 +17,23 @@ export const SEARCH_API_PARAMS = [
   "priceMin", "priceMax", "salonType", "popularService", "sort", "minRating", "openNow", "offersOnly",
 ] as const;
 
-/** Distance choices in the filter sidebar (km). Any value needs the customer's location. */
-export const DISTANCE_CHOICES_KM = [1, 3, 5, 10, 20] as const;
+/**
+ * Distance slider in the filter sidebar: 1–20 km in 1 km steps; the far right end (one step past
+ * the maximum) means "Any distance". Any real distance needs the customer's location.
+ */
+export const DISTANCE_SLIDER_MIN = 1;
+export const DISTANCE_SLIDER_MAX = 20;
+export const DISTANCE_SLIDER_ANY = DISTANCE_SLIDER_MAX + 1;
+
+/** Slider position → radius in km (null = any distance). */
+export function distanceFromSlider(position: number): number | null {
+  return position >= DISTANCE_SLIDER_ANY ? null : Math.max(DISTANCE_SLIDER_MIN, Math.round(position));
+}
+
+/** Radius in km → slider position (a radius under 1 km from an older link sits at the 1 km end). */
+export function sliderFromDistance(km: number | null): number {
+  return km === null ? DISTANCE_SLIDER_ANY : Math.min(DISTANCE_SLIDER_MAX, Math.max(DISTANCE_SLIDER_MIN, Math.round(km)));
+}
 
 /** "Top rated" means an average review score of at least this. */
 export const TOP_RATED_MIN = 4;

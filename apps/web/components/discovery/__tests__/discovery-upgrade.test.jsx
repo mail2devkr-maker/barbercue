@@ -12,7 +12,7 @@ import {
 import { resetFavoritesForTests, sortFavorites, useFavorites } from '../../../lib/favorites';
 import { CompareTable, FiltersPanel, SortControl } from '../DiscoveryFilters';
 import { SalonCard } from '../SalonCard';
-import { SalonResultCard, clockText } from '../SalonResultCard';
+import { SalonResultCard, clockText, salonStatus } from '../SalonResultCard';
 import { useAuth } from '../../../lib/auth-context';
 import { apiFetch } from '../../../lib/api';
 
@@ -121,15 +121,24 @@ describe('filter controls', () => {
     expect(onChange).toHaveBeenLastCalledWith({ favorites: '1' });
   });
 
-  it('distance needs location: picking a distance or Near me goes through the page', () => {
+  it('distance is a slider like price: 1–20 km, far end = any distance, applied on release', () => {
     const onRadius = jest.fn();
     const onNearMe = jest.fn();
     let tree;
     act(() => { tree = TestRenderer.create(<FiltersPanel state={state('')} onChange={jest.fn()} onClearAll={jest.fn()} activeCount={0} location={{ nearMe: false, radiusKm: null, locating: false, onRadius, onNearMe }} />); });
-    const select = tree.root.find((n) => n.type === 'select' && n.props['aria-label'] === 'Distance');
-    expect(select.findAllByType('option').map((o) => textOf(o))).toEqual(['Any distance', 'Within 1 km', 'Within 3 km', 'Within 5 km', 'Within 10 km', 'Within 20 km']);
-    act(() => select.props.onChange({ target: { value: '5' } }));
-    expect(onRadius).toHaveBeenCalledWith(5);
+    const slider = () => tree.root.find((n) => n.type === 'input' && n.props['aria-label'] === 'Distance');
+    expect(slider().props).toMatchObject({ type: 'range', min: 1, max: 21, value: 21 });
+    expect(textOf(tree.root)).toContain('Any distance');
+    act(() => slider().props.onChange({ target: { value: '7' } }));
+    expect(textOf(tree.root)).toContain('Within 7 km');
+    expect(onRadius).not.toHaveBeenCalled(); // only on release
+    act(() => slider().props.onPointerUp());
+    expect(onRadius).toHaveBeenCalledWith(7);
+    // The page puts the new radius in the URL and passes it back down.
+    act(() => { tree.update(<FiltersPanel state={state('')} onChange={jest.fn()} onClearAll={jest.fn()} activeCount={0} location={{ nearMe: true, radiusKm: 7, locating: false, onRadius, onNearMe }} />); });
+    act(() => slider().props.onChange({ target: { value: '21' } }));
+    act(() => slider().props.onBlur());
+    expect(onRadius).toHaveBeenLastCalledWith(null);
     act(() => tree.root.find((n) => n.type === 'label' && textOf(n).startsWith('Near me')).findByType('input').props.onChange({ target: { checked: true } }));
     expect(onNearMe).toHaveBeenCalledWith(true);
   });
@@ -286,6 +295,35 @@ describe('cards, comparison and hearts', () => {
     expect(rows[1]).toContain('Offer checked at booking');
     expect(rows[1]).not.toContain('₹200');
     expect(clockText('09:30')).toBe('9:30 AM');
+  });
+
+  it('every card says whether the salon is open, with today’s hours when listed', () => {
+    const hours = { isClosed: false, openTime: '10:00', closeTime: '21:00' };
+    expect(salonStatus(salon({ isOpenNow: true, closesAt: '21:00', todayHours: hours }))).toEqual({ tone: 'open', text: 'Open now · Closes 9:00 PM' });
+    expect(salonStatus(salon({ isOpenNow: false, todayHours: hours }))).toEqual({ tone: 'closed', text: 'Closed now · Today 10:00 AM – 9:00 PM' });
+    expect(salonStatus(salon({ isOpenNow: false, todayHours: { ...hours, isClosed: true } })).text).toBe('Closed today');
+    expect(salonStatus(salon({ isOpenNow: null, todayHours: null }))).toEqual({ tone: 'unknown', text: 'Hours not listed' });
+  });
+
+  it('gallery thumbnails open the photo viewer at that photo', () => {
+    useAuth.mockReturnValue({ user: null, status: 'unauthenticated' });
+    globalThis.document = { addEventListener() {}, removeEventListener() {}, body: { style: {} }, activeElement: null };
+    try {
+      let tree;
+      act(() => { tree = TestRenderer.create(<SalonResultCard salon={beardSalon({ photoUrls: ['c.jpg', 'g1.jpg', 'g2.jpg', 'g3.jpg', 'g4.jpg', 'g5.jpg'] })} />); });
+      const thumbs = tree.root.findAll((n) => n.type === 'button' && /^View (photo|all)/.test(n.props['aria-label'] ?? ''));
+      expect(thumbs.map((t) => t.props['aria-label'])).toEqual(['View photo 2 of 6', 'View photo 3 of 6', 'View photo 4 of 6', 'View all 6 photos']);
+      const opener = { focus: jest.fn() };
+      act(() => thumbs[1].props.onClick({ currentTarget: opener }));
+      const viewer = tree.root.find((n) => n.props.role === 'dialog' && n.props['aria-modal'] === 'true');
+      expect(viewer.props['aria-label']).toBe('Alpha Cuts — photo 3 of 6');
+      expect(viewer.findByType('img').props.src).toBe('g2.jpg');
+      act(() => viewer.props.onClick());
+      expect(tree.root.findAll((n) => n.props.role === 'dialog')).toHaveLength(0);
+      expect(opener.focus).toHaveBeenCalled(); // focus goes back to the thumbnail
+    } finally {
+      delete globalThis.document;
+    }
   });
 
   it('orders the favorites page', () => {
