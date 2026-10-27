@@ -1,5 +1,7 @@
 # Owner transfer release - backup, recovery and deployment checklist
 
+> The step-by-step executable sequence (commands, expected results, STOP conditions, rollback boundaries R0-R2, the e-mail delivery test and the Android device test) is in [`OWNER_TRANSFER_PRODUCTION_SEQUENCE.md`](OWNER_TRANSFER_PRODUCTION_SEQUENCE.md). Run its Phase A (`release_gate_owner_transfer.py`) first; it is read-only.
+
 For a release that contains migration `20261027140000_owner_transfer_password_gate` (PR #317). It is a **migration
 release**, so every gate below is mandatory and none may be skipped. Nothing here has been run against production.
 
@@ -34,8 +36,9 @@ check). Files in `C:\fastque-recovery\rotation\`:
 | Post-deploy verification, #317 + #313 | `p1_expected_schema.owner_transfer_and_change_requests.json` (77 tables, 71 migrations, md5 `e5bb9245...`) |
 | Post-deploy verification, #317 + #313 + #315 (Codex, Apple sign-in) | `p1_expected_schema.owner_transfer_change_requests_apple.json` (78 tables, 72 migrations, md5 `b0ec3438...`) - rehearsal only |
 
-Validated on 27 Oct 2026: the production inventory matches a master-equivalent chain (guard self-test 14/15; its one failure
-is only that the self-test derives the ledger from the checked-out branch, which has the extra migration), and
+Validated on 27 Oct 2026: the guard self-test is now PINNED to each inventory's own `release_sha` (19/19 for the production
+inventory and for `p1_expected_schema.owner_transfer.json`; it previously showed 14/15 only because it derived the ledger
+from the checked-out branch), and
 `p1_expected_schema.owner_transfer.json` reports MATCH against a chain built with this branch's migration while the
 production inventory correctly rejects that same migrated chain. Run `validate_new_inventory.py` after any migration change.
 
