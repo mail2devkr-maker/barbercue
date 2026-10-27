@@ -20,7 +20,7 @@ function formatCount(value: number): string {
   return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(value);
 }
 
-export function getNextShopStatus(status: SalonStatus): { status: SalonStatus; label: string } | null {
+function getNextShopStatus(status: SalonStatus): { status: SalonStatus; label: string } | null {
   if (status === SalonStatus.PENDING) return { status: SalonStatus.ACTIVE, label: "Open shop" };
   if (status === SalonStatus.ACTIVE) return { status: SalonStatus.SUSPENDED, label: "Suspend" };
   if (status === SalonStatus.SUSPENDED) return { status: SalonStatus.ACTIVE, label: "Re-open" };
