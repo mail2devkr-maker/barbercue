@@ -246,9 +246,17 @@ export class AdminDataExportService {
     }
     const byHash = new Map<string, string>();
     for (const phone of phones) {
-      const e164 = phone ? normalizeContactPhone(phone) : null;
-      if (phone && e164)
-        byHash.set(createHmac('sha256', key).update(e164).digest('hex'), phone);
+      if (phone === null) continue;
+      const e164 = normalizeContactPhone(phone);
+      // A legacy/invalid number cannot be compared with the global opt-out list.
+      // Reject the entire contact file, rather than silently exposing a number
+      // that we could not prove is absent from the suppression list.
+      if (!e164) {
+        throw new ServiceUnavailableException(
+          'Customer contact export unavailable: phone suppression could not be verified.',
+        );
+      }
+      byHash.set(createHmac('sha256', key).update(e164).digest('hex'), phone);
     }
     if (byHash.size === 0) return { checked: true, blocked: new Set() };
     const rows = await this.prisma.contactSuppression.findMany({
