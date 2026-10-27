@@ -230,6 +230,34 @@ function todayHoursOf(
     : null;
 }
 
+// When a closed salon next opens: today (later), tomorrow, or a later weekday within the week.
+// Null when the salon lists no upcoming opening hours or has no trustworthy time zone.
+export function nextOpeningOf(
+  hours: {
+    dayOfWeek: number;
+    isClosed: boolean;
+    openTime: string;
+  }[],
+  salon: { timezone: string | null; city: { countryCode: string } },
+  now = new Date(),
+): { inDays: number; dayOfWeek: number; time: string } | null {
+  const timeZone = resolveSalonTimeZone({
+    timezone: salon.timezone,
+    countryCode: salon.city.countryCode,
+  });
+  if (!timeZone) return null;
+  const { dayOfWeek, minutes } = zonedDayAndMinutes(now, timeZone);
+  for (let inDays = 0; inDays < 7; inDays++) {
+    const day = (dayOfWeek + inDays) % 7;
+    const entry = hours.find((h) => h.dayOfWeek === day);
+    if (!entry || entry.isClosed) continue;
+    const [h, m] = entry.openTime.split(':').map(Number);
+    if (inDays === 0 && minutes >= h * 60 + m) continue;
+    return { inDays, dayOfWeek: day, time: entry.openTime };
+  }
+  return null;
+}
+
 type SalonWithListRelations = Prisma.SalonGetPayload<{
   include: typeof listInclude;
 }>;
@@ -1267,6 +1295,8 @@ export class SalonsService {
         isOpenNow: openNow,
         closesAt: openNow ? (todayHours?.closeTime ?? null) : null,
         todayHours,
+        opensNext:
+          openNow === true ? null : nextOpeningOf(salon.operatingHours, salon),
         isClosedForToday: salon.isClosedForToday,
         verified: salon.verification?.status === VerificationStatus.APPROVED,
         waitingCount: waitingBy.get(salon.id) ?? 0,

@@ -6,7 +6,7 @@ import {
   salonSearchQuerySchema,
   type SalonListItemDto,
 } from '@barbercue/shared';
-import { SalonsService, sortListItems } from './salons.service';
+import { SalonsService, nextOpeningOf, sortListItems } from './salons.service';
 import { FavoritesService } from './favorites.service';
 
 const item = (over: Partial<SalonListItemDto>): SalonListItemDto =>
@@ -472,6 +472,31 @@ describe('booking page 3.0: offers filter and new sorts', () => {
     expect(salonSearchQuerySchema.safeParse({ sort: 'offer' }).success).toBe(
       true,
     );
+  });
+});
+
+describe('when a closed salon next opens', () => {
+  const india = { timezone: 'Asia/Kolkata', city: { countryCode: 'IN' } };
+  const hours = Array.from({ length: 7 }, (_, dayOfWeek) => ({
+    dayOfWeek,
+    isClosed: dayOfWeek === 3, // closed on Wednesdays
+    openTime: '10:00',
+  }));
+
+  it('later today, tomorrow, or skips a closed day', () => {
+    // Mon 26 Oct 2026, 08:00 IST → opens later today.
+    expect(
+      nextOpeningOf(hours, india, new Date('2026-10-26T02:30:00Z')),
+    ).toEqual({ inDays: 0, dayOfWeek: 1, time: '10:00' });
+    // Mon 22:00 IST → tomorrow (Tuesday).
+    expect(
+      nextOpeningOf(hours, india, new Date('2026-10-26T16:30:00Z')),
+    ).toEqual({ inDays: 1, dayOfWeek: 2, time: '10:00' });
+    // Tue 22:00 IST → Wednesday is closed, so Thursday.
+    expect(
+      nextOpeningOf(hours, india, new Date('2026-10-27T16:30:00Z')),
+    ).toEqual({ inDays: 2, dayOfWeek: 4, time: '10:00' });
+    expect(nextOpeningOf([], india)).toBeNull();
   });
 });
 

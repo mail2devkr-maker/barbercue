@@ -276,7 +276,9 @@ describe('cards, comparison and hearts', () => {
     act(() => { tree = TestRenderer.create(<SalonResultCard salon={beardSalon({ offers: [] })} />); });
     expect(textOf(tree.root)).not.toContain('Valid till');
     act(() => { tree.update(<SalonResultCard salon={beardSalon({ offers: [offer(), offer({ id: 'o2', title: 'Flat deal', discountType: 'FLAT', discountValue: 50, appliesTo: null, price: null })] })} />); });
-    act(() => tree.root.find((n) => n.type === 'button' && textOf(n) === 'View all 2 offers').props.onClick());
+    const box = tree.root.find((n) => n.type === 'button' && (n.props['aria-label'] ?? '').startsWith('Special Offer'));
+    expect(textOf(box)).toContain('+1 more offer');
+    act(() => box.props.onClick());
     const dialog = tree.root.find((n) => n.props.role === 'dialog');
     expect(textOf(dialog)).toContain('Flat ₹50 OFF Flat deal');
     expect(textOf(dialog)).toContain('On all services');
@@ -297,12 +299,26 @@ describe('cards, comparison and hearts', () => {
     expect(clockText('09:30')).toBe('9:30 AM');
   });
 
-  it('every card says whether the salon is open, with today’s hours when listed', () => {
-    const hours = { isClosed: false, openTime: '10:00', closeTime: '21:00' };
-    expect(salonStatus(salon({ isOpenNow: true, closesAt: '21:00', todayHours: hours }))).toEqual({ tone: 'open', text: 'Open now · Closes 9:00 PM' });
-    expect(salonStatus(salon({ isOpenNow: false, todayHours: hours }))).toEqual({ tone: 'closed', text: 'Closed now · Today 10:00 AM – 9:00 PM' });
-    expect(salonStatus(salon({ isOpenNow: false, todayHours: { ...hours, isClosed: true } })).text).toBe('Closed today');
-    expect(salonStatus(salon({ isOpenNow: null, todayHours: null }))).toEqual({ tone: 'unknown', text: 'Hours not listed' });
+  it('open shows only the closing time; closed shows only when it next opens', () => {
+    expect(salonStatus(salon({ isOpenNow: true, closesAt: '21:00' }))).toMatchObject({ tone: 'open', label: 'Open now', detail: 'Closes 9:00 PM' });
+    expect(salonStatus(salon({ isOpenNow: false, opensNext: { inDays: 0, dayOfWeek: 2, time: '10:00' } }))).toMatchObject({ tone: 'closed', label: 'Closed', detail: 'Opens 10:00 AM' });
+    expect(salonStatus(salon({ isOpenNow: false, opensNext: { inDays: 1, dayOfWeek: 3, time: '09:30' } })).text).toBe('Closed · Opens tomorrow 9:30 AM');
+    expect(salonStatus(salon({ isOpenNow: false, opensNext: { inDays: 3, dayOfWeek: 1, time: '10:00' } })).detail).toBe('Opens Mon 10:00 AM');
+    expect(salonStatus(salon({ isOpenNow: null }))).toMatchObject({ tone: 'unknown', label: 'Hours not listed', detail: null });
+  });
+
+  it('the cover photo opens the photo viewer too', () => {
+    useAuth.mockReturnValue({ user: null, status: 'unauthenticated' });
+    globalThis.document = { addEventListener() {}, removeEventListener() {}, body: { style: {} }, activeElement: null };
+    try {
+      let tree;
+      act(() => { tree = TestRenderer.create(<SalonResultCard salon={beardSalon({ photoUrls: ['cover.jpg', 'g1.jpg'] })} />); });
+      const cover = tree.root.find((n) => n.type === 'button' && n.props['aria-label'] === 'View Alpha Cuts photos (2)');
+      act(() => cover.props.onClick({ currentTarget: { focus() {} } }));
+      expect(tree.root.find((n) => n.props.role === 'dialog').findByType('img').props.src).toBe('cover.jpg');
+    } finally {
+      delete globalThis.document;
+    }
   });
 
   it('gallery thumbnails open the photo viewer at that photo', () => {

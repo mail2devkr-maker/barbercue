@@ -1,6 +1,7 @@
 /* Booking page 3.0 horizontal salon card. Uses the page's --fq-* dark tokens (composed from the
-   landing page on /search). One column on phones; photo beside two rows (info, then offer and
-   prices) on tablets and laptops; all five columns side by side on wide screens. */
+   landing page on /search). One column on phones; on tablets and laptops the photo, then info with
+   the offer box under it, then prices with the booking buttons under them; all five columns side
+   by side on wide (1520px+) screens. */
 .card {
   position: relative;
   display: grid;
@@ -20,28 +21,29 @@
 
 @media (min-width: 720px) {
   .card {
-    grid-template-columns: 220px minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-columns: 220px minmax(0, 1.1fr) minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
     grid-template-areas:
-      "media info info"
-      "media offer prices"
-      "media actions actions";
+      "media info prices"
+      "media offer actions";
     align-items: start;
   }
-  /* No offer: prices take the whole second row (no empty offer box). */
+  /* No offer: info runs down the middle (no empty offer box). */
   .card:not(:has(.offer)) {
     grid-template-areas:
-      "media info info"
-      "media prices prices"
-      "media actions actions";
+      "media info prices"
+      "media info actions";
   }
   .media { grid-area: media; }
   .info { grid-area: info; }
   .offer { grid-area: offer; }
   .prices { grid-area: prices; }
-  .actions { grid-area: actions; flex-direction: row; justify-content: flex-end; }
+  .actions { grid-area: actions; flex-direction: row; align-self: end; }
+  .actions .book,
+  .actions .profile { flex: 1; min-width: 0; }
 }
 
-@media (min-width: 1360px) {
+@media (min-width: 1520px) {
   .card {
     grid-template-columns: 220px minmax(170px, 1.15fr) minmax(160px, 0.95fr) minmax(170px, 1fr) 140px;
     grid-template-areas: "media info offer prices actions";
@@ -63,6 +65,15 @@
 
 .mediaLink {
   display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
+}
+
+a.mediaLink {
+  cursor: pointer;
 }
 
 .offerBadge {
@@ -233,19 +244,70 @@
   background: currentColor;
 }
 
-.open { color: #72d59a; }
+.open { color: #3ddc84; }
 .closed { color: #ff8b9a; }
 .unknown { color: var(--fq-text-faint); font-weight: 600; }
 
-/* ── Offer ── */
+/* Only the "Open now" / "Closed" word is coloured; the time stays neutral. */
+.statusDetail {
+  color: var(--fq-text-muted);
+  font-weight: 600;
+}
+
+/* ── Offer: a highlighted box; the whole box opens the offers list ── */
 .offer {
   display: flex;
+  align-items: center;
   gap: 10px;
+  width: 100%;
   padding: 12px;
-  border: 1px solid rgba(242, 10, 131, 0.38);
+  border: 1px solid rgba(255, 62, 87, 0.65);
   border-radius: 14px;
-  background: linear-gradient(135deg, rgba(242, 10, 131, 0.2), rgba(120, 10, 40, 0.18));
+  background: linear-gradient(135deg, rgba(242, 10, 131, 0.28), rgba(110, 8, 36, 0.55));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04), 0 8px 22px rgba(242, 10, 131, 0.18);
+  color: var(--fq-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
   min-width: 0;
+}
+
+.offer:hover {
+  border-color: var(--fq-orange);
+}
+
+.offer:focus-visible {
+  outline: 2px solid var(--fq-orange);
+  outline-offset: 2px;
+}
+
+.offerBody {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+
+.offerHighlight {
+  white-space: nowrap;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--fq-gradient);
+  color: #fff;
+}
+
+.offerMore {
+  margin-top: 4px;
+  color: var(--fq-orange);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.offerChevron {
+  flex: 0 0 auto;
+  color: #fff;
+  font-size: 1.6rem;
+  line-height: 1;
 }
 
 .offerIcon {
@@ -261,7 +323,8 @@
 
 .offerTitle {
   margin: 0;
-  color: #ffd1e6;
+  color: #ff9ccc;
+  text-transform: none;
   font-size: 0.88rem;
   font-weight: 800;
 }

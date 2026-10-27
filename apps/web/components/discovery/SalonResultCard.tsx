@@ -47,20 +47,28 @@ export function clockText(time: string): string {
   return `${((h + 11) % 12) + 1}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
 }
 
-/** Open/closed line for a salon card, with today's hours where the salon has listed them. */
-export function salonStatus(salon: SalonListItemDto): { tone: "open" | "closed" | "unknown"; text: string } {
-  const hours = salon.todayHours;
-  const todayText = hours && !hours.isClosed ? `${clockText(hours.openTime)} – ${clockText(hours.closeTime)}` : null;
-  if (salon.isClosedForToday) return { tone: "closed", text: SHOP_CLOSED_TODAY_MESSAGE };
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/** "Opens 10:00 AM" / "Opens tomorrow 10:00 AM" / "Opens Mon 10:00 AM". */
+function opensText(next: NonNullable<SalonListItemDto["opensNext"]>): string {
+  const day = next.inDays === 0 ? "" : next.inDays === 1 ? "tomorrow " : `${WEEKDAYS[next.dayOfWeek]} `;
+  return `Opens ${day}${clockText(next.time)}`;
+}
+
+/**
+ * Status for a salon card: open → "Open now" (green) with only the closing time; closed → "Closed"
+ * with only when it next opens. `text` joins both for compact places (the Compare table).
+ */
+export function salonStatus(salon: SalonListItemDto): { tone: "open" | "closed" | "unknown"; label: string; detail: string | null; text: string } {
+  const make = (tone: "open" | "closed" | "unknown", label: string, detail: string | null) => ({ tone, label, detail, text: detail ? `${label} · ${detail}` : label });
+  const opens = salon.opensNext ? opensText(salon.opensNext) : null;
+  if (salon.isClosedForToday) return make("closed", SHOP_CLOSED_TODAY_MESSAGE, opens);
   if (salon.isOpenNow === true) {
-    const closes = salon.closesAt ?? hours?.closeTime;
-    return { tone: "open", text: closes ? `Open now · Closes ${clockText(closes)}` : "Open now" };
+    const closes = salon.closesAt ?? salon.todayHours?.closeTime;
+    return make("open", "Open now", closes ? `Closes ${clockText(closes)}` : null);
   }
-  if (salon.isOpenNow === false) {
-    if (hours?.isClosed) return { tone: "closed", text: "Closed today" };
-    return { tone: "closed", text: todayText ? `Closed now · Today ${todayText}` : "Closed now" };
-  }
-  return { tone: "unknown", text: "Hours not listed" };
+  if (salon.isOpenNow === false) return make("closed", "Closed", opens);
+  return make("unknown", "Hours not listed", null);
 }
 
 function OffersDialog({ salon, onClose }: { salon: SalonListItemDto; onClose: () => void }) {
@@ -137,9 +145,20 @@ export function SalonResultCard({ salon, styleName }: { salon: SalonListItemDto;
   return (
     <article className={styles.card} aria-labelledby={`salon-${salon.id}`}>
       <div className={styles.media}>
-        <Link href={profileHref} className={styles.mediaLink} aria-label={`View ${salon.name}`} tabIndex={-1}>
-          <SalonImage url={photos[photo] ?? null} alt={`${salon.name} salon`} aspectRatio="4 / 3" rounded={0} />
-        </Link>
+        {photos.length > 0 ? (
+          <button
+            type="button"
+            className={styles.mediaLink}
+            onClick={(event) => openViewer(photo, event.currentTarget)}
+            aria-label={`View ${salon.name} photos (${photos.length})`}
+          >
+            <SalonImage url={photos[photo]} alt={`${salon.name} salon`} aspectRatio="4 / 3" rounded={0} />
+          </button>
+        ) : (
+          <Link href={profileHref} className={styles.mediaLink} aria-label={`View ${salon.name}`} tabIndex={-1}>
+            <SalonImage url={null} alt={`${salon.name} salon`} aspectRatio="4 / 3" rounded={0} />
+          </Link>
+        )}
         <FavoriteButton salonId={salon.id} salonName={salon.name} />
         {offer && <span className={styles.offerBadge}>{offerBadgeText(offer, salon.currency, salon.countryCode)}</span>}
         {photos.length > 1 && (
@@ -194,26 +213,34 @@ export function SalonResultCard({ salon, styleName }: { salon: SalonListItemDto;
             )}
           </div>
         )}
-        <p className={`${styles.status} ${styles[status.tone]}`}>{status.text}</p>
+        <p className={`${styles.status} ${styles[status.tone]}`}>
+          <span className={styles.statusLabel}>{status.label}</span>
+          {status.detail && <span className={styles.statusDetail}> · {status.detail}</span>}
+        </p>
       </div>
 
       {offer && (
-        <div className={styles.offer}>
+        <button
+          type="button"
+          className={styles.offer}
+          onClick={() => setOffersOpen(true)}
+          aria-label={`${offer.title}: ${offerBadgeText(offer, salon.currency, salon.countryCode)}. ${moreOffers > 0 ? `See all ${moreOffers + 1} offers` : "See offer details"}`}
+        >
           <span className={styles.offerIcon} aria-hidden="true">%</span>
-          <div>
-            <p className={styles.offerTitle}>{offer.title}</p>
-            <p className={styles.offerValue}>
-              {offerBadgeText(offer, salon.currency, salon.countryCode)} {offer.appliesTo ? `on ${offer.appliesTo}` : "on all services"}
-            </p>
+          <span className={styles.offerBody}>
+            <span className={styles.offerTitle}>{offer.title}</span>
+            <span className={styles.offerValue}>
+              <span className={styles.offerHighlight}>{offerBadgeText(offer, salon.currency, salon.countryCode)}</span>{" "}
+              {offer.appliesTo ? `on ${offer.appliesTo}` : "on all services"}
+            </span>
             {offerConditions(offer, salon.currency, salon.countryCode).length > 0 && (
-              <p className={styles.offerTerms}>{offerConditions(offer, salon.currency, salon.countryCode).join(" · ")}</p>
+              <span className={styles.offerTerms}>{offerConditions(offer, salon.currency, salon.countryCode).join(" · ")}</span>
             )}
-            <p className={styles.offerValid}>Valid till {validTill(offer.validTo)}</p>
-            <button type="button" className={styles.linkButton} onClick={() => setOffersOpen(true)}>
-              {moreOffers > 0 ? `View all ${moreOffers + 1} offers` : "Offer details"}
-            </button>
-          </div>
-        </div>
+            <span className={styles.offerValid}>Valid till {validTill(offer.validTo)}</span>
+            {moreOffers > 0 && <span className={styles.offerMore}>+{moreOffers} more {moreOffers === 1 ? "offer" : "offers"}</span>}
+          </span>
+          <span className={styles.offerChevron} aria-hidden="true">›</span>
+        </button>
       )}
 
       <div className={styles.prices}>

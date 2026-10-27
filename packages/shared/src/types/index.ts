@@ -558,6 +558,8 @@ export interface SalonListItemDto extends SalonSummary {
   closesAt?: string | null;
   // Today's salon-local hours ("HH:mm"); null when the salon hasn't listed hours for today.
   todayHours?: { isClosed: boolean; openTime: string; closeTime: string } | null;
+  // While closed: when it next opens (inDays 0 = later today, 1 = tomorrow; dayOfWeek 0 = Sunday).
+  opensNext?: { inDays: number; dayOfWeek: number; time: string } | null;
   serviceCount?: number;
   otherServices?: Array<{ id: string; name: string; price: number }>;
   offers?: SalonOfferSummaryDto[];
