@@ -1691,6 +1691,7 @@ model QueueEntry {
   // Only its SHA-256 digest is stored. No login account is created from an unverified number.
   guestAccessHash      String?    @unique @db.VarChar(64)
   guestAccessExpiresAt DateTime?  @db.Timestamptz(6)
+  guestExpoPushToken    String?    @db.VarChar(255)
   // Durable once-only queue arrival prompt. Customer claims are NOT verified shop arrivals.
   arrivalPromptSentAt       DateTime? @db.Timestamptz(6)
   customerArrivalResponse   Boolean?
