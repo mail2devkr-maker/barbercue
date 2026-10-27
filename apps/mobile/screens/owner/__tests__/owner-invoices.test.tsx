@@ -12,6 +12,23 @@ jest.mock('../../../lib/idempotency', () => ({ newIdempotencyKey: () => 'invoice
 jest.mock('../../../lib/salon-context', () => ({ useSalon: () => ({ selectedSalonId: 'salon-1', selectedSalon: { id: 'salon-1', name: 'Synthetic shop' } }) }));
 jest.mock('../../../lib/language-context', () => ({ useLanguage: () => ({ language: 'EN', t: { loadMore: 'Load more' } }) }));
 jest.mock('../../../lib/date-locale', () => ({ dateLocaleFor: () => 'en-IN' }));
+jest.mock('react-native', () => {
+  const React = require('react');
+  const native = jest.requireActual('react-native');
+  const MockFlatList = ({ data, renderItem, ListHeaderComponent, ListFooterComponent }: any) =>
+    React.createElement(
+      native.View,
+      null,
+      ListHeaderComponent,
+      ...data.map((item: unknown, index: number) => renderItem({ item, index })),
+      ListFooterComponent,
+    );
+  return new Proxy(native, {
+    get(target, property, receiver) {
+      return property === 'FlatList' ? MockFlatList : Reflect.get(target, property, receiver);
+    },
+  });
+});
 jest.mock('@react-navigation/native', () => ({
   useFocusEffect: (effect: () => void | (() => void)) => require('react').useEffect(effect, []),
 }));
