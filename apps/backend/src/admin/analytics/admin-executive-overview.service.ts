@@ -15,9 +15,11 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   addZonedCalendarDays,
+  resolveSalonTimeZone,
   utcToZonedDateStr,
 } from '../../common/timezone/timezone';
 import { localRange } from '../../owner-ops/local-time';
+import { scheduleStatusAt } from './shop-schedule';
 import { ADMIN_SHOP_ACTIVITY_TIME_ZONE } from '../admin-shop-activity.service';
 import {
   ADOPTION_CATEGORIES,
@@ -30,6 +32,37 @@ import {
 
 const TZ = ADMIN_SHOP_ACTIVITY_TIME_ZONE;
 const SHOPS_LIMIT = 100;
+
+/** Scheduled open means physically scheduled to be open, not merchant connected. */
+export function countScheduledOpenSalons(
+  salons: ReadonlyArray<{
+    status: SalonStatus;
+    isClosedForToday: boolean;
+    timezone: string | null;
+    city: { countryCode: string };
+    operatingHours: Array<{
+      dayOfWeek: number;
+      openTime: string;
+      closeTime: string;
+      isClosed: boolean;
+    }>;
+  }>,
+  now: Date,
+): number {
+  return salons.filter(
+    (salon) =>
+      salon.status === SalonStatus.ACTIVE &&
+      !salon.isClosedForToday &&
+      scheduleStatusAt(
+        salon.operatingHours,
+        resolveSalonTimeZone({
+          timezone: salon.timezone,
+          countryCode: salon.city.countryCode,
+        }),
+        now,
+      ).state === 'OPEN',
+  ).length;
+}
 
 interface ShopPeriod {
   appointmentsCompleted: number;
@@ -102,7 +135,12 @@ export class AdminExecutiveOverviewService {
           name: true,
           status: true,
           createdAt: true,
-          city: { select: { name: true } },
+          timezone: true,
+          isClosedForToday: true,
+          city: { select: { name: true, countryCode: true } },
+          operatingHours: {
+            select: { dayOfWeek: true, openTime: true, closeTime: true, isClosed: true },
+          },
         },
       }),
     ]);
@@ -198,8 +236,7 @@ export class AdminExecutiveOverviewService {
           cur.completedServiceMinutes,
           old.completedServiceMinutes,
         ),
-        openSalonsNow: salons.filter((s) => s.status === SalonStatus.ACTIVE)
-          .length,
+        openSalonsNow: countScheduledOpenSalons(salons, now),
         platformRevenuePaise: null,
       },
       trend: this.fillTrend(query.from, query.to, trend),
