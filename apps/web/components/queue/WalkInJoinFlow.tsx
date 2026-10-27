@@ -11,7 +11,6 @@ import { apiFetch, ApiError } from "../../lib/api";
 import { newIdempotencyKey } from "../../lib/idempotency";
 import { useAuth } from "../../lib/auth-context";
 import { Button } from "../ui/Button";
-import { GoogleIdentityButton } from "../auth/GoogleIdentityButton";
 import { QueueStatusPanel } from "./QueueStatusPanel";
 import { QueueContactFields, resolveContactInput } from "./QueueContactFields";
 import styles from "./queue.module.css";
@@ -23,12 +22,12 @@ import styles from "./queue.module.css";
 // across sign-in — the exact same pattern PublicQueueJoinFlow (the QR entry point) already proved
 // out for this queue engine.
 export function WalkInJoinFlow({ salonId, services }: { salonId: string; services: ServiceDto[] }) {
-  const { status: authStatus, googleLogin, user } = useAuth();
+  const { status: authStatus, user } = useAuth();
   const [selectedServiceId, setSelectedServiceId] = useState<string>("");
   const [contactName, setContactName] = useState("");
   const [contactPhone, setContactPhone] = useState(user?.phone ?? "");
   const [submitting, setSubmitting] = useState(false);
-  const [googleSubmitting, setGoogleSubmitting] = useState(false);
+  const [guestAccessToken, setGuestAccessToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [entry, setEntry] = useState<QueueEntryDetailDto | null>(null);
 
@@ -50,6 +49,23 @@ export function WalkInJoinFlow({ salonId, services }: { salonId: string; service
     };
   }, [authStatus]);
 
+  // Restore only this browser session's unguessable ticket, never an account identity.
+  useEffect(() => {
+    if (authStatus === "loading" || authStatus === "authenticated") return;
+    const key = `fastque:guest-queue:${salonId}`;
+    const saved = sessionStorage.getItem(key);
+    if (!saved) return;
+    try {
+      const data = JSON.parse(saved) as { id: string; token: string };
+      if (!data.id || !data.token) return;
+      apiFetch<QueueEntryDetailDto>(`${QUEUE_ENTRIES_PATH}/${data.id}/guest-status`, {
+        headers: { "X-Queue-Guest-Token": data.token },
+      }).then((row) => {
+        if (row.salonId === salonId) { setGuestAccessToken(data.token); setEntry(row); }
+      }).catch(() => sessionStorage.removeItem(key));
+    } catch { sessionStorage.removeItem(key); }
+  }, [salonId, authStatus]);
+
   // Prefill from the account once it loads, without clobbering anything the customer typed.
   useEffect(() => {
     if (user?.phone) setContactPhone((current) => current || (user.phone as string));
@@ -61,10 +77,16 @@ export function WalkInJoinFlow({ salonId, services }: { salonId: string; service
       setError(resolved.error);
       return;
     }
+    if (authStatus !== "authenticated" && !selectedServiceId) {
+      setError("Please select the service you want before joining.");
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
-      const created = await apiFetch<QueueEntryDetailDto>(`salons/${salonId}/queue/${SALON_QUEUE_PATHS.join}`, {
+      const guestMode = authStatus !== "authenticated";
+      const created = await apiFetch<QueueEntryDetailDto & { guestAccessToken?: string }>(
+        guestMode ? `salons/${salonId}/queue/guest-join` : `salons/${salonId}/queue/${SALON_QUEUE_PATHS.join}`, {
         method: "POST",
         headers: { "Idempotency-Key": newIdempotencyKey() },
         body: JSON.stringify({
@@ -72,27 +94,16 @@ export function WalkInJoinFlow({ salonId, services }: { salonId: string; service
           ...resolved.contact,
         }),
       });
+      if (created.guestAccessToken) {
+        setGuestAccessToken(created.guestAccessToken);
+        sessionStorage.setItem(`fastque:guest-queue:${salonId}`,
+          JSON.stringify({ id: created.id, token: created.guestAccessToken }));
+      }
       setEntry(created);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not join the queue. Please try again.");
     } finally {
       setSubmitting(false);
-    }
-  }
-
-  // Selection is preserved: googleLogin() only updates auth state in place, no navigation, so
-  // selectedServiceId above is exactly what it was before the sign-in overlay appeared. Once
-  // authStatus flips to "authenticated" the button below switches straight to "Join the queue"
-  // with that same selection already in place — no restart, no re-pick.
-  async function handleGoogleCredential(idToken: string) {
-    setError(null);
-    setGoogleSubmitting(true);
-    try {
-      await googleLogin({ idToken });
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not sign in with Google. Please try again.");
-    } finally {
-      setGoogleSubmitting(false);
     }
   }
 
@@ -105,13 +116,13 @@ export function WalkInJoinFlow({ salonId, services }: { salonId: string; service
           You already have an active Live Queue token at another salon. You can cancel it here
           before joining this salon.
         </p>
-        <QueueStatusPanel entry={entry} onEntryChange={setEntry} />
+        <QueueStatusPanel entry={entry} guestAccessToken={guestAccessToken} onEntryChange={setEntry} />
       </div>
     );
   }
 
   if (entry) {
-    return <QueueStatusPanel entry={entry} onEntryChange={setEntry} />;
+    return <QueueStatusPanel entry={entry} guestAccessToken={guestAccessToken} onEntryChange={setEntry} />;
   }
 
   return (
@@ -133,7 +144,7 @@ export function WalkInJoinFlow({ salonId, services }: { salonId: string; service
         ))}
       </select>
 
-      {authStatus === "authenticated" && (
+      {(
         <QueueContactFields
           idPrefix="walkin"
           name={contactName}
@@ -146,20 +157,10 @@ export function WalkInJoinFlow({ salonId, services }: { salonId: string; service
       {error && <p className={styles.errorText}>{error}</p>}
 
       <div className={styles.joinActions}>
-        {authStatus === "authenticated" ? (
-          <Button type="button" variant="primary" onClick={() => void handleJoin()} disabled={submitting}>
-            {submitting ? "Joining…" : "Join the queue"}
-          </Button>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, width: "100%" }}>
-            <p className={styles.fieldLabel}>Sign in to join the queue</p>
-            <GoogleIdentityButton
-              audienceLabel="customer"
-              onCredential={(idToken) => void handleGoogleCredential(idToken)}
-              disabled={googleSubmitting}
-            />
-          </div>
-        )}
+        <Button type="button" variant="primary" onClick={() => void handleJoin()} disabled={submitting}>
+          {submitting ? "Joining…" : "Join Live Queue"}
+        </Button>
+        <p className={styles.reassure}>No Gmail login needed. The contact number is not verified.</p>
       </div>
       <p className={styles.reassure}>We&apos;ll keep your place — no need to stay by the counter.</p>
     </div>
