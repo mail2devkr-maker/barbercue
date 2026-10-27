@@ -48,13 +48,15 @@ Old salons: a new `Salon.salonTypeConfirmed` flag (default `false`, so every exi
 | 5 Sorting | ✅ | `sort=relevance|distance|price|rating` combined with every filter; price needs a service (400 otherwise, disabled in UI); distance asks for location. |
 | 6 Tests + checks | ✅ | Backend: 13 new (filter rule, matching, price-in-range, selected price, sorts, validation, favorites scoping/idempotency) + updated mocks for batched queries. Web: 13 new (URL rules, controls, compare table, card, hearts incl. rollback and post-login save, favorites order). Browser-checked on a local QA database: search, compare, price sort, slider, salon-type filter, signed-out heart, registration field, phone layout. Favorites API exercised over HTTP. |
 
+| 7 Rating, open now, favorites only | ✅ | `minRating` (3 / 3.5 / 4 / 4.5; unreviewed salons never pass), `openNow=true` (checked per salon in its own time zone, so it uses the bounded single-page mode), `ids` (≤ 200 salon UUIDs; the public search never reads who is asking, so the client sends the customer's saved IDs). Web: Rating and "Show only" (Open now, My favorites) in the filter panel; signed out → sign-in prompt, nothing saved → empty state. |
+| 8 Mobile parity | ✅ | Search screen: Salon type, Compare price (popular service, price filter follows it), Sort (distance only with a location, price only with a service), Rating, Open now and Favorites toggles; card shows the compared service's own name and price, the confirmed type or "Type not set", and a heart (customers; optimistic with rollback; signed out → sign-in hint). New strings in English and Hindi. |
+
 **Also improved** — search result items are now built with grouped queries (ratings, price span, live queue, selected service) instead of 3–4 queries per salon.
 
 ## 4. Pending / not done
 
 - Customer sign-in locally needs phone OTP or Google, so the signed-in heart was verified through unit tests and the HTTP API rather than by clicking in the browser.
-- Mobile app (Expo) screens are unchanged; the shared types are backward compatible (mobile typecheck passes).
+- Mobile was verified with unit/screen tests and typecheck, not on a device or emulator. Popular-service names on mobile are shown in English (they match salons' own English service names).
 - Price/rating/distance sorts rank up to 200 candidates and return one page (same limit as "Near me" today); a geo index (PostGIS) and stored rating aggregates would lift it.
 - Popular-service matching is a keyword rule, not a curated service taxonomy; a canonical service key on `Service` would make it exact.
-- Review-score threshold and "favorites only" filters were not added.
 - Favorite count / "recently favorited" extras not built.

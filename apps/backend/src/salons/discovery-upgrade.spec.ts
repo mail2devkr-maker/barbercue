@@ -279,6 +279,87 @@ describe('sorting', () => {
   });
 });
 
+describe('rating, favorites-only and open-now filters', () => {
+  const allWeek = (openTime: string, closeTime: string) =>
+    Array.from({ length: 7 }, (_, dayOfWeek) => ({
+      dayOfWeek,
+      isClosed: false,
+      openTime,
+      closeTime,
+    }));
+
+  afterEach(() => jest.useRealTimers());
+
+  it('keeps only salons whose average review score reaches the minimum', async () => {
+    const { service, prisma } = makeSearchService([]);
+    prisma.review.groupBy.mockResolvedValueOnce([{ salonId: 'good' }]);
+    await service.search({ minRating: 4 });
+    expect(prisma.review.groupBy.mock.calls[0][0]).toMatchObject({
+      by: ['salonId'],
+      having: { rating: { _avg: { gte: 4 } } },
+    });
+    expect(prisma.salon.findMany.mock.calls[0][0].where.AND).toContainEqual({
+      id: { in: ['good'] },
+    });
+  });
+
+  it('limits results to the given salon IDs', async () => {
+    const { service, prisma } = makeSearchService([]);
+    const parsed = salonSearchQuerySchema.parse({
+      ids: '11111111-1111-4111-8111-111111111111, 22222222-2222-4222-8222-222222222222',
+    });
+    await service.search(parsed);
+    expect(prisma.salon.findMany.mock.calls[0][0].where.AND).toContainEqual({
+      id: {
+        in: [
+          '11111111-1111-4111-8111-111111111111',
+          '22222222-2222-4222-8222-222222222222',
+        ],
+      },
+    });
+  });
+
+  it('open now returns only salons open at this moment, as one name-ordered page', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-10-27T06:30:00Z')); // 12:00 in India
+    const { service, prisma } = makeSearchService([
+      salonRow('open', { operatingHours: allWeek('09:00', '21:00') }),
+      salonRow('later', { operatingHours: allWeek('18:00', '22:00') }),
+      salonRow('shut', {
+        operatingHours: allWeek('09:00', '21:00'),
+        isClosedForToday: true,
+      }),
+    ]);
+    const result = await service.search(
+      salonSearchQuerySchema.parse({ openNow: 'true' }),
+    );
+    expect(prisma.salon.findMany.mock.calls[0][0]).toMatchObject({
+      orderBy: { name: 'asc' },
+      take: 200,
+    });
+    expect(result.items.map((i) => i.id)).toEqual(['open']);
+    expect(result.nextCursor).toBeNull();
+  });
+
+  it('validates the new parameters', () => {
+    expect(salonSearchQuerySchema.safeParse({ minRating: '4.5' }).success).toBe(
+      true,
+    );
+    expect(salonSearchQuerySchema.safeParse({ minRating: '6' }).success).toBe(
+      false,
+    );
+    expect(
+      salonSearchQuerySchema.safeParse({ ids: 'not-a-uuid' }).success,
+    ).toBe(false);
+    expect(salonSearchQuerySchema.safeParse({ ids: '' }).success).toBe(false);
+    expect(salonSearchQuerySchema.parse({ openNow: 'false' }).openNow).toBe(
+      false,
+    );
+    expect(salonSearchQuerySchema.safeParse({ openNow: 'yes' }).success).toBe(
+      false,
+    );
+  });
+});
+
 describe('FavoritesService', () => {
   function makeFavorites(salonExists = true) {
     const prisma = {

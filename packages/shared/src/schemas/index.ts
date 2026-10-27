@@ -35,7 +35,7 @@ import {
   SALON_DESCRIPTION_SUGGESTION_LIMITS,
 } from "../constants";
 import { isValidPostalCode, postalCodeRuleFor } from "../locale";
-import { POPULAR_SERVICES, SALON_SORT_OPTIONS } from "../catalog/salon-discovery-filters";
+import { POPULAR_SERVICES, SALON_SEARCH_MAX_IDS, SALON_SORT_OPTIONS } from "../catalog/salon-discovery-filters";
 
 // Validation schemas shared by the backend (request validation) and clients (form validation).
 // The backend is always the authority — these schemas exist so both sides reject bad input the
@@ -337,6 +337,19 @@ export const salonSearchQuerySchema = z
       .refine((id) => POPULAR_SERVICES.some((s) => s.id === id), "Unknown popular service.")
       .optional(),
     sort: z.enum(SALON_SORT_OPTIONS).optional(),
+    // Minimum average review score (salons with no reviews never pass), "open right now", and
+    // "favorites only" — the client sends the customer's saved salon IDs (this route is public, so
+    // it never reads who is asking).
+    minRating: z.coerce.number().min(1).max(5).optional(),
+    openNow: z
+      .enum(["true", "false"])
+      .transform((value) => value === "true")
+      .optional(),
+    ids: z
+      .string()
+      .transform((value) => value.split(",").map((id) => id.trim()).filter(Boolean))
+      .pipe(z.array(z.string().uuid()).min(1).max(SALON_SEARCH_MAX_IDS))
+      .optional(),
   })
   .refine(
     (data) => data.sort !== "price" || data.popularService !== undefined || data.service !== undefined,

@@ -1,4 +1,6 @@
 import {
+  MIN_RATING_OPTIONS,
+  SALON_SEARCH_MAX_IDS,
   SALON_SORT_OPTIONS,
   popularServiceById,
   type SalonSortOption,
@@ -11,7 +13,7 @@ import {
 /** Every query param the search API understands, forwarded as-is. */
 export const SEARCH_API_PARAMS = [
   "q", "shopName", "city", "countryCode", "locality", "service", "lat", "lng", "radiusKm",
-  "priceMin", "priceMax", "salonType", "popularService", "sort",
+  "priceMin", "priceMax", "salonType", "popularService", "sort", "minRating", "openNow",
 ] as const;
 
 export const PRICE_SLIDER_MIN = 0;
@@ -26,6 +28,10 @@ export interface DiscoveryState {
   priceMax: number | null;
   sort: SalonSortOption;
   nearMe: boolean;
+  minRating: number | null;
+  openNow: boolean;
+  /** `favorites=1`: only the customer's saved salons (their IDs are sent, never put in the URL). */
+  favoritesOnly: boolean;
 }
 
 export function readDiscoveryState(params: URLSearchParams): DiscoveryState {
@@ -44,6 +50,9 @@ export function readDiscoveryState(params: URLSearchParams): DiscoveryState {
     priceMax: num("priceMax"),
     sort: (SALON_SORT_OPTIONS as readonly string[]).includes(sort ?? "") ? (sort as SalonSortOption) : nearMe ? "distance" : "relevance",
     nearMe,
+    minRating: (MIN_RATING_OPTIONS as readonly number[]).includes(num("minRating") ?? NaN) ? num("minRating") : null,
+    openNow: params.get("openNow") === "true",
+    favoritesOnly: params.get("favorites") === "1",
   };
 }
 
@@ -54,7 +63,7 @@ export function sortUnavailableReason(option: SalonSortOption, state: Pick<Disco
 }
 
 /** Search API query string for the current URL (only known params, empty values dropped). */
-export function searchApiQuery(params: URLSearchParams): string {
+export function searchApiQuery(params: URLSearchParams, favoriteIds?: Iterable<string>): string {
   const out = new URLSearchParams();
   for (const key of SEARCH_API_PARAMS) {
     const value = params.get(key);
@@ -63,6 +72,7 @@ export function searchApiQuery(params: URLSearchParams): string {
   // The API rejects price sort without a service; drop it rather than show an error page.
   const state = readDiscoveryState(params);
   if (state.sort === "price" && sortUnavailableReason("price", state)) out.delete("sort");
+  if (state.favoritesOnly && favoriteIds) out.set("ids", [...favoriteIds].slice(0, SALON_SEARCH_MAX_IDS).join(","));
   return out.toString();
 }
 
@@ -105,5 +115,8 @@ export function activeFilterCount(state: DiscoveryState): number {
     state.popularService,
     state.legacyService,
     state.priceMin !== null || state.priceMax !== null ? "price" : null,
+    state.minRating,
+    state.openNow,
+    state.favoritesOnly,
   ].filter(Boolean).length;
 }

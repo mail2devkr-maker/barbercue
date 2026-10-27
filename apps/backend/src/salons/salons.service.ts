@@ -324,6 +324,34 @@ export class SalonsService {
         : [broadPriceCondition];
     }
 
+    // Discovery upgrade: "favorites only" (the client's saved salon IDs) and a minimum average
+    // review score. Unreviewed salons have no average, so they never pass a minimum.
+    const extraConditions: Prisma.SalonWhereInput[] = [];
+    if (query.ids) extraConditions.push({ id: { in: query.ids } });
+    if (query.minRating !== undefined) {
+      const rated = await this.prisma.review.groupBy({
+        by: ['salonId'],
+        _avg: { rating: true },
+        having: { rating: { _avg: { gte: query.minRating } } },
+      });
+      extraConditions.push({ id: { in: rated.map((r) => r.salonId) } });
+    }
+    if (extraConditions.length > 0) {
+      where.AND = [
+        ...(where.AND
+          ? Array.isArray(where.AND)
+            ? where.AND
+            : [where.AND]
+          : []),
+        ...extraConditions,
+      ];
+    }
+    // "Open now" depends on each salon's hours in its own time zone, so it is checked per
+    // candidate after loading — which makes it a bounded, single-page mode like the sorts below.
+    const openNowOnly = query.openNow === true;
+    const keepOpen = (items: SalonListItemDto[]) =>
+      openNowOnly ? items.filter((item) => item.isOpenNow === true) : items;
+
     // "Near Me" (Phase 4): sorting by a computed haversine distance isn't something Prisma/Postgres
     // can do without a geo extension (PostGIS earthdistance), which isn't set up here. Rather than
     // fake a stable cursor over an in-memory sort, distance mode fetches a capped batch, sorts it
@@ -346,16 +374,21 @@ export class SalonsService {
     // Price and rating sorts need every candidate's value before ordering, so — like "Near me" —
     // they rank a bounded candidate set in memory and return a single page (nextCursor null).
     const sort = query.sort ?? (nearMe ? 'distance' : 'relevance');
-    if (!nearMe && (sort === 'price' || sort === 'rating')) {
+    if (!nearMe && (sort === 'price' || sort === 'rating' || openNowOnly)) {
       const candidates = await this.prisma.salon.findMany({
         where,
-        orderBy: { id: 'asc' },
+        orderBy: sort === 'relevance' ? { name: 'asc' } : { id: 'asc' },
         take: NEAR_ME_CANDIDATE_CAP,
         include: listInclude,
       });
-      const items = await this.toListItems(candidates, undefined, selected);
+      const items = keepOpen(
+        await this.toListItems(candidates, undefined, selected),
+      );
       return {
-        items: sortListItems(items, sort).slice(0, limit),
+        items: (sort === 'price' || sort === 'rating'
+          ? sortListItems(items, sort)
+          : items
+        ).slice(0, limit),
         nextCursor: null,
       };
     }
@@ -404,6 +437,7 @@ export class SalonsService {
       }));
       const sorted = withDistance
         .filter((w) => w.item.distanceKm !== null)
+        .filter((w) => !openNowOnly || w.item.isOpenNow === true)
         // The bounding box is a rectangle approximation of a circle (see boundingBoxDegrees), so a
         // corner of the box can sit slightly beyond the true requested radius — this is the actual
         // hard cutoff a caller-supplied radiusKm promises, checked against the real, unrounded

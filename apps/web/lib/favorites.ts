@@ -120,6 +120,8 @@ export function useFavorites() {
 
   return {
     isFavorite: (salonId: string) => current.has(salonId),
+    savedIds: current,
+    isCustomer,
     toggle,
     ready: status !== "loading",
     // True once this customer's saved IDs have arrived (module state, updated with the same emit).

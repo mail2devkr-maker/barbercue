@@ -161,3 +161,9 @@ export const SALON_SORT_LABELS: Record<SalonSortOption, string> = {
   price: 'Price (selected service)',
   rating: 'Reviews',
 };
+
+/** Minimum review score choices offered by the discovery filters ("4+ stars" etc.). */
+export const MIN_RATING_OPTIONS = [3, 3.5, 4, 4.5] as const;
+
+/** Most salon IDs one "favorites only" search may send (matches the bounded candidate cap). */
+export const SALON_SEARCH_MAX_IDS = 200;

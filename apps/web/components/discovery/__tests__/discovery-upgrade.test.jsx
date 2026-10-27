@@ -59,6 +59,15 @@ describe('discovery URL rules', () => {
     expect(priceRangeChange(100, 300)).toEqual({ priceMin: '100', priceMax: '300' });
     expect(activeFilterCount(readDiscoveryState(p('salonType=GENTS&popularService=haircut&priceMax=300')))).toBe(3);
   });
+
+  it('reads rating, open-now and favorites filters; sends saved IDs only for favorites', () => {
+    const state = readDiscoveryState(p('minRating=4&openNow=true&favorites=1'));
+    expect(state).toMatchObject({ minRating: 4, openNow: true, favoritesOnly: true });
+    expect(activeFilterCount(state)).toBe(3);
+    expect(readDiscoveryState(p('minRating=2.2')).minRating).toBeNull();
+    expect(searchApiQuery(p('minRating=4&openNow=true&favorites=1'), ['a', 'b'])).toBe('minRating=4&openNow=true&ids=a%2Cb');
+    expect(searchApiQuery(p('minRating=4'), ['a'])).toBe('minRating=4');
+  });
 });
 
 describe('filter controls', () => {
@@ -85,6 +94,20 @@ describe('filter controls', () => {
     const priceFieldset = tree.root.findAll((n) => n.type === 'fieldset').find((f) => textOf(f).startsWith('Price'));
     expect(priceFieldset.props.disabled).toBe(false);
     expect(textOf(priceFieldset)).toContain('for Haircut');
+  });
+
+  it('rating, open-now and favorites controls report their changes', () => {
+    const onChange = jest.fn();
+    let tree;
+    act(() => { tree = TestRenderer.create(<FiltersPanel state={state('openNow=true')} onChange={onChange} onClearAll={jest.fn()} activeCount={1} />); });
+    act(() => tree.root.find((n) => n.props.role === 'radio' && n.props['aria-label'] === '4 stars and up').props.onClick());
+    expect(onChange).toHaveBeenLastCalledWith({ minRating: '4' });
+    const openNow = tree.root.find((n) => n.type === 'button' && textOf(n) === 'Open now');
+    expect(openNow.props['aria-pressed']).toBe(true);
+    act(() => openNow.props.onClick());
+    expect(onChange).toHaveBeenLastCalledWith({ openNow: null });
+    act(() => tree.root.find((n) => n.type === 'button' && textOf(n).includes('My favorites')).props.onClick());
+    expect(onChange).toHaveBeenLastCalledWith({ favorites: '1' });
   });
 
   it('greys out price sort with a reason when no service is selected', () => {

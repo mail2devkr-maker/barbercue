@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import {
+  MIN_RATING_OPTIONS,
   POPULAR_SERVICES,
   SALON_SORT_LABELS,
   SALON_SORT_OPTIONS,
@@ -182,6 +183,51 @@ export function FiltersPanel({
       </fieldset>
 
       <ServicePriceSlider state={state} onChange={onChange} />
+
+      <fieldset className={styles.section}>
+        <legend className={styles.legend}>Rating</legend>
+        <div className={styles.segmented} role="radiogroup" aria-label="Minimum rating">
+          {[null, ...MIN_RATING_OPTIONS].map((value) => {
+            const checked = state.minRating === value;
+            return (
+              <button
+                key={value ?? "any"}
+                type="button"
+                role="radio"
+                aria-checked={checked}
+                aria-label={value === null ? "Any rating" : `${value} stars and up`}
+                className={`${styles.segment} ${checked ? styles.segmentOn : ""}`}
+                onClick={() => onChange({ minRating: value === null ? null : String(value) })}
+              >
+                {value === null ? "Any" : `${value}★+`}
+              </button>
+            );
+          })}
+        </div>
+        <p className={styles.help}>{state.minRating === null ? "Average customer review score." : "Salons without reviews are hidden."}</p>
+      </fieldset>
+
+      <fieldset className={styles.section}>
+        <legend className={styles.legend}>Show only</legend>
+        <div className={styles.chips}>
+          <button
+            type="button"
+            aria-pressed={state.openNow}
+            className={`${styles.chip} ${state.openNow ? styles.chipOn : ""}`}
+            onClick={() => onChange({ openNow: state.openNow ? null : "true" })}
+          >
+            Open now
+          </button>
+          <button
+            type="button"
+            aria-pressed={state.favoritesOnly}
+            className={`${styles.chip} ${state.favoritesOnly ? styles.chipOn : ""}`}
+            onClick={() => onChange({ favorites: state.favoritesOnly ? null : "1" })}
+          >
+            ♥ My favorites
+          </button>
+        </div>
+      </fieldset>
     </div>
   );
 }

@@ -25,6 +25,7 @@ import { ShopNameSearchField } from "../../../components/discovery/ShopNameSearc
 import { CitySearchField } from "../../../components/salons/CitySearchField";
 import { Button } from "../../../components/ui/Button";
 import { apiFetch } from "../../../lib/api";
+import { useFavorites } from "../../../lib/favorites";
 import styles from "./search.module.css";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api/v1";
@@ -192,6 +193,21 @@ export default function SearchClient() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const filterCount = activeFilterCount(discovery);
+  // "My favorites" sends the customer's saved salon IDs to the public search; until they are known
+  // (or when signed out / nothing saved) there is nothing to search.
+  const { savedIds, loaded: favoritesLoaded, isCustomer, ready: authReady } = useFavorites();
+  const favoritesGate: "wait" | "signin" | "empty" | null = !discovery.favoritesOnly
+    ? null
+    : !authReady
+      ? "wait"
+      : !isCustomer
+        ? "signin"
+        : !favoritesLoaded
+          ? "wait"
+          : savedIds.size === 0
+            ? "empty"
+            : null;
+  const favoriteKey = discovery.favoritesOnly ? [...savedIds].sort().join(",") : "";
 
   function applyChanges(changes: Record<string, string | null>) {
     const { __popularService, ...rest } = changes;
@@ -205,7 +221,10 @@ export default function SearchClient() {
   }
 
   function clearAllFilters() {
-    applyChanges({ salonType: null, __popularService: null, service: null, priceMin: null, priceMax: null, view: null });
+    applyChanges({
+      salonType: null, __popularService: null, service: null, priceMin: null, priceMax: null, view: null,
+      minRating: null, openNow: null, favorites: null,
+    });
   }
 
   // Shared by handleNearMe and selectRadius below — both need "ask the browser for a position,
@@ -277,12 +296,19 @@ export default function SearchClient() {
   useEffect(() => {
     // city/countryCode already arrive as real slugs/codes here (from CitySearchField's own
     // selection, or a shared/bookmarked URL) — no client-side normalization needed or safe to do.
-    const params = new URLSearchParams(searchApiQuery(searchParams));
+    const params = new URLSearchParams(searchApiQuery(searchParams, favoriteKey ? favoriteKey.split(",") : undefined));
 
     let cancelled = false;
     Promise.resolve()
       .then(() => {
         if (cancelled) return undefined;
+        if (favoritesGate) {
+          setResults([]);
+          setHasMore(false);
+          setError(null);
+          setLoading(favoritesGate === "wait");
+          return undefined;
+        }
         setLoading(true);
         setError(null);
         return fetch(`${API_BASE_URL}/${DISCOVERY_PATHS.salons}?${params.toString()}`);
@@ -308,7 +334,7 @@ export default function SearchClient() {
     return () => {
       cancelled = true;
     };
-  }, [retryKey, searchParams]);
+  }, [retryKey, searchParams, favoritesGate, favoriteKey]);
 
   function handleSubmit(event?: React.FormEvent, explicitService?: string) {
     event?.preventDefault();
@@ -497,7 +523,32 @@ export default function SearchClient() {
           </div>
         )}
 
-        {!loading && !error && results.length === 0 && (
+        {!loading && favoritesGate === "signin" && (
+          <div className={styles.stateCard}>
+            <span className={styles.stateIcon} aria-hidden="true">♡</span>
+            <h2>Sign in to see your favorite salons</h2>
+            <p>Your saved salons are kept in your customer account.</p>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => router.push(`/login?next=${encodeURIComponent(`/search?${searchParams.toString()}`)}`)}
+            >
+              Sign in
+            </Button>
+          </div>
+        )}
+        {!loading && favoritesGate === "empty" && (
+          <div className={styles.stateCard}>
+            <span className={styles.stateIcon} aria-hidden="true">♡</span>
+            <h2>No favorite salons yet</h2>
+            <p>Tap the heart on any salon to save it, then come back here to compare them.</p>
+            <Button type="button" variant="secondary" onClick={() => applyChanges({ favorites: null })}>
+              Show all salons
+            </Button>
+          </div>
+        )}
+
+        {!loading && !error && !favoritesGate && results.length === 0 && (
           <div className={styles.stateCard}>
             <span className={styles.stateIcon} aria-hidden="true">⌖</span>
             <h2>No shops match that search yet</h2>
