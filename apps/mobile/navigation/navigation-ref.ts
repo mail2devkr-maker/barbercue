@@ -12,6 +12,7 @@ import type { AccountStackParamList, BookingsStackParamList, QueueStackParamList
 export type AppNavigationParamList = {
   OwnerBookingsTab: undefined;
   OwnerQueueTab: undefined;
+  GuestQueueStatus: { salonId: string; entryId: string };
   SearchTab: NavigatorScreenParams<SearchStackParamList>;
   BookingsTab: NavigatorScreenParams<BookingsStackParamList>;
   QueueTab: NavigatorScreenParams<QueueStackParamList>;
