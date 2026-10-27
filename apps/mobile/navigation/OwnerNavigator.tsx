@@ -18,6 +18,7 @@ import { useEffect } from 'react';
 import { useSalon } from '../lib/salon-context';
 import { navigationRef } from './navigation-ref';
 import { subscribeToOwnerBookingPushNavigation } from '../lib/push-navigation';
+import { subscribeQueueArrivalNavigation } from '../lib/queue-push-navigation';
 import { OwnerArrivalPromptCoordinator } from '../components/owner/OwnerArrivalPromptCoordinator';
 
 export type OwnerTabParamList = {
@@ -39,6 +40,7 @@ export default function OwnerNavigator() {
   return (
     <SalonProvider>
       <OwnerPushNavigationBridge />
+      <OwnerQueueArrivalPushBridge />
       <OwnerArrivalPromptCoordinator />
       <OwnerNavigatorGate />
     </SalonProvider>
@@ -153,6 +155,24 @@ function OwnerPushNavigationBridge() {
     [workplaces, selectSalon],
   );
 
+  return null;
+}
+
+function OwnerQueueArrivalPushBridge() {
+  const { workplaces, selectSalon } = useSalon();
+
+  useEffect(
+    () => subscribeQueueArrivalNavigation('owner', (payload) => {
+      if (workplaces.length === 0) return false;
+      // A push cannot grant access to a salon. Only route to a verified owned workplace.
+      if (!workplaces.some((shop) => shop.id === payload.salonId)) return true;
+      if (!navigationRef.isReady()) return false;
+      selectSalon(payload.salonId);
+      navigationRef.navigate('OwnerQueueTab');
+      return true;
+    }),
+    [workplaces, selectSalon],
+  );
   return null;
 }
 
