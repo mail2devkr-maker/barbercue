@@ -84,8 +84,9 @@ const searchCalls = () => mockedApi.mock.calls.map((call) => call[0]).filter((pa
 
 async function render() {
   await act(async () => {
+    const props = { navigation: { navigate: jest.fn() }, route: { params: {} } };
     tree = TestRenderer.create(
-      createElement(SalonSearchScreen as any, { navigation: { navigate: jest.fn() }, route: { params: {} } }),
+      createElement(SalonSearchScreen as React.ComponentType<typeof props>, props),
     );
   });
 }
