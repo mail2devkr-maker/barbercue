@@ -160,6 +160,10 @@ export default function OwnerShopScreen() {
       <Text style={sectionStyles.sectionTitle}>{t.customersLabel}</Text>
       <Text style={sectionStyles.hint}>{t.customersHint}</Text>
       <Button title={t.viewCustomers} variant="outline" onPress={() => navigation.navigate('OwnerCustomers')} style={sectionStyles.addButton} />
+
+      <Text style={sectionStyles.sectionTitle}>Billing</Text>
+      <Text style={sectionStyles.hint}>Review issued invoices and payment records. Payments are never inferred from a QR code.</Text>
+      <Button title="Shop invoices" variant="outline" onPress={() => navigation.navigate('OwnerInvoices')} style={sectionStyles.addButton} />
     </Screen>
   );
 }

@@ -45,8 +45,8 @@ describe('mobile Home hero actions', () => {
     });
   });
 
-  it('hands signed-out Great offers to customer authentication', () => {
-    expect(createSignedOutHeroCommand('greatOffers', null)).toEqual({ destination: 'customerLogin' });
+  it('opens public Great offers without forcing sign-in', () => {
+    expect(createSignedOutHeroCommand('greatOffers', null)).toEqual({ destination: 'guestOffers' });
   });
 
   it('opens authenticated Book ahead in Search and preserves known location', () => {
@@ -60,18 +60,13 @@ describe('mobile Home hero actions', () => {
     expect(createAuthenticatedHeroCommand('joinLive', null)).toEqual({ destination: 'queue' });
   });
 
-  it('opens authenticated Great offers in the existing Credits experience', () => {
-    expect(createAuthenticatedHeroCommand('greatOffers', null)).toEqual({ destination: 'credits' });
+  it('opens public Great offers independently of the Credits release gate', () => {
+    expect(createAuthenticatedHeroCommand('greatOffers', null)).toEqual({ destination: 'offers' });
   });
 
-  // Google Play release gate (lib/feature-flags.ts) — the owner-approved compliance response
-  // pins production to "false", and Great offers must never resolve to Credits in that build.
-  it('never resolves authenticated Great offers to Credits when the release flag is off', () => {
+  it('keeps public offers discoverable when the Credits release flag is off', () => {
     process.env[CREDITS_ENV] = 'false';
-    expect(createAuthenticatedHeroCommand('greatOffers', location)).toEqual({
-      destination: 'search',
-      params: { initialLat: 12.9716, initialLng: 77.5946 },
-    });
+    expect(createAuthenticatedHeroCommand('greatOffers', location)).toEqual({ destination: 'offers' });
   });
 
   it('leaves Book ahead and Join live unaffected by the release flag', () => {
@@ -83,19 +78,9 @@ describe('mobile Home hero actions', () => {
     expect(createAuthenticatedHeroCommand('joinLive', null)).toEqual({ destination: 'queue' });
   });
 
-  it('supersedes Great offers when the cancelled login flow is replaced by Register Shop', () => {
-    stashPendingCustomerDestination({ kind: 'credits' });
-    stashPendingShopRegistrationIntent();
-
-    expect(takePendingCustomerDestination()).toEqual({ kind: 'registerShop' });
-    expect(takePendingShopRegistrationIntent()).toBe(false);
-  });
-
-  it('supersedes Register Shop when the later Great offers flow wins', () => {
-    stashPendingShopRegistrationIntent();
-    stashPendingCustomerDestination({ kind: 'credits' });
-
-    expect(takePendingCustomerDestination()).toEqual({ kind: 'credits' });
+  it('does not create an authentication intent for public offer browsing', () => {
+    expect(createSignedOutHeroCommand('greatOffers', null)).toEqual({ destination: 'guestOffers' });
+    expect(takePendingCustomerDestination()).toBeNull();
     expect(takePendingShopRegistrationIntent()).toBe(false);
   });
 });

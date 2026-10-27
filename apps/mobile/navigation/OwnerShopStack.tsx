@@ -2,12 +2,16 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import OwnerShopScreen from '../screens/owner/OwnerShopScreen';
 import OwnerCustomersScreen from '../screens/owner/OwnerCustomersScreen';
 import OwnerCustomerDetailScreen from '../screens/owner/OwnerCustomerDetailScreen';
+import OwnerInvoicesScreen from '../screens/owner/OwnerInvoicesScreen';
+import OwnerInvoiceDetailScreen from '../screens/owner/OwnerInvoiceDetailScreen';
 import { useLanguage } from '../lib/language-context';
 
 export type OwnerShopStackParamList = {
   OwnerShop: undefined;
   OwnerCustomers: undefined;
   OwnerCustomerDetail: { customerId: string };
+  OwnerInvoices: undefined;
+  OwnerInvoiceDetail: { salonId: string; invoiceId: string };
 };
 
 const Stack = createNativeStackNavigator<OwnerShopStackParamList>();
@@ -27,6 +31,8 @@ export default function OwnerShopStack() {
         component={OwnerCustomerDetailScreen}
         options={{ headerShown: true, title: t.customerLabel }}
       />
+      <Stack.Screen name="OwnerInvoices" component={OwnerInvoicesScreen} options={{ headerShown: true, title: 'Shop invoices' }} />
+      <Stack.Screen name="OwnerInvoiceDetail" component={OwnerInvoiceDetailScreen} options={{ headerShown: true, title: 'Invoice details' }} />
     </Stack.Navigator>
   );
 }

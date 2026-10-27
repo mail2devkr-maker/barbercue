@@ -1,4 +1,3 @@
-import { isCreditsEnabled } from './feature-flags';
 import type { SearchStackParamList } from '../navigation/types';
 
 export type HeroAction = 'bookAhead' | 'joinLive' | 'greatOffers';
@@ -6,12 +5,12 @@ export type HeroCoordinates = { lat: number; lng: number } | null;
 
 export type SignedOutHeroCommand =
   | { destination: 'guestSearch'; params: SearchStackParamList['SalonSearch'] }
-  | { destination: 'customerLogin' };
+  | { destination: 'guestOffers' };
 
 export type AuthenticatedHeroCommand =
   | { destination: 'search'; params: SearchStackParamList['SalonSearch'] }
   | { destination: 'queue' }
-  | { destination: 'credits' };
+  | { destination: 'offers' };
 
 function salonSearchParams(locationCoords: HeroCoordinates): SearchStackParamList['SalonSearch'] {
   return locationCoords
@@ -20,17 +19,12 @@ function salonSearchParams(locationCoords: HeroCoordinates): SearchStackParamLis
 }
 
 export function createSignedOutHeroCommand(action: HeroAction, locationCoords: HeroCoordinates): SignedOutHeroCommand {
-  if (action === 'greatOffers') return { destination: 'customerLogin' };
+  if (action === 'greatOffers') return { destination: 'guestOffers' };
   return { destination: 'guestSearch', params: salonSearchParams(locationCoords) };
 }
 
 export function createAuthenticatedHeroCommand(action: HeroAction, locationCoords: HeroCoordinates): AuthenticatedHeroCommand {
   if (action === 'bookAhead') return { destination: 'search', params: salonSearchParams(locationCoords) };
   if (action === 'joinLive') return { destination: 'queue' };
-  // Credits release gate (see feature-flags.ts) — Great offers falls back to the same destination
-  // as Book ahead rather than ever resolving to Credits when the flag is off. The Home/RoleSelect
-  // hero already hides this action's button in that case; this is defense in depth against any
-  // other caller still passing 'greatOffers' through.
-  if (!isCreditsEnabled()) return { destination: 'search', params: salonSearchParams(locationCoords) };
-  return { destination: 'credits' };
+  return { destination: 'offers' };
 }

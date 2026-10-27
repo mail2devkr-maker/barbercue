@@ -32,6 +32,7 @@ import { BookingUpiAction } from '../components/booking/BookingUpiAction';
 import { color, font, fontSize, lineHeightFor, radius, space } from '../lib/theme';
 import { Screen, SectionHeader, Card, Button, InlineError } from '../components/ui';
 import { isCreditsEnabled } from '../lib/feature-flags';
+import { includeOfferInBooking } from '../lib/customer-commerce';
 import type { SearchStackParamList, TabParamList } from '../navigation/types';
 
 // FastQue Credits / Wallet V1: steps by a flat ₹5 — fine-grained enough to reach any cap value
@@ -66,6 +67,8 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
     slotStart,
     slotEnd,
     selectedStyleName,
+    offerId,
+    offerTitle,
   } = route.params;
   // Multi-service booking core mission — this summary is a display-only preview; the server
   // independently re-derives combined duration/price from serviceIds alone (BookingsService.create
@@ -137,14 +140,14 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
       const result = await apiFetch<BookingDetailDto>(BOOKING_PATHS.bookings, {
         method: 'POST',
         headers: { 'Idempotency-Key': newIdempotencyKey() },
-        body: JSON.stringify({
+        body: JSON.stringify(includeOfferInBooking({
           salonId,
           serviceIds: services.map((s) => s.id),
           slotStart,
           ...(preferredStaffId ? { preferredStaffId } : {}),
           ...(selectedStyleName ? { selectedStyleName } : {}),
           ...(creditsToRedeem > 0 ? { creditsToRedeem } : {}),
-        }),
+        }, offerId)),
       });
       setBooking(result);
       setCreditsToRedeem(0);
@@ -169,6 +172,7 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
       <Screen contentStyle={styles.centeredContent}>
         <SectionHeader eyebrow={t.confirmedEyebrow} title={t.bookingConfirmedTitle} />
         <Card style={styles.card}>
+          {offerTitle && <Text style={styles.line}>Offer selected: {offerTitle}</Text>}
           <Text style={styles.line}>
             {booking.serviceName}{t.atConnector}{booking.salonName}
           </Text>
@@ -309,6 +313,11 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
         })()}
         {preferredStaffName && <Text style={styles.line}>{t.preferredBarberPrefix}{preferredStaffName}</Text>}
         {selectedStyleName && <Text style={styles.line}>{t.styleLabelPrefix}{selectedStyleName}</Text>}
+        {offerTitle && (
+          <Text style={styles.policyLine}>
+            Offer selected: {offerTitle}. Eligibility and final price are confirmed by FastQue when you book.
+          </Text>
+        )}
         {cancellationPolicy && (
           <Text style={styles.policyLine}>
             {t.freeCancellationUpTo}{formatFreeCancellationWindow(cancellationPolicy.effectiveFreeCancellationWindowMinutes, t)}{t.beforeYourAppointment}
