@@ -1,4 +1,6 @@
 import { addZonedCalendarDays } from '../../common/timezone/timezone';
+import { SalonStatus } from '@barbercue/shared';
+import { countScheduledOpenSalons } from './admin-executive-overview.service';
 import {
   averagePaise,
   cancellationRate,
@@ -127,5 +129,39 @@ describe('previousRange', () => {
     expect(
       previousRange('2026-03-01', '2026-03-31', addZonedCalendarDays),
     ).toEqual({ from: '2026-01-29', to: '2026-02-28' });
+  });
+});
+
+describe('scheduled open KPI', () => {
+  const at = new Date('2026-10-27T06:30:00.000Z');
+  const hours = [{ dayOfWeek: 2, openTime: '09:00', closeTime: '18:00', isClosed: false }];
+  const active = {
+    status: SalonStatus.ACTIVE,
+    isClosedForToday: false,
+    timezone: 'Asia/Kolkata',
+    city: { countryCode: 'IN' },
+    operatingHours: hours,
+  };
+
+  it('counts open hours, not every active salon', () => {
+    const salons = [
+      active,
+      { ...active, isClosedForToday: true },
+      { ...active, status: SalonStatus.SUSPENDED },
+      { ...active, operatingHours: [{ ...hours[0], openTime: '14:00' }] },
+      { ...active, operatingHours: [] },
+    ];
+    expect(countScheduledOpenSalons(salons, at)).toBe(1);
+  });
+
+  it('counts overnight hours correctly', () => {
+    const shop = {
+      ...active,
+      operatingHours: [
+        { dayOfWeek: 1, openTime: '20:00', closeTime: '06:00', isClosed: false },
+        { dayOfWeek: 2, openTime: '20:00', closeTime: '06:00', isClosed: false },
+      ],
+    };
+    expect(countScheduledOpenSalons([shop], new Date('2026-10-26T22:30:00Z'))).toBe(1);
   });
 });
