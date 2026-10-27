@@ -222,6 +222,8 @@ export class NotificationDeliveryService implements OnModuleInit {
       data: payload.data,
       channelId: 'booking-updates',
       priority: 'high',
+      // Live Queue arrival checks require audible OS notification when user permissions permit.
+      ...(payload.data.type === 'queue.arrival_check' ? { sound: 'default' as const } : {}),
     });
 
     if (result.noDevices) {
