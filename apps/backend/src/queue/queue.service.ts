@@ -420,7 +420,7 @@ export class QueueService {
     entryId: string, guestAccessToken: string, expoPushToken: string,
   ): Promise<{ registered: boolean }> {
     // Explicitly accepts Expo's public device-delivery token, never a raw FCM/APNs credential.
-    if (!/^(Expo(nent)?PushToken)\\[[A-Za-z0-9_-]{10,240}\\]$/.test(expoPushToken)) {
+    if (!/^(Expo(nent)?PushToken)\[[A-Za-z0-9_-]{10,240}\]$/.test(expoPushToken)) {
       throw new BadRequestException('Invalid Expo push token.');
     }
     await this.getGuestEntry(entryId, guestAccessToken);
