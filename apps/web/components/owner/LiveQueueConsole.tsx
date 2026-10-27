@@ -79,6 +79,12 @@ export function LiveQueueConsole({ salonId }: { salonId: string }) {
   const { kind, refreshCounts } = useOwnerShell();
   const voiceEnabled = useVoiceEnabled();
   const [confirmVoiceOff, setConfirmVoiceOff] = useState(false);
+  const [arrivalSnoozes, setArrivalSnoozes] = useState<Record<string, number>>({});
+  const [arrivalClock, setArrivalClock] = useState(Date.now());
+  useEffect(() => {
+    const tick = window.setInterval(() => setArrivalClock(Date.now()), 20_000);
+    return () => window.clearInterval(tick);
+  }, []);
 
   const requested = searchParams.get("view") as View | null;
   const view: View = requested && VIEWS.includes(requested) ? requested : "waiting";
@@ -283,11 +289,42 @@ export function LiveQueueConsole({ salonId }: { salonId: string }) {
     );
   }
 
+  const dueArrival = [...waiting, ...called].find((entry) =>
+    Boolean(entry.arrivalPromptSentAt) && !entry.arrivedAt &&
+    (arrivalSnoozes[entry.id] ?? 0) < arrivalClock
+  );
+
   // A chair reserved for an assigned customer is not free for anyone else.
   const freeChairs = data.chairs.filter((c) => (c.occupancy ?? "FREE") === "FREE" && !c.reservedForEntryId);
 
   return (
     <>
+      {dueArrival && (
+        <div role="alertdialog" aria-modal="true" aria-label="Live Queue customer arrival check"
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.92)", display: "grid",
+            placeItems: "center", zIndex: 1300, padding: 20 }}>
+          <div style={{ width: "min(95vw,540px)", background: "#fff", color: "#191919", padding: 32, borderRadius: 18 }}>
+            <h2>Live Queue · Arrival confirmation</h2>
+            <p>Token #{dueArrival.tokenNumber} — {whoLabel(dueArrival)}</p>
+            <p>Estimated service time is around 10 minutes away.
+              Has the customer physically arrived at your shop?</p>
+            <p>Customer replied: {dueArrival.customerArrivalResponse === true ? "Yes (self-reported)" :
+              dueArrival.customerArrivalResponse === false ? "Not yet" : "Not answered"}</p>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 24 }}>
+              <Btn variant="primary" disabled={busy !== null} onClick={() => {
+                if (!window.confirm("Confirm you personally verified this customer is physically in the shop?")) return;
+                void run(`arrive-${dueArrival.id}`,
+                  () => apiFetch(entryPath(dueArrival.id, DASHBOARD_PATHS.arrive), { method: "POST" }),
+                  "Customer physically confirmed at shop.").then(() => void refetch(false));
+              }}>Confirm arrived</Btn>
+              <Btn variant="secondary" onClick={() => setArrivalSnoozes((prev) => ({
+                ...prev, [dueArrival.id]: Date.now() + 120_000,
+              }))}>Not arrived · Remind in 2 minutes</Btn>
+            </div>
+            {error && <p role="alert">{error}</p>}
+          </div>
+        </div>
+      )}
       <PageHead
         title="Live Queue"
         sub={
