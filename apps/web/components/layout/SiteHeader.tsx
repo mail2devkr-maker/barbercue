@@ -152,12 +152,7 @@ export function SiteHeader() {
             </div>
 
             <div className={styles.utilityRight}>
-              <Link href="/employee/login">Employee Login</Link>
-              <Link href="/about-us">About Us</Link>
-              <Link href="/contact-us">Contact Us</Link>
-              <Link href="/careers">Careers</Link>
-              <Link href="/#book-or-queue">For Customers</Link>
-              <Link href="/#for-shops">For Shops</Link>
+              {/* Company and audience links live in the footer's Customers / Shops / FastQue columns. */}
               <Link href="/dashboard/register-shop">Partner With Us</Link>
               <ShopSwitcher />
               {authenticatedUser && <NotificationBell />}
