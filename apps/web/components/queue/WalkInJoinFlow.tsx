@@ -61,7 +61,12 @@ export function WalkInJoinFlow({ salonId, services }: { salonId: string; service
       apiFetch<QueueEntryDetailDto>(`${QUEUE_ENTRIES_PATH}/${data.id}/guest-status`, {
         headers: { "X-Queue-Guest-Token": data.token },
       }).then((row) => {
-        if (row.salonId === salonId) { setGuestAccessToken(data.token); setEntry(row); }
+        if (row.salonId === salonId && ["WAITING", "CALLED", "IN_SERVICE"].includes(row.status)) {
+          setGuestAccessToken(data.token);
+          setEntry(row);
+        } else {
+          sessionStorage.removeItem(key);
+        }
       }).catch(() => sessionStorage.removeItem(key));
     } catch { sessionStorage.removeItem(key); }
   }, [salonId, authStatus]);
