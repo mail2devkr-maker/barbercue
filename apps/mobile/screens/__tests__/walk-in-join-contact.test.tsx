@@ -137,8 +137,20 @@ it('keeps the optional service selection alongside the contact details', async (
   expect(postBody()).toEqual({ serviceId: 'sv1', contactName: 'Ravi', contactPhone: '+919811122233' });
 });
 
-it('shows no contact fields to a guest (they appear after sign-in)', async () => {
+it('shows name and mobile fields to a guest without requiring Google login', async () => {
   mockAuth.status = 'unauthenticated';
   await render();
-  expect(inputs()).toHaveLength(0);
+  expect(inputs()).toHaveLength(2);
+  expect(screenText()).toContain(t.contactNameLabel);
+  expect(screenText()).toContain(t.contactPhoneLabel);
+});
+
+it('requires guests to select a service before sending a join request', async () => {
+  mockAuth.status = 'unauthenticated';
+  await render();
+  await type(0, 'Ravi');
+  await type(1, '9811122233');
+  await join();
+  expect(postBody()).toBeNull();
+  expect(screenText()).toContain('Please choose a service');
 });
