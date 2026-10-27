@@ -1,5 +1,5 @@
 /// <reference types="jest" />
-import { act, createElement } from 'react';
+import { act, createElement, type ComponentType } from 'react';
 import TestRenderer from 'react-test-renderer';
 import { Role } from '@barbercue/shared';
 import SalonSearchScreen from '../SalonSearchScreen';
@@ -86,7 +86,7 @@ async function render() {
   await act(async () => {
     const props = { navigation: { navigate: jest.fn() }, route: { params: {} } };
     tree = TestRenderer.create(
-      createElement(SalonSearchScreen as React.ComponentType<typeof props>, props),
+      createElement(SalonSearchScreen as ComponentType<typeof props>, props),
     );
   });
 }
