@@ -183,6 +183,12 @@ describe('estimateWaitRangeMinutes', () => {
 });
 
 describe('isWaitAlertWorthy', () => {
+  it('alerts at ten estimated minutes but not at eleven (no large swing)', () => {
+    expect(isWaitAlertWorthy(11, 10)).toBe(true);
+    expect(isWaitAlertWorthy(12, 11)).toBe(false);
+    expect(isWaitAlertWorthy(10, 9)).toBe(false);
+  });
+
   it('is true the moment the wait first drops into the turn-approaching window', () => {
     expect(isWaitAlertWorthy(12, 4)).toBe(true);
   });
