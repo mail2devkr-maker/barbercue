@@ -47,9 +47,9 @@ jobs:
         run: npx jest --ci --runInBand --runTestsByPath src/__tests__/calc.test.ts
       - run: npm run prisma:generate --workspace=@barbercue/backend
       - run: npm run typecheck --workspace=@barbercue/backend
-      - name: Rehearse all committed migrations on disposable PG18
+      - name: Rehearse staged full migration chain on disposable PG18
         working-directory: apps/backend
-        run: npx prisma migrate deploy
+        run: bash scripts/verify-migration-chain.sh
       - name: Strict guest join and bilateral arrival reminder tests
         working-directory: apps/backend
         run: |
