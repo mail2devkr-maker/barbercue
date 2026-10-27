@@ -1,4 +1,4 @@
-import { BadRequestException, HttpStatus, Injectable, Optional } from '@nestjs/common';
+import { BadRequestException, HttpStatus, Injectable, Logger, Optional } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { createHash, randomBytes } from 'node:crypto';
 import {
@@ -97,6 +97,7 @@ type QueueEntryWithDetails = Prisma.QueueEntryGetPayload<{
 
 @Injectable()
 export class QueueService {
+  private readonly logger = new Logger(QueueService.name);
   constructor(
     private readonly prisma: PrismaService,
     private readonly availability: AvailabilityService,
@@ -371,15 +372,25 @@ export class QueueService {
       });
       return row.id;
     }, TRANSACTION_OPTIONS);
-    await this.recomputeEtas(salonId);
+    // After DB commit, owner notification/ETA provider errors must not destroy the
+    // only response containing this guest's otherwise unrecoverable capability.
+    try {
+      await this.recomputeEtas(salonId);
+    } catch (err) {
+      this.logger.warn(`Guest queue ETA refresh deferred: ${err instanceof Error ? err.message : 'unknown'}`);
+    }
     this.realtime.emitQueueUpdated(salonId);
     this.triggerAutoAssign(salonId);
-    await this.notifications.notify(
-      salon.ownerUserId,
-      'owner.walk_in.joined',
-      { salonId },
-      `dashboard/salons/${salonId}/queue`,
-    );
+    try {
+      await this.notifications.notify(
+        salon.ownerUserId,
+        'owner.walk_in.joined',
+        { salonId },
+        `dashboard/salons/${salonId}/queue`,
+      );
+    } catch (err) {
+      this.logger.warn(`Guest join owner notification failed: ${err instanceof Error ? err.message : 'unknown'}`);
+    }
     return { ...(await this.getDetailOrThrow(entryId)), guestAccessToken };
   }
 
