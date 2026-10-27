@@ -112,6 +112,29 @@ export class PublicQueueController {
     });
   }
 
+  // QR guest entry requires only name, mobile and service. The queue ticket returned
+  // includes an unguessable capability for status/cancel/arrival follow-up; no Google login.
+  // The phone is contact information, NOT verified account ownership.
+  @Public()
+  @Throttle({ default: { limit: 3, ttl: 60_000 } })
+  @Post(`${PUBLIC_QUEUE_PATHS.publicQueue}/:token/guest-join`)
+  async guestJoin(
+    @Param('token') token: string,
+    @Body(new ZodValidationPipe(joinQueueSchema.required())) body: Required<JoinQueueInput>,
+  ) {
+    const salon = await this.tokenService.resolveToken(token);
+    if (!salon || !this.tokenService.isQueueAvailable(salon)) {
+      throw new AppException(
+        BookingErrorCode.SALON_NOT_FOUND,
+        'This queue link is no longer available.',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    return this.queueService.joinGuestWalkIn(
+      salon.id, body.serviceId, body.contactName, body.contactPhone,
+    );
+  }
+
   // Authenticated owner/staff/admin endpoint. PLATFORM_ADMIN needs this read-only QR while
   // explicitly managing a selected ACTIVE shop; the salon-specific access check below still
   // prevents cross-shop access for ordinary owner/staff sessions and keeps delegated queue
