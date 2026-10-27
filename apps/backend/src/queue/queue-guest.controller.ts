@@ -8,8 +8,16 @@ import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { QueueService } from './queue.service';
 import { PrismaService } from '../prisma/prisma.service';
 
-const GUEST_MUTATION_LIMIT = { default: { limit: 3, ttl: 60_000 } };
-const GUEST_READ_LIMIT = { default: { limit: 30, ttl: 60_000 } };
+// Production traffic reaches this API through shared proxies (the website's Next.js rewrite and Railway's edge), so a per-client-address
+// counter would be ONE bucket for every guest on the platform: three joins a minute for everybody, and one noisy client could lock
+// everyone out. The guest limits are therefore keyed by what is actually being protected: the shop for joins (bounds spam into one
+// queue without letting a busy shop starve another) and the ticket for everything a guest does afterwards.
+type TrackerRequest = { params?: Record<string, string> };
+const byShop = (req: TrackerRequest) => `guest-join:salon:${req.params?.salonId ?? 'unknown'}`;
+const byTicket = (req: TrackerRequest) => `guest-ticket:${req.params?.id ?? 'unknown'}`;
+const GUEST_JOIN_LIMIT = { default: { limit: 20, ttl: 60_000, getTracker: byShop } };
+const GUEST_MUTATION_LIMIT = { default: { limit: 12, ttl: 60_000, getTracker: byTicket } };
+const GUEST_READ_LIMIT = { default: { limit: 60, ttl: 60_000, getTracker: byTicket } };
 // Guest customers provide name, mobile number and service. No account creation,
 // trust elevation to an existing account or bogus phone verification occurs.
 export const guestJoinSchema = joinQueueSchema.required();
@@ -23,7 +31,7 @@ export class QueueGuestController {
   ) {}
 
   @Post('salons/:salonId/queue/guest-join')
-  @Throttle(GUEST_MUTATION_LIMIT)
+  @Throttle(GUEST_JOIN_LIMIT)
   join(
     @Param('salonId') salonId: string,
     @Body(new ZodValidationPipe(guestJoinSchema)) body: Required<JoinQueueInput>,

@@ -133,7 +133,7 @@ export function WalkInJoinFlow({ salonId, services }: { salonId: string; service
   return (
     <div className={styles.joinCard}>
       <label className={styles.fieldLabel} htmlFor="walkin-service">
-        Service (optional)
+        Service
       </label>
       <select
         id="walkin-service"
@@ -141,7 +141,7 @@ export function WalkInJoinFlow({ salonId, services }: { salonId: string; service
         onChange={(e) => setSelectedServiceId(e.target.value)}
         className={styles.select}
       >
-        <option value="">Any service</option>
+        <option value="">Select a service</option>
         {services.map((s) => (
           <option key={s.id} value={s.id}>
             {s.name} ({s.durationMinutes} min)
