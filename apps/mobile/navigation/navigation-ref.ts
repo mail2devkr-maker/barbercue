@@ -1,5 +1,5 @@
 import { createNavigationContainerRef, type NavigatorScreenParams } from '@react-navigation/native';
-import type { AccountStackParamList, BookingsStackParamList, SearchStackParamList } from './types';
+import type { AccountStackParamList, BookingsStackParamList, QueueStackParamList, SearchStackParamList } from './types';
 
 // The authenticated root swaps between customer, owner and staff navigators. A notification can
 // open the app before its authenticated navigator has mounted, so this ref is deliberately paired
@@ -14,6 +14,7 @@ export type AppNavigationParamList = {
   OwnerQueueTab: undefined;
   SearchTab: NavigatorScreenParams<SearchStackParamList>;
   BookingsTab: NavigatorScreenParams<BookingsStackParamList>;
+  QueueTab: NavigatorScreenParams<QueueStackParamList>;
   AccountTab: NavigatorScreenParams<AccountStackParamList>;
 };
 
