@@ -81,7 +81,7 @@ export class OffersService {
     salonId: string,
     query: OfferListQuery,
   ): Promise<{ items: OfferDto[]; nextCursor: string | null }> {
-    await this.salonAccess.assertOwnerAccess(actorUserId, salonId);
+    await this.salonAccess.assertOwnerOrAdminAccess(actorUserId, salonId);
     const rows = await this.prisma.offer.findMany({
       where: {
         salonId,
@@ -115,7 +115,7 @@ export class OffersService {
     salonId: string,
     offerId: string,
   ): Promise<OfferDto> {
-    await this.salonAccess.assertOwnerAccess(actorUserId, salonId);
+    await this.salonAccess.assertOwnerOrAdminAccess(actorUserId, salonId);
     const row = await this.getOffer(this.prisma, salonId, offerId);
     if (!row) this.notFound();
     return this.toDto(row);
@@ -126,7 +126,11 @@ export class OffersService {
     salonId: string,
     input: CreateOfferInput,
   ): Promise<OfferDto> {
-    await this.salonAccess.assertOwnerAccess(actorUserId, salonId);
+    // The salon's owner, or a platform admin managing the salon (recorded in the audit log).
+    const actedAs = await this.salonAccess.assertOwnerOrAdminAccess(
+      actorUserId,
+      salonId,
+    );
     const parsed = createOfferSchema.safeParse(input);
     if (!parsed.success)
       this.invalid(
@@ -171,6 +175,7 @@ export class OffersService {
       }
       await this.audit(tx, actorUserId, 'OFFER_DRAFT_CREATED', row.id, {
         salonId,
+        actedAs,
         kind: row.kind,
         discountType: row.discountType,
         serviceCount: parsed.data.serviceIds.length,
@@ -186,7 +191,11 @@ export class OffersService {
     offerId: string,
     input: UpdateOfferInput,
   ): Promise<OfferDto> {
-    await this.salonAccess.assertOwnerAccess(actorUserId, salonId);
+    // The salon's owner, or a platform admin managing the salon (recorded in the audit log).
+    const actedAs = await this.salonAccess.assertOwnerOrAdminAccess(
+      actorUserId,
+      salonId,
+    );
     const row = await this.prisma.$transaction(async (tx) => {
       const current = await this.lockOffer(tx, salonId, offerId);
       if (current.status === 'ACTIVE')
@@ -280,6 +289,7 @@ export class OffersService {
       }
       await this.audit(tx, actorUserId, 'OFFER_DRAFT_UPDATED', offerId, {
         salonId,
+        actedAs,
         changedFields: Object.keys(input).sort(),
       });
       return this.getOffer(tx, salonId, offerId);
@@ -292,7 +302,11 @@ export class OffersService {
     salonId: string,
     offerId: string,
   ): Promise<OfferDto> {
-    await this.salonAccess.assertOwnerAccess(actorUserId, salonId);
+    // The salon's owner, or a platform admin managing the salon (recorded in the audit log).
+    const actedAs = await this.salonAccess.assertOwnerOrAdminAccess(
+      actorUserId,
+      salonId,
+    );
     const row = await this.prisma.$transaction(async (tx) => {
       const current = await this.lockOffer(tx, salonId, offerId);
       const now = new Date();
@@ -331,6 +345,7 @@ export class OffersService {
       });
       await this.audit(tx, actorUserId, 'OFFER_PUBLISHED', offerId, {
         salonId,
+        actedAs,
         kind: updated.kind,
         validFrom: updated.validFrom.toISOString(),
         validTo: updated.validTo.toISOString(),
@@ -345,7 +360,11 @@ export class OffersService {
     salonId: string,
     offerId: string,
   ): Promise<OfferDto> {
-    await this.salonAccess.assertOwnerAccess(actorUserId, salonId);
+    // The salon's owner, or a platform admin managing the salon (recorded in the audit log).
+    const actedAs = await this.salonAccess.assertOwnerOrAdminAccess(
+      actorUserId,
+      salonId,
+    );
     const row = await this.prisma.$transaction(async (tx) => {
       const current = await this.lockOffer(tx, salonId, offerId);
       if (current.status !== 'PAUSED') {
@@ -355,6 +374,7 @@ export class OffersService {
         });
         await this.audit(tx, actorUserId, 'OFFER_PAUSED', offerId, {
           salonId,
+          actedAs,
           wasActive: current.status === 'ACTIVE',
         });
       }
@@ -368,7 +388,7 @@ export class OffersService {
     salonId: string,
     input: CreateOfferInput,
   ): Promise<OfferPreviewDto> {
-    await this.salonAccess.assertOwnerAccess(actorUserId, salonId);
+    await this.salonAccess.assertOwnerOrAdminAccess(actorUserId, salonId);
     const parsed = createOfferSchema.safeParse(input);
     if (!parsed.success)
       this.invalid(
@@ -412,7 +432,7 @@ export class OffersService {
     offerId: string,
     input: { serviceIds: string[] },
   ): Promise<OfferPreviewDto> {
-    await this.salonAccess.assertOwnerAccess(actorUserId, salonId);
+    await this.salonAccess.assertOwnerOrAdminAccess(actorUserId, salonId);
     const offer = await this.getOffer(this.prisma, salonId, offerId);
     if (!offer) this.notFound();
     const services = await this.loadServices(
@@ -440,7 +460,7 @@ export class OffersService {
     salonId: string,
     offerId: string,
   ): Promise<OfferRedemptionStatsDto> {
-    await this.salonAccess.assertOwnerAccess(actorUserId, salonId);
+    await this.salonAccess.assertOwnerOrAdminAccess(actorUserId, salonId);
     const offer = await this.getOffer(this.prisma, salonId, offerId);
     if (!offer) this.notFound();
     const [aggregate, customers, completedBookings, cancelledBookings] =
