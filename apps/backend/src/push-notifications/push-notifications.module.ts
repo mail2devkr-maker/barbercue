@@ -9,6 +9,6 @@ import { ExpoPushSender } from './expo-push-sender';
 @Module({
   controllers: [PushNotificationsController],
   providers: [PushDeviceService, PushDispatchService, ExpoPushSender],
-  exports: [PushDeviceService, PushDispatchService],
+  exports: [PushDeviceService, PushDispatchService, ExpoPushSender],
 })
 export class PushNotificationsModule {}
