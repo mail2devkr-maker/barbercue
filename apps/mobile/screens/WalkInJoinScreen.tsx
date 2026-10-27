@@ -12,8 +12,7 @@ import { apiFetch, ApiError } from '../lib/api';
 import { newIdempotencyKey } from '../lib/idempotency';
 import { useAuth } from '../lib/auth-context';
 import { useLanguage } from '../lib/language-context';
-import { stashPendingGuestIntent } from '../lib/guest-booking-handoff';
-import { GoogleSignInGate } from '../components/auth/GoogleSignInGate';
+import { getItem, setItem } from '../lib/secure-storage';
 import { QueueStatusPanel } from '../components/QueueStatusPanel';
 import { color, font, fontSize, radius, space } from '../lib/theme';
 import { Screen, SectionHeader, Button, Skeleton, InlineError } from '../components/ui';
@@ -37,6 +36,7 @@ export default function WalkInJoinScreen({ route }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [entry, setEntry] = useState<QueueEntryDetailDto | null>(null);
+  const [guestAccessToken, setGuestAccessToken] = useState<string | null>(null);
 
   // A customer can only hold one active token anywhere — check for one on mount so a repeat
   // visit to this screen shows live status instead of a doomed join attempt. Guest visitors have
@@ -44,8 +44,20 @@ export default function WalkInJoinScreen({ route }: Props) {
   // this is skipped entirely rather than firing a request that would only 401.
   useEffect(() => {
     if (status !== 'authenticated') {
-      setLoading(false);
-      return undefined;
+      let cancelled = false;
+      void getItem(`fastque_guest_queue_${salonId}`).then(async (saved) => {
+        if (!saved || cancelled) return;
+        try {
+          const data = JSON.parse(saved) as { id: string; token: string };
+          const row = await apiFetch<QueueEntryDetailDto>(`${QUEUE_ENTRIES_PATH}/${data.id}/guest-status`, {
+            headers: { 'X-Queue-Guest-Token': data.token },
+          });
+          if (!cancelled && row.salonId === salonId && ['WAITING', 'CALLED', 'IN_SERVICE'].includes(row.status)) {
+            setEntry(row); setGuestAccessToken(data.token);
+          }
+        } catch { /* expired guest ticket: allow a new join */ }
+      }).finally(() => { if (!cancelled) setLoading(false); });
+      return () => { cancelled = true; };
     }
     let cancelled = false;
     apiFetch<QueueEntryDetailDto | null>(`${QUEUE_ENTRIES_PATH}/mine/active`)
@@ -78,10 +90,16 @@ export default function WalkInJoinScreen({ route }: Props) {
       setError(t.contactPhoneInvalidError);
       return;
     }
+    if (status !== 'authenticated' && !selectedServiceId) {
+      setError('Please choose a service before joining the Live Queue.');
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
-      const created = await apiFetch<QueueEntryDetailDto>(`salons/${salonId}/queue/${SALON_QUEUE_PATHS.join}`, {
+      const guest = status !== 'authenticated';
+      const created = await apiFetch<QueueEntryDetailDto & { guestAccessToken?: string }>(
+        `salons/${salonId}/queue/${guest ? 'guest-join' : SALON_QUEUE_PATHS.join}`, {
         method: 'POST',
         headers: { 'Idempotency-Key': newIdempotencyKey() },
         body: JSON.stringify({
@@ -90,6 +108,11 @@ export default function WalkInJoinScreen({ route }: Props) {
           contactPhone: phone,
         }),
       });
+      if (created.guestAccessToken) {
+        setGuestAccessToken(created.guestAccessToken);
+        await setItem(`fastque_guest_queue_${salonId}`,
+          JSON.stringify({ id: created.id, token: created.guestAccessToken }));
+      }
       setEntry(created);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t.couldNotJoinQueue);
@@ -113,7 +136,7 @@ export default function WalkInJoinScreen({ route }: Props) {
         <Text style={styles.subtitle}>
           {t.alreadyInQueueHint}
         </Text>
-        <QueueStatusPanel entry={entry} onEntryChange={setEntry} />
+        <QueueStatusPanel entry={entry} guestAccessToken={guestAccessToken} onEntryChange={setEntry} />
       </Screen>
     );
   }
@@ -122,7 +145,7 @@ export default function WalkInJoinScreen({ route }: Props) {
     return (
       <Screen scroll={false} contentStyle={styles.screenContent}>
         <SectionHeader eyebrow={t.queueTitle} title={t.youreInLineTitle} />
-        <QueueStatusPanel entry={entry} onEntryChange={setEntry} />
+        <QueueStatusPanel entry={entry} guestAccessToken={guestAccessToken} onEntryChange={setEntry} />
       </Screen>
     );
   }
@@ -150,7 +173,7 @@ export default function WalkInJoinScreen({ route }: Props) {
         ))}
       </View>
 
-      {status === 'authenticated' && (
+      {(
         <View style={styles.contactBlock}>
           <Text style={styles.fieldLabel}>{t.contactNameLabel}</Text>
           <TextInput
@@ -180,16 +203,9 @@ export default function WalkInJoinScreen({ route }: Props) {
 
       {error && <InlineError message={error} />}
 
-      {status === 'authenticated' ? (
-        <Button title={t.joinQueue} onPress={() => void handleJoin()} loading={submitting} style={styles.actionButton} />
-      ) : (
-        // Issue 2 (mobile launch mission) — same deferred-auth gate as ConfirmBookingScreen; see
-        // its own comment and lib/guest-booking-handoff.ts for why the params are stashed here.
-        <GoogleSignInGate
-          label={t.signInWithGoogle}
-          onBeforeSignIn={() => stashPendingGuestIntent({ kind: 'walkIn', params: route.params })}
-        />
-      )}
+      <Button title={t.joinQueue} onPress={() => void handleJoin()}
+        loading={submitting} style={styles.actionButton} />
+      <Text style={styles.fieldHint}>No Google sign-in needed. The number is unverified and only used to contact the shop.</Text>
     </Screen>
   );
 }
