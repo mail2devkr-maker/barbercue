@@ -2,10 +2,12 @@ import { Module, forwardRef } from '@nestjs/common';
 import { BookingsModule } from '../bookings/bookings.module';
 import { RealtimeModule } from '../realtime/realtime.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { NotificationDeliveryModule } from '../notifications/notification-delivery.module';
 import { SalonQueueController } from './salon-queue.controller';
 import { QueueEntriesController } from './queue-entries.controller';
 import { QueueContactController } from './queue-contact.controller';
 import { QueueGuestController } from './queue-guest.controller';
+import { QueueArrivalReminderService } from './queue-arrival-reminder.service';
 import { BookingCheckInController } from './booking-check-in.controller';
 import { DashboardQueueController } from './dashboard-queue.controller';
 import { QueueService } from './queue.service';
@@ -24,6 +26,7 @@ import { AssignmentReleaseModule } from './assignment-release.module';
     forwardRef(() => BookingsModule),
     RealtimeModule,
     NotificationsModule,
+    NotificationDeliveryModule,
     AssignmentReleaseModule,
   ],
   controllers: [
@@ -39,6 +42,7 @@ import { AssignmentReleaseModule } from './assignment-release.module';
     QueueService,
     StaffStatusService,
     QueueEntryExpiryService,
+    QueueArrivalReminderService,
     ManualChairOccupancyService,
   ],
   // Phase 9: PublicQueueModule reuses this exact QueueService (joinWalkIn) for the QR flow rather
