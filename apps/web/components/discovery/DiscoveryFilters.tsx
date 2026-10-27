@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import {
+  MAX_WAIT_OPTIONS,
   POPULAR_SERVICES,
   SALON_SORT_LABELS,
   SALON_SORT_OPTIONS,
@@ -28,7 +29,7 @@ import {
   type DiscoveryState,
 } from "../../lib/discovery-params";
 import { FavoriteButton } from "./FavoriteButton";
-import { offerBadgeText, salonStatus } from "./SalonResultCard";
+import { offerBadgeText, queueEtaText, salonStatus } from "./SalonResultCard";
 import styles from "./discovery-filters.module.css";
 
 type Changes = Record<string, string | null>;
@@ -279,6 +280,28 @@ export function FiltersPanel({
       </fieldset>
 
       <fieldset className={styles.section}>
+        <legend className={styles.legend}>Live queue</legend>
+        <div className={styles.waitOptions} role="radiogroup" aria-label="Live queue wait">
+          {[null, ...MAX_WAIT_OPTIONS].map((minutes) => {
+            const checked = state.maxWait === minutes;
+            return (
+              <button
+                key={minutes ?? "any"}
+                type="button"
+                role="radio"
+                aria-checked={checked}
+                className={`${styles.chip} ${checked ? styles.chipOn : ""}`}
+                onClick={() => onChange({ maxWaitMinutes: minutes === null ? null : String(minutes) })}
+              >
+                {minutes === null ? "Any" : minutes === 0 ? "Available now" : `Within ${minutes} min`}
+              </button>
+            );
+          })}
+        </div>
+        <p className={styles.help}>Estimated wait if you join the queue now. Only salons open right now.</p>
+      </fieldset>
+
+      <fieldset className={styles.section}>
         <legend className={styles.srOnly}>Show only</legend>
         <Check label="Open now only" checked={state.openNow} onChange={(on) => onChange({ openNow: on ? "true" : null })} />
         <Check
@@ -389,6 +412,7 @@ export function CompareTable({ salons, serviceLabel }: { salons: SalonListItemDt
                     const status = salonStatus(salon);
                     return <span className={status.tone === "open" ? styles.open : status.tone === "unknown" ? styles.muted : undefined}>{status.text}</span>;
                   })()}
+                  {salon.queueWait && <small>Queue: {queueEtaText(salon.queueWait).eta}</small>}
                 </td>
                 <td className={styles.rowActions}>
                   <FavoriteButton salonId={salon.id} salonName={salon.name} variant="inline" />

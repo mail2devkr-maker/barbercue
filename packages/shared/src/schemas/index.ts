@@ -345,6 +345,8 @@ export const salonSearchQuerySchema = z
       .enum(["true", "false"])
       .transform((value) => value === "true")
       .optional(),
+    // Live queue: only salons open now whose estimated queue wait is at most this many minutes.
+    maxWaitMinutes: z.coerce.number().int().min(0).max(240).optional(),
     // Only salons with a current published offer (for the selected service, when one is selected).
     offersOnly: z
       .enum(["true", "false"])

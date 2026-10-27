@@ -58,6 +58,10 @@ function makeSearchService(
     },
     queueEntry: { groupBy: jest.fn().mockResolvedValue([]) },
     offer: { findMany: jest.fn().mockResolvedValue([]) },
+    salonStaff: { groupBy: jest.fn().mockResolvedValue([]) },
+    chair: { groupBy: jest.fn().mockResolvedValue([]) },
+    manualChairOccupancy: { groupBy: jest.fn().mockResolvedValue([]) },
+    serviceSession: { findMany: jest.fn().mockResolvedValue([]) },
   };
   return {
     prisma,
@@ -482,6 +486,84 @@ describe('booking page 3.0: offers filter and new sorts', () => {
     expect(
       sortListItems(noService, 'effective_price').map((i) => i.id),
     ).toEqual(['offer', 'low', 'mid', 'none']);
+  });
+});
+
+describe('live queue wait in search', () => {
+  afterEach(() => jest.useRealTimers());
+  const allDay = Array.from({ length: 7 }, (_, dayOfWeek) => ({
+    dayOfWeek,
+    isClosed: false,
+    openTime: '00:00',
+    closeTime: '23:59',
+  }));
+
+  it('estimates the wait for open salons only, and filters by the maximum wait', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-10-27T06:30:00Z'));
+    const { service, prisma } = makeSearchService([
+      salonRow('busy', { operatingHours: allDay }),
+      salonRow('quiet', { operatingHours: allDay }),
+      salonRow('closed', { operatingHours: [] }),
+    ]);
+    prisma.queueEntry.groupBy.mockImplementation(
+      (args: { where: { status?: unknown } }) =>
+        Promise.resolve(
+          args.where.status === 'WAITING'
+            ? [{ salonId: 'busy', _count: { _all: 4 } }]
+            : [],
+        ),
+    );
+    prisma.salonStaff.groupBy.mockResolvedValue([
+      { salonId: 'busy', _count: { _all: 1 } },
+      { salonId: 'quiet', _count: { _all: 2 } },
+    ]);
+    prisma.chair.groupBy.mockResolvedValue([
+      { salonId: 'busy', _count: { _all: 2 } },
+      { salonId: 'quiet', _count: { _all: 2 } },
+    ]);
+    const all = await service.search(salonSearchQuerySchema.parse({}));
+    const byId = Object.fromEntries(all.items.map((i) => [i.id, i.queueWait]));
+    expect(byId.busy).toMatchObject({
+      waitingCount: 4,
+      estimatedWaitMinutes: 120,
+    });
+    expect(byId.quiet).toMatchObject({
+      waitingCount: 0,
+      estimatedWaitMinutes: 0,
+    });
+    expect(byId.closed).toBeNull();
+    // Only the open salons were looked up.
+    expect(prisma.salonStaff.groupBy.mock.calls[0][0].where.salonId).toEqual({
+      in: ['busy', 'quiet'],
+    });
+
+    const within30 = await service.search(
+      salonSearchQuerySchema.parse({ maxWaitMinutes: '30' }),
+    );
+    expect(within30.items.map((i) => i.id)).toEqual(['quiet']);
+  });
+
+  it('shortest queue wait sort puts unknown waits last', () => {
+    const w = (id: string, minutes: number | null) =>
+      item({
+        id,
+        queueWait:
+          minutes === null
+            ? null
+            : {
+                waitingCount: 1,
+                estimatedWaitMinutes: minutes,
+                range: { min: 0, max: 5 },
+              },
+      });
+    expect(
+      sortListItems([w('a', 40), w('b', null), w('c', 5)], 'wait').map(
+        (i) => i.id,
+      ),
+    ).toEqual(['c', 'a', 'b']);
+    expect(
+      salonSearchQuerySchema.safeParse({ maxWaitMinutes: '-1' }).success,
+    ).toBe(false);
   });
 });
 

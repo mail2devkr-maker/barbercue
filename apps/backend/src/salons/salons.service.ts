@@ -6,6 +6,7 @@ import {
   SessionAudience,
   ChairStatus,
   QueueEntryStatus,
+  ServiceSessionStatus,
   currencyForCountry,
   haversineDistanceKm,
   type MeResponse,
@@ -38,6 +39,7 @@ import {
   resolveSalonTimeZone,
   zonedDayAndMinutes,
 } from '../common/timezone/timezone';
+import { estimateQueueWait } from './queue-wait';
 import {
   summarizeOffers,
   type OfferRow,
@@ -162,6 +164,7 @@ export function effectivePrice(item: SalonListItemDto): number | null {
 
 export type RankedSort = Exclude<SalonSortOption, 'relevance' | 'distance'>;
 export const RANKED_SORTS: readonly SalonSortOption[] = [
+  'wait',
   'price',
   'price_desc',
   'effective_price',
@@ -198,6 +201,11 @@ export function sortListItems(
         return (
           offerRank(a) - offerRank(b) ||
           (b.offers?.[0]?.saving ?? 0) - (a.offers?.[0]?.saving ?? 0)
+        );
+      case 'wait':
+        return (
+          (a.queueWait?.estimatedWaitMinutes ?? last) -
+          (b.queueWait?.estimatedWaitMinutes ?? last)
         );
       case 'reviews':
         return (
@@ -497,8 +505,18 @@ export class SalonsService {
     // "Open now" depends on each salon's hours in its own time zone, so it is checked per
     // candidate after loading — which makes it a bounded, single-page mode like the sorts below.
     const openNowOnly = query.openNow === true;
+    // Live queue filter: open now with an estimated wait within the limit (checked after loading,
+    // like open now, so it is a bounded single-page mode too).
+    const maxWait = query.maxWaitMinutes;
     const keepOpen = (items: SalonListItemDto[]) =>
-      openNowOnly ? items.filter((item) => item.isOpenNow === true) : items;
+      items.filter(
+        (item) =>
+          (!openNowOnly || item.isOpenNow === true) &&
+          (maxWait === undefined ||
+            (item.queueWait != null &&
+              item.queueWait.estimatedWaitMinutes <= maxWait)),
+      );
+    const checkedAfterLoad = openNowOnly || maxWait !== undefined;
 
     // "Near Me" (Phase 4): sorting by a computed haversine distance isn't something Prisma/Postgres
     // can do without a geo extension (PostGIS earthdistance), which isn't set up here. Rather than
@@ -523,7 +541,7 @@ export class SalonsService {
     // they rank a bounded candidate set in memory and return a single page (nextCursor null).
     const sort = query.sort ?? (nearMe ? 'distance' : 'relevance');
     const ranked = RANKED_SORTS.includes(sort) ? (sort as RankedSort) : null;
-    if (!nearMe && (ranked || openNowOnly)) {
+    if (!nearMe && (ranked || checkedAfterLoad)) {
       const candidates = await this.prisma.salon.findMany({
         where,
         orderBy: sort === 'relevance' ? { name: 'asc' } : { id: 'asc' },
@@ -583,7 +601,7 @@ export class SalonsService {
       }));
       const sorted = withDistance
         .filter((w) => w.item.distanceKm !== null)
-        .filter((w) => !openNowOnly || w.item.isOpenNow === true)
+        .filter((w) => keepOpen([w.item]).length === 1)
         // The bounding box is a rectangle approximation of a circle (see boundingBoxDegrees), so a
         // corner of the box can sit slightly beyond the true requested radius — this is the actual
         // hard cutoff a caller-supplied radiusKm promises, checked against the real, unrounded
@@ -1170,6 +1188,17 @@ export class SalonsService {
     if (salons.length === 0) return [];
     const ids = salons.map((salon) => salon.id);
     const now = new Date();
+    // Queue waits only matter while a salon is open, so only those salons are queried.
+    const openIds = salons
+      .filter(
+        (salon) =>
+          !salon.isClosedForToday &&
+          isOpenNow(salon.operatingHours, salon) === true,
+      )
+      .map((salon) => salon.id);
+    const waitInputs = openIds.length
+      ? this.queueWaitInputs(openIds, now)
+      : Promise.resolve(null);
     const [ratings, prices, waiting, matches, activeServices, offerRows] =
       await Promise.all([
         this.prisma.review.groupBy({
@@ -1183,6 +1212,7 @@ export class SalonsService {
           where: { salonId: { in: ids }, isActive: true },
           _min: { price: true },
           _max: { price: true },
+          _avg: { durationMinutes: true },
         }),
         // Same WAITING/CALLED/IN_SERVICE whitelist getDashboardQueue/getCapacitySummary use.
         this.prisma.queueEntry.groupBy({
@@ -1253,6 +1283,7 @@ export class SalonsService {
       list.push({ id: row.id, name: row.name, price: Number(row.price) });
       servicesBy.set(row.salonId, list);
     }
+    const waitData = await waitInputs;
     const offersBy = new Map<string, OfferRow[]>();
     for (const row of offerRows) {
       const list = offersBy.get(row.salonId) ?? [];
@@ -1305,6 +1336,17 @@ export class SalonsService {
         isOpenNow: openNow,
         closesAt: openNow ? (todayHours?.closeTime ?? null) : null,
         todayHours,
+        queueWait:
+          waitData && openNow === true
+            ? estimateQueueWait({
+                waitingCount: waitData.waiting.get(salon.id) ?? 0,
+                activeStaff: waitData.staff.get(salon.id) ?? 0,
+                activeChairs: waitData.chairs.get(salon.id) ?? 0,
+                occupiedChairs: waitData.occupied.get(salon.id) ?? 0,
+                avgServiceMinutes: price?._avg?.durationMinutes ?? null,
+                activeSessions: waitData.sessions.get(salon.id) ?? [],
+              })
+            : null,
         opensNext:
           openNow === true ? null : nextOpeningOf(salon.operatingHours, salon),
         isClosedForToday: salon.isClosedForToday,
@@ -1334,6 +1376,68 @@ export class SalonsService {
         ).slice(0, 5),
       };
     });
+  }
+
+  /**
+   * Batched inputs for the live-queue wait of several open salons — the same counts
+   * QueueService.getQueueStatus reads for one salon: WAITING entries, ACTIVE staff, ACTIVE chairs,
+   * manually occupied chairs, and services in the chair right now.
+   */
+  private async queueWaitInputs(ids: string[], now: Date) {
+    const [waiting, staff, chairs, occupied, sessions] = await Promise.all([
+      this.prisma.queueEntry.groupBy({
+        by: ['salonId'],
+        where: { salonId: { in: ids }, status: QueueEntryStatus.WAITING },
+        _count: { _all: true },
+      }),
+      this.prisma.salonStaff.groupBy({
+        by: ['salonId'],
+        where: { salonId: { in: ids }, status: StaffMemberStatus.ACTIVE },
+        _count: { _all: true },
+      }),
+      this.prisma.chair.groupBy({
+        by: ['salonId'],
+        where: { salonId: { in: ids }, status: ChairStatus.ACTIVE },
+        _count: { _all: true },
+      }),
+      this.prisma.manualChairOccupancy.groupBy({
+        by: ['salonId'],
+        where: { salonId: { in: ids }, endedAt: null },
+        _count: { _all: true },
+      }),
+      this.prisma.serviceSession.findMany({
+        where: {
+          status: ServiceSessionStatus.ACTIVE,
+          chair: { salonId: { in: ids } },
+        },
+        select: {
+          startedAt: true,
+          service: { select: { durationMinutes: true } },
+          chair: { select: { salonId: true } },
+        },
+      }),
+    ]);
+    const counts = (rows: { salonId: string; _count: { _all: number } }[]) =>
+      new Map(rows.map((row) => [row.salonId, row._count._all]));
+    const bySalon = new Map<
+      string,
+      { durationMinutes: number; elapsedMinutes: number }[]
+    >();
+    for (const session of sessions) {
+      const list = bySalon.get(session.chair.salonId) ?? [];
+      list.push({
+        durationMinutes: session.service.durationMinutes,
+        elapsedMinutes: (now.getTime() - session.startedAt.getTime()) / 60_000,
+      });
+      bySalon.set(session.chair.salonId, list);
+    }
+    return {
+      waiting: counts(waiting),
+      staff: counts(staff),
+      chairs: counts(chairs),
+      occupied: counts(occupied),
+      sessions: bySalon,
+    };
   }
 
   /** Salons by id, in the given order, as list items (missing or inactive salons are skipped). */

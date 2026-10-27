@@ -558,6 +558,10 @@ export interface SalonListItemDto extends SalonSummary {
   closesAt?: string | null;
   // Today's salon-local hours ("HH:mm"); null when the salon hasn't listed hours for today.
   todayHours?: { isClosed: boolean; openTime: string; closeTime: string } | null;
+  // Live queue right now (only while the salon is open): people waiting and the estimated wait to
+  // be served if you join now — the queue page's own estimate (QueueService.getQueueStatus).
+  // Null when closed or when the salon has no active staff/chairs to estimate against.
+  queueWait?: { waitingCount: number; estimatedWaitMinutes: number; range: { min: number; max: number } } | null;
   // While closed: when it next opens (inDays 0 = later today, 1 = tomorrow; dayOfWeek 0 = Sunday).
   opensNext?: { inDays: number; dayOfWeek: number; time: string } | null;
   serviceCount?: number;

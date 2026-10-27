@@ -40,7 +40,9 @@
   .prices { grid-area: prices; }
   .actions { grid-area: actions; flex-direction: row; align-self: end; }
   .actions .book,
-  .actions .profile { flex: 1; min-width: 0; }
+  .actions .queue,
+  .actions .queueClosed { flex: 1; min-width: 0; }
+  .actions .profile { flex: 1 1 100%; min-height: 36px; }
 }
 
 @media (min-width: 1520px) {
@@ -425,6 +427,7 @@ a.mediaLink {
 /* ── Actions ── */
 .actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
@@ -448,6 +451,14 @@ a.mediaLink {
   .profile { flex: 0 0 auto; min-width: 128px; }
 }
 
+@media (min-width: 1520px) {
+  .actions { flex-wrap: nowrap; }
+  .actions .book,
+  .actions .queue,
+  .actions .queueClosed,
+  .actions .profile { flex: 0 0 auto; width: 100%; }
+}
+
 .book {
   background: var(--fq-gradient);
   color: #fff;
@@ -457,6 +468,52 @@ a.mediaLink {
 .profile {
   border: 1px solid rgba(255, 255, 255, 0.28);
   color: var(--fq-text);
+}
+
+/* Join Queue: outlined in the brand pink, with the live ETA under the label. */
+.queue,
+.queueClosed {
+  display: inline-flex;
+  flex: 1;
+  min-height: 42px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 14px;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  font-weight: 800;
+  line-height: 1.15;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.queue {
+  border: 1px solid var(--fq-pink);
+  background: rgba(242, 10, 131, 0.12);
+  color: #fff;
+}
+
+.queue:hover {
+  background: rgba(242, 10, 131, 0.22);
+}
+
+.queue:focus-visible {
+  outline: 2px solid var(--fq-orange);
+  outline-offset: 2px;
+}
+
+.eta {
+  margin-top: 2px;
+  color: #3ddc84;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.queueClosed {
+  border: 1px dashed rgba(255, 255, 255, 0.2);
+  color: var(--fq-text-faint);
+  font-weight: 700;
 }
 
 .book:focus-visible,

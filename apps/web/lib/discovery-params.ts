@@ -1,4 +1,5 @@
 import {
+  MAX_WAIT_OPTIONS,
   MIN_RATING_OPTIONS,
   SALON_SEARCH_MAX_IDS,
   SALON_SORT_OPTIONS,
@@ -14,7 +15,7 @@ import {
 /** Every query param the search API understands, forwarded as-is. */
 export const SEARCH_API_PARAMS = [
   "q", "shopName", "city", "countryCode", "locality", "service", "lat", "lng", "radiusKm",
-  "priceMin", "priceMax", "salonType", "popularService", "sort", "minRating", "openNow", "offersOnly",
+  "priceMin", "priceMax", "salonType", "popularService", "sort", "minRating", "openNow", "offersOnly", "maxWaitMinutes",
 ] as const;
 
 /**
@@ -53,6 +54,8 @@ export interface DiscoveryState {
   minRating: number | null;
   openNow: boolean;
   offersOnly: boolean;
+  /** Live queue: maximum estimated wait in minutes (0 = no wait right now), or null for any. */
+  maxWait: number | null;
   /** `favorites=1`: only the customer's saved salons (their IDs are sent, never put in the URL). */
   favoritesOnly: boolean;
 }
@@ -76,6 +79,7 @@ export function readDiscoveryState(params: URLSearchParams): DiscoveryState {
     minRating: (MIN_RATING_OPTIONS as readonly number[]).includes(num("minRating") ?? NaN) ? num("minRating") : null,
     openNow: params.get("openNow") === "true",
     offersOnly: params.get("offersOnly") === "true",
+    maxWait: (MAX_WAIT_OPTIONS as readonly number[]).includes(num("maxWaitMinutes") ?? NaN) ? num("maxWaitMinutes") : null,
     favoritesOnly: params.get("favorites") === "1",
   };
 }
@@ -139,6 +143,7 @@ export function activeFilterCount(state: DiscoveryState): number {
     state.minRating,
     state.openNow,
     state.offersOnly,
+    state.maxWait !== null ? "wait" : null,
     state.favoritesOnly,
   ].filter(Boolean).length;
 }

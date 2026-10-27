@@ -47,6 +47,14 @@ export function clockText(time: string): string {
   return `${((h + 11) % 12) + 1}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
 }
 
+/** Live-queue ETA for the Join Queue button: "No wait" or "~25 min wait", plus how many are waiting. */
+export function queueEtaText(wait: NonNullable<SalonListItemDto["queueWait"]>): { eta: string; waiting: string } {
+  return {
+    eta: wait.estimatedWaitMinutes === 0 ? "No wait" : `~${wait.estimatedWaitMinutes} min wait`,
+    waiting: wait.waitingCount === 0 ? "No one in queue" : `${wait.waitingCount} in queue`,
+  };
+}
+
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 /** "Opens 10:00 AM" / "Opens tomorrow 10:00 AM" / "Opens Mon 10:00 AM". */
@@ -133,6 +141,10 @@ export function SalonResultCard({ salon, styleName }: { salon: SalonListItemDto;
   // The card's offer travels into the existing booking journey, which re-checks it on the server.
   if (offer) bookingParams.set("offer", offer.id);
   const bookingHref = `/book/${salon.slug}?${bookingParams.toString()}`;
+  const queueParams = new URLSearchParams({ city: salon.citySlug, country: salon.countryCode });
+  if (styleName) queueParams.set("style", styleName);
+  const queueHref = `/queue/${salon.slug}?${queueParams.toString()}`;
+  const eta = salon.queueWait ? queueEtaText(salon.queueWait) : null;
 
   const rows = [
     ...(salon.selectedService ? [{ ...salon.selectedService, selected: true }] : []),
@@ -278,7 +290,21 @@ export function SalonResultCard({ salon, styleName }: { salon: SalonListItemDto;
         {salon.isClosedForToday ? (
           <span className={styles.muted}>Closed today</span>
         ) : (
-          <Link href={bookingHref} className={styles.book}>Book Now</Link>
+          <>
+            <Link href={bookingHref} className={styles.book}>Book Now</Link>
+            {salon.isOpenNow === false ? (
+              <span className={styles.queueClosed} title="The live queue opens when the salon opens">Queue closed</span>
+            ) : (
+              <Link
+                href={queueHref}
+                className={styles.queue}
+                aria-label={eta ? `Join the live queue — ${eta.eta}, ${eta.waiting}` : "Join the live queue"}
+              >
+                <span>Join Queue</span>
+                {eta && <small className={styles.eta}>{eta.eta}</small>}
+              </Link>
+            )}
+          </>
         )}
         <Link href={profileHref} className={styles.profile}>View Profile</Link>
       </div>

@@ -87,3 +87,5 @@
 .pay { color: var(--fq-pink, #f20a83); }
 .open { color: #72d59a; font-weight: 700; }
 .table { min-width: 980px; }
+
+.waitOptions { display: flex; flex-wrap: wrap; gap: 8px; }

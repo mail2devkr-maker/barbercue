@@ -131,6 +131,21 @@ describe('filter controls', () => {
     expect(onChange).toHaveBeenLastCalledWith({ favorites: '1' });
   });
 
+  it('live queue filter: any, available now, or within 15/30/60 minutes', () => {
+    const onChange = jest.fn();
+    let tree;
+    act(() => { tree = TestRenderer.create(<FiltersPanel state={state('maxWaitMinutes=15')} onChange={onChange} onClearAll={jest.fn()} activeCount={1} />); });
+    const radios = tree.root.find((n) => n.props.role === 'radiogroup' && n.props['aria-label'] === 'Live queue wait').findAll((n) => n.type === 'button');
+    expect(radios.map((r) => textOf(r))).toEqual(['Any', 'Available now', 'Within 15 min', 'Within 30 min', 'Within 60 min']);
+    expect(radios[2].props['aria-checked']).toBe(true);
+    act(() => radios[1].props.onClick());
+    expect(onChange).toHaveBeenLastCalledWith({ maxWaitMinutes: '0' });
+    act(() => radios[0].props.onClick());
+    expect(onChange).toHaveBeenLastCalledWith({ maxWaitMinutes: null });
+    expect(readDiscoveryState(new URLSearchParams('maxWaitMinutes=7')).maxWait).toBeNull();
+    expect(searchApiQuery(new URLSearchParams('maxWaitMinutes=0&sort=wait'))).toBe('sort=wait&maxWaitMinutes=0');
+  });
+
   it('distance is a slider like price: 1–20 km, far end = any distance, applied on release', () => {
     const onRadius = jest.fn();
     const onNearMe = jest.fn();
@@ -352,6 +367,22 @@ describe('cards, comparison and hearts', () => {
     } finally {
       delete globalThis.document;
     }
+  });
+
+  it('Join Queue sits beside Book Now with the live ETA; closed salons say the queue is closed', () => {
+    useAuth.mockReturnValue({ user: null, status: 'unauthenticated' });
+    let tree;
+    act(() => { tree = TestRenderer.create(<SalonResultCard salon={beardSalon({ isOpenNow: true, queueWait: { waitingCount: 3, estimatedWaitMinutes: 25, range: { min: 19, max: 31 } } })} />); });
+    const join = tree.root.find((n) => n.type === 'a' && textOf(n).startsWith('Join Queue'));
+    expect(join.props.href).toBe('/queue/alpha?city=pune&country=IN');
+    expect(textOf(join)).toBe('Join Queue~25 min wait');
+    const joinLink = tree.root.find((n) => n.type !== 'a' && typeof n.props.href === 'string' && n.props.href.startsWith('/queue/'));
+    expect(joinLink.props['aria-label']).toBe('Join the live queue — ~25 min wait, 3 in queue');
+    act(() => { tree.update(<SalonResultCard salon={beardSalon({ isOpenNow: true, queueWait: { waitingCount: 0, estimatedWaitMinutes: 0, range: { min: 0, max: 5 } } })} />); });
+    expect(textOf(tree.root)).toContain('Join QueueNo wait');
+    act(() => { tree.update(<SalonResultCard salon={beardSalon({ isOpenNow: false, queueWait: null })} />); });
+    expect(textOf(tree.root)).toContain('Queue closed');
+    expect(tree.root.findAll((n) => n.type === 'a' && textOf(n).startsWith('Join Queue'))).toHaveLength(0);
   });
 
   it('orders the favorites page', () => {

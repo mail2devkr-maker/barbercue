@@ -114,7 +114,7 @@ export default function SearchClient() {
   function clearAllFilters() {
     applyChanges({
       salonType: null, __popularService: null, service: null, priceMin: null, priceMax: null, view: null,
-      minRating: null, openNow: null, offersOnly: null, favorites: null,
+      minRating: null, openNow: null, offersOnly: null, maxWaitMinutes: null, favorites: null,
     });
   }
 

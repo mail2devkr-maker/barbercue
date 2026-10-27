@@ -162,6 +162,7 @@ export const SALON_SORT_OPTIONS = [
   'offer',
   'rating',
   'reviews',
+  'wait',
 ] as const;
 export type SalonSortOption = (typeof SALON_SORT_OPTIONS)[number];
 export const SALON_SORT_LABELS: Record<SalonSortOption, string> = {
@@ -173,7 +174,11 @@ export const SALON_SORT_LABELS: Record<SalonSortOption, string> = {
   offer: 'Best offer',
   rating: 'Highest rated',
   reviews: 'Most reviewed',
+  wait: 'Shortest queue wait',
 };
+
+/** "Live queue" filter choices: maximum estimated wait in minutes (0 = no wait right now). */
+export const MAX_WAIT_OPTIONS = [0, 15, 30, 60] as const;
 
 /**
  * Sorts that compare prices: by the selected service's price when a service is selected, otherwise
