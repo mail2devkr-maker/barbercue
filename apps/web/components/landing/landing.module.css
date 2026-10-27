@@ -1834,3 +1834,36 @@
   .finalPrimary:hover,
   .bookingCard:hover { transform: none; }
 }
+
+/* Booking page 3.0: customers' favorites heart (with count) in the header. */
+.headerFavorites {
+  position: relative;
+  display: inline-grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border: 1px solid var(--fq-hairline);
+  border-radius: 50%;
+  color: var(--fq-text);
+  font-size: 1.15rem;
+  text-decoration: none;
+}
+.headerFavorites:hover,
+.headerFavorites:focus-visible {
+  border-color: var(--fq-pink);
+}
+.headerFavoritesCount {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--fq-gradient);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 18px;
+  text-align: center;
+}

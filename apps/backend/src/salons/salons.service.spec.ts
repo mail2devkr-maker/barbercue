@@ -51,14 +51,18 @@ describe('SalonsService', () => {
       create: jest.Mock;
       count: jest.Mock;
     };
-    review: { aggregate: jest.Mock };
-    service: { aggregate: jest.Mock; findMany: jest.Mock };
-    queueEntry: { count: jest.Mock };
+    review: { aggregate: jest.Mock; groupBy: jest.Mock };
+    service: { aggregate: jest.Mock; findMany: jest.Mock; groupBy: jest.Mock };
+    queueEntry: { count: jest.Mock; groupBy: jest.Mock };
+    offer: { findMany: jest.Mock };
     locality: { findUnique: jest.Mock };
     userRole: { upsert: jest.Mock; findMany: jest.Mock };
     user: { findUniqueOrThrow: jest.Mock };
     operatingHours: { createMany: jest.Mock };
-    chair: { createMany: jest.Mock };
+    chair: { createMany: jest.Mock; groupBy: jest.Mock };
+    salonStaff: { groupBy: jest.Mock };
+    manualChairOccupancy: { groupBy: jest.Mock };
+    serviceSession: { findMany: jest.Mock };
     $transaction: jest.Mock;
   };
   let citiesService: {
@@ -81,21 +85,34 @@ describe('SalonsService', () => {
         aggregate: jest
           .fn()
           .mockResolvedValue({ _avg: { rating: null }, _count: { rating: 0 } }),
+        // Search results batch their per-salon figures (SalonsService.toListItems).
+        groupBy: jest.fn().mockResolvedValue([]),
       },
       service: {
         aggregate: jest
           .fn()
           .mockResolvedValue({ _min: { price: null }, _max: { price: null } }),
         findMany: jest.fn().mockResolvedValue([]),
+        groupBy: jest.fn().mockResolvedValue([]),
       },
-      queueEntry: { count: jest.fn().mockResolvedValue(0) },
+      queueEntry: {
+        count: jest.fn().mockResolvedValue(0),
+        groupBy: jest.fn().mockResolvedValue([]),
+      },
+      offer: { findMany: jest.fn().mockResolvedValue([]) },
       locality: { findUnique: jest.fn() },
       userRole: {
         upsert: jest.fn(),
         findMany: jest.fn().mockResolvedValue([]),
       },
       operatingHours: { createMany: jest.fn().mockResolvedValue({ count: 7 }) },
-      chair: { createMany: jest.fn().mockResolvedValue({ count: 10 }) },
+      chair: {
+        createMany: jest.fn().mockResolvedValue({ count: 10 }),
+        groupBy: jest.fn().mockResolvedValue([]),
+      },
+      salonStaff: { groupBy: jest.fn().mockResolvedValue([]) },
+      manualChairOccupancy: { groupBy: jest.fn().mockResolvedValue([]) },
+      serviceSession: { findMany: jest.fn().mockResolvedValue([]) },
       // registerSalon's post-grant re-read — default shape carries exactly the newly-granted
       // SALON_OWNER role so existing registerSalon tests (which don't care about the minted
       // session) keep passing without each needing to stub this individually.
@@ -577,10 +594,13 @@ describe('SalonsService', () => {
 
     it('maps Decimal price aggregates to plain numbers', async () => {
       prisma.salon.findMany.mockResolvedValue([makeSalon()]);
-      prisma.service.aggregate.mockResolvedValue({
-        _min: { price: { toString: () => '300' } },
-        _max: { price: { toString: () => '600' } },
-      });
+      prisma.service.groupBy.mockResolvedValue([
+        {
+          salonId: 's1',
+          _min: { price: { toString: () => '300' } },
+          _max: { price: { toString: () => '600' } },
+        },
+      ]);
       const result = await service.search({});
       expect(result.items[0].priceMin).toBe(300);
       expect(result.items[0].priceMax).toBe(600);
@@ -595,14 +615,16 @@ describe('SalonsService', () => {
     // Issue #13 Mission F: a real live signal on the search card, never a fabricated one.
     it('includes the real live waitingCount, scoped to WAITING/CALLED/IN_SERVICE for that salon', async () => {
       prisma.salon.findMany.mockResolvedValue([makeSalon()]);
-      prisma.queueEntry.count.mockResolvedValue(3);
+      prisma.queueEntry.groupBy.mockResolvedValue([{ salonId: 's1', _count: { _all: 3 } }]);
       const result = await service.search({});
       expect(result.items[0].waitingCount).toBe(3);
-      expect(prisma.queueEntry.count).toHaveBeenCalledWith({
+      expect(prisma.queueEntry.groupBy).toHaveBeenCalledWith({
+        by: ['salonId'],
         where: {
-          salonId: 's1',
+          salonId: { in: ['s1'] },
           status: { in: ['WAITING', 'CALLED', 'IN_SERVICE'] },
         },
+        _count: { _all: true },
       });
     });
 

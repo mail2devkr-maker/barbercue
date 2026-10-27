@@ -100,6 +100,8 @@ export default function DashboardServicesPage({
   const [services, setServices] = useState<SalonServiceDto[] | null>(null);
   const [salonType, setSalonType] = useState<SalonType | null>(null);
   const [savingSalonType, setSavingSalonType] = useState(false);
+  // False while the type is only the UNISEX default (shops created before customers could filter by it).
+  const [salonTypeConfirmed, setSalonTypeConfirmed] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -147,6 +149,7 @@ export default function DashboardServicesPage({
         if (cancelled) return;
         setServices(list);
         setSalonType(typeResult.salonType);
+        setSalonTypeConfirmed(typeResult.salonTypeConfirmed !== false);
       })
       .catch((fetchError) => {
         if (!cancelled) setError(fetchError instanceof ApiError ? fetchError.message : "Could not load services.");
@@ -155,7 +158,8 @@ export default function DashboardServicesPage({
   }, [base]);
 
   async function saveSalonType(nextType: SalonType) {
-    if (nextType === salonType || savingSalonType) return;
+    // Re-choosing the current type is allowed while it is unconfirmed: that click IS the confirmation.
+    if ((nextType === salonType && salonTypeConfirmed) || savingSalonType) return;
     setSavingSalonType(true);
     setError(null);
     setNotice(null);
@@ -165,6 +169,7 @@ export default function DashboardServicesPage({
         { method: "PATCH", body: JSON.stringify({ salonType: nextType }) },
       );
       setSalonType(result.salonType);
+      setSalonTypeConfirmed(result.salonTypeConfirmed !== false);
       setNotice(`${SALON_TYPE_OPTIONS.find((option) => option.value === result.salonType)?.label ?? "Salon type"} saved. Service packs updated.`);
     } catch (saveError) {
       setError(saveError instanceof ApiError ? saveError.message : "Could not save salon type.");
@@ -275,8 +280,15 @@ export default function DashboardServicesPage({
         <p className={styles.eyebrow}>Step 1</p>
         <h2 id="salon-type-heading" className={styles.sectionHeading}>Select salon type</h2>
         <p className={styles.hint} style={{ marginBottom: 12 }}>
-          This controls which services appear inside Basic, Standard and Advance packs. You can change it later.
+          This controls which services appear inside Basic, Standard and Advance packs, and how customers find you
+          (Male / Female / Unisex filter). You can change it later.
         </p>
+        {salonType && !salonTypeConfirmed && (
+          <p className={`${styles.banner} ${styles.bannerWarning}`} role="status" style={{ marginBottom: 12 }}>
+            Your salon type hasn’t been confirmed yet, so customers see “Type not set”. Choose Gents, Ladies or Unisex below
+            {" — "}tap the highlighted option to keep it.
+          </p>
+        )}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 10 }}>
           {SALON_TYPE_OPTIONS.map((option) => {
             const active = salonType === option.value;

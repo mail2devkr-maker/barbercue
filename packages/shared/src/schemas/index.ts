@@ -35,6 +35,7 @@ import {
   SALON_DESCRIPTION_SUGGESTION_LIMITS,
 } from "../constants";
 import { isValidPostalCode, postalCodeRuleFor } from "../locale";
+import { POPULAR_SERVICES, SALON_SEARCH_MAX_IDS, SALON_SORT_OPTIONS } from "../catalog/salon-discovery-filters";
 
 // Validation schemas shared by the backend (request validation) and clients (form validation).
 // The backend is always the authority — these schemas exist so both sides reject bad input the
@@ -268,6 +269,9 @@ export const registerSalonSchema = z
     localityText: z.string().trim().max(160).optional(),
     localitySlug: z.string().optional(),
     landmark: z.string().trim().max(200).optional(),
+    // Discovery upgrade: the registration form asks for it; optional here so older clients keep
+    // working (their salons stay "type not set" until the owner confirms it in settings).
+    salonType: z.nativeEnum(SalonType).optional(),
   })
   // A half-coordinate is meaningless — it would place the shop on the equator or the prime
   // meridian. Either both arrive or neither does.
@@ -325,7 +329,39 @@ export const salonSearchQuerySchema = z
     // text search matched. Both ends optional so a caller can give just a floor or just a ceiling.
     priceMin: z.coerce.number().nonnegative().optional(),
     priceMax: z.coerce.number().nonnegative().optional(),
+    // Discovery upgrade (catalog/salon-discovery-filters.ts): salon type, a popular service to
+    // compare by (its price drives priceMin/priceMax and sort=price), and result ordering.
+    salonType: z.enum(["GENTS", "LADIES", "UNISEX"]).optional(),
+    popularService: z
+      .string()
+      .refine((id) => POPULAR_SERVICES.some((s) => s.id === id), "Unknown popular service.")
+      .optional(),
+    sort: z.enum(SALON_SORT_OPTIONS).optional(),
+    // Minimum average review score (salons with no reviews never pass), "open right now", and
+    // "favorites only" — the client sends the customer's saved salon IDs (this route is public, so
+    // it never reads who is asking).
+    minRating: z.coerce.number().min(1).max(5).optional(),
+    openNow: z
+      .enum(["true", "false"])
+      .transform((value) => value === "true")
+      .optional(),
+    // Live queue: only salons open now whose estimated queue wait is at most this many minutes.
+    maxWaitMinutes: z.coerce.number().int().min(0).max(240).optional(),
+    // Only salons with a current published offer (for the selected service, when one is selected).
+    offersOnly: z
+      .enum(["true", "false"])
+      .transform((value) => value === "true")
+      .optional(),
+    ids: z
+      .string()
+      .transform((value) => value.split(",").map((id) => id.trim()).filter(Boolean))
+      .pipe(z.array(z.string().uuid()).min(1).max(SALON_SEARCH_MAX_IDS))
+      .optional(),
   })
+  .refine(
+    (data) => data.sort !== "distance" || (data.lat !== undefined && data.lng !== undefined),
+    { message: "Sorting by distance needs your location.", path: ["sort"] },
+  )
   .refine(
     (data) =>
       data.priceMin === undefined ||

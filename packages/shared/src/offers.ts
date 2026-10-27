@@ -13,6 +13,9 @@ const serviceIdsSchema = z
     "Service IDs must be unique.",
   );
 
+/** "HH:mm", 24-hour, salon-local wall time. */
+export const OFFER_TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
+
 const offerBaseSchema = z.object({
   kind: z.enum(OFFER_KINDS),
   title: z.string().trim().min(2).max(120),
@@ -37,6 +40,32 @@ const offerBaseSchema = z.object({
     .optional(),
   perCustomerLimit: z.number().int().positive().max(100).default(1),
   serviceIds: serviceIdsSchema.default([]),
+  // Booking rules (all optional, so existing offers keep working unchanged):
+  // minimum total of the booked services, a cap on the discount (percentage offers), and Happy
+  // Hours — the salon-local weekdays (0 = Sunday) and daily time window the APPOINTMENT must fall in.
+  minimumBookingAmount: z
+    .number()
+    .finite()
+    .positive()
+    .max(99_999_999.99)
+    .multipleOf(0.01)
+    .nullable()
+    .optional(),
+  maximumDiscountAmount: z
+    .number()
+    .finite()
+    .positive()
+    .max(99_999_999.99)
+    .multipleOf(0.01)
+    .nullable()
+    .optional(),
+  applicableDays: z
+    .array(z.number().int().min(0).max(6))
+    .max(7)
+    .refine((days) => new Set(days).size === days.length, "Days must be unique.")
+    .default([]),
+  dailyStartTime: z.string().regex(OFFER_TIME_PATTERN).nullable().optional(),
+  dailyEndTime: z.string().regex(OFFER_TIME_PATTERN).nullable().optional(),
 });
 
 const validateOffer = (
@@ -65,6 +94,27 @@ const validateOffer = (
       code: z.ZodIssueCode.custom,
       path: ["inactiveDays"],
       message: "inactiveDays is required for the INACTIVE audience.",
+    });
+  }
+  if (!value.dailyStartTime !== !value.dailyEndTime) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["dailyEndTime"],
+      message: "Set both a start and an end time, or neither.",
+    });
+  }
+  if (value.dailyStartTime && value.dailyEndTime && value.dailyStartTime >= value.dailyEndTime) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["dailyEndTime"],
+      message: "The end time must be after the start time.",
+    });
+  }
+  if (value.discountType === "FLAT" && value.maximumDiscountAmount != null) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["maximumDiscountAmount"],
+      message: "A maximum discount only applies to percentage offers.",
     });
   }
   if (value.audience !== "INACTIVE" && value.inactiveDays !== undefined) {
@@ -160,6 +210,11 @@ export interface OfferDto {
   maxRedemptions: number | null;
   perCustomerLimit: number;
   serviceIds: string[];
+  minimumBookingAmount: number | null;
+  maximumDiscountAmount: number | null;
+  applicableDays: number[];
+  dailyStartTime: string | null;
+  dailyEndTime: string | null;
   redemptionCount: number;
   createdAt: string;
   updatedAt: string;
@@ -212,4 +267,46 @@ export interface OfferRedemptionStatsDto {
   cancelledBookings: number;
   recordedDiscount: number;
   currency: string;
+}
+
+// ── Offer booking rules shared by the booking validation (server) and the search display ──
+
+export interface OfferSchedule {
+  applicableDays: number[];
+  dailyStartTime: string | null;
+  dailyEndTime: string | null;
+}
+
+/** True when the offer only applies on some days or at some times (Happy Hours). */
+export function offerHasSchedule(schedule: OfferSchedule): boolean {
+  return schedule.applicableDays.length > 0 || !!(schedule.dailyStartTime && schedule.dailyEndTime);
+}
+
+const minutesOf = (time: string) => {
+  const [hours, minutes] = time.split(":").map(Number);
+  return hours * 60 + minutes;
+};
+
+/**
+ * Whether an appointment at this salon-local weekday (0 = Sunday) and minute of day falls inside
+ * the offer's schedule. The window is start-inclusive, end-exclusive.
+ */
+export function offerScheduleApplies(schedule: OfferSchedule, localDayOfWeek: number, localMinutes: number): boolean {
+  if (schedule.applicableDays.length > 0 && !schedule.applicableDays.includes(localDayOfWeek)) return false;
+  if (schedule.dailyStartTime && schedule.dailyEndTime) {
+    return localMinutes >= minutesOf(schedule.dailyStartTime) && localMinutes < minutesOf(schedule.dailyEndTime);
+  }
+  return true;
+}
+
+const DAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/** "Mon–Fri, 14:00–17:00" style summary of an offer's schedule, or null when it has none. */
+export function describeOfferSchedule(schedule: OfferSchedule): string | null {
+  if (!offerHasSchedule(schedule)) return null;
+  const days = [...schedule.applicableDays].sort((a, b) => a - b);
+  const weekdays = days.length === 5 && days.every((day, index) => day === index + 1);
+  const dayText = days.length === 0 ? "" : weekdays ? "Mon–Fri" : days.map((day) => DAY_SHORT[day]).join(", ");
+  const timeText = schedule.dailyStartTime && schedule.dailyEndTime ? `${schedule.dailyStartTime}–${schedule.dailyEndTime}` : "";
+  return [dayText, timeText].filter(Boolean).join(", ");
 }

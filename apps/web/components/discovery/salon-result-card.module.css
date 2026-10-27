@@ -1,0 +1,596 @@
+/* Booking page 3.0 horizontal salon card. Uses the page's --fq-* dark tokens (composed from the
+   landing page on /search). One column on phones; on tablets and laptops the photo, then info with
+   the offer box under it, then prices with the booking buttons under them; all five columns side
+   by side on wide (1520px+) screens. */
+.card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+  padding: 12px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.015)), var(--fq-charcoal, #0d0d12);
+  border: 1px solid var(--fq-hairline, rgba(255, 255, 255, 0.1));
+  border-radius: 18px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.32);
+  color: var(--fq-text, #f7f5f4);
+}
+
+.card:hover {
+  border-color: var(--fq-glass-border, rgba(255, 62, 87, 0.28));
+}
+
+@media (min-width: 720px) {
+  .card {
+    grid-template-columns: 220px minmax(0, 1.1fr) minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+    grid-template-areas:
+      "media info prices"
+      "media offer actions";
+    align-items: start;
+  }
+  /* No offer: info runs down the middle (no empty offer box). */
+  .card:not(:has(.offer)) {
+    grid-template-areas:
+      "media info prices"
+      "media info actions";
+  }
+  .media { grid-area: media; }
+  .info { grid-area: info; }
+  .offer { grid-area: offer; }
+  .prices { grid-area: prices; }
+  .actions { grid-area: actions; flex-direction: row; align-self: end; }
+  .actions .book,
+  .actions .queue,
+  .actions .queueClosed { flex: 1; min-width: 0; }
+  .actions .profile { flex: 1 1 100%; min-height: 36px; }
+}
+
+@media (min-width: 1520px) {
+  .card {
+    grid-template-columns: 220px minmax(170px, 1.15fr) minmax(160px, 0.95fr) minmax(170px, 1fr) 140px;
+    grid-template-areas: "media info offer prices actions";
+  }
+  .card:not(:has(.offer)) {
+    grid-template-columns: 220px minmax(200px, 1.4fr) minmax(170px, 1fr) 140px;
+    grid-template-areas: "media info prices actions";
+  }
+  .actions { flex-direction: column; justify-content: center; align-self: center; }
+}
+
+/* ── Photo ── */
+.media {
+  position: relative;
+  overflow: hidden;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.mediaLink {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
+}
+
+a.mediaLink {
+  cursor: pointer;
+}
+
+.offerBadge {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: var(--fq-gradient);
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 800;
+  box-shadow: 0 6px 16px rgba(242, 10, 131, 0.35);
+}
+
+.arrow {
+  position: absolute;
+  top: 50%;
+  width: 30px;
+  height: 30px;
+  margin-top: -15px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.arrowPrev { left: 8px; }
+.arrowNext { right: 8px; }
+
+.arrow:focus-visible,
+.thumb:focus-visible,
+.linkButton:focus-visible {
+  outline: 2px solid var(--fq-orange);
+  outline-offset: 2px;
+}
+
+.counter {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+/* ── Info ── */
+.info {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.titleRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.name {
+  margin: 0;
+  font-size: 1.15rem;
+  line-height: 1.2;
+}
+
+.name a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.name a:hover {
+  text-decoration: underline;
+}
+
+.rating {
+  padding: 2px 8px;
+  border-radius: 8px;
+  background: rgba(255, 195, 104, 0.16);
+  color: #ffc368;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.rating small {
+  color: var(--fq-text-faint);
+  font-weight: 600;
+}
+
+.verified {
+  color: #72d59a;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.address,
+.distance {
+  margin: 0;
+  color: var(--fq-text-muted);
+  font-size: 0.86rem;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.typeChip {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--fq-hairline);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.typeUnknown {
+  color: var(--fq-text-faint);
+}
+
+.thumbs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.thumb {
+  width: 54px;
+  padding: 0;
+  border: 1px solid var(--fq-hairline);
+  border-radius: 7px;
+  background: none;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.thumbMore {
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 6px 9px;
+  border: 1px solid var(--fq-hairline);
+  border-radius: 7px;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.status {
+  margin: 2px 0 0;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.status::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.open { color: #3ddc84; }
+.closed { color: #ff8b9a; }
+.unknown { color: var(--fq-text-faint); font-weight: 600; }
+
+/* Only the "Open now" / "Closed" word is coloured; the time stays neutral. */
+.statusDetail {
+  color: var(--fq-text-muted);
+  font-weight: 600;
+}
+
+/* ── Offer: a highlighted box; the whole box opens the offers list ── */
+.offer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid rgba(255, 62, 87, 0.65);
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(242, 10, 131, 0.28), rgba(110, 8, 36, 0.55));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04), 0 8px 22px rgba(242, 10, 131, 0.18);
+  color: var(--fq-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.offer:hover {
+  border-color: var(--fq-orange);
+}
+
+.offer:focus-visible {
+  outline: 2px solid var(--fq-orange);
+  outline-offset: 2px;
+}
+
+.offerBody {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+
+.offerHighlight {
+  white-space: nowrap;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--fq-gradient);
+  color: #fff;
+}
+
+.offerMore {
+  margin-top: 4px;
+  color: var(--fq-orange);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.offerChevron {
+  flex: 0 0 auto;
+  color: #fff;
+  font-size: 1.6rem;
+  line-height: 1;
+}
+
+.offerIcon {
+  display: grid;
+  flex: 0 0 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--fq-gradient);
+  color: #fff;
+  font-weight: 900;
+}
+
+.offerTitle {
+  margin: 0;
+  color: #ff9ccc;
+  text-transform: none;
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.offerValue {
+  margin: 2px 0 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.offerTerms,
+.offerValid {
+  margin: 4px 0 0;
+  color: var(--fq-text-muted);
+  font-size: 0.75rem;
+}
+
+.linkButton {
+  margin-top: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--fq-orange);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+/* ── Prices ── */
+.prices {
+  min-width: 0;
+}
+
+.prices ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.prices li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--fq-text-muted);
+  font-size: 0.84rem;
+}
+
+.prices li.selectedRow {
+  color: var(--fq-text);
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.serviceName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.servicePrice {
+  flex-shrink: 0;
+}
+
+.servicePrice s {
+  color: var(--fq-text-faint);
+  font-weight: 500;
+}
+
+.selectedRow .servicePrice strong,
+.servicePrice s + strong {
+  color: var(--fq-pink);
+}
+
+.conditional {
+  margin: 6px 0 0;
+  color: #ffc368;
+  font-size: 0.75rem;
+}
+
+.allServices {
+  display: inline-block;
+  margin-top: 8px;
+  color: var(--fq-orange);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.muted {
+  margin: 4px 0 0;
+  color: var(--fq-text-faint);
+  font-size: 0.8rem;
+}
+
+/* ── Actions ── */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.book,
+.profile {
+  display: inline-flex;
+  flex: 1;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 16px;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  font-weight: 800;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+@media (min-width: 720px) {
+  .book,
+  .profile { flex: 0 0 auto; min-width: 128px; }
+}
+
+@media (min-width: 1520px) {
+  .actions { flex-wrap: nowrap; }
+  .actions .book,
+  .actions .queue,
+  .actions .queueClosed,
+  .actions .profile { flex: 0 0 auto; width: 100%; }
+}
+
+.book {
+  background: var(--fq-gradient);
+  color: #fff;
+  box-shadow: 0 8px 20px rgba(242, 10, 131, 0.3);
+}
+
+.profile {
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: var(--fq-text);
+}
+
+/* Join Queue: outlined in the brand pink, with the live ETA under the label. */
+.queue,
+.queueClosed {
+  display: inline-flex;
+  flex: 1;
+  min-height: 42px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 14px;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  font-weight: 800;
+  line-height: 1.15;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.queue {
+  border: 1px solid var(--fq-pink);
+  background: rgba(242, 10, 131, 0.12);
+  color: #fff;
+}
+
+.queue:hover {
+  background: rgba(242, 10, 131, 0.22);
+}
+
+.queue:focus-visible {
+  outline: 2px solid var(--fq-orange);
+  outline-offset: 2px;
+}
+
+.eta {
+  margin-top: 2px;
+  color: #3ddc84;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.queueClosed {
+  border: 1px dashed rgba(255, 255, 255, 0.2);
+  color: var(--fq-text-faint);
+  font-weight: 700;
+}
+
+.book:focus-visible,
+.profile:focus-visible,
+.allServices:focus-visible {
+  outline: 2px solid var(--fq-orange);
+  outline-offset: 2px;
+}
+
+/* ── Offers dialog ── */
+.dialogBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.dialog {
+  width: min(460px, 100%);
+  max-height: 80vh;
+  overflow: auto;
+  padding: 18px;
+  border: 1px solid var(--fq-hairline);
+  border-radius: 16px;
+  background: #141016;
+  color: #f7f5f4;
+}
+
+.dialogHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dialogHead h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.dialogClose {
+  border: 0;
+  background: none;
+  color: inherit;
+  font-size: 1.5rem;
+  cursor: pointer;
+}
+
+.dialogList {
+  display: grid;
+  gap: 12px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dialogList li {
+  padding: 12px;
+  border: 1px solid rgba(242, 10, 131, 0.3);
+  border-radius: 12px;
+}
+
+.dialogList p {
+  margin: 4px 0 0;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.82rem;
+}
+
+.terms {
+  color: #ffc368 !important;
+}
+
+.dialogNote {
+  margin: 14px 0 0;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.78rem;
+}

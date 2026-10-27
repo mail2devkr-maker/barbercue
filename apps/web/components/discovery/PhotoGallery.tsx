@@ -65,7 +65,8 @@ function GalleryPhoto({
 // `failedIndices` also covers a photo whose full-size load fails INSIDE the lightbox even though
 // its thumbnail succeeded (a flakier/larger asset, or a URL that broke between the two loads):
 // navigation skips those the same way, and the whole viewer closes if every photo ends up failed.
-function Lightbox({
+// Also used by the search result cards (SalonResultCard) for their gallery thumbnails.
+export function Lightbox({
   photos,
   salonName,
   openIndex,
@@ -74,7 +75,7 @@ function Lightbox({
   markFailed,
   openerRef,
 }: {
-  photos: PhotoDto[];
+  photos: Pick<PhotoDto, "url" | "altText">[];
   salonName: string;
   openIndex: number;
   setOpenIndex: (i: number | null) => void;

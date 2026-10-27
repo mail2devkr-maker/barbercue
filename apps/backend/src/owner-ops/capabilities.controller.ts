@@ -9,7 +9,8 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { SalonCapabilitiesService } from './capabilities.service';
 
 @Controller('dashboard/salons/:salonId/capabilities')
-@Roles(Role.SALON_OWNER)
+// Read-only: platform admins managing a salon (e.g. its Offers page) need the same feature list.
+@Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN)
 export class CapabilitiesController {
   constructor(private readonly capabilities: SalonCapabilitiesService) {}
 
