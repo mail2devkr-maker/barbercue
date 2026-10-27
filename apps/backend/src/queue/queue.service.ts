@@ -1,5 +1,6 @@
 import { BadRequestException, HttpStatus, Injectable, Optional } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { createHash, randomBytes } from 'node:crypto';
 import {
   BookingErrorCode,
   BookingStatus,
@@ -311,6 +312,175 @@ export class QueueService {
       `dashboard/salons/${salonId}/queue`,
     );
     return this.getDetailOrThrow(entryId);
+  }
+
+  /**
+   * No account/Gmail/OTP required: this is an *unverified* walk-in reservation.
+   * A bearer capability (never persisted in plaintext) scopes subsequent ticket reads/actions.
+   * It cannot authenticate an existing account or prove telephone ownership.
+   */
+  async joinGuestWalkIn(
+    salonId: string,
+    serviceId: string,
+    contactName: string,
+    contactPhone: string,
+  ): Promise<QueueEntryDetailDto & { guestAccessToken: string }> {
+    const salon = await this.availability.getSalonOrThrow(salonId);
+    await this.availability.getServiceOrThrow(salonId, serviceId);
+    const guestAccessToken = randomBytes(32).toString('base64url');
+    const guestAccessHash = createHash('sha256').update(guestAccessToken).digest('hex');
+    const activeStatuses = [
+      QueueEntryStatus.WAITING,
+      QueueEntryStatus.CALLED,
+      QueueEntryStatus.IN_SERVICE,
+    ];
+    const entryId = await this.prisma.$transaction(async (tx) => {
+      // Serialize duplicate check and token allocation for this salon.
+      await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${salonId}))`);
+      const existing = await tx.queueEntry.findFirst({
+        where: { salonId, contactPhone, status: { in: activeStatuses } },
+        select: { id: true },
+      });
+      if (existing) {
+        throw new AppException(
+          QueueErrorCode.ALREADY_IN_QUEUE,
+          'This mobile number already has an active token at this shop.',
+          HttpStatus.CONFLICT,
+        );
+      }
+      const activeCount = await tx.queueEntry.count({
+        where: { salonId, status: { in: activeStatuses } },
+      });
+      if (activeCount >= 80) {
+        throw new BadRequestException('This Live Queue is at capacity; please contact the shop.');
+      }
+      const tokenNumber = await this.nextTokenNumber(tx, salonId);
+      const row = await tx.queueEntry.create({
+        data: {
+          salonId,
+          serviceId,
+          source: QueueEntrySource.WALK_IN,
+          tokenNumber,
+          status: QueueEntryStatus.WAITING,
+          contactName,
+          contactPhone,
+          guestAccessHash,
+          guestAccessExpiresAt: new Date(Date.now() + 24 * 60 * 60_000),
+        },
+        select: { id: true },
+      });
+      return row.id;
+    }, TRANSACTION_OPTIONS);
+    await this.recomputeEtas(salonId);
+    this.realtime.emitQueueUpdated(salonId);
+    this.triggerAutoAssign(salonId);
+    await this.notifications.notify(
+      salon.ownerUserId,
+      'owner.walk_in.joined',
+      { salonId },
+      `dashboard/salons/${salonId}/queue`,
+    );
+    return { ...(await this.getDetailOrThrow(entryId)), guestAccessToken };
+  }
+
+  private guestHash(guestAccessToken: string): string {
+    if (!/^[a-zA-Z0-9_-]{43}$/.test(guestAccessToken)) {
+      throw new AppException(
+        QueueErrorCode.QUEUE_ENTRY_NOT_FOUND,
+        'Live Queue ticket not found.',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    return createHash('sha256').update(guestAccessToken).digest('hex');
+  }
+
+  async getGuestEntry(
+    entryId: string,
+    guestAccessToken: string,
+  ): Promise<QueueEntryDetailDto> {
+    const row = await this.prisma.queueEntry.findFirst({
+      where: {
+        id: entryId,
+        guestAccessHash: this.guestHash(guestAccessToken),
+        guestAccessExpiresAt: { gt: new Date() },
+      },
+      select: { id: true },
+    });
+    if (!row) {
+      throw new AppException(
+        QueueErrorCode.QUEUE_ENTRY_NOT_FOUND,
+        'Live Queue ticket not found.',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    return this.getDetailOrThrow(entryId);
+  }
+
+  async cancelGuestEntry(entryId: string, guestAccessToken: string): Promise<QueueEntryDetailDto> {
+    await this.getGuestEntry(entryId, guestAccessToken);
+    const row = await this.prisma.queueEntry.findUniqueOrThrow({
+      where: { id: entryId },
+      select: { salonId: true },
+    });
+    const claim = await this.prisma.queueEntry.updateMany({
+      where: {
+        id: entryId,
+        guestAccessHash: this.guestHash(guestAccessToken),
+        guestAccessExpiresAt: { gt: new Date() },
+        bookingId: null,
+        status: { in: [QueueEntryStatus.WAITING, QueueEntryStatus.CALLED] },
+      },
+      data: { status: QueueEntryStatus.CANCELLED },
+    });
+    if (claim.count !== 1) {
+      throw new AppException(
+        QueueErrorCode.INVALID_QUEUE_TRANSITION,
+        'This Live Queue ticket can no longer be cancelled.',
+        HttpStatus.CONFLICT,
+      );
+    }
+    await this.recomputeEtas(row.salonId);
+    this.realtime.emitQueueUpdated(row.salonId);
+    this.triggerAutoAssign(row.salonId);
+    return this.getDetailOrThrow(entryId);
+  }
+
+  async respondArrival(
+    entryId: string,
+    choice: boolean,
+    selector: { customerId?: string; guestAccessToken?: string },
+  ): Promise<QueueEntryDetailDto> {
+    const ownership = selector.customerId
+      ? { customerId: selector.customerId }
+      : {
+          guestAccessHash: this.guestHash(selector.guestAccessToken ?? ''),
+          guestAccessExpiresAt: { gt: new Date() },
+        };
+    const updated = await this.prisma.queueEntry.updateMany({
+      where: {
+        id: entryId,
+        ...ownership,
+        status: { in: [QueueEntryStatus.WAITING, QueueEntryStatus.CALLED] },
+        arrivedAt: null,
+        arrivalPromptSentAt: { not: null },
+        customerArrivalResponseAt: null,
+      },
+      data: { customerArrivalResponse: choice, customerArrivalResponseAt: new Date() },
+    });
+    if (updated.count === 0) {
+      // Do not reveal any ticket details to a caller without a valid bearer capability.
+      const current = await this.prisma.queueEntry.findFirst({
+        where: { id: entryId, ...ownership },
+        select: { customerArrivalResponseAt: true },
+      });
+      if (!current) throw new AppException(QueueErrorCode.QUEUE_ENTRY_NOT_FOUND, 'Ticket not found.', HttpStatus.NOT_FOUND);
+      if (!current.customerArrivalResponseAt) {
+        throw new AppException(QueueErrorCode.INVALID_QUEUE_TRANSITION, 'Arrival response is no longer available.', HttpStatus.CONFLICT);
+      }
+    }
+    const row = await this.getDetailOrThrow(entryId);
+    this.realtime.emitQueueUpdated(row.salonId);
+    return row;
   }
 
   async getActiveForCustomer(
@@ -2517,6 +2687,8 @@ export class QueueService {
       customerPhone: entry.contactPhone ?? entry.customer?.phone ?? null,
       customerName: entry.contactName ?? null,
       arrivedAt: entry.arrivedAt?.toISOString() ?? null,
+      arrivalPromptSentAt: entry.arrivalPromptSentAt?.toISOString() ?? null,
+      customerArrivalResponse: entry.customerArrivalResponse,
       assignedStaffName: entry.assignedStaff?.displayName ?? null,
       assignedChairLabel: entry.assignedChair?.label ?? null,
       preferredStaffId: entry.booking?.preferredStaffId ?? null,
