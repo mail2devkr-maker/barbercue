@@ -4,6 +4,7 @@ import { RealtimeModule } from '../realtime/realtime.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { SalonQueueController } from './salon-queue.controller';
 import { QueueEntriesController } from './queue-entries.controller';
+import { QueueContactController } from './queue-contact.controller';
 import { BookingCheckInController } from './booking-check-in.controller';
 import { DashboardQueueController } from './dashboard-queue.controller';
 import { QueueService } from './queue.service';
@@ -27,6 +28,7 @@ import { AssignmentReleaseModule } from './assignment-release.module';
   controllers: [
     SalonQueueController,
     QueueEntriesController,
+    QueueContactController,
     BookingCheckInController,
     DashboardQueueController,
     ManualChairOccupancyController,
