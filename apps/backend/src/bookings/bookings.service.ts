@@ -185,6 +185,9 @@ export class BookingsService {
         input.offerId,
         services,
         source,
+        new Date(),
+        // Offer days, times and validity are judged at the appointment, not at booking time.
+        new Date(input.slotStart),
       );
     }
     const onlineBookingDiscountPercent = offerApplication
@@ -443,6 +446,7 @@ export class BookingsService {
           services,
           source,
           new Date(),
+          new Date(input.slotStart),
         );
         if (
           !offerApplication ||
