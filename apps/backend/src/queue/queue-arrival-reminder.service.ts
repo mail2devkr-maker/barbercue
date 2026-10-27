@@ -4,6 +4,7 @@ import { NotificationCategory, QueueEntryStatus } from '@barbercue/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationDeliveryService } from '../notifications/notification-delivery.service';
 import { QueueService } from './queue.service';
+import { RealtimeGateway } from '../realtime/realtime.gateway';
 
 /** Customers and shop receive the same T-10 *estimated* service-arrival prompt. */
 export const LIVE_QUEUE_ARRIVAL_LEAD_MINUTES = 10;
@@ -19,6 +20,7 @@ export class QueueArrivalReminderService {
     private readonly prisma: PrismaService,
     private readonly queue: QueueService,
     private readonly delivery: NotificationDeliveryService,
+    private readonly realtime: RealtimeGateway,
   ) {}
 
   @Interval(30_000)
@@ -136,7 +138,7 @@ export class QueueArrivalReminderService {
         });
         continue;
       }
-      this.queue.notifySalonQueueUpdated(row.salonId);
+      this.realtime.emitQueueUpdated(row.salonId);
       sent++;
     }
     return sent;
