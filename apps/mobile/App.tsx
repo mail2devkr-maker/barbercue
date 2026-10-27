@@ -21,7 +21,7 @@ import { OfflineBanner } from './components/OfflineBanner';
 import { StartupIntro, StartupIntroErrorBoundary } from './components/StartupIntro';
 import AuthStack from './navigation/AuthStack';
 import { PasswordChangeRequiredNotice } from './components/PasswordChangeRequiredNotice';
-import { subscribePasswordChangeRequired } from './lib/password-change-gate';
+import { usePasswordChangeGate } from './lib/use-password-change-gate';
 import RootNavigator from './navigation/RootNavigator';
 import OwnerNavigator from './navigation/OwnerNavigator';
 import StaffNavigator from './navigation/StaffNavigator';
@@ -91,12 +91,7 @@ function AuthenticatedNavigator({ roles }: { roles: Role[] }) {
 function Root() {
   const { status, user, logout } = useAuth();
   // True once the backend has told this session its account holds a temporary password; cleared when the session ends.
-  const [mustChangePassword, setMustChangePassword] = useState(false);
-
-  useEffect(() => subscribePasswordChangeRequired(() => setMustChangePassword(true)), []);
-  useEffect(() => {
-    if (status !== 'authenticated') setMustChangePassword(false);
-  }, [status]);
+  const mustChangePassword = usePasswordChangeGate(status);
 
   if (status === 'loading') {
     return (

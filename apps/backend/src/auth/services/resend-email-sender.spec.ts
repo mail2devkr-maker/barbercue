@@ -88,6 +88,43 @@ describe('ResendEmailSender', () => {
     });
   });
 
+  describe('sendOwnerTransferInvitation', () => {
+    const link = `https://fastque.com/accept-owner-invitation#t=${'a'.repeat(64)}`;
+
+    it('POSTs the single-use link and hour-based expiry to Resend, with the token only in the body link', async () => {
+      fetchSpy.mockResolvedValue(jsonResponse(200, { id: 'email-3' }));
+      await service.sendOwnerTransferInvitation('owner@example.com', link, 72);
+
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      const body = JSON.parse(fetchSpy.mock.calls[0][1]?.body as string);
+      expect(body.to).toBe('owner@example.com');
+      expect(body.from).toBe('BarberCue <no-reply@barbercue.app>');
+      expect(body.html).toContain(link);
+      expect(body.html).toContain('72 hours');
+      expect(body.subject).not.toContain('a'.repeat(64));
+      expect(fetchSpy.mock.calls[0][0]).not.toContain('a'.repeat(64));
+      expect(JSON.stringify(fetchSpy.mock.calls[0][1]?.headers)).not.toContain('a'.repeat(64));
+    });
+
+    it('never logs the link or the API key when the provider refuses', async () => {
+      fetchSpy.mockResolvedValue(jsonResponse(422, { message: 'domain not verified' }));
+      await expect(
+        service.sendOwnerTransferInvitation('owner@example.com', link, 72),
+      ).rejects.toMatchObject({ code: AuthErrorCode.EMAIL_DELIVERY_UNAVAILABLE, status: 503 });
+      const logged = JSON.stringify(loggerErrorSpy.mock.calls);
+      expect(logged).not.toContain('a'.repeat(64));
+      expect(logged).not.toContain('test-secret-key-do-not-log-me');
+    });
+
+    it('fails without calling the provider when e-mail is not configured', async () => {
+      delete process.env.EMAIL_FROM_ADDRESS;
+      await expect(
+        service.sendOwnerTransferInvitation('owner@example.com', link, 72),
+      ).rejects.toMatchObject({ code: AuthErrorCode.EMAIL_DELIVERY_UNAVAILABLE });
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+  });
+
   describe('provider failure', () => {
     it('throws EMAIL_DELIVERY_UNAVAILABLE when Resend returns a non-2xx status', async () => {
       fetchSpy.mockResolvedValue(jsonResponse(422, { message: 'domain not verified' }));
