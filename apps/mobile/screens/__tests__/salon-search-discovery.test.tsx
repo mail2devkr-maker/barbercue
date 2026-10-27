@@ -91,6 +91,16 @@ async function render() {
   });
 }
 
+afterEach(async () => {
+  // VirtualizedList schedules delayed cell renders; stop them before Jest tears down
+  // its console, otherwise even passing assertions can produce an exit code 1.
+  if (tree) {
+    await act(async () => {
+      tree.unmount();
+    });
+  }
+});
+
 beforeEach(() => {
   mockedApi.mockReset();
   mockedAuth.mockReturnValue({ user: { id: 'u1', roles: [Role.CUSTOMER] }, status: 'authenticated' });
