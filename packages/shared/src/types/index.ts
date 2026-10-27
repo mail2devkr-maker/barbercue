@@ -1333,6 +1333,7 @@ export const NOTIFICATION_TYPES = [
   // corrected to COMPLETED — deliberately NOT 'booking.confirmed', which would misstate the outcome.
   "booking.corrected",
   "queue.turn_approaching",
+  "queue.arrival_check",
   "owner.booking.created",
   "owner.booking.cancelled",
   "owner.booking.no_show",
