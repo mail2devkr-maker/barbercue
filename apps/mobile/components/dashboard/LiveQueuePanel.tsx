@@ -1,6 +1,6 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import { Alert, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Linking, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   DASHBOARD_PATHS,
   Language,
@@ -291,6 +291,13 @@ export const LiveQueuePanel = forwardRef<LiveQueuePanelHandle, { salonId: string
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [chairBusyId, setChairBusyId] = useState<string | null>(null);
+  const [arrivalSnoozes, setArrivalSnoozes] = useState<Record<string, number>>({});
+  const [arrivalClock, setArrivalClock] = useState(Date.now());
+  const [arrivalBusy, setArrivalBusy] = useState(false);
+  useEffect(() => {
+    const timer = setInterval(() => setArrivalClock(Date.now()), 20_000);
+    return () => clearInterval(timer);
+  }, []);
 
   const hasDataRef = useRef(false);
 
@@ -386,6 +393,31 @@ export const LiveQueuePanel = forwardRef<LiveQueuePanelHandle, { salonId: string
 
   const activeStaff = data.staffRoster.filter((s) => s.status === 'ACTIVE');
   const activeEntries = data.entries.filter((e) => e.status !== 'COMPLETED' && e.status !== 'CANCELLED' && e.status !== 'NO_SHOW');
+  const arrivalEntry = activeEntries.find((entry) =>
+    Boolean(entry.arrivalPromptSentAt) && !entry.arrivedAt &&
+    (arrivalSnoozes[entry.id] ?? 0) < arrivalClock
+  );
+  function confirmArrivalAtShop() {
+    if (!arrivalEntry || arrivalBusy) return;
+    Alert.alert(
+      'Confirm physical arrival',
+      'Did you personally verify this Live Queue customer is physically at your shop?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Yes, confirmed', onPress: async () => {
+          setArrivalBusy(true);
+          try {
+            await apiFetch(liveQueuePaths.arrive(arrivalEntry.id), { method: 'POST' });
+            await load(true);
+          } catch (err) {
+            Alert.alert('Could not confirm arrival', err instanceof ApiError ? err.message : 'Please retry.');
+          } finally {
+            setArrivalBusy(false);
+          }
+        } },
+      ],
+    );
+  }
 
   const chairStatus = (
     <Card style={styles.entryCard}>
@@ -408,6 +440,28 @@ export const LiveQueuePanel = forwardRef<LiveQueuePanelHandle, { salonId: string
   return (
     <>
       {chairStatus}
+      <Modal transparent animationType="fade" visible={Boolean(arrivalEntry)}
+        onRequestClose={() => undefined}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,.92)', justifyContent: 'center', padding: 22 }}>
+          <View style={{ backgroundColor: '#fff', borderRadius: 18, padding: 26 }}>
+            <Text style={{ fontSize: 23, fontWeight: 'bold', color: '#111' }}>Live Queue · Arrival check</Text>
+            <Text style={{ marginVertical: 14, color: '#111' }}>
+              Token #{arrivalEntry?.tokenNumber} · {arrivalEntry?.customerName ?? 'Customer'}.
+              Estimated service time is around 10 minutes away. Has this customer physically arrived?
+            </Text>
+            <Text style={{ color: '#222', marginBottom: 12 }}>
+              Customer response: {arrivalEntry?.customerArrivalResponse === true ? 'Yes, self-reported'
+                : arrivalEntry?.customerArrivalResponse === false ? 'Not yet' : 'Not answered'}
+            </Text>
+            <Button title="Confirm arrived at shop" loading={arrivalBusy} onPress={confirmArrivalAtShop} />
+            <Button title="Not yet · Remind in 2 minutes" variant="outline"
+              onPress={() => {
+                if (!arrivalEntry) return;
+                setArrivalSnoozes((prev) => ({ ...prev, [arrivalEntry.id]: Date.now() + 120_000 }));
+              }} />
+          </View>
+        </View>
+      </Modal>
       {activeEntries.map((entry) => (
         <EntryRow key={entry.id} entry={entry} chairs={data.chairs} activeStaff={activeStaff} onAction={() => void load(true)} />
       ))}
