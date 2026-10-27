@@ -77,7 +77,8 @@
   text-transform: uppercase;
 }
 
-.field input {
+.field input,
+.citySelect {
   width: 100%;
   min-height: 48px;
   padding: 0 14px;
@@ -528,8 +529,8 @@
 }
 .discoveryLayout .results { width: auto; margin: 0; }
 .discoveryLayout .grid { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
-/* Below the fixed site header (152px, see landing.module.css .siteHeaderSpacer). */
-.filtersAside { position: sticky; top: 168px; max-height: calc(100vh - 184px); overflow-y: auto; }
+/* Sticky with no inner scrollbar; SearchClient sets `top` from the panel's height (see asideTop). */
+.filtersAside { position: sticky; top: 168px; }
 .filtersToggle {
   display: none;
   align-self: end;
@@ -703,4 +704,9 @@
   .discoveryLayout {
     width: calc(100% - 32px);
   }
+}
+
+.citySelect {
+  color-scheme: dark;
+  cursor: pointer;
 }

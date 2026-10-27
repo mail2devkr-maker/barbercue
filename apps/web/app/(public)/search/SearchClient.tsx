@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type {
+  CityDto,
   CitySearchResultDto,
   CountryDto,
   PaginatedResult,
@@ -27,6 +28,10 @@ import { apiFetch } from "../../../lib/api";
 import { useFavorites } from "../../../lib/favorites";
 import styles from "./search.module.css";
 
+// The filter sidebar sits below the fixed site header (152px, see landing.module.css .siteHeaderSpacer).
+const SIDEBAR_TOP = 168;
+const SIDEBAR_BOTTOM_GAP = 16;
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api/v1";
 
 export default function SearchClient() {
@@ -40,6 +45,8 @@ export default function SearchClient() {
   // catalog would need an actual country selector here, not a silent guess at that point.
   const [defaultCountryId, setDefaultCountryId] = useState("");
   const [selectedCity, setSelectedCity] = useState<CitySearchResultDto | null>(null);
+  // Fallback city list (cities with salons) when the country catalogue isn't available.
+  const [salonCities, setSalonCities] = useState<CityDto[] | null>(null);
   const [results, setResults] = useState<SalonListItemDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -66,6 +73,24 @@ export default function SearchClient() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const filterCount = activeFilterCount(discovery);
+  // The sidebar never scrolls inside itself. If it fits on screen it stays pinned under the header;
+  // if it is taller, it scrolls with the page and then stays put once its bottom reaches the
+  // bottom of the screen (a negative sticky top), so every option is reachable by page scrolling.
+  const asideRef = useRef<HTMLElement>(null);
+  const [asideTop, setAsideTop] = useState(SIDEBAR_TOP);
+  useEffect(() => {
+    const aside = asideRef.current;
+    if (!aside || typeof ResizeObserver === "undefined") return undefined;
+    const update = () => setAsideTop(Math.min(SIDEBAR_TOP, window.innerHeight - aside.offsetHeight - SIDEBAR_BOTTOM_GAP));
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(aside);
+    window.addEventListener("resize", update);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", update);
+    };
+  }, []);
   // "My favorites" sends the customer's saved salon IDs to the public search; until they are known
   // (or when signed out / nothing saved) there is nothing to search.
   const { savedIds, loaded: favoritesLoaded, isCustomer, ready: authReady } = useFavorites();
@@ -156,14 +181,25 @@ export default function SearchClient() {
   }
 
   useEffect(() => {
+    // City autocomplete needs the country catalogue. When it isn't available (an empty catalogue,
+    // as on a fresh local database, or a failed request), fall back to a plain list of the cities
+    // that actually have salons, so a customer can always pick a city without sharing location.
+    const fallBackToSalonCities = () =>
+      apiFetch<CityDto[]>(DISCOVERY_PATHS.cities)
+        .then((cities) => {
+          setSalonCities(cities);
+          // Keep a city that is already in the link selected.
+          const fromLink = cities.find((c) => c.slug === new URLSearchParams(window.location.search).get("city"));
+          if (fromLink) setSelectedCity({ id: fromLink.id, name: fromLink.name, slug: fromLink.slug, countryCode: fromLink.countryCode, region: null });
+        })
+        .catch(() => setSalonCities([]));
     apiFetch<CountryDto[]>(COUNTRY_PATHS.countries)
       .then((countries) => {
         const india = countries.find((c) => c.isoCode2 === "IN");
         if (india) setDefaultCountryId(india.id);
+        else void fallBackToSalonCities();
       })
-      .catch(() => {
-        /* City autocomplete stays disabled — shop-name search and Near Me still work */
-      });
+      .catch(() => void fallBackToSalonCities());
   }, []);
 
   useEffect(() => {
@@ -221,6 +257,10 @@ export default function SearchClient() {
     if (selectedCity) {
       params.set("city", selectedCity.slug);
       params.set("countryCode", selectedCity.countryCode);
+    } else if (salonCities) {
+      // The fallback list's "Any city" really means any city.
+      params.delete("city");
+      params.delete("countryCode");
     }
     if (styleName) params.set("style", styleName);
     router.push(`/search${params.size ? `?${params.toString()}` : ""}`);
@@ -280,6 +320,21 @@ export default function SearchClient() {
                 onSelect={setSelectedCity}
                 labelledBy="search-city-label"
               />
+            ) : salonCities ? (
+              <select
+                className={styles.citySelect}
+                aria-labelledby="search-city-label"
+                value={selectedCity?.slug ?? ""}
+                onChange={(event) => {
+                  const city = salonCities.find((c) => c.slug === event.target.value);
+                  setSelectedCity(city ? { id: city.id, name: city.name, slug: city.slug, countryCode: city.countryCode, region: null } : null);
+                }}
+              >
+                <option value="">{salonCities.length ? "Any city" : "No cities yet"}</option>
+                {salonCities.map((city) => (
+                  <option key={city.id} value={city.slug}>{city.name}{city.state ? `, ${city.state}` : ""}</option>
+                ))}
+              </select>
             ) : (
               <input type="search" placeholder="Loading cities…" disabled />
             )}
@@ -323,7 +378,13 @@ export default function SearchClient() {
       )}
 
       <div className={styles.discoveryLayout}>
-      <aside id="discovery-filters" className={`${styles.filtersAside} ${filtersOpen ? styles.filtersAsideOpen : ""}`} aria-label="Search filters">
+      <aside
+        id="discovery-filters"
+        ref={asideRef}
+        style={{ top: asideTop }}
+        className={`${styles.filtersAside} ${filtersOpen ? styles.filtersAsideOpen : ""}`}
+        aria-label="Search filters"
+      >
         <FiltersPanel
           state={discovery}
           onChange={applyChanges}
