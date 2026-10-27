@@ -3,6 +3,7 @@ import { BookingsModule } from '../bookings/bookings.module';
 import { RealtimeModule } from '../realtime/realtime.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { NotificationDeliveryModule } from '../notifications/notification-delivery.module';
+import { PushNotificationsModule } from '../push-notifications/push-notifications.module';
 import { SalonQueueController } from './salon-queue.controller';
 import { QueueEntriesController } from './queue-entries.controller';
 import { QueueContactController } from './queue-contact.controller';
@@ -27,6 +28,7 @@ import { AssignmentReleaseModule } from './assignment-release.module';
     RealtimeModule,
     NotificationsModule,
     NotificationDeliveryModule,
+    PushNotificationsModule,
     AssignmentReleaseModule,
   ],
   controllers: [
