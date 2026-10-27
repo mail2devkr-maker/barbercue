@@ -3,6 +3,7 @@
 ALTER TABLE "queue_entries"
   ADD COLUMN "guestAccessHash" VARCHAR(64),
   ADD COLUMN "guestAccessExpiresAt" TIMESTAMPTZ(6),
+  ADD COLUMN "guestExpoPushToken" VARCHAR(255),
   ADD COLUMN "arrivalPromptSentAt" TIMESTAMPTZ(6),
   ADD COLUMN "customerArrivalResponse" BOOLEAN,
   ADD COLUMN "customerArrivalResponseAt" TIMESTAMPTZ(6);
