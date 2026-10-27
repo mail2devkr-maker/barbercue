@@ -22,6 +22,7 @@ import {
   type OwnerBookingPushData,
 } from '../lib/push-navigation';
 import { requestOwnerArrivalPrompt } from '../lib/arrival-prompt';
+import { parseQueueArrivalPushData, requestQueueArrivalNavigation } from '../lib/queue-push-navigation';
 import {
   LOCAL_ARRIVAL_ALERT_TYPE,
   foregroundArrivalPushBehavior,
@@ -110,6 +111,27 @@ export function PushNotificationCoordinator() {
     return true;
   }
 
+  function handleQueueArrivalResponse(
+    response: Notifications.NotificationResponse,
+    actor: MeResponse | null,
+  ): boolean {
+    const payload = parseQueueArrivalPushData(response.notification.request.content.data);
+    if (!payload) return false;
+    // A push only requests navigation; neither this handler nor its payload
+    // marks a customer arrived. Explicit UI actions require the normal API auth.
+    if (isOwner(actor)) {
+      requestQueueArrivalNavigation('owner', payload);
+      return true;
+    }
+    if (isCustomer(actor)) {
+      requestQueueArrivalNavigation('customer', payload);
+      return true;
+    }
+    // Guest push is supported as a heads-up, but its ticket remains a separate
+    // capability: never pretend a signed-out device has account-based navigation.
+    return false;
+  }
+
   function scheduleForegroundVoiceFallback(payload: OwnerBookingPushData): void {
     if (payload.type === 'booking.arrival_check') {
       // Sound for this push is decided by the notification handler above; just keep the in-app
@@ -175,12 +197,17 @@ export function PushNotificationCoordinator() {
     let mounted = true;
 
     const receivedSubscription = Notifications.addNotificationReceivedListener((notification) => {
+      const queuePayload = parseQueueArrivalPushData(notification.request.content.data);
+      const actor = currentUserRef.current;
+      if (queuePayload && isOwner(actor)) requestQueueArrivalNavigation('owner', queuePayload);
+      else if (queuePayload && isCustomer(actor)) requestQueueArrivalNavigation('customer', queuePayload);
+
       const payload = parseOwnerBookingPushData(notification.request.content.data);
-      if (payload && isOwner(currentUserRef.current)) scheduleForegroundVoiceFallback(payload);
+      if (payload && isOwner(actor)) scheduleForegroundVoiceFallback(payload);
     });
 
     const responseSubscription = Notifications.addNotificationResponseReceivedListener((response) => {
-      if (!handleOwnerBookingResponse(response, currentUserRef.current) && !handleCustomerBookingResponse(response, currentUserRef.current)) {
+      if (!handleOwnerBookingResponse(response, currentUserRef.current) && !handleCustomerBookingResponse(response, currentUserRef.current) && !handleQueueArrivalResponse(response, currentUserRef.current)) {
         deferredResponseRef.current = response;
       }
     });
@@ -191,7 +218,7 @@ export function PushNotificationCoordinator() {
     void Notifications.getLastNotificationResponseAsync()
       .then((response) => {
         if (!mounted || !response) return;
-        if (handleOwnerBookingResponse(response, currentUserRef.current) || handleCustomerBookingResponse(response, currentUserRef.current)) {
+        if (handleOwnerBookingResponse(response, currentUserRef.current) || handleCustomerBookingResponse(response, currentUserRef.current) || handleQueueArrivalResponse(response, currentUserRef.current)) {
           void Notifications.clearLastNotificationResponseAsync();
         } else {
           deferredResponseRef.current = response;
@@ -214,7 +241,7 @@ export function PushNotificationCoordinator() {
     void registerPushDeviceForUser(user);
 
     const deferredResponse = deferredResponseRef.current;
-    if (deferredResponse && (handleOwnerBookingResponse(deferredResponse, user) || handleCustomerBookingResponse(deferredResponse, user))) {
+    if (deferredResponse && (handleOwnerBookingResponse(deferredResponse, user) || handleCustomerBookingResponse(deferredResponse, user) || handleQueueArrivalResponse(deferredResponse, user))) {
       deferredResponseRef.current = null;
       void Notifications.clearLastNotificationResponseAsync();
     }
