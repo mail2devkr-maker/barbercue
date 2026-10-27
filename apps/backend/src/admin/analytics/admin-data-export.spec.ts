@@ -231,6 +231,32 @@ describe('AdminDataExportService', () => {
     });
   });
 
+  it('fails closed and audits when a legacy phone cannot be normalized for opt-out checks', async () => {
+    process.env.CONTACT_LEDGER_HASH_KEY = 'test-key';
+    const contacts = new Map([
+      [
+        maskCustomerId(USER_ID),
+        {
+          phone: 'legacy-invalid-phone',
+          email: 'c@example.test',
+          createdAt: new Date('2026-09-01T00:00:00Z'),
+        },
+      ],
+    ]);
+    const { service, prisma, customers } = makeService(contacts);
+
+    await expect(
+      service.export('admin-1', 'CUSTOMER_CONTACTS', QUERY),
+    ).rejects.toThrow('phone suppression could not be verified');
+
+    expect(customers.exportRows).toHaveBeenCalledWith(QUERY, true);
+    expect(prisma.contactSuppression.findMany).not.toHaveBeenCalled();
+    expect(prisma.auditLog.create.mock.calls[0][0].data.metadata).toMatchObject({
+      category: 'CUSTOMER_CONTACTS',
+      outcome: 'FAILED',
+    });
+  });
+
   it('keeps staff performance and staff contact exports apart', async () => {
     const { service, prisma } = makeService(null);
     const performance = lines(
