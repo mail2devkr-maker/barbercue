@@ -1,0 +1,115 @@
+name: Nitesh Admin + Discovery Release Gate
+
+# Independent, strict certification of the reviewed combined candidate.
+# No production endpoints, user credentials, or deployment publishing.
+on:
+  pull_request:
+    paths:
+      - 'apps/backend/**'
+      - 'apps/web/**'
+      - 'apps/mobile/**'
+      - 'packages/shared/**'
+      - '.github/workflows/nitesh-release-certification.yml'
+  push:
+    branches:
+      - 'integration/nitesh-admin-discovery-*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nitesh-release-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: '5432'
+      PGUSER: postgres
+      CHAIN_DATABASE_URL: postgresql://postgres@127.0.0.1:5432/nitesh_gate?schema=public
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build:shared
+      - run: npm run prisma:generate --workspace=@barbercue/backend
+      - run: npm run typecheck --workspace=@barbercue/backend
+      - name: Verify entire migration chain on disposable PostgreSQL
+        run: |
+          psql -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE nitesh_gate"
+          cd apps/backend
+          DATABASE_URL="$CHAIN_DATABASE_URL" bash scripts/verify-migration-chain.sh
+      - name: Strict new admin and discovery regression tests (no baseline allowance)
+        working-directory: apps/backend
+        run: |
+          npx jest --ci --runInBand --runTestsByPath \
+            src/admin/analytics/admin-data-export.spec.ts \
+            src/admin/analytics/executive-metrics.spec.ts \
+            src/admin/analytics/admin-timeseries.spec.ts \
+            src/admin/admin.controller.spec.ts \
+            src/salons/discovery-upgrade.spec.ts
+
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build:shared
+      - run: npm run typecheck --workspace=@barbercue/web
+      - name: Strict new feature tests (no baseline allowance)
+        working-directory: apps/web
+        run: |
+          npx jest --ci --runInBand --runTestsByPath \
+            components/auth/__tests__/admin-route-access.test.jsx \
+            components/admin/command-center/__tests__/CommandCenter.test.jsx \
+            components/admin/people/__tests__/people.test.jsx \
+            components/admin/charts/__tests__/charts.test.jsx \
+            components/admin/shell/__tests__/admin-shell.test.jsx \
+            components/discovery/__tests__/discovery-upgrade.test.jsx
+      - name: Complete website production build
+        run: npm run build --workspace=@barbercue/web
+
+  mobile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build:shared
+      - run: npm run typecheck --workspace=@barbercue/mobile
+      - name: Strict discovery regression tests
+        working-directory: apps/mobile
+        run: |
+          npx jest --ci --runInBand --runTestsByPath \
+            lib/__tests__/discovery-search.test.ts \
+            screens/__tests__/salon-search-discovery.test.tsx
+      - name: Android JS bundle, not physical-device certification
+        working-directory: apps/mobile
+        run: npx expo export --platform android --output-dir "$RUNNER_TEMP/android-export"
