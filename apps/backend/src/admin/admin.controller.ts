@@ -1,6 +1,8 @@
 import {
   Body,
   Controller,
+  StreamableFile,
+  Res,
   Delete,
   Get,
   Header,
@@ -11,6 +13,7 @@ import {
 } from '@nestjs/common';
 import {
   ADMIN_PATHS,
+  ADMIN_PERMISSION_ROLES,
   Role,
   decideVerificationSchema,
   updateSalonStatusSchema,
@@ -61,6 +64,13 @@ import { AdminShopActivityService } from './admin-shop-activity.service';
 import { AdminExecutiveOverviewService } from './analytics/admin-executive-overview.service';
 import { AdminShopStatusService } from './analytics/admin-shop-status.service';
 import { AdminTimeseriesService } from './analytics/admin-timeseries.service';
+import { AdminCustomerAnalyticsService } from './analytics/admin-customer-analytics.service';
+import { AdminStaffAnalyticsService } from './analytics/admin-staff-analytics.service';
+import {
+  AdminDataExportService,
+  type ExportCategory,
+} from './analytics/admin-data-export.service';
+import type { Response } from 'express';
 
 /** Authentication is global; authorization is admin-role only. Monitoring routes are read-only;
  * the verification routes (Phase 18) and shop deletion are this controller's mutating surfaces —
@@ -81,6 +91,9 @@ export class AdminController {
     private readonly executive: AdminExecutiveOverviewService,
     private readonly shopStatus: AdminShopStatusService,
     private readonly timeseries: AdminTimeseriesService,
+    private readonly customerAnalytics: AdminCustomerAnalyticsService,
+    private readonly staffAnalytics: AdminStaffAnalyticsService,
+    private readonly dataExports: AdminDataExportService,
   ) {}
 
   @Get(ADMIN_PATHS.overview)
@@ -151,6 +164,95 @@ export class AdminController {
   @Header('Cache-Control', 'private, no-store')
   shopStatusReport() {
     return this.shopStatus.getStatus();
+  }
+
+  // ---- Customers & salon staff (Admin Dashboard 2.1, phase C) ----------------------------------
+  // Analytics responses never contain contact details. Each export is its own route so a role that
+  // may download the report can never reach the contact file by changing a query parameter.
+
+  @Get(ADMIN_PATHS.customers)
+  @Roles(...ADMIN_PERMISSION_ROLES.viewCustomerAnalytics)
+  @Header('Cache-Control', 'private, no-store')
+  customerOverview(
+    @Query(new ZodValidationPipe(adminAnalyticsRangeQuerySchema))
+    query: AdminAnalyticsRangeQuery,
+  ) {
+    return this.customerAnalytics.getOverview(query);
+  }
+
+  @Get(ADMIN_PATHS.salonStaff)
+  @Roles(...ADMIN_PERMISSION_ROLES.viewStaffAnalytics)
+  @Header('Cache-Control', 'private, no-store')
+  staffOverview(
+    @Query(new ZodValidationPipe(adminAnalyticsRangeQuerySchema))
+    query: AdminAnalyticsRangeQuery,
+  ) {
+    return this.staffAnalytics.getOverview(query);
+  }
+
+  @Get(`${ADMIN_PATHS.exports}/${ADMIN_PATHS.customers}`)
+  @Roles(...ADMIN_PERMISSION_ROLES.exportCustomerReport)
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  exportCustomerReport(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query(new ZodValidationPipe(adminAnalyticsRangeQuerySchema))
+    query: AdminAnalyticsRangeQuery,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    return this.sendExport(user, 'CUSTOMER_REPORT', query, res);
+  }
+
+  @Get(`${ADMIN_PATHS.exports}/${ADMIN_PATHS.customers}/${ADMIN_PATHS.contact}`)
+  @Roles(...ADMIN_PERMISSION_ROLES.exportCustomerContacts)
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  exportCustomerContacts(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query(new ZodValidationPipe(adminAnalyticsRangeQuerySchema))
+    query: AdminAnalyticsRangeQuery,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    return this.sendExport(user, 'CUSTOMER_CONTACTS', query, res);
+  }
+
+  @Get(`${ADMIN_PATHS.exports}/${ADMIN_PATHS.salonStaff}`)
+  @Roles(...ADMIN_PERMISSION_ROLES.exportStaffPerformance)
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  exportStaffPerformance(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query(new ZodValidationPipe(adminAnalyticsRangeQuerySchema))
+    query: AdminAnalyticsRangeQuery,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    return this.sendExport(user, 'STAFF_PERFORMANCE', query, res);
+  }
+
+  @Get(
+    `${ADMIN_PATHS.exports}/${ADMIN_PATHS.salonStaff}/${ADMIN_PATHS.contact}`,
+  )
+  @Roles(...ADMIN_PERMISSION_ROLES.exportStaffContacts)
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  exportStaffContacts(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query(new ZodValidationPipe(adminAnalyticsRangeQuerySchema))
+    query: AdminAnalyticsRangeQuery,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    return this.sendExport(user, 'STAFF_CONTACTS', query, res);
+  }
+
+  private async sendExport(
+    user: AuthenticatedUser,
+    category: ExportCategory,
+    query: AdminAnalyticsRangeQuery,
+    res: Response,
+  ) {
+    const file = await this.dataExports.export(user.id, category, query);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${file.filename}"`,
+    );
+    res.setHeader('Cache-Control', 'private, no-store');
+    return new StreamableFile(file.body);
   }
 
   @Get(ADMIN_PATHS.verification)

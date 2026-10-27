@@ -80,12 +80,12 @@ export const ADMIN_NAV_ITEMS: ReadonlyArray<AdminNavItem> = [
   planned("REVENUE", "platform-revenue", "FastQue Platform Revenue", "A platform-fee ledger (commissions, fees, subscriptions) — not recorded today."),
   planned("REVENUE", "settlements", "Payment & Settlement Reports", "Settlement records from the payment provider."),
 
-  planned("STAFF", "staff-overview", "Staff Overview", "Phase C: staff analytics from service sessions (data exists)."),
-  planned("STAFF", "staff-export", "Staff Data Export", "Phase C: a separately permitted, audited export."),
+  { id: "staff-overview", label: "Staff Overview", group: "STAFF", href: "/dashboard/admin/staff", status: "live" },
+  { id: "staff-export", label: "Staff Data Export", group: "STAFF", href: "/dashboard/admin/staff", query: "view=export", status: "live" },
 
   { id: "customer-trends", label: "Customer Booking Trends", group: "CUSTOMERS", href: CHARTS, query: "preset=customers", status: "live" },
-  planned("CUSTOMERS", "customer-overview", "Customer Overview", "Phase C: privacy-safe customer analytics (data exists)."),
-  planned("CUSTOMERS", "customer-export", "Customer Data Export", "Phase C: a customer-data permission, consent checks and an export audit log."),
+  { id: "customer-overview", label: "Customer Overview", group: "CUSTOMERS", href: "/dashboard/admin/customers", status: "live" },
+  { id: "customer-export", label: "Customer Data Export", group: "CUSTOMERS", href: "/dashboard/admin/customers", query: "view=export", status: "live" },
 
   { id: "field-crm", label: "Field CRM", group: "SALES", href: "/dashboard/admin/crm", status: "live" },
   { id: "crm-analytics", label: "Sales Executives", group: "SALES", href: "/dashboard/admin/crm/analytics", status: "live" },

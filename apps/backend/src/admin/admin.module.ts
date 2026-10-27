@@ -12,6 +12,9 @@ import { AdminShopActivityService } from './admin-shop-activity.service';
 import { AdminExecutiveOverviewService } from './analytics/admin-executive-overview.service';
 import { AdminShopStatusService } from './analytics/admin-shop-status.service';
 import { AdminTimeseriesService } from './analytics/admin-timeseries.service';
+import { AdminCustomerAnalyticsService } from './analytics/admin-customer-analytics.service';
+import { AdminStaffAnalyticsService } from './analytics/admin-staff-analytics.service';
+import { AdminDataExportService } from './analytics/admin-data-export.service';
 
 @Module({
   imports: [SalonSetupModule, AuthModule],
@@ -27,6 +30,9 @@ import { AdminTimeseriesService } from './analytics/admin-timeseries.service';
     AdminExecutiveOverviewService,
     AdminShopStatusService,
     AdminTimeseriesService,
+    AdminCustomerAnalyticsService,
+    AdminStaffAnalyticsService,
+    AdminDataExportService,
   ],
 })
 export class AdminModule {}

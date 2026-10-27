@@ -1,6 +1,8 @@
 // Cross-cutting constants shared by the backend (route/controller definitions) and clients
 // (URL construction) — kept here so the literal never has to be duplicated or drift between them.
 
+import { Role } from "../enums";
+
 // Matches the backend's HealthController's @Controller() path. Clients build the full URL as
 // `${API_BASE_URL}/${HEALTH_PATH}`, where API_BASE_URL already includes the /api/v1 prefix.
 export const HEALTH_PATH = 'health';
@@ -80,6 +82,12 @@ export const ADMIN_PATHS = {
   // admin/shops/status — live scheduled open/closed status; admin/analytics/timeseries — chart builder.
   shopStatus: 'status',
   timeseries: 'timeseries',
+  // admin/customers, admin/staff (salon staff analytics, no contact data) and the audited CSV exports
+  // admin/exports/{customers,staff}[/contact]. Contact exports are separate routes with their own roles.
+  customers: 'customers',
+  salonStaff: 'staff',
+  exports: 'exports',
+  contact: 'contact',
   // Phase 18 — admin/verification[/:id[/start-review|/decide]], the PLATFORM_ADMIN review queue.
   verification: 'verification',
   startReview: 'start-review',
@@ -103,6 +111,21 @@ export const ADMIN_PATHS = {
   visits: 'visits',
   followUps: 'follow-ups',
 } as const;
+
+// Admin data permissions → the roles that hold them (enforced by the backend's RolesGuard on each
+// route; the web app only mirrors them). Contact-data exports are deliberately narrower than analytics.
+export const ADMIN_PERMISSION_ROLES = {
+  viewCustomerAnalytics: [Role.PLATFORM_ADMIN, Role.CO_FOUNDER, Role.PLATFORM_VIEWER],
+  exportCustomerReport: [Role.PLATFORM_ADMIN, Role.CO_FOUNDER],
+  exportCustomerContacts: [Role.PLATFORM_ADMIN],
+  viewStaffAnalytics: [Role.PLATFORM_ADMIN, Role.CO_FOUNDER, Role.HR_ADMIN, Role.PLATFORM_VIEWER],
+  exportStaffPerformance: [Role.PLATFORM_ADMIN, Role.CO_FOUNDER, Role.HR_ADMIN],
+  exportStaffContacts: [Role.PLATFORM_ADMIN, Role.HR_ADMIN],
+} as const satisfies Record<string, readonly Role[]>;
+export type AdminPermission = keyof typeof ADMIN_PERMISSION_ROLES;
+export function hasAdminPermission(roles: readonly Role[], permission: AdminPermission): boolean {
+  return (ADMIN_PERMISSION_ROLES[permission] as readonly Role[]).some((r) => roles.includes(r));
+}
 
 // Proposed shop adoption thresholds (docs/admin-dashboard-2.0/PLAN.md §4) — business proposals, not
 // industry standards. "Completed visits" = completed appointments + served walk-ins.

@@ -134,7 +134,7 @@ Started 2026-10-27 on `feature/admin-dashboard-2.0`.
 | --- | --- | --- |
 | A — Admin app shell | ✅ | `components/admin/shell/*`: the owner dashboard's rail + sidebar + toolbar styles (`owner.module.css`), 13 sidebar sections from one registry (`admin-nav.ts`), shared IST reporting period in the top bar (kept across pages for the browser session), phone drawer. Owner routes and navigation are untouched; the public header/footer step aside on `/dashboard/admin/**`. Sidebar items whose data is not recorded open an honest "Planned" page that names what is missing — never sample numbers. |
 | B — Chart builder | ✅ (partial) | `/dashboard/admin/analytics/chart-builder`, `GET admin/analytics/timeseries`: up to 6 KPIs, daily/weekly/monthly, previous-period overlay, line / column / area / combination per series, one y-axis per unit (a third unit is refused, never mixed), legend toggles, hover tooltip, CSV + PNG export, full screen, saved views. **Gaps:** saved views live in the browser (no `ChartPreferences` table yet), no zoom, no geography/salesperson filters, hourly granularity not offered. |
-| C — Customers & staff | ⛔ next | Data exists (bookings, queue entries, service sessions). Needs separate customer-data and staff-data export permissions and an export audit table. |
+| C — Customers & staff | ✅ | `/dashboard/admin/customers` + `/staff`, `GET admin/customers`, `GET admin/staff`, four audited CSV exports (see below). Analytics responses carry no contact data: customers are masked IDs, staff are display names. |
 | D — Open / closed shops | ✅ (partial) | `/dashboard/admin/shops/status`, `GET admin/shops/status`: scheduled open/closed from weekly hours in each shop's own time zone (overnight hours, closed days, "unknown" when hours or zone are missing), owner's "closed for today", accepting bookings, opening/closing within an hour, "open with no bookings for 4 h", hour-by-hour scheduled-open shops vs visits for today. **Not available:** merchant-app online (not recorded), holiday/one-time exceptions and effective-dated schedule history (no tables) — so no historical open-shop charts. |
 | E — QA | 🔄 | Unit tests for schedule rules, buckets, query validation, chart config, combo chart, navigation and route access; SQL checked against a local QA database. Not done: load testing. |
 
@@ -148,3 +148,32 @@ Started 2026-10-27 on `feature/admin-dashboard-2.0`.
 | Accepting bookings | Shop is ACTIVE and not closed for today. |
 | Open, no bookings | Scheduled open, accepting bookings, and no new booking or walk-in for ≥ 4 hours since it opened (proposed default). |
 | Counts | Only ACTIVE shops are counted as open/closed; pending and suspended shops are listed but not counted. |
+
+### Customers, staff and data exports (phase C)
+
+**Permissions** (`ADMIN_PERMISSION_ROLES` in `packages/shared`, enforced per route by the backend RolesGuard; the web app only mirrors them):
+
+| Permission | Roles | Route |
+| --- | --- | --- |
+| View customer analytics | Platform admin, Co-founder, Viewer | `GET admin/customers` |
+| Export customer report (no contacts) | Platform admin, Co-founder | `GET admin/exports/customers` |
+| Export customer contacts | Platform admin | `GET admin/exports/customers/contact` |
+| View salon-staff analytics | Platform admin, Co-founder, HR, Viewer | `GET admin/staff` |
+| Export staff performance | Platform admin, Co-founder, HR | `GET admin/exports/staff` |
+| Export staff contacts | Platform admin, HR | `GET admin/exports/staff/contact` |
+
+Contact exports are separate routes, so no query parameter can turn a report into a contact file.
+
+**Privacy rules**
+- Customer analytics count **account customers** only; guest visits have no stable identity. Customers are shown as a masked, non-reversible ID (`C-` + 10 hex of a SHA-256 of the account ID).
+- No analytics response selects phone, email or name (verified against the QA database: zero identifiers in either response).
+- Customer contact export: deleted accounts excluded; phones on the global contact-suppression list are withheld when `CONTACT_LEDGER_HASH_KEY` is configured — otherwise the file and its audit row say the check could not run. Account customers have no name field, so none is exported.
+- The web page asks for an explicit purpose confirmation before any contact download.
+
+**Audit** — every export, including a failed one, writes an `audit_logs` row: `action = ADMIN_DATA_EXPORT`, actor, export ID, category, period, field set, row count, outcome and the suppression check. No new table was needed.
+
+**Definitions**
+- Customer visits = completed appointments (appointment time) + completed live-queue walk-ins (join time). New = first-ever visit in the period; returning = active − new; repeat rate = active customers with ≥ 2 visits ÷ active.
+- Staff figures come from completed service sessions (one staff member each, so no double counting). Value = current menu price of the service (estimate). Utilisation = service minutes ÷ minutes in the staff member's configured weekly hours, counting days up to today only; "—" when no hours are set. Leave/absence is not recorded.
+
+**Not done** — server-side expiring download links (files stream directly to the authorised request), XLSX, territory-scoped exports (needs territories), customer city (not recorded).

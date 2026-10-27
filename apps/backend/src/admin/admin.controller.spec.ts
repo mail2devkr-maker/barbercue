@@ -52,6 +52,32 @@ describe('AdminController authorization', () => {
       Role.SALES_ADMIN,
       Role.PLATFORM_VIEWER,
     ]);
+    // Phase C: analytics vs exports vs contact exports are separate, progressively narrower roles.
+    expect(routeRoles('customerOverview')).toEqual([
+      Role.PLATFORM_ADMIN,
+      Role.CO_FOUNDER,
+      Role.PLATFORM_VIEWER,
+    ]);
+    expect(routeRoles('exportCustomerReport')).toEqual([
+      Role.PLATFORM_ADMIN,
+      Role.CO_FOUNDER,
+    ]);
+    expect(routeRoles('exportCustomerContacts')).toEqual([Role.PLATFORM_ADMIN]);
+    expect(routeRoles('staffOverview')).toEqual([
+      Role.PLATFORM_ADMIN,
+      Role.CO_FOUNDER,
+      Role.HR_ADMIN,
+      Role.PLATFORM_VIEWER,
+    ]);
+    expect(routeRoles('exportStaffPerformance')).toEqual([
+      Role.PLATFORM_ADMIN,
+      Role.CO_FOUNDER,
+      Role.HR_ADMIN,
+    ]);
+    expect(routeRoles('exportStaffContacts')).toEqual([
+      Role.PLATFORM_ADMIN,
+      Role.HR_ADMIN,
+    ]);
     expect(routeRoles('crmOverview')).toEqual([
       Role.PLATFORM_ADMIN,
       Role.CO_FOUNDER,
@@ -110,6 +136,9 @@ describe('AdminController authorization', () => {
       {} as never,
       {} as never,
       {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
     );
     for (const [role, expectedMask] of [
       [Role.PLATFORM_VIEWER, true],
@@ -151,6 +180,9 @@ describe('AdminController authorization', () => {
       verification as never,
       salonManagement as never,
       activation as never,
+      {} as never,
+      {} as never,
+      {} as never,
       {} as never,
       {} as never,
       {} as never,
@@ -211,6 +243,9 @@ describe('AdminController authorization', () => {
       {} as never,
       {} as never,
       {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
     );
 
     await controller.deleteShop({ id: 'admin-1' } as never, 'salon-1');
@@ -239,6 +274,9 @@ describe('AdminController authorization', () => {
       verification as never,
       salonManagement as never,
       activation as never,
+      {} as never,
+      {} as never,
+      {} as never,
       {} as never,
       {} as never,
       {} as never,

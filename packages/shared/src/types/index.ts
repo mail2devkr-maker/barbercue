@@ -2036,6 +2036,82 @@ export interface AdminShopStatusDto {
   shops: AdminShopStatusRowDto[];
 }
 
+// GET admin/customers — privacy-safe customer analytics. Account customers only (guest visits have
+// no stable identity). NO contact fields: a customer is identified by a masked, non-reversible ID.
+export interface AdminCustomerRowDto {
+  maskedId: string; // e.g. "C-3F9A2B71C0"
+  firstVisitAt: string | null; // first completed visit ever
+  lastVisitAt: string | null;
+  completedVisits: number; // in the period
+  cancelled: number; // in the period
+  noShow: number; // in the period
+  serviceValuePaise: number; // in the period
+  preferredCategory: string | null; // most-visited category in the period
+}
+export interface AdminCustomerOverviewDto {
+  from: string;
+  to: string;
+  timeZone: string;
+  generatedAt: string;
+  kpis: {
+    customersEver: number; // with ≥1 completed visit up to the end of the period
+    activeCustomers: number; // with ≥1 completed visit in the period
+    newCustomers: number; // first-ever completed visit in the period
+    returningCustomers: number;
+    completedVisits: number;
+    averageVisitsPerActive: number | null;
+    averageVisitValuePaise: number | null;
+    repeatRatePercent: number | null; // active customers with ≥2 visits ÷ active customers
+    noShowRatePercent: number | null; // no-shows ÷ (completed + no-show) appointments
+  };
+  sources: Array<{ source: string; label: string; count: number }>;
+  categories: Array<{ category: string; visits: number }>;
+  customers: AdminCustomerRowDto[];
+  customersTotal: number;
+  customersLimit: number;
+}
+
+// GET admin/staff — salon staff (barbers, stylists), NOT FastQue employees. No contact fields.
+export interface AdminStaffRowDto {
+  id: string;
+  displayName: string;
+  salonName: string;
+  salonPublicId: string;
+  city: string;
+  role: string;
+  status: string;
+  servingNow: boolean;
+  completedServices: number; // completed service sessions that ended in the period
+  distinctServices: number;
+  serviceMinutes: number;
+  averageServiceMinutes: number | null;
+  serviceValuePaise: number; // current menu price of each completed service (estimate)
+  scheduledMinutes: number | null; // configured working hours over the period; null = not set
+  utilizationPercent: number | null;
+}
+export interface AdminStaffOverviewDto {
+  from: string;
+  to: string;
+  timeZone: string;
+  generatedAt: string;
+  kpis: {
+    registeredStaff: number;
+    activeStaff: number;
+    shopsWithStaff: number;
+    averageStaffPerShop: number | null;
+    scheduledToday: number; // active staff whose working hours include today
+    servingNow: number;
+    completedServices: number;
+    serviceHours: number;
+    averageServiceMinutes: number | null;
+    serviceValuePaise: number;
+    utilizationPercent: number | null; // over staff with working hours set
+  };
+  staff: AdminStaffRowDto[];
+  staffTotal: number;
+  staffLimit: number;
+}
+
 export interface PlatformAdminOverviewDto {
   generatedAt: string;
   // Null only before the first real browser/device has registered. We intentionally do not
