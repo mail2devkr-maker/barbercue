@@ -5,6 +5,7 @@ import OwnerCustomerDetailScreen from '../screens/owner/OwnerCustomerDetailScree
 import OwnerInvoicesScreen from '../screens/owner/OwnerInvoicesScreen';
 import OwnerInvoiceDetailScreen from '../screens/owner/OwnerInvoiceDetailScreen';
 import OwnerAnalyticsScreen from '../screens/owner/OwnerAnalyticsScreen';
+import OwnerInventoryScreen from '../screens/owner/OwnerInventoryScreen';
 import { useLanguage } from '../lib/language-context';
 import { fastQue, font } from '../lib/theme';
 
@@ -15,6 +16,7 @@ export type OwnerShopStackParamList = {
   OwnerInvoices: undefined;
   OwnerInvoiceDetail: { salonId: string; invoiceId: string };
   OwnerAnalytics: undefined;
+  OwnerInventory: undefined;
 };
 
 const Stack = createNativeStackNavigator<OwnerShopStackParamList>();
@@ -42,6 +44,17 @@ export default function OwnerShopStack() {
         options={{
           headerShown: true,
           title: language === 'HI' ? 'विश्लेषण' : 'Analytics',
+          headerStyle: { backgroundColor: fastQue.backgroundRaised },
+          headerTintColor: fastQue.text,
+          headerTitleStyle: { fontFamily: font.bodySemiBold },
+        }}
+      />
+      <Stack.Screen
+        name="OwnerInventory"
+        component={OwnerInventoryScreen}
+        options={{
+          headerShown: true,
+          title: language === 'HI' ? 'इन्वेंटरी' : 'Inventory',
           headerStyle: { backgroundColor: fastQue.backgroundRaised },
           headerTintColor: fastQue.text,
           headerTitleStyle: { fontFamily: font.bodySemiBold },

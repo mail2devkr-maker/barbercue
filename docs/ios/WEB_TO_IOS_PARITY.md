@@ -1,14 +1,14 @@
 # FastQue live-web to iOS parity checkpoint
 
-Date: 2026-10-27 (IST)
+Date: 2026-10-28 (IST)
 
 ## Evidence boundary
 
 - iOS source base: PR #315, `3e9b533ffeddf7d9c2edc24c1b1cd07bb04990c8` (OPEN, Draft).
-- Parity PR: #331, `8efb9acf8bac0a340ca3059ee3d26372018259de` (OPEN, Draft; stacked on #315).
+- Parity PR: #331, latest verified remote head `8e1a4d7e2cc07dc293ad7fba1144417a48517f87` (OPEN, Draft; stacked on #315). This worktree contains the subsequent Owner Inventory increment and its tests.
 - Current production master was rechecked at `7069b299dab5b58732f630179f1395e267dcae9a`.
-- At pre-edit refresh the isolated PR #331 worktree was at the exact head with tracked files clean; this session now has the owner-analytics refinement plus new local export/cache artifacts. The source change is not part of PR #331 until committed and pushed.
-- Exact-head PR #331 workflows: Owner Operations Certification run `40534750804` SUCCESS; iOS Simulator Smoke run `40534751417` SUCCESS. These do not certify production, TestFlight, or physical-device behavior.
+- Isolated worktree: `codex/fastque-ios-parity-20261027`, based on remote PR #331. Generated local export/cache artifacts are preserved and excluded from source changes.
+- Exact-head PR #331 CI on `8e1a4d7e2cc07dc293ad7fba1144417a48517f87`: Owner Operations Certification `40557861156` SUCCESS; iOS Simulator Smoke `40557861089` SUCCESS. These do not certify production, TestFlight, or physical-device behavior and do not include the later local inventory increment.
 - “Source present” means a native route/component/API call exists; it does not prove the production backend, authentication, or real device flow works.
 - Scope is current live website functionality. Unmerged Draft UI work is not counted as a live-web feature or an iOS release dependency.
 
@@ -34,9 +34,9 @@ Date: 2026-10-27 (IST)
 | Live Queue and booking management | `OwnerQueueScreen`, `OwnerBookingsScreen`; owner APIs | Verify assigned versus in-service transitions, cancellation reasons, concurrency, and notifications. | Source present; authenticated runtime NOT VERIFIED |
 | Shop settings, services, chairs, staff, hours, photos, QR | `OwnerShopScreen`, setup sections/catalog picker; owner APIs | Verify CRUD and role authorization without modifying a real shop during acceptance. | Source present; full parity/runtime NOT VERIFIED |
 | Owner notifications and arrival/voice preferences | Dashboard account/notifications and `OwnerVoiceSettingsCard` | Verify persistence, notification delivery behavior, and voice ON/OFF on a real device; audible playback is not yet certified. | Source present; device/runtime NOT VERIFIED |
-| Revenue and analytics charts/exports | Candidate adds `OwnerAnalyticsScreen` linked from the owner dashboard; it uses the owner-only `GET dashboard/salons/:salonId/analytics?range=today\|7d\|30d` contract and the salon-selected scope | Includes appointment/cancellation/no-show KPIs, daily and service-level listed-price estimates, customer visit counts, and clear non-revenue disclaimer. The screen is read-only; owner revenue reports/exports and full analytics parity remain separate gaps. | Candidate source present in local worktree; focused tests 4/4 PASS; full suite 260/260 PASS; PR review/CI pending |
+| Revenue and analytics charts/exports | Candidate adds `OwnerAnalyticsScreen` linked from the owner dashboard; it uses the owner-only `GET dashboard/salons/:salonId/analytics?range=today\|7d\|30d` contract and the salon-selected scope | Includes appointment/cancellation/no-show KPIs, daily and service-level listed-price estimates, customer visit counts, and clear non-revenue disclaimer. The screen is read-only; owner revenue reports/exports and full analytics parity remain separate gaps. | Source is on remote PR #331 head `8e1a4d7`; focused tests passed and exact-head Owner Operations + iOS Simulator CI passed; production data/runtime not verified |
 | Owner invoices and recorded payment/refund history | Candidate adds `OwnerInvoicesScreen` / `OwnerInvoiceDetailScreen`; owner-scoped `GET dashboard/salons/:salonId/invoices` APIs | Verify authorized owner can read the selected shop only and that payment status matches persisted records. Invoice issue/void, payment entry, refund, and billing-profile editing are not implemented in this candidate. Never mark paid from QR display. | Candidate read-only source; local tests 10/10 PASS and full suite 260/260 PASS; production authorization NOT VERIFIED; write workflows remain missing |
-| Inventory and stock history | No native inventory routes found | Web has products, purchases, adjustments, reports, suppliers, and stock history. Requires a scoped implementation/API review before claiming parity. | Missing launch parity; BLOCKED |
+| Inventory and stock history | Candidate increment adds `OwnerInventoryScreen` with salon-scoped report, product/low-stock list, and separately cursor-paged movement history reads | Uses the existing owner/admin-only GET routes; the backend additionally checks owner-or-admin salon access. Cursor pages are de-duplicated, stale responses are ignored after shop changes, errors do not fabricate stock values, and valuation is labeled as an estimate rather than revenue. Product/category/supplier creation, purchases, consumption, and adjustments remain unavailable in native UI. | Local candidate source; focused inventory tests 5/5 PASS, full mobile suite 265/265 PASS, TypeScript and iOS JS export PASS; exact-head CI for this increment pending |
 | Cancellations analytics and owner review management | No dedicated native owner routes found | Web has cancellation analysis and review management. Keep admin/owner RBAC distinct; add only after reviewed scope. | Missing launch parity; BLOCKED |
 | Offers, campaign, and promotion management | Native customer offers are not owner campaign management | Owner draft/preview/publish/pause, eligibility, and redemption controls remain web-only. | Missing launch parity; BLOCKED |
 
@@ -50,15 +50,13 @@ Date: 2026-10-27 (IST)
 
 ## Candidate change and test record
 
-- PR #331 adds customer-facing public Offers browsing, offer-ID handoff into the existing server-validated booking request, customer-scoped invoice list/detail, and owner-scoped read-only invoice/payment history. The current uncommitted refinement adds the owner analytics view described above.
+- PR #331 adds customer-facing public Offers browsing, offer-ID handoff into the existing server-validated booking request, customer-scoped invoice list/detail, and owner-scoped read-only invoice/payment history. The candidate also includes the read-only owner analytics and inventory views described above.
 - Does not change backend source, database schema, Expo native modules, Android configuration, production services, or customer data.
 - PR #331 previously recorded focused commerce/invoice tests: 4 suites / 10 tests PASS; full mobile Jest: 36 suites / 256 tests PASS; mobile TypeScript: PASS; iOS JS export: PASS (Metro export only).
-- Current analytics refinement: focused suite 1/1 and 4/4 tests PASS. Final full mobile Jest: 37/37 suites and 260/260 tests PASS using the worktree-local warmed cache. A preceding cold run hit the existing 5-second timeout in multi-service booking CASE 13; the test passed unchanged on isolated rerun (4/4) and on subsequent full runs. The current-master worktree comparison could not execute because that worktree's Jest setup cannot resolve `expo-modules-core`; no assertion or timeout was changed.
-- Mobile TypeScript check: PASS after the analytics screen and localized header changes.
-- iOS JavaScript export for the final analytics source: PASS, 1 bundle / 1,217 modules. The first attempt failed because Hermes could not write to the sandbox shared temp directory; rerunning with temporary output redirected inside this isolated worktree succeeded. This is not a signed IPA.
-- `git diff --check`: PASS before staging; staged-diff check pending immediately before commit.
-- Exact-head GitHub CI for the current analytics refinement: NOT RUN (not pushed).
-- Exact PR #331 native iOS Simulator Smoke `40534751417`: SUCCESS, simulator only; the added analytics view still needs a fresh exact-head run.
+- Owner Analytics: focused suite 4/4 PASS. On remote head `8e1a4d7`, Owner Operations `40557861156` and iOS Simulator Smoke `40557861089` both passed; the latter is simulator evidence only.
+- Owner Inventory local increment: focused suite 5/5 PASS; full mobile Jest 38 suites / 265 tests PASS; mobile TypeScript PASS; iOS Expo JavaScript export PASS (1 bundle / 1,218 modules). Jest emits a non-failing open-handle notice after the full run. The export is not a signed IPA.
+- Current inventory increment exact-head CI: pending until its commit is pushed. The previous successful CI runs cover `8e1a4d7`, not the local increment.
+- Current diff whitespace check and staged-diff check are required before commit.
 - Signed production IPA, App Store Connect upload, TestFlight, physical iPhone, App Review, and public listing: NOT VERIFIED / NOT DONE.
 
 ## Release blockers
