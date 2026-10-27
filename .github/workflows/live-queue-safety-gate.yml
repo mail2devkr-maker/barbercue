@@ -1,0 +1,39 @@
+name: Live Queue Safety Gate
+
+# Strict isolated check; never publishes a mobile update or deploys to production.
+on:
+  pull_request:
+    paths:
+      - 'apps/backend/src/queue/**'
+      - 'apps/web/components/queue/**'
+      - 'apps/mobile/components/QueueStatusPanel.tsx'
+      - 'packages/shared/src/calc/**'
+      - 'packages/shared/src/__tests__/calc.test.ts'
+      - '.github/workflows/live-queue-safety-gate.yml'
+permissions:
+  contents: read
+
+jobs:
+  queue:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build:shared
+      - name: Threshold and dedupe tests
+        working-directory: packages/shared
+        run: npx jest --ci --runInBand --runTestsByPath src/__tests__/calc.test.ts
+      - run: npm run prisma:generate --workspace=@barbercue/backend
+      - run: npm run typecheck --workspace=@barbercue/backend
+      - name: Business-phone privacy and owner-only route tests
+        working-directory: apps/backend
+        run: npx jest --ci --runInBand --runTestsByPath src/queue/queue-contact.controller.spec.ts
+      - run: npm run typecheck --workspace=@barbercue/web
+      - run: npm run typecheck --workspace=@barbercue/mobile
+      - name: Web production build
+        run: npm run build --workspace=@barbercue/web
