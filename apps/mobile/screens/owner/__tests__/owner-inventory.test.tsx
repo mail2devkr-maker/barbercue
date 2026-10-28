@@ -285,3 +285,32 @@ it('discards category lookups from the previous salon after a shop switch', asyn
   expect(renderedText()).not.toContain('Old private category');
   expect(apiFetch).toHaveBeenCalledWith('dashboard/salons/shop-2/inventory/categories?limit=25');
 });
+
+it('edits and deactivates a product through the selected salon API without rewriting stock history', async () => {
+  const active = { ...products.items[0], category: { id: '11111111-1111-4111-8111-111111111111', name: 'Hair' } };
+  const inactive = { ...active, isActive: false };
+  let productSaved = false;
+  (apiFetch as jest.Mock).mockImplementation(async (path: string, options?: RequestInit) => {
+    if (options?.method === 'PATCH') { productSaved = true; return inactive; }
+    if (path.endsWith('/report')) return report;
+    if (path.includes('/categories?')) return { items: [], nextCursor: null, hasMore: false };
+    if (path.includes('/suppliers?')) return { items: [], nextCursor: null, hasMore: false };
+    if (path.includes('/products?')) return { items: [productSaved ? inactive : active], nextCursor: null, hasMore: false };
+    return movements;
+  });
+  await act(async () => { tree = TestRenderer.create(createElement(OwnerInventoryScreen, {} as never)); });
+  const edit = tree.root.findAll((node: any) => node.props.accessibilityRole === 'button' && textOf(node) === 'Edit product')[0];
+  await act(async () => { edit.props.onPress(); await Promise.resolve(); });
+  const inactiveToggle = tree.root.findAll((node: any) => node.props.accessibilityRole === 'button' && textOf(node) === 'Active')[0];
+  await act(async () => inactiveToggle.props.onPress());
+  const save = tree.root.findAll((node: any) => node.props.accessibilityRole === 'button' && textOf(node) === 'Save')[0];
+  await act(async () => { save.props.onPress(); await Promise.resolve(); });
+
+  expect(apiFetch).toHaveBeenCalledWith('dashboard/salons/shop%2Fid/inventory/products/p1', {
+    method: 'PATCH',
+    body: JSON.stringify({ name: 'Shampoo', sku: 'SH-1', categoryId: '11111111-1111-4111-8111-111111111111', supplierId: null, isActive: false, reorderThreshold: 5 }),
+  });
+  expect((apiFetch as jest.Mock).mock.calls.some(([, options]) => options?.method === 'POST')).toBe(false);
+  expect(renderedText()).toContain('Inactive');
+  expect(renderedText()).toContain('3');
+});

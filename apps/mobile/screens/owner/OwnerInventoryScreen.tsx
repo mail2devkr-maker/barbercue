@@ -19,6 +19,7 @@ import {
   type InventoryMovementDto,
   type InventoryPageDto,
   type InventoryProductDto,
+  updateInventoryProductSchema,
   type InventoryReportDto,
 } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../../lib/api';
@@ -62,6 +63,7 @@ const copy = {
     saved: 'Stock movement recorded. Inventory refreshed.', invalidMovement: 'Check the stock movement details.',
     alreadyRecorded: 'This stock movement was already recorded. Inventory refreshed.', costRequired: 'Enter a unit cost, or enter 0 explicitly.',
     addProduct: 'Add product', addCategory: 'Add category', addSupplier: 'Add supplier',
+    editProduct: 'Edit product', productUpdated: 'Product details updated.', active: 'Active', inactiveStatus: 'Inactive',
     productName: 'Product name', sku: 'SKU (optional)', unit: 'Unit', category: 'Category', supplier: 'Supplier',
     none: 'None', reorderThreshold: 'Low-stock threshold', save: 'Save', creating: 'Saving…',
     productCreated: 'Product created. Record opening stock to set its on-hand quantity.',
@@ -87,6 +89,7 @@ const copy = {
     saved: 'स्टॉक गतिविधि दर्ज हुई। इन्वेंटरी रीफ़्रेश की गई।', invalidMovement: 'स्टॉक गतिविधि का विवरण जाँचें।',
     alreadyRecorded: 'यह स्टॉक गतिविधि पहले से दर्ज है। इन्वेंटरी रीफ़्रेश की गई।', costRequired: 'प्रति इकाई लागत दर्ज करें, या स्पष्ट रूप से 0 लिखें।',
     addProduct: 'उत्पाद जोड़ें', addCategory: 'श्रेणी जोड़ें', addSupplier: 'आपूर्तिकर्ता जोड़ें',
+    editProduct: 'उत्पाद संपादित करें', productUpdated: 'उत्पाद का विवरण अपडेट हुआ।', active: 'सक्रिय', inactiveStatus: 'निष्क्रिय',
     productName: 'उत्पाद का नाम', sku: 'SKU (वैकल्पिक)', unit: 'इकाई', category: 'श्रेणी', supplier: 'आपूर्तिकर्ता',
     none: 'कोई नहीं', reorderThreshold: 'कम-स्टॉक सीमा', save: 'सहेजें', creating: 'सहेज रहा है…',
     productCreated: 'उत्पाद बनाया गया। मौजूदा स्टॉक तय करने के लिए आरंभिक स्टॉक दर्ज करें।',
@@ -154,6 +157,8 @@ export default function OwnerInventoryScreen(_props: Props) {
   const [productCategoryId, setProductCategoryId] = useState('');
   const [productSupplierId, setProductSupplierId] = useState('');
   const [productThreshold, setProductThreshold] = useState('0');
+  const [productActive, setProductActive] = useState(true);
+  const [editingProduct, setEditingProduct] = useState<InventoryProductDto | null>(null);
   const [categoryName, setCategoryName] = useState('');
   const [supplierName, setSupplierName] = useState('');
   const [supplierContactName, setSupplierContactName] = useState('');
@@ -181,19 +186,23 @@ export default function OwnerInventoryScreen(_props: Props) {
     setSuppliers([]);
     setCategoryCursor(null);
     setSupplierCursor(null);
+    setProductActive(true);
+    setEditingProduct(null);
   }, [selectedSalonId]);
 
-  const openManagement = async (mode: Exclude<ManagementMode, null>) => {
+  const openManagement = async (mode: Exclude<ManagementMode, null>, product?: InventoryProductDto) => {
     const request = ++managementRequest.current;
     setManagementMode(mode);
     setManagementError(null);
     setManagementNotice(null);
-    setProductName('');
-    setProductSku('');
-    setProductUnit(InventoryUnit.EACH);
-    setProductCategoryId('');
-    setProductSupplierId('');
-    setProductThreshold('0');
+    setEditingProduct(product ?? null);
+    setProductName(product?.name ?? '');
+    setProductSku(product?.sku ?? '');
+    setProductUnit(product?.unit ?? InventoryUnit.EACH);
+    setProductCategoryId(product?.category?.id ?? '');
+    setProductSupplierId(product?.supplier?.id ?? '');
+    setProductThreshold(product?.reorderThreshold ?? '0');
+    setProductActive(product?.isActive ?? true);
     setCategoryName('');
     setSupplierName('');
     setSupplierContactName('');
@@ -286,21 +295,36 @@ export default function OwnerInventoryScreen(_props: Props) {
         unit: productUnit,
         categoryId: productCategoryId || null,
         supplierId: productSupplierId || null,
+        isActive: editingProduct ? productActive : undefined,
         reorderThreshold: Number(productThreshold),
       });
       if (!parsed.success) { setManagementError(parsed.error.issues[0]?.message ?? labels.managementInvalid); return; }
-      path = `${rootPath(salonId)}/${INVENTORY_PATHS.products}`;
-      body = parsed.data;
-      successText = labels.productCreated;
+      path = `${rootPath(salonId)}/${INVENTORY_PATHS.products}${editingProduct ? `/${encodeURIComponent(editingProduct.id)}` : ''}`;
+      if (editingProduct) {
+        const update = updateInventoryProductSchema.safeParse({
+          name: parsed.data.name,
+          sku: parsed.data.sku,
+          categoryId: parsed.data.categoryId,
+          supplierId: parsed.data.supplierId,
+          isActive: parsed.data.isActive,
+          reorderThreshold: parsed.data.reorderThreshold,
+        });
+        if (!update.success) { setManagementError(update.error.issues[0]?.message ?? labels.managementInvalid); return; }
+        body = update.data;
+      } else {
+        body = parsed.data;
+      }
+      successText = editingProduct ? labels.productUpdated : labels.productCreated;
     }
     setManagementBusy(true);
     setManagementError(null);
     try {
-      const result = await apiFetch<InventoryProductDto | InventoryCategoryDto | InventorySupplierDto>(path, { method: 'POST', body: JSON.stringify(body) });
+      const result = await apiFetch<InventoryProductDto | InventoryCategoryDto | InventorySupplierDto>(path, { method: editingProduct && mode === 'product' ? 'PATCH' : 'POST', body: JSON.stringify(body) });
       if (salonId !== selectedSalonIdRef.current || requestAtSubmit !== requestId.current) return;
       if (mode === 'category') setCategories((current) => [...current, result as InventoryCategoryDto]);
       if (mode === 'supplier') setSuppliers((current) => [...current, result as InventorySupplierDto]);
       setManagementMode(null);
+      setEditingProduct(null);
       setManagementNotice(successText);
       await load(true);
     } catch (err) {
@@ -502,7 +526,7 @@ export default function OwnerInventoryScreen(_props: Props) {
           {managementNotice ? <Text accessibilityRole="alert" style={styles.notice}>{managementNotice}</Text> : null}
           {managementMode ? (
             <PremiumCard strong style={styles.formCard}>
-              <Text style={styles.cardTitle}>{managementMode === 'product' ? labels.addProduct : managementMode === 'category' ? labels.addCategory : labels.addSupplier}</Text>
+              <Text style={styles.cardTitle}>{managementMode === 'product' ? (editingProduct ? labels.editProduct : labels.addProduct) : managementMode === 'category' ? labels.addCategory : labels.addSupplier}</Text>
               {managementError ? <InlineError message={managementError} /> : null}
               {managementLoading ? <Text style={styles.muted}>{labels.loading}</Text> : null}
               {managementMode === 'product' ? <>
@@ -522,17 +546,26 @@ export default function OwnerInventoryScreen(_props: Props) {
                 <Text style={styles.inputLabel}>{labels.category}</Text>
                 <View style={styles.modeRow} accessibilityRole="tablist">
                   <LookupOption label={labels.none} selected={!productCategoryId} onPress={() => setProductCategoryId('')} />
+                  {editingProduct?.category && !categories.some((item) => item.id === editingProduct.category?.id) ? <LookupOption label={editingProduct.category.name} selected={productCategoryId === editingProduct.category.id} onPress={() => setProductCategoryId(editingProduct.category!.id)} /> : null}
                   {categories.map((item) => <LookupOption key={item.id} label={item.name} selected={productCategoryId === item.id} onPress={() => setProductCategoryId(item.id)} />)}
                 </View>
                 {categoryCursor ? <MoreButton label={labels.loadMoreCategories} loading={managementLoading} onPress={() => void loadMoreLookup('category')} /> : null}
                 <Text style={styles.inputLabel}>{labels.supplier}</Text>
                 <View style={styles.modeRow} accessibilityRole="tablist">
                   <LookupOption label={labels.none} selected={!productSupplierId} onPress={() => setProductSupplierId('')} />
+                  {editingProduct?.supplier && !suppliers.some((item) => item.id === editingProduct.supplier?.id) ? <LookupOption label={editingProduct.supplier.name} selected={productSupplierId === editingProduct.supplier.id} onPress={() => setProductSupplierId(editingProduct.supplier!.id)} /> : null}
                   {suppliers.map((item) => <LookupOption key={item.id} label={item.name} selected={productSupplierId === item.id} onPress={() => setProductSupplierId(item.id)} />)}
                 </View>
                 {supplierCursor ? <MoreButton label={labels.loadMoreSuppliers} loading={managementLoading} onPress={() => void loadMoreLookup('supplier')} /> : null}
                 <Text style={styles.inputLabel}>{labels.reorderThreshold}</Text>
                 <TextInput accessibilityLabel={labels.reorderThreshold} editable={!managementBusy} value={productThreshold} onChangeText={setProductThreshold} keyboardType="decimal-pad" style={styles.input} />
+                {editingProduct ? <>
+                  <Text style={styles.inputLabel}>{labels.unit}: {productUnit}</Text>
+                  <Text style={styles.muted}>{labels.unit} is unchanged so existing stock history keeps its original meaning.</Text>
+                  <Pressable accessibilityRole="button" accessibilityState={{ selected: productActive }} disabled={managementBusy} onPress={() => setProductActive((active) => !active)} style={styles.modeButton}>
+                    <Text style={styles.moreText}>{productActive ? labels.active : labels.inactiveStatus}</Text>
+                  </Pressable>
+                </> : null}
                 <Text style={styles.muted}>{labels.productHelp}</Text>
               </> : managementMode === 'category' ? <>
                 <Text style={styles.inputLabel}>{labels.category}</Text>
@@ -603,6 +636,7 @@ export default function OwnerInventoryScreen(_props: Props) {
                 <Text style={styles.productName}>{product.name}</Text>
                 <Text style={styles.productMeta}>{product.category?.name ?? product.sku ?? product.unit}</Text>
                 <Pressable accessibilityRole="button" disabled={movementBusy} onPress={() => openMovement(product)} style={styles.recordButton}><Text style={styles.moreText}>{labels.recordMovement}</Text></Pressable>
+                <Pressable accessibilityRole="button" disabled={movementBusy || managementBusy} onPress={() => void openManagement('product', product)} style={styles.recordButton}><Text style={styles.moreText}>{labels.editProduct}</Text></Pressable>
               </View>
               <View style={styles.stockValue}>
                 <Text style={[styles.stockNumber, product.isLowStock && styles.warning]}>{product.stockOnHand}</Text>
