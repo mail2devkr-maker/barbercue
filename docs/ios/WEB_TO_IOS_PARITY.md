@@ -72,3 +72,14 @@ Date: 2026-10-28 (IST)
 7. Finish App Privacy, account deletion, export compliance, support/privacy URLs, review notes, supported-device screenshots, and final seller/listing approval before App Review.
 
 **Decision: NO-GO for App Store submission or public release.** Safe local engineering and review can continue, but the gates above remain open.
+
+
+## Exact-head refresh — 2026-10-28
+
+- PR #331 is OPEN/Draft at `485959832d7517ef65ae4aac2ded23fcc2fd77d3`, based on PR #315 `3e9b533ffeddf7d9c2edc24c1b1cd07bb04990c8`. This head includes the one-line typed navigation-prop fix for `OwnerBookingsScreen`; it changes no runtime feature behavior.
+- Local mobile TypeScript: PASS. Full mobile Jest rerun: 47 suites / 324 tests PASS. The first full rerun had one 5-second timeout in `salon-profile-multi-service.test.tsx`; isolated rerun and subsequent full rerun passed. The clean-master comparator did not execute because that baseline worktree is missing Expo module source files; do not classify the timeout as a proven baseline failure.
+- Focused owner inventory, invoice, revenue, file-share and API transport suites: 5 suites / 40 tests PASS. Completed-booking invoice action: 2/2 PASS.
+- Exact-head workflows for `4859598`: Owner Operations Certification run 40688353656 and iOS Simulator Smoke run 40688353654 were still running at the time of this update; inspect the run conclusions before treating this head as CI-certified.
+- Production remains at master `7069b299dab5b58732f630179f1395e267dcae9a`; Railway backend deployment `8d315146-bc9c-4bef-bd6f-3658cc871e23` and web deployment `d580733b-1577-4086-9929-8c08a99881dd` are healthy. No production change occurred.
+- Database gate remains blocked: the owner kept Neon OAuth scoped to P2, so the Railway DB endpoint cannot be independently mapped to P1 `crimson-field-96192935` / branch `br-jolly-pond-azhohrz3` / `fastque_final_20261023` or reconciled against P1's applied migration ledger from this session. No fresh P1 restore was certified; no production migration was run.
+- No signed App Store IPA, App Store Connect FastQue record, TestFlight, physical-device acceptance, App Review submission, or public App Store availability has been verified. PR #315's backend auth and additive Apple migration remain Draft and production auth is not certified.
