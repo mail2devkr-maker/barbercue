@@ -2218,7 +2218,7 @@ describe('AuthService', () => {
 
       expect(prisma.accountDeletionRequest.create).toHaveBeenCalledWith({
         data: { userId: 'subject-1', status: 'REQUESTED' },
-        select: { id: true, status: true, createdAt: true },
+        select: { id: true, status: true, createdAt: true, updatedAt: true },
       });
       expect(prisma.auditLog.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
