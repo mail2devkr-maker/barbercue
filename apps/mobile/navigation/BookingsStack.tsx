@@ -1,6 +1,8 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import MyBookingsScreen from '../screens/MyBookingsScreen';
 import BookingDetailScreen from '../screens/BookingDetailScreen';
+import MyInvoicesScreen from '../screens/MyInvoicesScreen';
+import InvoiceDetailScreen from '../screens/InvoiceDetailScreen';
 import { lightStackOptions } from './screenOptions';
 import { HomeHeaderButton } from './HomeHeaderButton';
 import { useLanguage } from '../lib/language-context';
@@ -18,6 +20,8 @@ export default function BookingsStack() {
         component={BookingDetailScreen}
         options={{ title: t.bookingTitle, headerRight: () => <HomeHeaderButton /> }}
       />
+      <Stack.Screen name="MyInvoices" component={MyInvoicesScreen} options={{ title: 'My invoices' }} />
+      <Stack.Screen name="InvoiceDetail" component={InvoiceDetailScreen} options={{ title: 'Invoice details' }} />
     </Stack.Navigator>
   );
 }

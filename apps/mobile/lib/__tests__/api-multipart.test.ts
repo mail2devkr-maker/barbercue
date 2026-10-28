@@ -19,10 +19,10 @@ jest.mock('../current-language', () => ({
 }));
 
 import * as FileSystem from 'expo-file-system/legacy';
-import { getItem } from '../secure-storage';
+import { getItem, setItem } from '../secure-storage';
 import { reportNetworkFailure, reportNetworkSuccess } from '../network-status';
 import { getCurrentUiStrings } from '../current-language';
-import { apiUploadImage, NativeUploadError, setAccessToken } from '../api';
+import { apiFetchResponse, apiUploadImage, NativeUploadError, setAccessToken } from '../api';
 
 const uploadAsyncMock = FileSystem.uploadAsync as jest.Mock;
 const getItemMock = getItem as jest.Mock;
@@ -36,6 +36,7 @@ function response(status: number, body: unknown): Response {
   return {
     status,
     ok: status >= 200 && status < 300,
+    headers: { get: jest.fn(() => 'application/octet-stream') },
     json: jest.fn().mockResolvedValue(body),
     text: jest.fn().mockResolvedValue(body === undefined ? '' : JSON.stringify(body)),
   } as unknown as Response;
@@ -151,5 +152,47 @@ describe('native image upload transport', () => {
       }),
     ).rejects.toMatchObject({ code: 'IMAGE_INVALID', status: 422, message: 'That image is not valid.' });
     expect(reportNetworkFailureMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('authenticated file response transport', () => {
+  beforeEach(() => {
+    jest.resetAllMocks();
+    fetchMock = jest.fn();
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    setAccessToken('access-token-for-test');
+    getItemMock.mockResolvedValue(null);
+  });
+
+  it('returns successful binary responses without parsing or logging file content', async () => {
+    const fileResponse = response(200, undefined);
+    fetchMock.mockResolvedValue(fileResponse);
+
+    await expect(apiFetchResponse('dashboard/salons/s1/invoices/i1/pdf')).resolves.toBe(fileResponse);
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/dashboard/salons/s1/invoices/i1/pdf'),
+      expect.objectContaining({ headers: expect.any(Headers) }),
+    );
+  });
+
+  it('refreshes once and retries an owner-authorized file request', async () => {
+    const fileResponse = response(200, undefined);
+    fetchMock
+      .mockResolvedValueOnce(response(401, { error: { code: 'TOKEN_EXPIRED', message: 'expired' } }))
+      .mockResolvedValueOnce(response(201, { accessToken: 'refreshed-access-token', refreshToken: 'rotated-refresh-token' }))
+      .mockResolvedValueOnce(fileResponse);
+    getItemMock.mockResolvedValue('refresh-token-for-test');
+
+    await expect(apiFetchResponse('dashboard/salons/s1/revenue/report.csv')).resolves.toBe(fileResponse);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(setItem).toHaveBeenCalledWith('barbercue_refresh_token', 'rotated-refresh-token');
+  });
+
+  it('uses normal API error codes for denied file access', async () => {
+    fetchMock.mockResolvedValue(response(403, { error: { code: 'FORBIDDEN', message: 'Shop access denied.' } }));
+
+    await expect(apiFetchResponse('dashboard/salons/other/invoices/i1/pdf')).rejects.toMatchObject({
+      code: 'FORBIDDEN', status: 403, message: 'Shop access denied.',
+    });
   });
 });

@@ -202,6 +202,9 @@ export default function AccountScreen() {
         <Pressable style={styles.shortcutCard} onPress={() => navigation.navigate('BookingsTab', { screen: 'MyBookings' })}>
           <Text style={styles.shortcutTitle}>{t.myBookings}</Text>
         </Pressable>
+        <Pressable style={styles.shortcutCard} onPress={() => navigation.navigate('BookingsTab', { screen: 'MyInvoices' })} accessibilityRole="button">
+          <Text style={styles.shortcutTitle}>My invoices</Text>
+        </Pressable>
         <Pressable style={styles.shortcutCard} onPress={() => navigation.navigate('QueueTab', { screen: 'QueueHome' })}>
           <Text style={styles.shortcutTitle}>{t.liveQueue}</Text>
         </Pressable>

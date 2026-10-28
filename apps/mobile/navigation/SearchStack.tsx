@@ -6,6 +6,7 @@ import DateSelectScreen from '../screens/DateSelectScreen';
 import SlotSelectScreen from '../screens/SlotSelectScreen';
 import ConfirmBookingScreen from '../screens/ConfirmBookingScreen';
 import WalkInJoinScreen from '../screens/WalkInJoinScreen';
+import OffersScreen from '../screens/OffersScreen';
 import { lightStackOptions } from './screenOptions';
 import { HomeHeaderButton } from './HomeHeaderButton';
 import { useLanguage } from '../lib/language-context';
@@ -27,6 +28,7 @@ export default function SearchStack() {
   return (
     <Stack.Navigator initialRouteName="SalonSearch" screenOptions={lightStackOptions}>
       <Stack.Screen name="SalonSearch" component={SalonSearchScreen} options={{ title: t.findASalonTitle }} />
+      <Stack.Screen name="Offers" component={OffersScreen} options={{ title: t.trustOffersLabel }} />
       <Stack.Screen name="SalonProfile" component={SalonProfileScreen} options={{ title: t.salonTitle, ...homeAction }} />
       <Stack.Screen name="StaffSelect" component={StaffSelectScreen} options={{ title: t.chooseABarberTitle, ...homeAction }} />
       <Stack.Screen name="DateSelect" component={DateSelectScreen} options={{ title: t.chooseADateTitle, ...homeAction }} />
