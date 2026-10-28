@@ -76,10 +76,14 @@ Date: 2026-10-28 (IST)
 
 ## Exact-head refresh — 2026-10-28
 
-- PR #331 is OPEN/Draft at `485959832d7517ef65ae4aac2ded23fcc2fd77d3`, based on PR #315 `3e9b533ffeddf7d9c2edc24c1b1cd07bb04990c8`. This head includes the one-line typed navigation-prop fix for `OwnerBookingsScreen`; it changes no runtime feature behavior.
-- Local mobile TypeScript: PASS. Full mobile Jest rerun: 47 suites / 324 tests PASS. The first full rerun had one 5-second timeout in `salon-profile-multi-service.test.tsx`; isolated rerun and subsequent full rerun passed. The clean-master comparator did not execute because that baseline worktree is missing Expo module source files; do not classify the timeout as a proven baseline failure.
-- Focused owner inventory, invoice, revenue, file-share and API transport suites: 5 suites / 40 tests PASS. Completed-booking invoice action: 2/2 PASS.
-- Exact-head workflows for `4859598`: Owner Operations Certification run 40688353656 and iOS Simulator Smoke run 40688353654 were still running at the time of this update; inspect the run conclusions before treating this head as CI-certified.
-- Production remains at master `7069b299dab5b58732f630179f1395e267dcae9a`; Railway backend deployment `8d315146-bc9c-4bef-bd6f-3658cc871e23` and web deployment `d580733b-1577-4086-9929-8c08a99881dd` are healthy. No production change occurred.
-- Database gate remains blocked: the owner kept Neon OAuth scoped to P2, so the Railway DB endpoint cannot be independently mapped to P1 `crimson-field-96192935` / branch `br-jolly-pond-azhohrz3` / `fastque_final_20261023` or reconciled against P1's applied migration ledger from this session. No fresh P1 restore was certified; no production migration was run.
-- No signed App Store IPA, App Store Connect FastQue record, TestFlight, physical-device acceptance, App Review submission, or public App Store availability has been verified. PR #315's backend auth and additive Apple migration remain Draft and production auth is not certified.
+- Verified PR #331 source head: `18ceb9e25b8b616b4656744183cf7241d0ea4118`, OPEN/Draft, based on PR #315 `3e9b533ffeddf7d9c2edc24c1b1cd07bb04990c8`. Current production master: `7069b299dab5b58732f630179f1395e267dcae9a`.
+- Owner Operations Certification run `40689486117`: SUCCESS (disposable PostgreSQL backend migrations/unit/E2E, Android checks, and web checks).
+- iOS Simulator Smoke run `40689486091`: IN PROGRESS at the last poll; simulator build had advanced to bundle verification and cold launch. It is simulator evidence only, not a signed IPA, TestFlight, or physical-device result.
+- Local mobile Jest: 47 suites / 324 tests PASS; TypeScript and iOS JavaScript export PASS. These are source-level checks only.
+- PR #329 (Nitesh Dashboard) and PR #330 (Live Queue) remain OPEN/Draft on master `7069b299...`; no backend/auth integration or release-train merge was made here.
+- The owner intentionally keeps Neon scoped to P2. P1 identity/data facts in Issue #308 are owner/independent-audit supplied, not independently inspected in this session. Railway's live database target therefore remains unverified against P1; no production SQL or migration was run.
+- Railway production remains unchanged: backend `8d315146-bc9c-4bef-bd6f-3658cc871e23` and web `d580733b-1577-4086-9929-8c08a99881dd` are successful at master; no pending production work was observed.
+- The Apple account screenshot establishes Individual Team ID `LXP4CLM2NW`; account holder states seller/IP authorization is documented and the Developer Program Agreement was accepted. App Store Connect access, FastQue record/capability state, signing profile, and seller display were not independently verified in this checkpoint.
+- Production Apple/Google authentication, signed store IPA, TestFlight, physical iPhone acceptance, App Review, and public listing remain NOT VERIFIED / NOT DONE. The parity gaps recorded above remain open.
+
+**Decision: NO-GO for App Store submission or public release.**
