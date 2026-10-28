@@ -43,6 +43,9 @@ export const AUTH_PATHS = {
   // DELETE auth/account — customer-only irreversible account deletion/anonymization. The server
   // derives the affected account entirely from the authenticated token; no user id is accepted.
   accountDeletion: 'account',
+  // GET/POST/DELETE auth/account/deletion-request — role-aware, non-destructive request/status flow for
+  // accounts whose business, employment, or platform relationships require resolution first.
+  accountDeletionRequest: 'account/deletion-request',
   me: 'me',
   // auth/methods — which sign-in methods this deployment can actually complete right now.
   // Booleans only; never echoes any configuration value.

@@ -5,13 +5,20 @@ import {
   REFRESH_TOKEN_COOKIE_NAME,
   Role,
   SessionAudience,
+  accountDeletionRequestSchema,
 } from '@barbercue/shared';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 
 describe('AuthController', () => {
   let controller: AuthController;
-  let authService: { refresh: jest.Mock; deleteCustomerAccount: jest.Mock };
+  let authService: {
+    refresh: jest.Mock;
+    deleteCustomerAccount: jest.Mock;
+    getAccountDeletionRequest: jest.Mock;
+    requestAccountDeletion: jest.Mock;
+    cancelAccountDeletionRequest: jest.Mock;
+  };
   let res: { cookie: jest.Mock; clearCookie: jest.Mock };
 
   beforeEach(async () => {
@@ -23,6 +30,31 @@ describe('AuthController', () => {
       deleteCustomerAccount: jest.fn().mockResolvedValue({
         success: true,
         appleRevocation: 'not_applicable',
+      }),
+      getAccountDeletionRequest: jest.fn().mockResolvedValue({
+        request: null,
+        resolution: 'EMPLOYMENT_RESOLUTION_REQUIRED',
+        relatedShopCount: 1,
+      }),
+      requestAccountDeletion: jest.fn().mockResolvedValue({
+        request: {
+          id: 'request-1',
+          status: 'REQUESTED',
+          createdAt: '2026-10-28T10:00:00.000Z',
+          updatedAt: '2026-10-28T10:00:00.000Z',
+        },
+        resolution: 'EMPLOYMENT_RESOLUTION_REQUIRED',
+        relatedShopCount: 1,
+      }),
+      cancelAccountDeletionRequest: jest.fn().mockResolvedValue({
+        request: {
+          id: 'request-1',
+          status: 'CANCELLED',
+          createdAt: '2026-10-28T10:00:00.000Z',
+          updatedAt: '2026-10-28T10:05:00.000Z',
+        },
+        resolution: 'EMPLOYMENT_RESOLUTION_REQUIRED',
+        relatedShopCount: 1,
       }),
     };
     res = { cookie: jest.fn(), clearCookie: jest.fn() };
@@ -72,6 +104,66 @@ describe('AuthController', () => {
       REFRESH_TOKEN_COOKIE_NAME,
       expect.objectContaining({ httpOnly: true, path: '/' }),
     );
+  });
+
+  it('reads deletion status only for the authenticated JWT subject', async () => {
+    await controller.accountDeletionRequestStatus({
+      id: 'caller-a',
+      roles: [Role.SALON_STAFF],
+      audience: SessionAudience.STAFF,
+    });
+
+    expect(authService.getAccountDeletionRequest).toHaveBeenCalledWith(
+      'caller-a',
+    );
+  });
+
+  it('creates a deletion request for the authenticated subject and ignores any target identifier', async () => {
+    const result = await controller.requestAccountDeletion(
+      {
+        id: 'caller-a',
+        roles: [Role.SALON_OWNER],
+        audience: SessionAudience.STAFF,
+      },
+      { confirmation: 'REQUEST_DELETION', userId: 'victim-b' } as never,
+    );
+
+    expect(authService.requestAccountDeletion).toHaveBeenCalledWith('caller-a');
+    expect(authService.requestAccountDeletion).not.toHaveBeenCalledWith(
+      'victim-b',
+    );
+    expect(result).toMatchObject({ request: { id: 'request-1' } });
+  });
+
+  it('withdraws only the current authenticated subject’s deletion request', async () => {
+    await controller.cancelAccountDeletionRequest({
+      id: 'caller-a',
+      roles: [Role.SALON_STAFF],
+      audience: SessionAudience.STAFF,
+    });
+
+    expect(authService.cancelAccountDeletionRequest).toHaveBeenCalledWith(
+      'caller-a',
+    );
+    expect(authService.cancelAccountDeletionRequest).not.toHaveBeenCalledWith(
+      'victim-b',
+    );
+  });
+
+  it('requires the explicit request confirmation and strips client-supplied account targets', () => {
+    expect(
+      accountDeletionRequestSchema.safeParse({
+        confirmation: 'REQUEST_DELETION',
+        userId: 'victim-b',
+      }),
+    ).toEqual({
+      success: true,
+      data: { confirmation: 'REQUEST_DELETION' },
+    });
+    expect(
+      accountDeletionRequestSchema.safeParse({ confirmation: 'DELETE' })
+        .success,
+    ).toBe(false);
   });
 
   it('advertises configured Google and Apple login without returning client identifiers', () => {

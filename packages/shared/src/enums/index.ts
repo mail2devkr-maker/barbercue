@@ -41,6 +41,28 @@ export const UserStatus = {
 } as const;
 export type UserStatus = (typeof UserStatus)[keyof typeof UserStatus];
 
+/**
+ * A non-customer account deletion is a request, not an immediate destructive operation. The
+ * resolution is derived from the account's current server-side roles and relationships.
+ */
+export const AccountDeletionRequestStatus = {
+  REQUESTED: 'REQUESTED',
+  CANCELLED: 'CANCELLED',
+} as const;
+export type AccountDeletionRequestStatus =
+  (typeof AccountDeletionRequestStatus)[keyof typeof AccountDeletionRequestStatus];
+
+export const AccountDeletionResolution = {
+  CUSTOMER_DIRECT_DELETE: 'CUSTOMER_DIRECT_DELETE',
+  EMPLOYMENT_RESOLUTION_REQUIRED: 'EMPLOYMENT_RESOLUTION_REQUIRED',
+  OWNER_TRANSFER_REQUIRED: 'OWNER_TRANSFER_REQUIRED',
+  ADMIN_GOVERNANCE_REVIEW_REQUIRED: 'ADMIN_GOVERNANCE_REVIEW_REQUIRED',
+  MIXED_ROLE_RESOLUTION_REQUIRED: 'MIXED_ROLE_RESOLUTION_REQUIRED',
+  ACCOUNT_ROLE_REVIEW_REQUIRED: 'ACCOUNT_ROLE_REVIEW_REQUIRED',
+} as const;
+export type AccountDeletionResolution =
+  (typeof AccountDeletionResolution)[keyof typeof AccountDeletionResolution];
+
 // Phase 14 (Localization & Voice Operations). Deliberately tiny — every entry is a language the
 // platform actually has real translated voice-announcement/UI strings for (see
 // packages/shared/src/i18n). Adding a language means adding both an enum value here AND a
@@ -526,6 +548,7 @@ export const AuthErrorCode = {
   EMAIL_DELIVERY_UNAVAILABLE: 'EMAIL_DELIVERY_UNAVAILABLE',
   UNAUTHENTICATED: 'UNAUTHENTICATED',
   FORBIDDEN_ROLE: 'FORBIDDEN_ROLE',
+  ACCOUNT_DELETION_CUSTOMER_FLOW_REQUIRED: 'ACCOUNT_DELETION_CUSTOMER_FLOW_REQUIRED',
 } as const;
 export type AuthErrorCode = (typeof AuthErrorCode)[keyof typeof AuthErrorCode];
 

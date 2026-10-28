@@ -5,6 +5,7 @@ import request from 'supertest';
 import type { App } from 'supertest/types';
 import {
   AUTH_PATHS,
+  AccountDeletionResolution,
   AuthErrorCode,
   DISCOVERY_PATHS,
   OtpPurpose,
@@ -140,6 +141,9 @@ maybe(
       if (app) {
         const userIds = [...fixtureUserIds];
         if (userIds.length > 0) {
+          await prisma.accountDeletionRequest.deleteMany({
+            where: { userId: { in: userIds } },
+          });
           await prisma.auditLog.deleteMany({
             where: { actorUserId: { in: userIds } },
           });
@@ -473,6 +477,130 @@ maybe(
       expect(methods.body.ownerPhoneOtp).toBe(true);
       expect(methods.body).not.toHaveProperty('providerKey');
     });
+
+    it('records owner deletion requests idempotently without changing shop or account data', async () => {
+      const tokens = await tokenService.issueTokenPair(
+        ownerId,
+        [Role.SALON_OWNER],
+        SessionAudience.STAFF,
+        'synthetic-account-deletion-owner',
+      );
+      const endpoint = `/api/v1/auth/${AUTH_PATHS.accountDeletionRequest}`;
+      const initial = await request(app.getHttpServer())
+        .get(endpoint)
+        .set('Authorization', `Bearer ${tokens.accessToken}`)
+        .expect(200);
+      expect(initial.body).toMatchObject({
+        request: null,
+        resolution: AccountDeletionResolution.OWNER_TRANSFER_REQUIRED,
+        relatedShopCount: 1,
+      });
+
+      const firstRequest = await request(app.getHttpServer())
+        .post(endpoint)
+        .set('Authorization', `Bearer ${tokens.accessToken}`)
+        .send({ confirmation: 'REQUEST_DELETION', userId: 'not-the-caller' })
+        .expect(200);
+      const retry = await request(app.getHttpServer())
+        .post(endpoint)
+        .set('Authorization', `Bearer ${tokens.accessToken}`)
+        .send({ confirmation: 'REQUEST_DELETION' })
+        .expect(200);
+      expect(retry.body.request).toEqual(firstRequest.body.request);
+
+      await request(app.getHttpServer()).delete(endpoint).expect(401);
+      const withdrawn = await request(app.getHttpServer())
+        .delete(endpoint)
+        .set('Authorization', `Bearer ${tokens.accessToken}`)
+        .expect(200);
+      expect(withdrawn.body.request).toMatchObject({
+        id: firstRequest.body.request.id,
+        status: 'CANCELLED',
+      });
+      const reopened = await request(app.getHttpServer())
+        .post(endpoint)
+        .set('Authorization', `Bearer ${tokens.accessToken}`)
+        .send({ confirmation: 'REQUEST_DELETION' })
+        .expect(200);
+      expect(reopened.body.request).toMatchObject({
+        id: firstRequest.body.request.id,
+        status: 'REQUESTED',
+      });
+
+      const [deletionRequests, auditEvents, owner] = await Promise.all([
+        prisma.accountDeletionRequest.findMany({ where: { userId: ownerId } }),
+        prisma.auditLog.findMany({
+          where: {
+            actorUserId: ownerId,
+            action: {
+              in: [
+                'ACCOUNT_DELETION_REQUESTED',
+                'ACCOUNT_DELETION_REQUEST_CANCELLED',
+                'ACCOUNT_DELETION_REQUEST_REOPENED',
+              ],
+            },
+            entityType: 'AccountDeletionRequest',
+          },
+        }),
+        prisma.user.findUnique({
+          where: { id: ownerId },
+          include: { ownedSalons: true },
+        }),
+      ]);
+      expect(deletionRequests).toHaveLength(1);
+      expect(auditEvents).toHaveLength(3);
+      expect(deletionRequests[0].status).toBe('REQUESTED');
+      expect(owner?.status).toBe(UserStatus.ACTIVE);
+      expect(owner?.deletedAt).toBeNull();
+      expect(owner?.ownedSalons.map(({ id }) => id)).toContain(ownerSalonId);
+      expect(
+        await prisma.salon.count({
+          where: { id: ownerSalonId, status: SalonStatus.ACTIVE },
+        }),
+      ).toBe(1);
+    }, 60_000);
+
+    it('keeps mixed customer/staff identities on the non-destructive role-resolution path', async () => {
+      const mixed = await prisma.user.create({
+        data: {
+          email: `otp-mixed-deletion-${run}@example.test`,
+          status: UserStatus.ACTIVE,
+        },
+      });
+      fixtureUserIds.add(mixed.id);
+      await prisma.userRole.createMany({
+        data: [
+          { userId: mixed.id, role: Role.CUSTOMER },
+          { userId: mixed.id, role: Role.SALON_STAFF, salonId: ownerSalonId },
+        ],
+      });
+      const tokens = await tokenService.issueTokenPair(
+        mixed.id,
+        [Role.CUSTOMER, Role.SALON_STAFF],
+        SessionAudience.STAFF,
+        'synthetic-account-deletion-mixed',
+      );
+
+      const response = await request(app.getHttpServer())
+        .post(`/api/v1/auth/${AUTH_PATHS.accountDeletionRequest}`)
+        .set('Authorization', `Bearer ${tokens.accessToken}`)
+        .send({ confirmation: 'REQUEST_DELETION' })
+        .expect(200);
+
+      expect(response.body.resolution).toBe(
+        AccountDeletionResolution.MIXED_ROLE_RESOLUTION_REQUIRED,
+      );
+      expect(
+        await prisma.accountDeletionRequest.count({
+          where: { userId: mixed.id },
+        }),
+      ).toBe(1);
+      expect(
+        await prisma.user.count({
+          where: { id: mixed.id, status: UserStatus.ACTIVE },
+        }),
+      ).toBe(1);
+    }, 60_000);
 
     it('atomically caps parallel admissions across independent Prisma clients and never refunds an unknown timeout', async () => {
       const otpService = app.get(OtpService);

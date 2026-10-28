@@ -52,6 +52,11 @@ enum UserStatus {
   SUSPENDED
 }
 
+enum AccountDeletionRequestStatus {
+  REQUESTED
+  CANCELLED
+}
+
 // Phase 14 (Localization & Voice Operations). Deliberately tiny — see packages/shared/src/i18n's
 // own doc comment: a language only belongs here once real translated voice-announcement strings
 // exist for it.
@@ -443,6 +448,7 @@ model User {
   manualChairOccupanciesEnded   ManualChairOccupancy[]   @relation("ManualChairOccupancyEndedBy")
   employeeProfile               EmployeeProfile?
   createdDemoWorkspaces         OwnerDemoWorkspace[]     @relation("OwnerDemoWorkspaceCreator")
+  accountDeletionRequest        AccountDeletionRequest?
 
   @@map("users")
 }
@@ -491,6 +497,21 @@ model AuthIdentity {
   @@unique([provider, providerSub])
   @@index([userId])
   @@map("auth_identities")
+}
+
+// Non-customer deletion requests are durable, idempotent, and non-destructive. The request is
+// bound to exactly one authenticated User and is never used to transfer or delete salon data.
+// Resolution and related-shop counts are derived from current server-side relations at read time.
+model AccountDeletionRequest {
+  id        String                       @id @default(uuid())
+  userId    String                       @unique
+  user      User                         @relation(fields: [userId], references: [id], onDelete: Restrict)
+  status    AccountDeletionRequestStatus @default(REQUESTED)
+  createdAt DateTime                     @default(now())
+  updatedAt DateTime                     @updatedAt
+
+  @@index([status, createdAt])
+  @@map("account_deletion_requests")
 }
 
 // Short-lived, one-use Sign in with Apple nonce challenges. Only a SHA-256 digest is stored; the
