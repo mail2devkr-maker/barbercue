@@ -183,3 +183,105 @@ it('does not submit a confirmation that belongs to a shop scope which is no long
     alert.mockRestore();
   }
 });
+
+it('creates a product only through the selected salon API and refreshes server inventory', async () => {
+  const category = { id: '11111111-1111-4111-8111-111111111111', salonId: 'shop/id', name: 'Synthetic supplies', createdAt: '2026-10-28T00:00:00.000Z' };
+  const supplier = { id: '22222222-2222-4222-8222-222222222222', salonId: 'shop/id', name: 'Synthetic wholesaler', contactName: null, phone: null, email: null, notes: null, createdAt: '2026-10-28T00:00:00.000Z' };
+  const createdProduct = { ...products.items[0], id: 'created-product', name: 'New Shampoo', sku: 'SH-NEW', stockOnHand: '0', category: { id: category.id, name: category.name }, supplier: { id: supplier.id, name: supplier.name } };
+  (apiFetch as jest.Mock).mockImplementation(async (path: string, options?: RequestInit) => {
+    if (options?.method === 'POST') return createdProduct;
+    if (path.endsWith('/report')) return report;
+    if (path.includes('/categories?')) return { items: [category], nextCursor: null, hasMore: false };
+    if (path.includes('/suppliers?')) return { items: [supplier], nextCursor: null, hasMore: false };
+    if (path.includes('/products?')) return { items: [createdProduct], nextCursor: null, hasMore: false };
+    return movements;
+  });
+  await act(async () => { tree = TestRenderer.create(createElement(OwnerInventoryScreen, {} as never)); });
+  const add = tree.root.findAll((node: any) => node.props.accessibilityRole === 'button' && textOf(node) === 'Add product')[0];
+  await act(async () => { add.props.onPress(); await Promise.resolve(); });
+  const input = (label: string) => tree.root.findAllByType(TextInput).find((item: any) => item.props.accessibilityLabel === label);
+  await act(async () => { input('Product name')!.props.onChangeText('New Shampoo'); input('SKU (optional)')!.props.onChangeText('sh-new'); input('Low-stock threshold')!.props.onChangeText('5'); });
+  const categoryOption = tree.root.findAll((node: any) => node.props.accessibilityRole === 'tab' && textOf(node) === 'Synthetic supplies')[0];
+  const supplierOption = tree.root.findAll((node: any) => node.props.accessibilityRole === 'tab' && textOf(node) === 'Synthetic wholesaler')[0];
+  await act(async () => { categoryOption.props.onPress(); supplierOption.props.onPress(); });
+  const save = tree.root.findAll((node: any) => node.props.accessibilityRole === 'button' && textOf(node) === 'Save')[0];
+  await act(async () => { save.props.onPress(); await Promise.resolve(); });
+  expect(apiFetch).toHaveBeenCalledWith('dashboard/salons/shop%2Fid/inventory/products', {
+    method: 'POST',
+    body: JSON.stringify({ name: 'New Shampoo', sku: 'sh-new', unit: 'EACH', categoryId: category.id, supplierId: supplier.id, reorderThreshold: 5 }),
+  });
+  expect(renderedText()).toContain('Product created. Record opening stock to set its on-hand quantity.');
+  expect(renderedText()).toContain('New Shampoo');
+});
+
+it('creates a category through the salon-scoped endpoint without assuming stock exists', async () => {
+  const createdCategory = { id: '33333333-3333-4333-8333-333333333333', salonId: 'shop/id', name: 'Hair care', createdAt: '2026-10-28T00:00:00.000Z' };
+  (apiFetch as jest.Mock).mockImplementation(async (path: string, options?: RequestInit) => {
+    if (options?.method === 'POST') return createdCategory;
+    if (path.endsWith('/report')) return report;
+    if (path.includes('/products?')) return products;
+    return movements;
+  });
+  await act(async () => { tree = TestRenderer.create(createElement(OwnerInventoryScreen, {} as never)); });
+  const add = tree.root.findAll((node: any) => node.props.accessibilityRole === 'button' && textOf(node) === 'Add category')[0];
+  await act(async () => add.props.onPress());
+  const name = tree.root.findAllByType(TextInput).find((item: any) => item.props.accessibilityLabel === 'Category');
+  await act(async () => name!.props.onChangeText('Hair care'));
+  const save = tree.root.findAll((node: any) => node.props.accessibilityRole === 'button' && textOf(node) === 'Save')[0];
+  await act(async () => { save.props.onPress(); await Promise.resolve(); });
+  expect(apiFetch).toHaveBeenCalledWith('dashboard/salons/shop%2Fid/inventory/categories', { method: 'POST', body: JSON.stringify({ name: 'Hair care' }) });
+  expect(renderedText()).toContain('Category created.');
+});
+
+it('validates supplier email and creates supplier records only after valid input', async () => {
+  const createdSupplier = { id: '44444444-4444-4444-8444-444444444444', salonId: 'shop/id', name: 'Local supplier', contactName: 'Asha', phone: null, email: 'asha@example.test', notes: null, createdAt: '2026-10-28T00:00:00.000Z' };
+  (apiFetch as jest.Mock).mockImplementation(async (path: string, options?: RequestInit) => {
+    if (options?.method === 'POST') return createdSupplier;
+    if (path.endsWith('/report')) return report;
+    if (path.includes('/products?')) return products;
+    return movements;
+  });
+  await act(async () => { tree = TestRenderer.create(createElement(OwnerInventoryScreen, {} as never)); });
+  const add = tree.root.findAll((node: any) => node.props.accessibilityRole === 'button' && textOf(node) === 'Add supplier')[0];
+  await act(async () => add.props.onPress());
+  const input = (label: string) => tree.root.findAllByType(TextInput).find((item: any) => item.props.accessibilityLabel === label);
+  await act(async () => { input('Supplier')!.props.onChangeText('Local supplier'); input('Contact name (optional)')!.props.onChangeText('Asha'); input('Email (optional)')!.props.onChangeText('not-an-email'); });
+  const save = tree.root.findAll((node: any) => node.props.accessibilityRole === 'button' && textOf(node) === 'Save')[0];
+  await act(async () => { save.props.onPress(); await Promise.resolve(); });
+  expect((apiFetch as jest.Mock).mock.calls.some(([, options]) => options?.method === 'POST')).toBe(false);
+  expect(renderedText()).toContain('Invalid email');
+
+  await act(async () => input('Email (optional)')!.props.onChangeText('asha@example.test'));
+  await act(async () => { save.props.onPress(); await Promise.resolve(); });
+  expect(apiFetch).toHaveBeenCalledWith('dashboard/salons/shop%2Fid/inventory/suppliers', {
+    method: 'POST', body: JSON.stringify({ name: 'Local supplier', contactName: 'Asha', phone: null, email: 'asha@example.test', notes: null }),
+  });
+  expect(renderedText()).toContain('Supplier created.');
+});
+
+it('discards category lookups from the previous salon after a shop switch', async () => {
+  const oldCategory = { id: '55555555-5555-4555-8555-555555555555', salonId: 'shop/id', name: 'Old private category', createdAt: '2026-10-28T00:00:00.000Z' };
+  const newCategory = { id: '66666666-6666-4666-8666-666666666666', salonId: 'shop-2', name: 'New shop category', createdAt: '2026-10-28T00:00:00.000Z' };
+  let resolveOldCategories!: (value: InventoryPageDto<any>) => void;
+  const oldCategories = new Promise<InventoryPageDto<any>>((resolve) => { resolveOldCategories = resolve; });
+  (apiFetch as jest.Mock).mockImplementation((path: string) => {
+    if (path.endsWith('/report')) return Promise.resolve(report);
+    if (path.includes('/categories?') && path.includes('shop%2Fid')) return oldCategories;
+    if (path.includes('/categories?') && path.includes('shop-2')) return Promise.resolve({ items: [newCategory], nextCursor: null, hasMore: false });
+    if (path.includes('/suppliers?')) return Promise.resolve({ items: [], nextCursor: null, hasMore: false });
+    if (path.includes('/products?')) return Promise.resolve(products);
+    return Promise.resolve(movements);
+  });
+  await act(async () => { tree = TestRenderer.create(createElement(OwnerInventoryScreen, {} as never)); });
+  const addProduct = () => tree.root.findAll((node: any) => node.props.accessibilityRole === 'button' && textOf(node) === 'Add product')[0];
+  await act(async () => { addProduct().props.onPress(); await Promise.resolve(); });
+
+  mockSelectedShop = { id: 'shop-2', name: 'Other synthetic shop' };
+  await act(async () => { tree.update(createElement(OwnerInventoryScreen, {} as never)); await Promise.resolve(); });
+  await act(async () => { addProduct().props.onPress(); await Promise.resolve(); });
+  await act(async () => { resolveOldCategories({ items: [oldCategory], nextCursor: null, hasMore: false }); await oldCategories; });
+
+  expect(renderedText()).toContain('New shop category');
+  expect(renderedText()).not.toContain('Old private category');
+  expect(apiFetch).toHaveBeenCalledWith('dashboard/salons/shop-2/inventory/categories?limit=25');
+});

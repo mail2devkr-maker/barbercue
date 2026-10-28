@@ -4,11 +4,18 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import {
   DASHBOARD_PATHS,
+  createInventoryCategorySchema,
   createInventoryMovementSchema,
+  createInventoryProductSchema,
+  createInventorySupplierSchema,
   formatMoney,
   INVENTORY_PATHS,
   InventoryMovementKind,
+  InventoryUnit,
+  type InventoryUnit as InventoryUnitValue,
+  type InventoryCategoryDto,
   type CreateInventoryMovementInput,
+  type InventorySupplierDto,
   type InventoryMovementDto,
   type InventoryPageDto,
   type InventoryProductDto,
@@ -25,6 +32,7 @@ import type { OwnerShopStackParamList } from '../../navigation/OwnerShopStack';
 
 type Props = NativeStackScreenProps<OwnerShopStackParamList, 'OwnerInventory'>;
 type ProductMode = 'all' | 'low-stock';
+type ManagementMode = 'product' | 'category' | 'supplier' | null;
 type MovementFormState = {
   product: InventoryProductDto;
   kind: InventoryMovementDto['kind'];
@@ -53,6 +61,15 @@ const copy = {
     cancel: 'Cancel', confirmTitle: 'Confirm stock movement', confirmPrefix: 'Record this stock change for',
     saved: 'Stock movement recorded. Inventory refreshed.', invalidMovement: 'Check the stock movement details.',
     alreadyRecorded: 'This stock movement was already recorded. Inventory refreshed.', costRequired: 'Enter a unit cost, or enter 0 explicitly.',
+    addProduct: 'Add product', addCategory: 'Add category', addSupplier: 'Add supplier',
+    productName: 'Product name', sku: 'SKU (optional)', unit: 'Unit', category: 'Category', supplier: 'Supplier',
+    none: 'None', reorderThreshold: 'Low-stock threshold', save: 'Save', creating: 'Saving…',
+    productCreated: 'Product created. Record opening stock to set its on-hand quantity.',
+    productHelp: 'New products start at zero stock. Record opening stock to set the on-hand quantity.',
+    categoryCreated: 'Category created.', supplierCreated: 'Supplier created.',
+    managementInvalid: 'Check the inventory details.', lookupRetry: 'Could not load inventory categories and suppliers.',
+    contactName: 'Contact name (optional)', phone: 'Phone (optional)', email: 'Email (optional)', notes: 'Notes (optional)',
+    loadMoreCategories: 'Load more categories', loadMoreSuppliers: 'Load more suppliers',
   },
   HI: {
     title: 'इन्वेंटरी', subtitle: 'इस दुकान का स्टॉक और दर्ज गतिविधि इतिहास।',
@@ -69,6 +86,15 @@ const copy = {
     cancel: 'रद्द करें', confirmTitle: 'स्टॉक गतिविधि की पुष्टि करें', confirmPrefix: 'इस उत्पाद के लिए स्टॉक परिवर्तन दर्ज करें:',
     saved: 'स्टॉक गतिविधि दर्ज हुई। इन्वेंटरी रीफ़्रेश की गई।', invalidMovement: 'स्टॉक गतिविधि का विवरण जाँचें।',
     alreadyRecorded: 'यह स्टॉक गतिविधि पहले से दर्ज है। इन्वेंटरी रीफ़्रेश की गई।', costRequired: 'प्रति इकाई लागत दर्ज करें, या स्पष्ट रूप से 0 लिखें।',
+    addProduct: 'उत्पाद जोड़ें', addCategory: 'श्रेणी जोड़ें', addSupplier: 'आपूर्तिकर्ता जोड़ें',
+    productName: 'उत्पाद का नाम', sku: 'SKU (वैकल्पिक)', unit: 'इकाई', category: 'श्रेणी', supplier: 'आपूर्तिकर्ता',
+    none: 'कोई नहीं', reorderThreshold: 'कम-स्टॉक सीमा', save: 'सहेजें', creating: 'सहेज रहा है…',
+    productCreated: 'उत्पाद बनाया गया। मौजूदा स्टॉक तय करने के लिए आरंभिक स्टॉक दर्ज करें।',
+    productHelp: 'नए उत्पाद का स्टॉक शून्य से शुरू होता है। मौजूदा मात्रा तय करने के लिए आरंभिक स्टॉक दर्ज करें।',
+    categoryCreated: 'श्रेणी बनाई गई।', supplierCreated: 'आपूर्तिकर्ता बनाया गया।',
+    managementInvalid: 'इन्वेंटरी का विवरण जाँचें।', lookupRetry: 'इन्वेंटरी की श्रेणियाँ और आपूर्तिकर्ता लोड नहीं हो सके।',
+    contactName: 'संपर्क नाम (वैकल्पिक)', phone: 'फ़ोन (वैकल्पिक)', email: 'ईमेल (वैकल्पिक)', notes: 'नोट्स (वैकल्पिक)',
+    loadMoreCategories: 'और श्रेणियाँ देखें', loadMoreSuppliers: 'और आपूर्तिकर्ता देखें',
   },
 } as const;
 
@@ -113,6 +139,28 @@ export default function OwnerInventoryScreen(_props: Props) {
   const [movementError, setMovementError] = useState<string | null>(null);
   const [movementNotice, setMovementNotice] = useState<string | null>(null);
   const [movementBusy, setMovementBusy] = useState(false);
+  const [managementMode, setManagementMode] = useState<ManagementMode>(null);
+  const [managementBusy, setManagementBusy] = useState(false);
+  const [managementLoading, setManagementLoading] = useState(false);
+  const [managementError, setManagementError] = useState<string | null>(null);
+  const [managementNotice, setManagementNotice] = useState<string | null>(null);
+  const [categories, setCategories] = useState<InventoryCategoryDto[]>([]);
+  const [suppliers, setSuppliers] = useState<InventorySupplierDto[]>([]);
+  const [categoryCursor, setCategoryCursor] = useState<string | null>(null);
+  const [supplierCursor, setSupplierCursor] = useState<string | null>(null);
+  const [productName, setProductName] = useState('');
+  const [productSku, setProductSku] = useState('');
+  const [productUnit, setProductUnit] = useState<InventoryUnitValue>(InventoryUnit.EACH);
+  const [productCategoryId, setProductCategoryId] = useState('');
+  const [productSupplierId, setProductSupplierId] = useState('');
+  const [productThreshold, setProductThreshold] = useState('0');
+  const [categoryName, setCategoryName] = useState('');
+  const [supplierName, setSupplierName] = useState('');
+  const [supplierContactName, setSupplierContactName] = useState('');
+  const [supplierPhone, setSupplierPhone] = useState('');
+  const [supplierEmail, setSupplierEmail] = useState('');
+  const [supplierNotes, setSupplierNotes] = useState('');
+  const managementRequest = useRef(0);
   const movementRequest = useRef<MovementRequestSnapshot | null>(null);
   const requestId = useRef(0);
   const selectedSalonIdRef = useRef(selectedSalonId);
@@ -124,7 +172,144 @@ export default function OwnerInventoryScreen(_props: Props) {
     setMovementNotice(null);
     setMovementBusy(false);
     movementRequest.current = null;
+    managementRequest.current += 1;
+    setManagementMode(null);
+    setManagementError(null);
+    setManagementNotice(null);
+    setManagementBusy(false);
+    setCategories([]);
+    setSuppliers([]);
+    setCategoryCursor(null);
+    setSupplierCursor(null);
   }, [selectedSalonId]);
+
+  const openManagement = async (mode: Exclude<ManagementMode, null>) => {
+    const request = ++managementRequest.current;
+    setManagementMode(mode);
+    setManagementError(null);
+    setManagementNotice(null);
+    setProductName('');
+    setProductSku('');
+    setProductUnit(InventoryUnit.EACH);
+    setProductCategoryId('');
+    setProductSupplierId('');
+    setProductThreshold('0');
+    setCategoryName('');
+    setSupplierName('');
+    setSupplierContactName('');
+    setSupplierPhone('');
+    setSupplierEmail('');
+    setSupplierNotes('');
+    if (mode !== 'product' || !selectedSalonId) return;
+    setCategories([]);
+    setSuppliers([]);
+    setCategoryCursor(null);
+    setSupplierCursor(null);
+    const salonId = selectedSalonId;
+    setManagementLoading(true);
+    try {
+      const [categoryPage, supplierPage] = await Promise.all([
+        apiFetch<InventoryPageDto<InventoryCategoryDto>>(queryPath(`${rootPath(salonId)}/${INVENTORY_PATHS.categories}`, { limit: String(PAGE_SIZE) })),
+        apiFetch<InventoryPageDto<InventorySupplierDto>>(queryPath(`${rootPath(salonId)}/${INVENTORY_PATHS.suppliers}`, { limit: String(PAGE_SIZE) })),
+      ]);
+      if (request !== managementRequest.current || salonId !== selectedSalonIdRef.current) return;
+      setCategories(categoryPage.items);
+      setSuppliers(supplierPage.items);
+      setCategoryCursor(categoryPage.nextCursor);
+      setSupplierCursor(supplierPage.nextCursor);
+    } catch (err) {
+      if (request !== managementRequest.current || salonId !== selectedSalonIdRef.current) return;
+      setManagementError(err instanceof ApiError ? err.message : labels.lookupRetry);
+    } finally {
+      if (request === managementRequest.current) setManagementLoading(false);
+    }
+  };
+
+  const loadMoreLookup = async (kind: 'category' | 'supplier') => {
+    if (!selectedSalonId || managementLoading) return;
+    const cursor = kind === 'category' ? categoryCursor : supplierCursor;
+    if (!cursor) return;
+    const salonId = selectedSalonId;
+    const request = ++managementRequest.current;
+    setManagementLoading(true);
+    setManagementError(null);
+    try {
+      const resource = kind === 'category' ? INVENTORY_PATHS.categories : INVENTORY_PATHS.suppliers;
+      if (kind === 'category') {
+        const page = await apiFetch<InventoryPageDto<InventoryCategoryDto>>(queryPath(`${rootPath(salonId)}/${resource}`, { limit: String(PAGE_SIZE), cursor }));
+        if (request !== managementRequest.current || salonId !== selectedSalonIdRef.current) return;
+        setCategories((current) => { const known = new Set(current.map((item) => item.id)); return [...current, ...page.items.filter((item) => !known.has(item.id))]; });
+        setCategoryCursor(page.nextCursor);
+      } else {
+        const page = await apiFetch<InventoryPageDto<InventorySupplierDto>>(queryPath(`${rootPath(salonId)}/${resource}`, { limit: String(PAGE_SIZE), cursor }));
+        if (request !== managementRequest.current || salonId !== selectedSalonIdRef.current) return;
+        setSuppliers((current) => { const known = new Set(current.map((item) => item.id)); return [...current, ...page.items.filter((item) => !known.has(item.id))]; });
+        setSupplierCursor(page.nextCursor);
+      }
+    } catch (err) {
+      if (request === managementRequest.current && salonId === selectedSalonIdRef.current) setManagementError(err instanceof ApiError ? err.message : labels.lookupRetry);
+    } finally {
+      if (request === managementRequest.current) setManagementLoading(false);
+    }
+  };
+
+  const submitManagement = async () => {
+    if (!selectedSalonId || !managementMode || managementBusy || managementLoading) return;
+    const salonId = selectedSalonId;
+    const requestAtSubmit = requestId.current;
+    const mode = managementMode;
+    let path: string;
+    let body: unknown;
+    let successText: string;
+    if (mode === 'category') {
+      const parsed = createInventoryCategorySchema.safeParse({ name: categoryName });
+      if (!parsed.success) { setManagementError(parsed.error.issues[0]?.message ?? labels.managementInvalid); return; }
+      path = `${rootPath(salonId)}/${INVENTORY_PATHS.categories}`;
+      body = parsed.data;
+      successText = labels.categoryCreated;
+    } else if (mode === 'supplier') {
+      const parsed = createInventorySupplierSchema.safeParse({
+        name: supplierName,
+        contactName: supplierContactName.trim() || null,
+        phone: supplierPhone.trim() || null,
+        email: supplierEmail.trim() || null,
+        notes: supplierNotes.trim() || null,
+      });
+      if (!parsed.success) { setManagementError(parsed.error.issues[0]?.message ?? labels.managementInvalid); return; }
+      path = `${rootPath(salonId)}/${INVENTORY_PATHS.suppliers}`;
+      body = parsed.data;
+      successText = labels.supplierCreated;
+    } else {
+      const parsed = createInventoryProductSchema.safeParse({
+        name: productName,
+        sku: productSku.trim() || null,
+        unit: productUnit,
+        categoryId: productCategoryId || null,
+        supplierId: productSupplierId || null,
+        reorderThreshold: Number(productThreshold),
+      });
+      if (!parsed.success) { setManagementError(parsed.error.issues[0]?.message ?? labels.managementInvalid); return; }
+      path = `${rootPath(salonId)}/${INVENTORY_PATHS.products}`;
+      body = parsed.data;
+      successText = labels.productCreated;
+    }
+    setManagementBusy(true);
+    setManagementError(null);
+    try {
+      const result = await apiFetch<InventoryProductDto | InventoryCategoryDto | InventorySupplierDto>(path, { method: 'POST', body: JSON.stringify(body) });
+      if (salonId !== selectedSalonIdRef.current || requestAtSubmit !== requestId.current) return;
+      if (mode === 'category') setCategories((current) => [...current, result as InventoryCategoryDto]);
+      if (mode === 'supplier') setSuppliers((current) => [...current, result as InventorySupplierDto]);
+      setManagementMode(null);
+      setManagementNotice(successText);
+      await load(true);
+    } catch (err) {
+      if (salonId !== selectedSalonIdRef.current || requestAtSubmit !== requestId.current) return;
+      setManagementError(err instanceof ApiError ? err.message : labels.managementInvalid);
+    } finally {
+      setManagementBusy(false);
+    }
+  };
 
   const load = useCallback(async (refresh = false) => {
     const currentRequest = ++requestId.current;
@@ -309,6 +494,67 @@ export default function OwnerInventoryScreen(_props: Props) {
               })}
             </View>
           </View>
+          <View style={styles.managementActions}>
+            <ActionButton label={labels.addProduct} disabled={managementBusy} onPress={() => void openManagement('product')} />
+            <ActionButton label={labels.addCategory} disabled={managementBusy} onPress={() => void openManagement('category')} />
+            <ActionButton label={labels.addSupplier} disabled={managementBusy} onPress={() => void openManagement('supplier')} />
+          </View>
+          {managementNotice ? <Text accessibilityRole="alert" style={styles.notice}>{managementNotice}</Text> : null}
+          {managementMode ? (
+            <PremiumCard strong style={styles.formCard}>
+              <Text style={styles.cardTitle}>{managementMode === 'product' ? labels.addProduct : managementMode === 'category' ? labels.addCategory : labels.addSupplier}</Text>
+              {managementError ? <InlineError message={managementError} /> : null}
+              {managementLoading ? <Text style={styles.muted}>{labels.loading}</Text> : null}
+              {managementMode === 'product' ? <>
+                <Text style={styles.inputLabel}>{labels.productName}</Text>
+                <TextInput accessibilityLabel={labels.productName} editable={!managementBusy} value={productName} onChangeText={setProductName} maxLength={120} style={styles.input} />
+                <Text style={styles.inputLabel}>{labels.sku}</Text>
+                <TextInput accessibilityLabel={labels.sku} editable={!managementBusy} value={productSku} onChangeText={setProductSku} maxLength={80} style={styles.input} />
+                <Text style={styles.inputLabel}>{labels.unit}</Text>
+                <View style={styles.modeRow} accessibilityRole="tablist">
+                  {(Object.values(InventoryUnit) as InventoryUnitValue[]).map((unit) => {
+                    const selected = productUnit === unit;
+                    return <Pressable key={unit} accessibilityRole="tab" accessibilityState={{ selected }} disabled={managementBusy} onPress={() => setProductUnit(unit)} style={[styles.modeButton, selected && styles.modeSelected]}>
+                      <Text style={[styles.modeText, selected && styles.modeTextSelected]}>{unit}</Text>
+                    </Pressable>;
+                  })}
+                </View>
+                <Text style={styles.inputLabel}>{labels.category}</Text>
+                <View style={styles.modeRow} accessibilityRole="tablist">
+                  <LookupOption label={labels.none} selected={!productCategoryId} onPress={() => setProductCategoryId('')} />
+                  {categories.map((item) => <LookupOption key={item.id} label={item.name} selected={productCategoryId === item.id} onPress={() => setProductCategoryId(item.id)} />)}
+                </View>
+                {categoryCursor ? <MoreButton label={labels.loadMoreCategories} loading={managementLoading} onPress={() => void loadMoreLookup('category')} /> : null}
+                <Text style={styles.inputLabel}>{labels.supplier}</Text>
+                <View style={styles.modeRow} accessibilityRole="tablist">
+                  <LookupOption label={labels.none} selected={!productSupplierId} onPress={() => setProductSupplierId('')} />
+                  {suppliers.map((item) => <LookupOption key={item.id} label={item.name} selected={productSupplierId === item.id} onPress={() => setProductSupplierId(item.id)} />)}
+                </View>
+                {supplierCursor ? <MoreButton label={labels.loadMoreSuppliers} loading={managementLoading} onPress={() => void loadMoreLookup('supplier')} /> : null}
+                <Text style={styles.inputLabel}>{labels.reorderThreshold}</Text>
+                <TextInput accessibilityLabel={labels.reorderThreshold} editable={!managementBusy} value={productThreshold} onChangeText={setProductThreshold} keyboardType="decimal-pad" style={styles.input} />
+                <Text style={styles.muted}>{labels.productHelp}</Text>
+              </> : managementMode === 'category' ? <>
+                <Text style={styles.inputLabel}>{labels.category}</Text>
+                <TextInput accessibilityLabel={labels.category} editable={!managementBusy} value={categoryName} onChangeText={setCategoryName} maxLength={80} style={styles.input} />
+              </> : <>
+                <Text style={styles.inputLabel}>{labels.supplier}</Text>
+                <TextInput accessibilityLabel={labels.supplier} editable={!managementBusy} value={supplierName} onChangeText={setSupplierName} maxLength={120} style={styles.input} />
+                <Text style={styles.inputLabel}>{labels.contactName}</Text>
+                <TextInput accessibilityLabel={labels.contactName} editable={!managementBusy} value={supplierContactName} onChangeText={setSupplierContactName} maxLength={120} style={styles.input} />
+                <Text style={styles.inputLabel}>{labels.phone}</Text>
+                <TextInput accessibilityLabel={labels.phone} editable={!managementBusy} value={supplierPhone} onChangeText={setSupplierPhone} maxLength={40} keyboardType="phone-pad" style={styles.input} />
+                <Text style={styles.inputLabel}>{labels.email}</Text>
+                <TextInput accessibilityLabel={labels.email} editable={!managementBusy} value={supplierEmail} onChangeText={setSupplierEmail} maxLength={254} keyboardType="email-address" autoCapitalize="none" style={styles.input} />
+                <Text style={styles.inputLabel}>{labels.notes}</Text>
+                <TextInput accessibilityLabel={labels.notes} editable={!managementBusy} value={supplierNotes} onChangeText={setSupplierNotes} maxLength={500} multiline style={[styles.input, styles.multiline]} />
+              </>}
+              <View style={styles.formActions}>
+                <Pressable accessibilityRole="button" disabled={managementBusy} onPress={() => { managementRequest.current += 1; setManagementMode(null); setManagementError(null); }} style={styles.modeButton}><Text style={styles.modeText}>{labels.cancel}</Text></Pressable>
+                <Pressable accessibilityRole="button" disabled={managementBusy || managementLoading} onPress={() => void submitManagement()} style={[styles.modeButton, styles.actionSelected]}><Text style={[styles.modeText, styles.actionText]}>{managementBusy ? labels.creating : labels.save}</Text></Pressable>
+              </View>
+            </PremiumCard>
+          ) : null}
           {movementNotice ? <Text accessibilityRole="alert" style={styles.notice}>{movementNotice}</Text> : null}
           {movementForm ? (
             <PremiumCard strong style={styles.formCard}>
@@ -398,6 +644,14 @@ function MoreButton({ label, loading, onPress }: { label: string; loading: boole
   return <Pressable accessibilityRole="button" disabled={loading} onPress={onPress} style={styles.moreButton}><Text style={styles.moreText}>{loading ? '…' : label}</Text></Pressable>;
 }
 
+function ActionButton({ label, disabled, onPress }: { label: string; disabled: boolean; onPress: () => void }) {
+  return <Pressable accessibilityRole="button" disabled={disabled} onPress={onPress} style={styles.modeButton}><Text style={styles.moreText}>{label}</Text></Pressable>;
+}
+
+function LookupOption({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
+  return <Pressable accessibilityRole="tab" accessibilityState={{ selected }} onPress={onPress} style={[styles.modeButton, selected && styles.modeSelected]}><Text style={[styles.modeText, selected && styles.modeTextSelected]}>{label}</Text></Pressable>;
+}
+
 const styles = StyleSheet.create({
   loading: { gap: space[3] },
   skeleton: { height: 104, borderRadius: radius.lg },
@@ -411,6 +665,7 @@ const styles = StyleSheet.create({
   cardTitle: { color: fastQue.text, fontFamily: font.displaySemiBold, fontSize: fontSize.lg },
   money: { color: fastQue.text, fontFamily: font.displaySemiBold, fontSize: fontSize['2xl'], marginTop: space[2] },
   sectionHeader: { gap: space[3], marginBottom: space[3] },
+  managementActions: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2], marginBottom: space[3] },
   sectionTitle: { color: fastQue.text, fontFamily: font.displaySemiBold, fontSize: fontSize.lg },
   modeRow: { flexDirection: 'row', gap: space[2] },
   modeButton: { minHeight: 40, paddingHorizontal: space[3], borderRadius: radius.pill, borderWidth: 1, borderColor: fastQue.border, justifyContent: 'center' },
