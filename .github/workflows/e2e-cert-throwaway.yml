@@ -1,0 +1,69 @@
+name: E2E certification (throwaway branch - never merged, never deployed)
+
+# Runs the real-database e2e suites that no other workflow runs. Source is byte-identical to the certified release SHA
+# (this file is the only addition). Synthetic secrets only; disposable PostgreSQL; no production endpoints.
+on:
+  push:
+    branches:
+      - 'ci/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: '5432'
+      PGUSER: postgres
+      DATABASE_URL: postgresql://postgres@127.0.0.1:5432/e2e_cert?schema=public
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build:shared
+      - run: npm run prisma:generate --workspace=@barbercue/backend
+      - name: Create database and apply the whole committed migration chain
+        working-directory: apps/backend
+        run: |
+          psql -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE e2e_cert"
+          bash scripts/verify-migration-chain.sh
+      - name: Live Queue + customer-cancel e2e (real PostgreSQL, real throttler)
+        working-directory: apps/backend
+        env:
+          NODE_ENV: development
+          AGENT_LLM_PROVIDER: none
+        run: |
+          export JWT_ACCESS_SECRET="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
+          export TOTP_ENCRYPTION_KEY="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
+          npx jest --config ./test/jest-e2e.json --runInBand --ci test/live-queue-verification.e2e-spec.ts test/queue-customer-cancel.e2e-spec.ts
+      - name: Seed demo data (synthetic) and run the discovery e2e
+        working-directory: apps/backend
+        env:
+          NODE_ENV: development
+          AGENT_LLM_PROVIDER: none
+        run: |
+          export JWT_ACCESS_SECRET="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
+          export TOTP_ENCRYPTION_KEY="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
+          export ADMIN_SEED_EMAIL=seed-admin@example.test
+          export ADMIN_SEED_PASSWORD="Qa-$(node -e "console.log(require('crypto').randomBytes(9).toString('base64url'))")-9"
+          npx ts-node --transpile-only --compiler-options '{"module":"CommonJS"}' prisma/seed.ts > /dev/null
+          npx jest --config ./test/jest-e2e.json --runInBand --ci test/discovery.e2e-spec.ts
