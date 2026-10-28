@@ -75,6 +75,24 @@ export function AccountDeletionRequestCard() {
     }
   }
 
+  async function withdrawRequest() {
+    setSubmitting(true);
+    setError(null);
+    try {
+      const next = await apiFetch<AccountDeletionRequestDto>(
+        `auth/${AUTH_PATHS.accountDeletionRequest}`,
+        { method: "DELETE" },
+      );
+      setStatus(next);
+    } catch (err) {
+      setError(
+        err instanceof ApiError ? err.message : t.accountDeletionWithdrawError,
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   function resolutionMessage(): string {
     const shopCount = status?.relatedShopCount ?? 0;
     const shops =
@@ -107,7 +125,7 @@ export function AccountDeletionRequestCard() {
           accessibilityLabel="Loading account deletion status"
           color={color.muted}
         />
-      ) : status?.request ? (
+      ) : status?.request?.status === "REQUESTED" ? (
         <>
           <Text style={styles.requestStatus}>
             {t.accountDeletionRequestReceived} ·{" "}
@@ -115,8 +133,71 @@ export function AccountDeletionRequestCard() {
               dateLocaleFor(language),
             )}
           </Text>
+          <Text style={styles.noteText}>
+            {t.accountDeletionStatusUpdated.replace(
+              "{date}",
+              new Date(status.request.updatedAt).toLocaleDateString(
+                dateLocaleFor(language),
+              ),
+            )}
+          </Text>
           <Text style={styles.noteText}>{resolutionMessage()}</Text>
           <Text style={styles.noteText}>{t.accountDeletionPendingNotice}</Text>
+          <Button
+            title={
+              submitting
+                ? t.accountDeletionWithdrawing
+                : t.accountDeletionWithdraw
+            }
+            variant="outline"
+            onPress={() => void withdrawRequest()}
+            disabled={submitting}
+            style={styles.button}
+          />
+        </>
+      ) : status?.request?.status === "CANCELLED" ? (
+        <>
+          <Text style={styles.requestStatus}>
+            {t.accountDeletionRequestWithdrawn.replace(
+              "{date}",
+              new Date(status.request.updatedAt).toLocaleDateString(
+                dateLocaleFor(language),
+              ),
+            )}
+          </Text>
+          <Text style={styles.noteText}>{resolutionMessage()}</Text>
+          {!confirming ? (
+            <Button
+              title={t.accountDeletionStart}
+              variant="outline"
+              onPress={() => setConfirming(true)}
+              style={styles.button}
+            />
+          ) : (
+            <>
+              <Text style={styles.warning}>
+                {t.accountDeletionConfirmPrompt}
+              </Text>
+              <Button
+                title={
+                  submitting
+                    ? t.accountDeletionSubmitting
+                    : t.accountDeletionConfirm
+                }
+                onPress={() => void submitRequest()}
+                disabled={submitting}
+                style={styles.button}
+              />
+              <Pressable
+                disabled={submitting}
+                onPress={() => setConfirming(false)}
+              >
+                <Text style={styles.cancel}>
+                  {t.accountDeletionCancelSetup}
+                </Text>
+              </Pressable>
+            </>
+          )}
         </>
       ) : (
         <>

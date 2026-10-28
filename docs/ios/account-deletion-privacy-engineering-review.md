@@ -1,14 +1,15 @@
 # FastQue iOS account deletion and privacy engineering review
 
 **Internal engineering review; not a public privacy notice, legal opinion, or App Store Connect privacy declaration.**
-This review is based on the PR #331 source baseline `fc54afbe944483bbb29648d51544f02179789847` and the isolated account-deletion implementation in this branch. It must be reconciled against the actual production API, vendor configuration, and the signed binary before submission.
+This review is based on the PR #331 source baseline `fc54afbe944483bbb29648d51544f02179789847`, the PR #333 account-deletion implementation, and the pending requester-withdrawal addition on the same Draft branch. It must be reconciled against the actual production API, vendor configuration, and the signed binary before submission.
 
 ## Account deletion behavior and limits
 
 - Customer-only accounts retain the existing authenticated in-app deletion endpoint. The backend validates the signed-in user, revokes refresh sessions and provider credentials where it has the necessary revocation material, removes direct identity/contact surfaces and customer content according to the existing implementation, and preserves linked operational/financial records in de-identified form. This branch does not change that behavior.
-- Non-customer, staff, owner, administrator, and mixed-role accounts receive an in-app, account-bound deletion-request form. The API derives the subject only from the authenticated session, classifies the current role relationships on the server, and records one idempotent request. It exposes a self-only status DTO and does not accept another user ID.
-- The request is deliberately non-destructive: it does not revoke access, end employment, transfer or close a shop, alter bookings/payments, delete personal data, or claim that deletion is complete. The app reports the request as pending and keeps access active. Current automatic resolution and completion workflow is not implemented.
+- Non-customer, staff, owner, administrator, and mixed-role accounts receive an in-app, account-bound deletion-request form. The API derives the subject only from the authenticated session, classifies the current role relationships on the server, and records one idempotent request. It exposes a self-only status DTO and does not accept another user ID. The requester can withdraw a pending request and reopen it later; those transitions are audited and expose timestamps.
+- The request is deliberately non-destructive: it does not revoke access, end employment, transfer or close a shop, alter bookings/payments, delete personal data, or claim that deletion is complete. The app reports that no reviewer/completion workflow is available in this release and keeps access active. Current automatic resolution and completion workflow is not implemented.
 - The new table is an additive Prisma migration. It has not been applied to any production database. The mobile request/status API will fail until a coordinated backend release applies the migration.
+- The follow-up migration adds only a `CANCELLED` enum state. It does not add a reviewer role, legal-retention state, account-deactivation behavior, provider revocation, or deletion processing.
 - Current direct customer deletion is not a substitute for a complete deletion process for owners, staff, administrators, or mixed-role accounts. The flow in this branch is a safe in-app initiation step, not final App Store deletion certification.
 
 ## Retention and continuity policy requiring owner/legal approval
@@ -25,7 +26,7 @@ The policy must also decide:
 | Platform administrator | Assign successor/recovery access and preserve required administrative audit continuity. |
 | Mixed-role | Resolve every role and tenant relationship independently; do not allow customer-role deletion to remove business/admin relationships. |
 
-The owner must additionally approve the request handling owner/team, identity verification, user-visible next steps, status transitions, completion notification and a reasonable completion target. Do not make the flow depend solely on email, phone, or chat support; provide an in-app workflow. No business policy or completion SLA is encoded by this change.
+The owner must additionally approve the request handling owner/team, identity verification, user-visible next steps, reviewer authority, status transitions, completion notification and a reasonable completion target. The proposed record-class decisions, reviewer model, lifecycle, and timeline are documented in [ACCOUNT_DELETION_OWNER_DECISIONS.md](./ACCOUNT_DELETION_OWNER_DECISIONS.md); they remain proposals, not policy. Do not make the flow depend solely on email, phone, or chat support; provide an in-app workflow. No business policy or completion SLA is encoded by this change.
 
 ## iOS data-flow and SDK inventory (source-level)
 

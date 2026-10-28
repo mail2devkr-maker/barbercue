@@ -106,6 +106,21 @@ function setupApi(status: AccountDeletionRequestDto) {
             id: "request-1",
             status: "REQUESTED",
             createdAt: "2026-10-28T10:00:00.000Z",
+            updatedAt: "2026-10-28T10:00:00.000Z",
+          },
+        };
+      }
+      if (
+        path === "auth/account/deletion-request" &&
+        options?.method === "DELETE"
+      ) {
+        return {
+          ...status,
+          request: {
+            id: status.request?.id ?? "request-1",
+            status: "CANCELLED",
+            createdAt: status.request?.createdAt ?? "2026-10-28T10:00:00.000Z",
+            updatedAt: "2026-10-28T10:05:00.000Z",
           },
         };
       }
@@ -179,8 +194,47 @@ it("lets an owner submit a non-destructive deletion request and renders its pend
   });
   expect(renderedText()).toContain("Request received");
   expect(renderedText()).toContain(
-    "This is a pending request, not completed deletion.",
+    "This request is recorded but is not completed deletion.",
   );
+  expect(logout).not.toHaveBeenCalled();
+});
+
+it("lets an owner withdraw a pending request without logging out or implying deletion", async () => {
+  const logout = jest.fn();
+  userMock.mockReturnValue({
+    user: { roles: [Role.SALON_OWNER] },
+    logout,
+    refreshMe: jest.fn(),
+  });
+  setupApi({
+    request: {
+      id: "request-1",
+      status: "REQUESTED",
+      createdAt: "2026-10-28T10:00:00.000Z",
+      updatedAt: "2026-10-28T10:00:00.000Z",
+    },
+    resolution: "OWNER_TRANSFER_REQUIRED",
+    relatedShopCount: 1,
+  });
+
+  await act(async () => {
+    tree = TestRenderer.create(createElement(DashboardAccountScreen));
+  });
+  expect(renderedText()).toContain(
+    "This release does not yet provide a reviewer or completion workflow.",
+  );
+
+  const withdraw = tree.root.findAll(
+    (node: any) =>
+      node.props.accessibilityRole === "button" &&
+      flattenText(node).includes("Withdraw request"),
+  )[0];
+  await act(async () => withdraw.props.onPress());
+
+  expect(apiFetchMock).toHaveBeenCalledWith("auth/account/deletion-request", {
+    method: "DELETE",
+  });
+  expect(renderedText()).toContain("Request withdrawn on");
   expect(logout).not.toHaveBeenCalled();
 });
 
@@ -217,6 +271,7 @@ it("shows the governance resolution and does not offer immediate deletion to an 
       id: "request-admin",
       status: "REQUESTED",
       createdAt: "2026-10-28T10:00:00.000Z",
+      updatedAt: "2026-10-28T10:00:00.000Z",
     },
     resolution: "ADMIN_GOVERNANCE_REVIEW_REQUIRED",
     relatedShopCount: 0,

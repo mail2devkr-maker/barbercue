@@ -47,6 +47,7 @@ export type UserStatus = (typeof UserStatus)[keyof typeof UserStatus];
  */
 export const AccountDeletionRequestStatus = {
   REQUESTED: 'REQUESTED',
+  CANCELLED: 'CANCELLED',
 } as const;
 export type AccountDeletionRequestStatus =
   (typeof AccountDeletionRequestStatus)[keyof typeof AccountDeletionRequestStatus];

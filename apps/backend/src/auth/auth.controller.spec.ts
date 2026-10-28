@@ -17,6 +17,7 @@ describe('AuthController', () => {
     deleteCustomerAccount: jest.Mock;
     getAccountDeletionRequest: jest.Mock;
     requestAccountDeletion: jest.Mock;
+    cancelAccountDeletionRequest: jest.Mock;
   };
   let res: { cookie: jest.Mock; clearCookie: jest.Mock };
 
@@ -40,6 +41,17 @@ describe('AuthController', () => {
           id: 'request-1',
           status: 'REQUESTED',
           createdAt: '2026-10-28T10:00:00.000Z',
+          updatedAt: '2026-10-28T10:00:00.000Z',
+        },
+        resolution: 'EMPLOYMENT_RESOLUTION_REQUIRED',
+        relatedShopCount: 1,
+      }),
+      cancelAccountDeletionRequest: jest.fn().mockResolvedValue({
+        request: {
+          id: 'request-1',
+          status: 'CANCELLED',
+          createdAt: '2026-10-28T10:00:00.000Z',
+          updatedAt: '2026-10-28T10:05:00.000Z',
         },
         resolution: 'EMPLOYMENT_RESOLUTION_REQUIRED',
         relatedShopCount: 1,
@@ -101,7 +113,9 @@ describe('AuthController', () => {
       audience: SessionAudience.STAFF,
     });
 
-    expect(authService.getAccountDeletionRequest).toHaveBeenCalledWith('caller-a');
+    expect(authService.getAccountDeletionRequest).toHaveBeenCalledWith(
+      'caller-a',
+    );
   });
 
   it('creates a deletion request for the authenticated subject and ignores any target identifier', async () => {
@@ -115,8 +129,25 @@ describe('AuthController', () => {
     );
 
     expect(authService.requestAccountDeletion).toHaveBeenCalledWith('caller-a');
-    expect(authService.requestAccountDeletion).not.toHaveBeenCalledWith('victim-b');
+    expect(authService.requestAccountDeletion).not.toHaveBeenCalledWith(
+      'victim-b',
+    );
     expect(result).toMatchObject({ request: { id: 'request-1' } });
+  });
+
+  it('withdraws only the current authenticated subject’s deletion request', async () => {
+    await controller.cancelAccountDeletionRequest({
+      id: 'caller-a',
+      roles: [Role.SALON_STAFF],
+      audience: SessionAudience.STAFF,
+    });
+
+    expect(authService.cancelAccountDeletionRequest).toHaveBeenCalledWith(
+      'caller-a',
+    );
+    expect(authService.cancelAccountDeletionRequest).not.toHaveBeenCalledWith(
+      'victim-b',
+    );
   });
 
   it('requires the explicit request confirmation and strips client-supplied account targets', () => {
@@ -130,7 +161,8 @@ describe('AuthController', () => {
       data: { confirmation: 'REQUEST_DELETION' },
     });
     expect(
-      accountDeletionRequestSchema.safeParse({ confirmation: 'DELETE' }).success,
+      accountDeletionRequestSchema.safeParse({ confirmation: 'DELETE' })
+        .success,
     ).toBe(false);
   });
 

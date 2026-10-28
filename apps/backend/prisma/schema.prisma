@@ -54,6 +54,7 @@ enum UserStatus {
 
 enum AccountDeletionRequestStatus {
   REQUESTED
+  CANCELLED
 }
 
 // Phase 14 (Localization & Voice Operations). Deliberately tiny — see packages/shared/src/i18n's

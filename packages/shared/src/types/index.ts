@@ -91,7 +91,7 @@ export interface AuthMethodsDto {
 }
 
 /**
- * GET/POST auth/account/deletion-request. No target user or shop identifiers are returned. The
+ * GET/POST/DELETE auth/account/deletion-request. No target user or shop identifiers are returned. The
  * resolution is recomputed from the authenticated account's current server-side relationships.
  */
 export interface AccountDeletionRequestDto {
@@ -99,6 +99,7 @@ export interface AccountDeletionRequestDto {
     id: string;
     status: AccountDeletionRequestStatus;
     createdAt: string;
+    updatedAt: string;
   } | null;
   resolution: AccountDeletionResolution;
   relatedShopCount: number;

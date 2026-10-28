@@ -529,6 +529,14 @@ export class AuthController {
     return this.authService.requestAccountDeletion(user.id);
   }
 
+  /** Withdraws only the authenticated caller's pending, non-destructive request. */
+  @Delete(AUTH_PATHS.accountDeletionRequest)
+  @Throttle(AUTH_THROTTLE)
+  @HttpCode(HttpStatus.OK)
+  cancelAccountDeletionRequest(@CurrentUser() user: AuthenticatedUser) {
+    return this.authService.cancelAccountDeletionRequest(user.id);
+  }
+
   /** Customer-only immediate deletion. No target user id is accepted: the JWT subject is authoritative. */
   @Delete(AUTH_PATHS.accountDeletion)
   @HttpCode(HttpStatus.OK)

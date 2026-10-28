@@ -608,6 +608,11 @@ export interface UiStrings {
   accountDeletionCustomerGuidance: string;
   accountDeletionDefaultGuidance: string;
   accountDeletionPendingNotice: string;
+  accountDeletionStatusUpdated: string;
+  accountDeletionRequestWithdrawn: string;
+  accountDeletionWithdraw: string;
+  accountDeletionWithdrawing: string;
+  accountDeletionWithdrawError: string;
   accountDeletionRequestNotice: string;
   accountDeletionConfirmPrompt: string;
   accountDeletionStart: string;
@@ -1379,9 +1384,14 @@ const enUi: UiStrings = {
   accountDeletionReviewGuidance: 'FastQue must review this account’s role and linked operational records before closure.',
   accountDeletionCustomerGuidance: 'Use the customer delete-account action for a customer-only account.',
   accountDeletionDefaultGuidance: 'FastQue will review the account relationships and required operational transitions.',
-  accountDeletionPendingNotice: 'This is a pending request, not completed deletion. No shop, staff permission, administrator access, or business record has been changed. Access remains active until the required transition and approved retention review are complete.',
-  accountDeletionRequestNotice: 'Submitting creates a request for this signed-in account only. It does not close a shop, remove employment records, revoke access, or delete operational or financial data.',
-  accountDeletionConfirmPrompt: 'Confirm that you want FastQue to review this account for deletion. The request itself does not perform deletion.',
+  accountDeletionPendingNotice: 'This request is recorded but is not completed deletion. This release does not yet provide a reviewer or completion workflow. No shop, staff permission, administrator access, or business record has changed; your account remains active.',
+  accountDeletionStatusUpdated: 'Last updated {date}',
+  accountDeletionRequestWithdrawn: 'Request withdrawn on {date}. No account access or business data was changed.',
+  accountDeletionWithdraw: 'Withdraw request',
+  accountDeletionWithdrawing: 'Withdrawing…',
+  accountDeletionWithdrawError: 'Could not withdraw the request. Please try again.',
+  accountDeletionRequestNotice: 'Submitting records a request for this signed-in account only. It does not close a shop, remove employment records, revoke access, or delete operational or financial data. No reviewer or completion workflow is available in this release.',
+  accountDeletionConfirmPrompt: 'Confirm that you want to record a deletion request for this account. The request itself does not perform deletion.',
   accountDeletionStart: 'Start deletion request',
   accountDeletionConfirm: 'Confirm deletion request',
   accountDeletionSubmitting: 'Submitting request…',
@@ -2099,9 +2109,14 @@ const hiUi: UiStrings = {
   accountDeletionReviewGuidance: 'खाता बंद करने से पहले FastQue को इस खाते की भूमिका और जुड़े परिचालन रिकॉर्ड की समीक्षा करनी होगी।',
   accountDeletionCustomerGuidance: 'केवल ग्राहक खाते के लिए ग्राहक वाला खाता हटाने का विकल्प इस्तेमाल करें।',
   accountDeletionDefaultGuidance: 'FastQue खाते के संबंधों और आवश्यक परिचालन बदलावों की समीक्षा करेगा।',
-  accountDeletionPendingNotice: 'यह लंबित अनुरोध है, पूरा हुआ खाता हटाना नहीं। कोई सैलून, स्टाफ अनुमति, एडमिन एक्सेस या व्यावसायिक रिकॉर्ड बदला नहीं गया है। आवश्यक बदलाव और स्वीकृत रिकॉर्ड-रिटेंशन समीक्षा पूरी होने तक एक्सेस सक्रिय रहेगा।',
-  accountDeletionRequestNotice: 'यह अनुरोध केवल इस साइन-इन खाते के लिए है। इससे कोई सैलून बंद नहीं होता, रोजगार रिकॉर्ड या एक्सेस नहीं हटता और परिचालन या वित्तीय डेटा नहीं मिटता।',
-  accountDeletionConfirmPrompt: 'पुष्टि करें कि आप FastQue से इस खाते को हटाने की समीक्षा का अनुरोध करना चाहते हैं। अनुरोध स्वयं खाता नहीं हटाता।',
+  accountDeletionPendingNotice: 'यह दर्ज किया गया अनुरोध है, पूरा हुआ खाता हटाना नहीं। इस रिलीज़ में अभी समीक्षक या पूरा करने की प्रक्रिया उपलब्ध नहीं है। कोई सैलून, स्टाफ अनुमति, एडमिन एक्सेस या व्यावसायिक रिकॉर्ड नहीं बदला है; आपका खाता सक्रिय रहेगा।',
+  accountDeletionStatusUpdated: 'अंतिम अपडेट {date}',
+  accountDeletionRequestWithdrawn: '{date} को अनुरोध वापस लिया गया। खाता एक्सेस या व्यावसायिक डेटा नहीं बदला गया।',
+  accountDeletionWithdraw: 'अनुरोध वापस लें',
+  accountDeletionWithdrawing: 'वापस लिया जा रहा है…',
+  accountDeletionWithdrawError: 'अनुरोध वापस नहीं लिया जा सका। कृपया फिर कोशिश करें।',
+  accountDeletionRequestNotice: 'यह अनुरोध केवल इस साइन-इन खाते के लिए दर्ज होता है। इससे कोई सैलून बंद नहीं होता, रोजगार रिकॉर्ड या एक्सेस नहीं हटता और परिचालन या वित्तीय डेटा नहीं मिटता। इस रिलीज़ में समीक्षक या पूरा करने की प्रक्रिया उपलब्ध नहीं है।',
+  accountDeletionConfirmPrompt: 'पुष्टि करें कि आप इस खाते के लिए हटाने का अनुरोध दर्ज करना चाहते हैं। अनुरोध स्वयं खाता नहीं हटाता।',
   accountDeletionStart: 'खाता हटाने का अनुरोध शुरू करें',
   accountDeletionConfirm: 'खाता हटाने के अनुरोध की पुष्टि करें',
   accountDeletionSubmitting: 'अनुरोध भेजा जा रहा है…',

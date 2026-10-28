@@ -61,7 +61,11 @@ describe('AuthService', () => {
     queueEntry: { updateMany: jest.Mock };
     review: { deleteMany: jest.Mock };
     auditLog: { updateMany: jest.Mock; create: jest.Mock };
-    accountDeletionRequest: { findUnique: jest.Mock; create: jest.Mock };
+    accountDeletionRequest: {
+      findUnique: jest.Mock;
+      create: jest.Mock;
+      updateMany: jest.Mock;
+    };
     $transaction: jest.Mock;
   };
   let passwordService: { hash: jest.Mock; compare: jest.Mock };
@@ -142,6 +146,7 @@ describe('AuthService', () => {
       accountDeletionRequest: {
         findUnique: jest.fn().mockResolvedValue(null),
         create: jest.fn(),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       // Supports both call shapes AuthService actually uses: the array form
       // (resetPassword's batch of writes) and the interactive-callback form (googleLogin's
@@ -2169,6 +2174,7 @@ describe('AuthService', () => {
 
   describe('role-aware account deletion requests', () => {
     const requestedAt = new Date('2026-10-28T10:00:00.000Z');
+    const updatedAt = new Date('2026-10-28T10:05:00.000Z');
     const subject = (overrides: Record<string, unknown> = {}) => ({
       id: 'subject-1',
       status: UserStatus.ACTIVE,
@@ -2186,6 +2192,7 @@ describe('AuthService', () => {
         id: 'deletion-request-1',
         status: 'REQUESTED',
         createdAt: requestedAt,
+        updatedAt,
       });
     });
 
@@ -2196,11 +2203,14 @@ describe('AuthService', () => {
       });
       prisma.user.findUnique.mockResolvedValue(staff);
 
-      await expect(service.requestAccountDeletion('subject-1')).resolves.toEqual({
+      await expect(
+        service.requestAccountDeletion('subject-1'),
+      ).resolves.toEqual({
         request: {
           id: 'deletion-request-1',
           status: 'REQUESTED',
           createdAt: requestedAt.toISOString(),
+          updatedAt: updatedAt.toISOString(),
         },
         resolution: 'EMPLOYMENT_RESOLUTION_REQUIRED',
         relatedShopCount: 2,
@@ -2294,14 +2304,22 @@ describe('AuthService', () => {
 
     it('returns the existing request on retries without duplicate audit events', async () => {
       const staff = subject();
-      let stored: { id: string; status: string; createdAt: Date } | null = null;
+      let stored: {
+        id: string;
+        status: string;
+        createdAt: Date;
+        updatedAt: Date;
+      } | null = null;
       prisma.user.findUnique.mockResolvedValue(staff);
-      prisma.accountDeletionRequest.findUnique.mockImplementation(async () => stored);
+      prisma.accountDeletionRequest.findUnique.mockImplementation(
+        async () => stored,
+      );
       prisma.accountDeletionRequest.create.mockImplementation(async () => {
         stored = {
           id: 'deletion-request-1',
           status: 'REQUESTED',
           createdAt: requestedAt,
+          updatedAt,
         };
         return stored;
       });
@@ -2320,6 +2338,7 @@ describe('AuthService', () => {
         id: 'winner-request',
         status: 'REQUESTED',
         createdAt: requestedAt,
+        updatedAt,
       };
       prisma.user.findUnique.mockResolvedValue(staff);
       prisma.accountDeletionRequest.findUnique
@@ -2354,6 +2373,7 @@ describe('AuthService', () => {
         id: 'deletion-request-1',
         status: 'REQUESTED',
         createdAt: requestedAt,
+        updatedAt,
       });
 
       const result = await service.getAccountDeletionRequest('subject-1');
@@ -2361,7 +2381,97 @@ describe('AuthService', () => {
       expect(result.request?.id).toBe('deletion-request-1');
       expect(prisma.accountDeletionRequest.findUnique).toHaveBeenCalledWith({
         where: { userId: 'subject-1' },
-        select: { id: true, status: true, createdAt: true },
+        select: { id: true, status: true, createdAt: true, updatedAt: true },
+      });
+    });
+
+    it('withdraws the caller request and leaves authentication and business state intact', async () => {
+      prisma.user.findUnique.mockResolvedValue(subject());
+      const pending = {
+        id: 'deletion-request-1',
+        status: 'REQUESTED',
+        createdAt: requestedAt,
+        updatedAt,
+      };
+      const cancelled = {
+        ...pending,
+        status: 'CANCELLED',
+        updatedAt: new Date('2026-10-28T10:10:00.000Z'),
+      };
+      prisma.accountDeletionRequest.findUnique
+        .mockResolvedValueOnce(pending)
+        .mockResolvedValueOnce(cancelled);
+
+      const result = await service.cancelAccountDeletionRequest('subject-1');
+
+      expect(result.request).toMatchObject({
+        id: pending.id,
+        status: 'CANCELLED',
+        updatedAt: cancelled.updatedAt.toISOString(),
+      });
+      expect(prisma.accountDeletionRequest.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: pending.id,
+          userId: 'subject-1',
+          status: 'REQUESTED',
+        },
+        data: { status: 'CANCELLED' },
+      });
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          actorUserId: 'subject-1',
+          action: 'ACCOUNT_DELETION_REQUEST_CANCELLED',
+          entityId: pending.id,
+        }),
+      });
+      expect(prisma.user.update).not.toHaveBeenCalled();
+      expect(prisma.userRole.deleteMany).not.toHaveBeenCalled();
+      expect(prisma.refreshToken.deleteMany).not.toHaveBeenCalled();
+      expect(prisma.authIdentity.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it('reopens a cancelled request only for its authenticated requester and audits the transition', async () => {
+      prisma.user.findUnique.mockResolvedValue(subject());
+      const cancelled = {
+        id: 'deletion-request-1',
+        status: 'CANCELLED',
+        createdAt: requestedAt,
+        updatedAt,
+      };
+      const reopened = {
+        ...cancelled,
+        status: 'REQUESTED',
+        updatedAt: new Date('2026-10-28T10:15:00.000Z'),
+      };
+      prisma.accountDeletionRequest.findUnique
+        .mockResolvedValueOnce(cancelled)
+        .mockResolvedValueOnce(cancelled)
+        .mockResolvedValueOnce(reopened);
+      prisma.accountDeletionRequest.updateMany.mockResolvedValueOnce({
+        count: 1,
+      });
+
+      const result = await service.requestAccountDeletion('subject-1');
+
+      expect(result.request).toMatchObject({
+        id: cancelled.id,
+        status: 'REQUESTED',
+        updatedAt: reopened.updatedAt.toISOString(),
+      });
+      expect(prisma.accountDeletionRequest.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: cancelled.id,
+          userId: 'subject-1',
+          status: 'CANCELLED',
+        },
+        data: { status: 'REQUESTED' },
+      });
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          actorUserId: 'subject-1',
+          action: 'ACCOUNT_DELETION_REQUEST_REOPENED',
+          entityId: cancelled.id,
+        }),
       });
     });
   });

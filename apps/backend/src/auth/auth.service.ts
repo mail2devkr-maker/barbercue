@@ -1564,7 +1564,7 @@ export class AuthService {
     this.assertAccountDeletionSubjectActive(user);
     const request = await this.prisma.accountDeletionRequest.findUnique({
       where: { userId },
-      select: { id: true, status: true, createdAt: true },
+      select: { id: true, status: true, createdAt: true, updatedAt: true },
     });
     return this.toAccountDeletionRequestDto(user, request);
   }
@@ -1593,9 +1593,9 @@ export class AuthService {
 
     const existing = await this.prisma.accountDeletionRequest.findUnique({
       where: { userId },
-      select: { id: true, status: true, createdAt: true },
+      select: { id: true, status: true, createdAt: true, updatedAt: true },
     });
-    if (existing) {
+    if (existing?.status === AccountDeletionRequestStatus.REQUESTED) {
       return this.toAccountDeletionRequestDto(currentUser, existing);
     }
 
@@ -1624,10 +1624,54 @@ export class AuthService {
 
         const alreadyRequested = await tx.accountDeletionRequest.findUnique({
           where: { userId },
-          select: { id: true, status: true, createdAt: true },
+          select: { id: true, status: true, createdAt: true, updatedAt: true },
         });
-        if (alreadyRequested) {
+        if (
+          alreadyRequested?.status === AccountDeletionRequestStatus.REQUESTED
+        ) {
           return this.toAccountDeletionRequestDto(user, alreadyRequested);
+        }
+
+        if (
+          alreadyRequested?.status === AccountDeletionRequestStatus.CANCELLED
+        ) {
+          const reopened = await tx.accountDeletionRequest.updateMany({
+            where: {
+              id: alreadyRequested.id,
+              userId,
+              status: AccountDeletionRequestStatus.CANCELLED,
+            },
+            data: { status: AccountDeletionRequestStatus.REQUESTED },
+          });
+          const latest = await tx.accountDeletionRequest.findUnique({
+            where: { userId },
+            select: {
+              id: true,
+              status: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+          });
+          if (reopened.count > 0) {
+            if (!latest) {
+              throw new Error(
+                'Account deletion request disappeared during reopen.',
+              );
+            }
+            await tx.auditLog.create({
+              data: {
+                actorUserId: userId,
+                action: 'ACCOUNT_DELETION_REQUEST_REOPENED',
+                entityType: 'AccountDeletionRequest',
+                entityId: latest.id,
+                metadata: {
+                  resolution,
+                  relatedShopCount: relatedDeletionShopCount(user),
+                },
+              },
+            });
+          }
+          return this.toAccountDeletionRequestDto(user, latest);
         }
 
         const request = await tx.accountDeletionRequest.create({
@@ -1635,7 +1679,7 @@ export class AuthService {
             userId,
             status: AccountDeletionRequestStatus.REQUESTED,
           },
-          select: { id: true, status: true, createdAt: true },
+          select: { id: true, status: true, createdAt: true, updatedAt: true },
         });
         await tx.auditLog.create({
           data: {
@@ -1660,6 +1704,67 @@ export class AuthService {
       }
       throw error;
     }
+  }
+
+  /**
+   * Lets only the signed-in requester withdraw their still-pending request. This is reversible,
+   * idempotent and deliberately does not revoke access or alter business data. A later POST can
+   * reopen the same request while the audit log retains each transition.
+   */
+  async cancelAccountDeletionRequest(
+    userId: string,
+  ): Promise<AccountDeletionRequestDto> {
+    const initialUser = await this.loadAccountDeletionSubject(userId);
+    this.assertAccountDeletionSubjectActive(initialUser);
+
+    return this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.findUnique({
+        where: { id: userId },
+        include: {
+          roles: { select: { role: true } },
+          ownedSalons: { select: { id: true } },
+          staffMemberships: { select: { salonId: true } },
+          employeeProfile: { select: { id: true } },
+        },
+      });
+      this.assertAccountDeletionSubjectActive(user);
+
+      const request = await tx.accountDeletionRequest.findUnique({
+        where: { userId },
+        select: { id: true, status: true, createdAt: true, updatedAt: true },
+      });
+      if (
+        !request ||
+        request.status === AccountDeletionRequestStatus.CANCELLED
+      ) {
+        return this.toAccountDeletionRequestDto(user, request);
+      }
+
+      const cancelled = await tx.accountDeletionRequest.updateMany({
+        where: {
+          id: request.id,
+          userId,
+          status: AccountDeletionRequestStatus.REQUESTED,
+        },
+        data: { status: AccountDeletionRequestStatus.CANCELLED },
+      });
+      const latest = await tx.accountDeletionRequest.findUnique({
+        where: { userId },
+        select: { id: true, status: true, createdAt: true, updatedAt: true },
+      });
+      if (cancelled.count > 0 && latest) {
+        await tx.auditLog.create({
+          data: {
+            actorUserId: userId,
+            action: 'ACCOUNT_DELETION_REQUEST_CANCELLED',
+            entityType: 'AccountDeletionRequest',
+            entityId: latest.id,
+            metadata: { status: AccountDeletionRequestStatus.CANCELLED },
+          },
+        });
+      }
+      return this.toAccountDeletionRequestDto(user, latest);
+    });
   }
 
   private async loadAccountDeletionSubject(
@@ -1694,6 +1799,7 @@ export class AuthService {
       id: string;
       status: AccountDeletionRequestStatus;
       createdAt: Date;
+      updatedAt: Date;
     } | null,
   ): AccountDeletionRequestDto {
     return {
@@ -1702,6 +1808,7 @@ export class AuthService {
             id: request.id,
             status: request.status,
             createdAt: request.createdAt.toISOString(),
+            updatedAt: request.updatedAt.toISOString(),
           }
         : null,
       resolution: accountDeletionResolution(user),

@@ -496,23 +496,49 @@ maybe(
         relatedShopCount: 1,
       });
 
-      await request(app.getHttpServer())
+      const firstRequest = await request(app.getHttpServer())
         .post(endpoint)
         .set('Authorization', `Bearer ${tokens.accessToken}`)
         .send({ confirmation: 'REQUEST_DELETION', userId: 'not-the-caller' })
         .expect(200);
-      await request(app.getHttpServer())
+      const retry = await request(app.getHttpServer())
         .post(endpoint)
         .set('Authorization', `Bearer ${tokens.accessToken}`)
         .send({ confirmation: 'REQUEST_DELETION' })
         .expect(200);
+      expect(retry.body.request).toEqual(firstRequest.body.request);
+
+      await request(app.getHttpServer()).delete(endpoint).expect(401);
+      const withdrawn = await request(app.getHttpServer())
+        .delete(endpoint)
+        .set('Authorization', `Bearer ${tokens.accessToken}`)
+        .expect(200);
+      expect(withdrawn.body.request).toMatchObject({
+        id: firstRequest.body.request.id,
+        status: 'CANCELLED',
+      });
+      const reopened = await request(app.getHttpServer())
+        .post(endpoint)
+        .set('Authorization', `Bearer ${tokens.accessToken}`)
+        .send({ confirmation: 'REQUEST_DELETION' })
+        .expect(200);
+      expect(reopened.body.request).toMatchObject({
+        id: firstRequest.body.request.id,
+        status: 'REQUESTED',
+      });
 
       const [deletionRequests, auditEvents, owner] = await Promise.all([
         prisma.accountDeletionRequest.findMany({ where: { userId: ownerId } }),
         prisma.auditLog.findMany({
           where: {
             actorUserId: ownerId,
-            action: 'ACCOUNT_DELETION_REQUESTED',
+            action: {
+              in: [
+                'ACCOUNT_DELETION_REQUESTED',
+                'ACCOUNT_DELETION_REQUEST_CANCELLED',
+                'ACCOUNT_DELETION_REQUEST_REOPENED',
+              ],
+            },
             entityType: 'AccountDeletionRequest',
           },
         }),
@@ -522,7 +548,8 @@ maybe(
         }),
       ]);
       expect(deletionRequests).toHaveLength(1);
-      expect(auditEvents).toHaveLength(1);
+      expect(auditEvents).toHaveLength(3);
+      expect(deletionRequests[0].status).toBe('REQUESTED');
       expect(owner?.status).toBe(UserStatus.ACTIVE);
       expect(owner?.deletedAt).toBeNull();
       expect(owner?.ownedSalons.map(({ id }) => id)).toContain(ownerSalonId);
