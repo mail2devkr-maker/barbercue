@@ -164,18 +164,23 @@ function parseApiResponse<T>(res: Response): Promise<T> {
  * once. This is "handle expired access tokens via refresh token" for mobile.
  */
 export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
+  return parseApiResponse<T>(await apiFetchResponse(path, options));
+}
+
+/** Authenticated response for owner-scoped file exports, with the same one-refresh contract as apiFetch. */
+export async function apiFetchResponse(path: string, options: RequestInit = {}): Promise<Response> {
   let res = await fetchOrOffline(path, options);
 
   if (res.status === 401 && path !== REFRESH_PATH) {
     const refreshed = await tryRefresh();
-    if (refreshed) {
-      res = await fetchOrOffline(path, options);
-    }
+    if (refreshed) res = await fetchOrOffline(path, options);
   }
 
-  // A controller returning null sends a genuinely empty body (not the literal text "null") —
-  // parseApiResponse preserves that existing behavior while also being shared by multipart calls.
-  return parseApiResponse<T>(res);
+  if (!res.ok) {
+    // Reuse the standard API error mapping without logging or retaining the response body.
+    parseApiPayload(res.status, await res.text());
+  }
+  return res;
 }
 
 async function probeBackendReachability(): Promise<boolean> {

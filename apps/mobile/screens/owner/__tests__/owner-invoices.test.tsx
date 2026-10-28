@@ -6,8 +6,10 @@ import type { InvoiceDetailDto, InvoiceListDto } from '@barbercue/shared';
 import OwnerInvoicesScreen from '../OwnerInvoicesScreen';
 import OwnerInvoiceDetailScreen from '../OwnerInvoiceDetailScreen';
 import { apiFetch } from '../../../lib/api';
+import { shareOwnerFile } from '../../../lib/owner-file-share';
 
 jest.mock('../../../lib/api', () => ({ apiFetch: jest.fn(), ApiError: class ApiError extends Error {} }));
+jest.mock('../../../lib/owner-file-share', () => ({ shareOwnerFile: jest.fn() }));
 jest.mock('../../../lib/idempotency', () => ({ newIdempotencyKey: () => 'invoice-payment-key' }));
 jest.mock('../../../lib/salon-context', () => ({ useSalon: () => ({ selectedSalonId: 'salon-1', selectedSalon: { id: 'salon-1', name: 'Synthetic shop' } }) }));
 jest.mock('../../../lib/language-context', () => ({ useLanguage: () => ({ language: 'EN', t: { loadMore: 'Load more' } }) }));
@@ -25,6 +27,7 @@ jest.mock('react-native', () => {
     );
   return new Proxy(native, {
     get(target, property, receiver) {
+      if (property === 'Platform') return { ...native.Platform, OS: 'ios' };
       return property === 'FlatList' ? MockFlatList : Reflect.get(target, property, receiver);
     },
   });
@@ -91,6 +94,31 @@ it('loads detail only through the salon-scoped owner endpoint and renders record
   const output = tree.root.findAll((node: any) => node.type === Text).map(textOf).join(' ');
   expect(output).toContain('Recorded payments');
   expect(output).toContain('This screen does not collect payments');
+});
+
+it('shares an invoice PDF using the same salon-scoped invoice identity', async () => {
+  const detail = {
+    ...invoiceSummary, salonName: 'Synthetic shop', customerPhone: null, staffName: null, subtotal: 240,
+    discountTotal: 0, taxTotal: 0, taxLabel: null, taxRatePercent: null, taxMode: null,
+    seller: { legalName: 'Synthetic shop', gstin: null, address: null, phone: null, email: null },
+    lines: [], payments: [], voidReason: null,
+  } as InvoiceDetailDto;
+  (apiFetch as jest.Mock).mockResolvedValue(detail);
+  (shareOwnerFile as jest.Mock).mockResolvedValue(undefined);
+  await act(async () => {
+    tree = TestRenderer.create(createElement(OwnerInvoiceDetailScreen, { route: { params: { salonId: 'salon-1', invoiceId: 'invoice-1' } } } as never));
+  });
+
+  const shareButton = tree.root.findAll((node: any) => typeof node.props.onPress === 'function' && textOf(node).includes('Share invoice PDF'))[0];
+  expect(shareButton).toBeDefined();
+  await act(async () => { shareButton.props.onPress(); await Promise.resolve(); });
+
+  expect(shareOwnerFile).toHaveBeenCalledWith({
+    kind: 'pdf',
+    path: 'dashboard/salons/salon-1/invoices/invoice-1/pdf',
+    fileName: 'FQ-0001.pdf',
+    contentType: 'application/pdf',
+  });
 });
 
 it('records only a confirmed actual receipt through the salon-scoped idempotent API and trusts its response', async () => {

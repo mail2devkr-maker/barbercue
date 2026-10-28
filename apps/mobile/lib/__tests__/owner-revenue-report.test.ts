@@ -1,5 +1,6 @@
 import {
   dateKeyInTimezone,
+  ownerRevenueCsvPath,
   ownerRevenueReportPath,
   ownerRevenueTimezonePath,
   revenuePresetRange,
@@ -12,6 +13,9 @@ describe('owner revenue report helpers', () => {
     expect(ownerRevenueReportPath('salon/one', {
       from: '2026-10-01', to: '2026-10-28', groupBy: 'week', source: 'FASTQUE_APP',
     })).toBe('dashboard/salons/salon%2Fone/revenue/report?from=2026-10-01&to=2026-10-28&groupBy=week&source=FASTQUE_APP');
+    expect(ownerRevenueCsvPath('salon/one', {
+      from: '2026-10-01', to: '2026-10-28', groupBy: 'week', source: 'FASTQUE_APP',
+    })).toBe('dashboard/salons/salon%2Fone/revenue/report.csv?from=2026-10-01&to=2026-10-28&groupBy=week&source=FASTQUE_APP');
   });
 
   it('derives today in the salon timezone rather than the device timezone', () => {

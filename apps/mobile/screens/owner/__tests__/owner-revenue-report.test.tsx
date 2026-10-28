@@ -5,9 +5,20 @@ import TestRenderer from 'react-test-renderer';
 import type { OwnerRevenueReportDto, SalonTimezoneResultDto } from '@barbercue/shared';
 import OwnerRevenueReportScreen from '../OwnerRevenueReportScreen';
 import { apiFetch } from '../../../lib/api';
+import { shareOwnerFile } from '../../../lib/owner-file-share';
 import { dateKeyInTimezone, revenuePresetRange } from '../../../lib/owner-revenue-report';
 
 jest.mock('../../../lib/api', () => ({ apiFetch: jest.fn(), ApiError: class ApiError extends Error {} }));
+jest.mock('../../../lib/owner-file-share', () => ({ shareOwnerFile: jest.fn() }));
+jest.mock('react-native', () => {
+  const actual = jest.requireActual('react-native');
+  return new Proxy(actual, {
+    get(target, property, receiver) {
+      if (property === 'Platform') return { ...actual.Platform, OS: 'ios' };
+      return Reflect.get(target, property, receiver);
+    },
+  });
+});
 jest.mock('../../../lib/salon-context', () => ({ useSalon: () => ({ selectedSalonId: 'salon-1', selectedSalon: { id: 'salon-1', name: 'Synthetic shop' } }) }));
 jest.mock('../../../lib/language-context', () => ({ useLanguage: () => ({ language: 'EN', t: {} }) }));
 jest.mock('../../../lib/date-locale', () => ({ dateLocaleFor: () => 'en-IN' }));
@@ -120,4 +131,20 @@ it('shows a truthful error instead of empty financial totals when report loading
 
   expect(renderedText()).toContain('Could not load the revenue report. Please try again.');
   expect(renderedText()).not.toContain('₹400');
+});
+
+it('shares a server-generated CSV with the exact report filters and shop scope', async () => {
+  await act(async () => { tree = TestRenderer.create(createElement(OwnerRevenueReportScreen, {} as never)); await flushEffects(); });
+  const exportButton = tree.root.findAll((node: any) => node.props.accessibilityRole === 'button' && textOf(node).includes('Share CSV export'))[0];
+  expect(exportButton).toBeDefined();
+
+  await act(async () => { exportButton.props.onPress(); await flushEffects(); });
+
+  const range = revenuePresetRange('30d', dateKeyInTimezone('Asia/Kolkata'));
+  expect(shareOwnerFile).toHaveBeenCalledWith({
+    kind: 'text',
+    path: `dashboard/salons/salon-1/revenue/report.csv?from=${range.from}&to=${range.to}&groupBy=day`,
+    fileName: `fastque-revenue-${range.from}-${range.to}.csv`,
+    contentType: 'text/csv',
+  });
 });

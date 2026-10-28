@@ -34,6 +34,12 @@ export function ownerRevenueReportPath(salonId: string, query: RevenueReportQuer
   return `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${encodeURIComponent(salonId)}/revenue/report?${params.toString()}`;
 }
 
+export function ownerRevenueCsvPath(salonId: string, query: RevenueReportQuery): string {
+  const params = new URLSearchParams({ from: query.from, to: query.to, groupBy: query.groupBy });
+  if (query.source) params.set('source', query.source);
+  return `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${encodeURIComponent(salonId)}/revenue/report.csv?${params.toString()}`;
+}
+
 export function dateKeyInTimezone(timeZone: string, instant = new Date()): string {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone,

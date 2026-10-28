@@ -10,6 +10,10 @@ export function ownerInvoiceDetailRequestPath(salonId: string, invoiceId: string
   return `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${encodeURIComponent(salonId)}/${OWNER_OPS_PATHS.invoices}/${encodeURIComponent(invoiceId)}`;
 }
 
+export function ownerInvoicePdfRequestPath(salonId: string, invoiceId: string): string {
+  return `${ownerInvoiceDetailRequestPath(salonId, invoiceId)}/pdf`;
+}
+
 export function ownerInvoicePaymentsRequestPath(salonId: string, invoiceId: string): string {
   return `${ownerInvoiceDetailRequestPath(salonId, invoiceId)}/payments`;
 }

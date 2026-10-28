@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import {
   formatMoney,
   type OwnerRevenueReportDto,
@@ -12,8 +12,10 @@ import { apiFetch, ApiError } from '../../lib/api';
 import { dateLocaleFor } from '../../lib/date-locale';
 import { useLanguage } from '../../lib/language-context';
 import { useSalon } from '../../lib/salon-context';
+import { shareOwnerFile } from '../../lib/owner-file-share';
 import {
   dateKeyInTimezone,
+  ownerRevenueCsvPath,
   ownerRevenueReportPath,
   ownerRevenueTimezonePath,
   REVENUE_SOURCES,
@@ -46,6 +48,7 @@ const copy = {
     rangeLimit: 'Choose a date range of 366 days or fewer.', loading: 'Loading revenue report…', notLinked: 'Not linked',
     today: 'Today', period: 'Period', service: 'Service', staff: 'Staff', completed: 'Completed',
     channel: 'Source', unknown: 'Not recorded', showAll: 'Show all periods', showLess: 'Show fewer periods', collectionNote: 'Collections and refunds come only from shop-recorded invoice ledger events. Invoices, QR display and completed services do not prove payment.',
+    exportCsv: 'Share CSV export', exporting: 'Preparing export…', exportError: 'Could not prepare the revenue export. Please try again.',
   },
   HI: {
     title: 'आय रिपोर्ट', subtitle: 'इस दुकान के दर्ज इनवॉइस भुगतान और सेवा अनुमान।',
@@ -63,6 +66,7 @@ const copy = {
     today: 'आज', period: 'अवधि', service: 'सेवा', staff: 'स्टाफ', completed: 'पूरी हुई',
     channel: 'स्रोत', unknown: 'दर्ज नहीं', showAll: 'सभी अवधि दिखाएँ', showLess: 'कम अवधि दिखाएँ',
     collectionNote: 'प्राप्त भुगतान और रिफंड केवल दुकान के दर्ज इनवॉइस लेजर से आते हैं। इनवॉइस, QR दिखना या पूरी सेवा भुगतान का प्रमाण नहीं है।',
+    exportCsv: 'CSV साझा करें', exporting: 'एक्सपोर्ट तैयार हो रहा है…', exportError: 'आय एक्सपोर्ट तैयार नहीं हो सका। फिर से प्रयास करें।',
   },
 } as const;
 
@@ -110,6 +114,8 @@ export default function OwnerRevenueReportScreen(_props: Props) {
   const [error, setError] = useState<string | null>(null);
   const [rangeError, setRangeError] = useState<string | null>(null);
   const [showAllPeriods, setShowAllPeriods] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const requestId = useRef(0);
 
   const loadReport = useCallback(async (query: RevenueReportQuery, refresh = false) => {
@@ -191,6 +197,27 @@ export default function OwnerRevenueReportScreen(_props: Props) {
     setSource(value);
     if (from && to) void loadReport({ from, to, groupBy: granularity, source: value });
   };
+  const exportCsv = async () => {
+    if (!selectedSalonId) return;
+    const query = { from, to, groupBy: granularity, source };
+    const validation = validQuery(query, labels);
+    setRangeError(validation);
+    if (validation) return;
+    setExporting(true);
+    setExportError(null);
+    try {
+      await shareOwnerFile({
+        kind: 'text',
+        path: ownerRevenueCsvPath(selectedSalonId, query),
+        fileName: `fastque-revenue-${from}-${to}.csv`,
+        contentType: 'text/csv',
+      });
+    } catch {
+      setExportError(labels.exportError);
+    } finally {
+      setExporting(false);
+    }
+  };
   const metricMoney = (metric: OwnerRevenueReportMetricDto, field: 'recordedCollections' | 'refunds' | 'netRecordedCollections' | 'invoicedAmount' | 'invoiceDiscounts' | 'estimatedServiceValue') => money(metric[field], report?.currency ?? null);
 
   return (
@@ -223,6 +250,8 @@ export default function OwnerRevenueReportScreen(_props: Props) {
               })}
             </View>
             <ActionButton title={labels.apply} onPress={apply} disabled={loading} />
+            {Platform.OS === 'ios' ? <ActionButton title={exporting ? labels.exporting : labels.exportCsv} onPress={() => { void exportCsv(); }} disabled={loading || exporting} /> : null}
+            {exportError ? <InlineError message={exportError} /> : null}
           </PremiumCard>
 
           <View style={styles.filterSection}>

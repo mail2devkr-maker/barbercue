@@ -1,11 +1,12 @@
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { formatMoney, InvoicePaymentKind, InvoicePaymentMethod, recordInvoicePaymentSchema, voidInvoiceSchema } from '@barbercue/shared';
 import type { InvoiceDetailDto, InvoicePaymentKind as InvoicePaymentKindType, InvoicePaymentMethod as InvoicePaymentMethodType } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../../lib/api';
-import { ownerInvoiceDetailRequestPath, ownerInvoicePaymentsRequestPath, ownerInvoiceVoidRequestPath } from '../../lib/owner-invoices';
+import { ownerInvoiceDetailRequestPath, ownerInvoicePaymentsRequestPath, ownerInvoicePdfRequestPath, ownerInvoiceVoidRequestPath } from '../../lib/owner-invoices';
+import { shareOwnerFile } from '../../lib/owner-file-share';
 import { newIdempotencyKey } from '../../lib/idempotency';
 import { dateLocaleFor } from '../../lib/date-locale';
 import { useLanguage } from '../../lib/language-context';
@@ -26,6 +27,8 @@ export default function OwnerInvoiceDetailScreen({ route }: Props) {
   const [voidMode, setVoidMode] = useState(false);
   const [voidReason, setVoidReason] = useState('');
   const [voidBusy, setVoidBusy] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
   const [voidIdempotencyKey] = useState(newIdempotencyKey);
 
   const load = useCallback(() => {
@@ -78,11 +81,30 @@ export default function OwnerInvoiceDetailScreen({ route }: Props) {
     );
   };
 
+  const sharePdf = async () => {
+    setPdfBusy(true);
+    setPdfError(null);
+    try {
+      await shareOwnerFile({
+        kind: 'pdf',
+        path: ownerInvoicePdfRequestPath(salonId, invoiceId),
+        fileName: `${invoice?.number ?? 'fastque-invoice'}.pdf`,
+        contentType: 'application/pdf',
+      });
+    } catch {
+      setPdfError(language === 'HI' ? 'इनवॉइस PDF साझा नहीं हो सका। फिर से प्रयास करें।' : 'Could not prepare the invoice PDF. Please try again.');
+    } finally {
+      setPdfBusy(false);
+    }
+  };
+
   return (
     <Screen contentStyle={styles.screenContent}>
       {loading ? <Skeleton style={styles.skeleton} /> : error ? <InlineError message={error} /> : invoice ? (
         <>
           <SectionHeader eyebrow="Shop invoice" title={invoice.number} subtitle={`${invoice.salonName} · ${new Date(invoice.serviceDate).toLocaleDateString(dateLocaleFor(language))}`} />
+          {Platform.OS === 'ios' ? <Button title={pdfBusy ? (language === 'HI' ? 'PDF तैयार हो रहा है…' : 'Preparing PDF…') : (language === 'HI' ? 'इनवॉइस PDF साझा करें' : 'Share invoice PDF')} variant="outline" onPress={() => { void sharePdf(); }} loading={pdfBusy} disabled={pdfBusy} /> : null}
+          {pdfError ? <InlineError message={pdfError} /> : null}
           {notice ? <Text accessibilityRole="alert" style={styles.notice}>{notice}</Text> : null}
           {invoice.status === 'VOID' ? <Text style={styles.muted}>{language === 'HI' ? 'रद्द किया गया' : 'Voided'}{invoice.voidReason ? `: ${invoice.voidReason}` : ''}. {language === 'HI' ? 'इनवॉइस नंबर रिकॉर्ड में सुरक्षित है।' : 'The invoice number remains on record.'}</Text> : null}
           <Card style={styles.card}>
