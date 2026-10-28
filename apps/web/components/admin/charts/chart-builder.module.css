@@ -1,0 +1,48 @@
+.controls { display: grid; gap: 14px; }
+.control { display: grid; gap: 6px; }
+.controlLabel { color: var(--os-muted); font-size: 12px; font-weight: 700; }
+.inline { display: flex; flex-wrap: wrap; align-items: end; gap: 14px; }
+.select, .selectSm, .search {
+  height: 38px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--os-border);
+  background: var(--os-surface-2); color: var(--os-ink); font: 600 14px var(--font-body); color-scheme: dark;
+}
+.selectSm { height: 32px; font-size: 13px; }
+.check { display: inline-flex; align-items: center; gap: 8px; min-height: 38px; color: var(--os-ink); font-size: 14px; }
+.check input { width: 18px; height: 18px; accent-color: var(--os-brand); }
+
+.chips { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 7px; min-height: 32px; padding: 0 4px 0 10px; border-radius: 999px;
+  border: 1px solid var(--os-border); background: var(--os-surface-2); color: var(--os-ink); font-size: 13px; font-weight: 600;
+}
+.chipBlocked { border-style: dashed; color: var(--os-muted); }
+.chipNote { color: var(--os-warn-ink); font-weight: 500; }
+.chipDot { width: 10px; height: 10px; border-radius: 3px; flex: 0 0 auto; }
+.chipRemove { display: inline-grid; place-items: center; width: 24px; height: 24px; border: 0; border-radius: 999px; background: transparent; color: var(--os-muted); cursor: pointer; }
+.chipRemove:hover { background: var(--os-surface); color: var(--os-ink); }
+
+.picker { margin-top: 14px; padding: 12px; border-radius: var(--os-radius-sm); border: 1px solid var(--os-border); background: var(--os-surface-2); }
+.search { width: min(340px, 100%); margin-bottom: 10px; }
+.options { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 4px 14px; margin: 0; padding: 0; list-style: none; max-height: 300px; overflow-y: auto; }
+.option { display: flex; gap: 10px; align-items: flex-start; padding: 6px; border-radius: 8px; color: var(--os-ink); font-size: 14px; cursor: pointer; }
+.option:hover { background: var(--os-surface); }
+.option input { margin-top: 3px; width: 16px; height: 16px; accent-color: var(--os-brand); }
+.option small { display: block; color: var(--os-muted); font-size: 12px; }
+.optionOff { cursor: not-allowed; color: var(--os-muted); }
+
+.seriesTable { display: grid; gap: 6px; margin-top: 14px; }
+.seriesRow { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto auto; align-items: center; gap: 10px; font-size: 13px; }
+.seriesName { color: var(--os-ink); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.seriesAxis { color: var(--os-muted); font-size: 12px; }
+.notice { margin: 10px 0 0; color: var(--os-muted); font-size: 13px; }
+
+.chartCard:fullscreen { overflow: auto; padding: 24px; background: var(--os-bg); }
+.tools { display: flex; flex-wrap: wrap; gap: 6px; }
+.skeleton { height: 320px; border-radius: var(--os-radius-sm); }
+.emptyNote { margin: 0 0 8px; color: var(--os-muted); font-size: 13px; }
+.footnote { margin: 12px 0 0; color: var(--os-muted); font-size: 12px; line-height: 1.5; }
+
+@media (max-width: 640px) {
+  .seriesRow { grid-template-columns: 12px minmax(0, 1fr) auto; }
+  .seriesAxis { display: none; }
+}

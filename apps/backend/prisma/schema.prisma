@@ -425,6 +425,7 @@ model User {
   notificationPreferences       NotificationPreference[]
   ledgerEntries                 CustomerLedgerEntry[]
   auditLogs                     AuditLog[]
+  favoriteSalons                CustomerFavorite[]
   inventoryMovements            InventoryMovement[]
   otpRequests                   OtpRequest[]             @relation("OtpRequestSubject")
   premiumSubscriptions          CustomerSubscription[]
@@ -914,6 +915,10 @@ model Salon {
   // Owner-selected service audience used to filter onboarding presets. Existing salons default to
   // UNISEX so the migration is backwards-compatible and never hides already-configured services.
   salonType                         SalonType   @default(UNISEX)
+  // Discovery upgrade: true once an owner has actually chosen salonType (at registration or in
+  // settings). Every salon created before this column existed starts false, because its UNISEX value
+  // is only the column default — discovery must not present it as a confirmed unisex salon.
+  salonTypeConfirmed                Boolean     @default(false)
   // Percentage discount applied by FastQue only to APP/WEB bookings for this salon. The Service
   // rows remain the owner's original list prices; 0 means no platform-booking offer is active.
   onlineBookingDiscountPercent      Int         @default(0)
@@ -969,6 +974,7 @@ model Salon {
   manualChairOccupancies      ManualChairOccupancy[]
   // FastQue internal field CRM attribution — at most one employee lead may claim a registered shop.
   crmLeadAttribution          EmployeeCrmLead?             @relation("CrmLeadOnboardedSalon")
+  favoritedBy                 CustomerFavorite[]
   billingProfile              SalonBillingProfile?
   invoices                    Invoice[]
   inventoryCategories         InventoryCategory[]
@@ -2482,4 +2488,21 @@ model ContactSuppression {
   createdByUserId String?
 
   @@map("contact_suppressions")
+}
+
+// A customer's saved salons (heart on the discovery cards). One row per (customer, salon); the
+// unique key prevents duplicates, and both lookups — "my favorites" and "is this salon a favorite" —
+// are index-backed.
+model CustomerFavorite {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  salonId   String
+  salon     Salon    @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, salonId])
+  @@index([userId, createdAt])
+  @@index([salonId])
+  @@map("customer_favorites")
 }

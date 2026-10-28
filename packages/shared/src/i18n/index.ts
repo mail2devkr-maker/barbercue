@@ -700,6 +700,28 @@ export interface UiStrings {
   noSalonsFoundHint: string;
   openNowLabel: string;
   closedNowLabel: string;
+  salonTypeFilterLabel: string;
+  salonTypeAll: string;
+  salonTypeMale: string;
+  salonTypeFemale: string;
+  salonTypeUnisex: string;
+  salonTypeNotSet: string;
+  compareServiceLabel: string;
+  compareServiceNone: string;
+  sortLabel: string;
+  sortRecommended: string;
+  sortDistance: string;
+  sortPrice: string;
+  sortRating: string;
+  sortPriceNeedsService: string;
+  ratingFilterLabel: string;
+  ratingFilterAny: string;
+  favoritesOnlyLabel: string;
+  saveFavoriteAction: string;
+  removeFavoriteAction: string;
+  favoritesSignInHint: string;
+  favoritesEmptyHint: string;
+  favoriteUpdateFailed: string;
   // Unit-agnostic — the actual number+unit ("2 km"/"1.2 mi") comes from formatDistance, which
   // already picks metric vs imperial per salon country; this is only ever appended after that.
   awaySuffix: string;
@@ -1448,6 +1470,28 @@ const enUi: UiStrings = {
   noSalonsFoundHint: 'Try a different name, or clear the search to browse everything.',
   openNowLabel: 'Open now',
   closedNowLabel: 'Closed now',
+  salonTypeFilterLabel: 'Salon type',
+  salonTypeAll: 'All salons',
+  salonTypeMale: 'Male',
+  salonTypeFemale: 'Female',
+  salonTypeUnisex: 'Unisex',
+  salonTypeNotSet: 'Type not set',
+  compareServiceLabel: 'Compare price',
+  compareServiceNone: 'No service',
+  sortLabel: 'Sort by',
+  sortRecommended: 'Recommended',
+  sortDistance: 'Distance',
+  sortPrice: 'Price',
+  sortRating: 'Reviews',
+  sortPriceNeedsService: 'Pick a service under "Compare price" to sort by price.',
+  ratingFilterLabel: 'Rating',
+  ratingFilterAny: 'Any rating',
+  favoritesOnlyLabel: '♥ Favorites',
+  saveFavoriteAction: 'Save to favorites',
+  removeFavoriteAction: 'Remove from favorites',
+  favoritesSignInHint: 'Sign in as a customer to save and see favorite salons.',
+  favoritesEmptyHint: 'No favorite salons yet. Tap the heart on a salon to save it.',
+  favoriteUpdateFailed: 'Couldn’t update favorites. Please try again.',
   awaySuffix: ' away',
   distanceFilterLabel: 'Distance',
   distanceFilterLocationHint: 'Choose a radius to use your current location.',
@@ -2145,6 +2189,28 @@ const hiUi: UiStrings = {
   noSalonsFoundHint: 'कोई और नाम आज़माएं, या सब कुछ देखने के लिए खोज साफ़ करें।',
   openNowLabel: 'अभी खुला है',
   closedNowLabel: 'अभी बंद है',
+  salonTypeFilterLabel: 'सैलून प्रकार',
+  salonTypeAll: 'सभी सैलून',
+  salonTypeMale: 'पुरुष',
+  salonTypeFemale: 'महिला',
+  salonTypeUnisex: 'यूनिसेक्स',
+  salonTypeNotSet: 'प्रकार तय नहीं',
+  compareServiceLabel: 'कीमत तुलना',
+  compareServiceNone: 'कोई सेवा नहीं',
+  sortLabel: 'क्रम',
+  sortRecommended: 'सुझाए गए',
+  sortDistance: 'दूरी',
+  sortPrice: 'कीमत',
+  sortRating: 'समीक्षाएं',
+  sortPriceNeedsService: 'कीमत से क्रम के लिए पहले "कीमत तुलना" में सेवा चुनें।',
+  ratingFilterLabel: 'रेटिंग',
+  ratingFilterAny: 'कोई भी रेटिंग',
+  favoritesOnlyLabel: '♥ पसंदीदा',
+  saveFavoriteAction: 'पसंदीदा में जोड़ें',
+  removeFavoriteAction: 'पसंदीदा से हटाएं',
+  favoritesSignInHint: 'पसंदीदा सैलून सहेजने और देखने के लिए ग्राहक के रूप में साइन इन करें।',
+  favoritesEmptyHint: 'अभी कोई पसंदीदा सैलून नहीं। सहेजने के लिए सैलून पर दिल टैप करें।',
+  favoriteUpdateFailed: 'पसंदीदा अपडेट नहीं हो सका। कृपया फिर से कोशिश करें।',
   awaySuffix: ' दूर',
   distanceFilterLabel: 'दूरी',
   distanceFilterLocationHint: 'अपनी वर्तमान लोकेशन का उपयोग करने के लिए एक दूरी चुनें।',

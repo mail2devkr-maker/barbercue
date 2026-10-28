@@ -35,6 +35,7 @@ import {
   SALON_DESCRIPTION_SUGGESTION_LIMITS,
 } from "../constants";
 import { isValidPostalCode, postalCodeRuleFor } from "../locale";
+import { POPULAR_SERVICES, SALON_SEARCH_MAX_IDS, SALON_SORT_OPTIONS } from "../catalog/salon-discovery-filters";
 
 // Validation schemas shared by the backend (request validation) and clients (form validation).
 // The backend is always the authority — these schemas exist so both sides reject bad input the
@@ -268,6 +269,9 @@ export const registerSalonSchema = z
     localityText: z.string().trim().max(160).optional(),
     localitySlug: z.string().optional(),
     landmark: z.string().trim().max(200).optional(),
+    // Discovery upgrade: the registration form asks for it; optional here so older clients keep
+    // working (their salons stay "type not set" until the owner confirms it in settings).
+    salonType: z.nativeEnum(SalonType).optional(),
   })
   // A half-coordinate is meaningless — it would place the shop on the equator or the prime
   // meridian. Either both arrive or neither does.
@@ -325,7 +329,36 @@ export const salonSearchQuerySchema = z
     // text search matched. Both ends optional so a caller can give just a floor or just a ceiling.
     priceMin: z.coerce.number().nonnegative().optional(),
     priceMax: z.coerce.number().nonnegative().optional(),
+    // Discovery upgrade (catalog/salon-discovery-filters.ts): salon type, a popular service to
+    // compare by (its price drives priceMin/priceMax and sort=price), and result ordering.
+    salonType: z.enum(["GENTS", "LADIES", "UNISEX"]).optional(),
+    popularService: z
+      .string()
+      .refine((id) => POPULAR_SERVICES.some((s) => s.id === id), "Unknown popular service.")
+      .optional(),
+    sort: z.enum(SALON_SORT_OPTIONS).optional(),
+    // Minimum average review score (salons with no reviews never pass), "open right now", and
+    // "favorites only" — the client sends the customer's saved salon IDs (this route is public, so
+    // it never reads who is asking).
+    minRating: z.coerce.number().min(1).max(5).optional(),
+    openNow: z
+      .enum(["true", "false"])
+      .transform((value) => value === "true")
+      .optional(),
+    ids: z
+      .string()
+      .transform((value) => value.split(",").map((id) => id.trim()).filter(Boolean))
+      .pipe(z.array(z.string().uuid()).min(1).max(SALON_SEARCH_MAX_IDS))
+      .optional(),
   })
+  .refine(
+    (data) => data.sort !== "price" || data.popularService !== undefined || data.service !== undefined,
+    { message: "Select a service first to sort by price.", path: ["sort"] },
+  )
+  .refine(
+    (data) => data.sort !== "distance" || (data.lat !== undefined && data.lng !== undefined),
+    { message: "Sorting by distance needs your location.", path: ["sort"] },
+  )
   .refine(
     (data) =>
       data.priceMin === undefined ||
@@ -718,6 +751,93 @@ export const adminCrmAnalyticsQuerySchema = z
 export type AdminCrmAnalyticsQuery = z.infer<
   typeof adminCrmAnalyticsQuerySchema
 >;
+
+// Admin "Shop activity" — an inclusive range of IST calendar dates, capped so one request can
+// never scan an unbounded history.
+export const ADMIN_SHOP_ACTIVITY_MAX_DAYS = 92;
+const adminCalendarDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/)
+  .refine((value) => {
+    const parsed = new Date(`${value}T00:00:00.000Z`);
+    return (
+      Number.isFinite(parsed.getTime()) &&
+      parsed.toISOString().slice(0, 10) === value
+    );
+  }, "date must be a valid YYYY-MM-DD calendar date");
+export const adminShopActivityQuerySchema = z
+  .object({ from: adminCalendarDate, to: adminCalendarDate })
+  .superRefine((query, ctx) => {
+    const days =
+      (Date.parse(`${query.to}T00:00:00.000Z`) -
+        Date.parse(`${query.from}T00:00:00.000Z`)) /
+        86_400_000 +
+      1;
+    if (days < 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["to"],
+        message: "to must be on or after from",
+      });
+    } else if (days > ADMIN_SHOP_ACTIVITY_MAX_DAYS) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["to"],
+        message: `the range cannot exceed ${ADMIN_SHOP_ACTIVITY_MAX_DAYS} days`,
+      });
+    }
+  });
+export type AdminShopActivityQuery = z.infer<
+  typeof adminShopActivityQuerySchema
+>;
+// Every admin analytics report takes the same inclusive IST date range.
+export const adminAnalyticsRangeQuerySchema = adminShopActivityQuerySchema;
+export type AdminAnalyticsRangeQuery = AdminShopActivityQuery;
+
+// Admin chart builder (docs/admin-dashboard-2.0). Metric keys are a closed list; the backend owns
+// each metric's SQL, unit and date basis.
+export const ADMIN_TIMESERIES_METRICS = [
+  "appointmentsBooked",
+  "appointmentsCompleted",
+  "walkInsServed",
+  "completedVisits",
+  "cancelled",
+  "noShow",
+  "cancellationRatePercent",
+  "completedServiceValuePaise",
+  "serviceHours",
+  "newSalons",
+  "uniqueCustomers",
+  "newCustomers",
+  "averageWaitMinutes",
+] as const;
+export type AdminTimeseriesMetric = (typeof ADMIN_TIMESERIES_METRICS)[number];
+export const ADMIN_TIMESERIES_GRANULARITIES = ["day", "week", "month"] as const;
+export type AdminTimeseriesGranularity =
+  (typeof ADMIN_TIMESERIES_GRANULARITIES)[number];
+export const ADMIN_TIMESERIES_MAX_METRICS = 6;
+export const adminTimeseriesQuerySchema = z
+  .object({
+    from: adminCalendarDate,
+    to: adminCalendarDate,
+    granularity: z.enum(ADMIN_TIMESERIES_GRANULARITIES).default("day"),
+    // Comma-separated metric keys, e.g. "appointmentsBooked,cancelled".
+    metrics: z
+      .string()
+      .transform((value) => [...new Set(value.split(",").map((m) => m.trim()).filter(Boolean))])
+      .pipe(z.array(z.enum(ADMIN_TIMESERIES_METRICS)).min(1).max(ADMIN_TIMESERIES_MAX_METRICS)),
+    compare: z.enum(["none", "previous"]).default("none"),
+  })
+  .superRefine((query, ctx) => {
+    const days =
+      (Date.parse(`${query.to}T00:00:00.000Z`) - Date.parse(`${query.from}T00:00:00.000Z`)) / 86_400_000 + 1;
+    if (days < 1) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["to"], message: "to must be on or after from" });
+    } else if (days > 366) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["to"], message: "the range cannot exceed 366 days" });
+    }
+  });
+export type AdminTimeseriesQuery = z.infer<typeof adminTimeseriesQuerySchema>;
 
 export const managedAdminRoleSchema = z.enum([
   Role.CO_FOUNDER,

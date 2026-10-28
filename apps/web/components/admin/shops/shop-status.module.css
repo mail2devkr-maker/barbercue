@@ -1,0 +1,24 @@
+.kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.kpiButton { width: 100%; text-align: left; font: inherit; cursor: pointer; }
+.kpiButton:hover { border-color: var(--os-border-strong); }
+.kpiActive { border-color: var(--os-brand); box-shadow: 0 0 0 1px var(--os-brand) inset; }
+.skeleton { height: 360px; border-radius: var(--os-radius); }
+
+.filters { display: grid; gap: 12px; margin-bottom: 12px; }
+.filters [role="group"] { flex-wrap: wrap; width: fit-content; max-width: 100%; }
+.filterRow { display: flex; flex-wrap: wrap; gap: 12px; }
+.field { display: grid; gap: 4px; color: var(--os-muted); font-size: 12px; font-weight: 700; }
+.field select, .field input {
+  height: 38px; min-width: 200px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--os-border);
+  background: var(--os-surface-2); color: var(--os-ink); font: 15px var(--font-body); color-scheme: dark;
+}
+.shopCell { font-weight: 400; text-align: left; }
+.shopCell strong, .shopCell small { display: block; }
+.shopCell small { margin-top: 2px; color: var(--os-muted); font-size: 12px; }
+.quiet { margin-top: 4px; color: var(--os-warn-ink); font-size: 12px; }
+
+@media (max-width: 1360px) { .kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width: 1100px) { .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* Row headers must not inherit the uppercase column-header style from owner .table th. */
+th.shopCell.shopCell { text-transform: none; letter-spacing: normal; font-size: 13.5px; color: var(--os-ink); }

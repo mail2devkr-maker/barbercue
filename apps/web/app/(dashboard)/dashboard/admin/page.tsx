@@ -5,7 +5,9 @@ import { ADMIN_PATHS, Role, SalonStatus, type PlatformAdminOverviewDto } from "@
 import { useAuth } from "../../../../lib/auth-context";
 import { apiFetch, ApiError } from "../../../../lib/api";
 import { Button, LinkButton } from "../../../../components/ui/Button";
+import { ShopActivityPanel } from "../../../../components/admin/ShopActivityPanel";
 import styles from "./admin.module.css";
+import { getNextShopStatus } from "./admin-actions";
 
 function contact(email: string | null, phone: string | null): string {
   return email ?? phone ?? "Not recorded";
@@ -19,15 +21,8 @@ function formatCount(value: number): string {
   return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(value);
 }
 
-export function getNextShopStatus(status: SalonStatus): { status: SalonStatus; label: string } | null {
-  if (status === SalonStatus.PENDING) return { status: SalonStatus.ACTIVE, label: "Open shop" };
-  if (status === SalonStatus.ACTIVE) return { status: SalonStatus.SUSPENDED, label: "Suspend" };
-  if (status === SalonStatus.SUSPENDED) return { status: SalonStatus.ACTIVE, label: "Re-open" };
-  return null;
-}
-
 export default function AdminDashboardPage() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const superAdmin = !!user && user.roles.includes(Role.PLATFORM_ADMIN);
   const coFounder = !!user && user.roles.includes(Role.CO_FOUNDER);
   const hrAdmin = !!user && user.roles.includes(Role.HR_ADMIN);
@@ -41,9 +36,6 @@ export default function AdminDashboardPage() {
     !salesAdmin;
   const maskedOverview = !superAdmin && !coFounder;
   const canManageShops = superAdmin || coFounder;
-  const canManageEmployees = superAdmin || coFounder || hrAdmin;
-  const canOpenCrm = superAdmin || coFounder || hrAdmin || salesAdmin;
-  const canReviewVerification = superAdmin || coFounder;
   const [data, setData] = useState<PlatformAdminOverviewDto | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -54,6 +46,7 @@ export default function AdminDashboardPage() {
   const [statusError, setStatusError] = useState<string | null>(null);
   const [statusSuccess, setStatusSuccess] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [refreshToken, setRefreshToken] = useState(0);
 
   async function handleStatusChange(shopId: string, shopName: string, currentStatus: SalonStatus) {
     const transition = getNextShopStatus(currentStatus);
@@ -149,14 +142,9 @@ export default function AdminDashboardPage() {
           <p>Monitor FastQue and apply controlled shop support actions. Signed in as {user?.email ?? "platform admin"}.</p>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <Button type="button" variant="outline" onClick={() => void loadOverview()} disabled={refreshing}>
+          <Button type="button" variant="outline" onClick={() => { setRefreshToken((n) => n + 1); void loadOverview(); }} disabled={refreshing}>
             {refreshing ? "Refreshing…" : "Refresh"}
           </Button>
-          {superAdmin && <LinkButton href="/dashboard/admin/access" variant="outline">Access</LinkButton>}
-          {canManageEmployees && <LinkButton href="/dashboard/admin/employees" variant="outline">Employees</LinkButton>}
-          {canOpenCrm && <LinkButton href="/dashboard/admin/crm" variant="outline">Field CRM</LinkButton>}
-          {canReviewVerification && <LinkButton href="/dashboard/admin/verification" variant="outline">Verification queue</LinkButton>}
-          <Button type="button" variant="outline" onClick={() => void logout()}>Log out</Button>
         </div>
       </header>
 
@@ -231,6 +219,8 @@ export default function AdminDashboardPage() {
               </select>
             </div>
           </section>
+
+          <ShopActivityPanel search={query} refreshToken={refreshToken} />
 
           <section className={styles.section}>
             <div className={styles.sectionHeader}><h2>Shops</h2><span>{shops.length} shown · latest 100</span></div>

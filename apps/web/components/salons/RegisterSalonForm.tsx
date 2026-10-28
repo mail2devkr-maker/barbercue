@@ -35,7 +35,16 @@ interface FormState {
   localityText: string;
   localitySlug: string;
   landmark: string;
+  salonType: "" | "GENTS" | "LADIES" | "UNISEX";
 }
+
+// Shown in customer discovery (Male / Female / Unisex filter). Required here so new shops are never
+// classified by a default; the owner can change it later on the Services page.
+const SALON_TYPE_CHOICES = [
+  { value: "GENTS", label: "Male (Gents)", hint: "Mainly serves men" },
+  { value: "LADIES", label: "Female (Ladies)", hint: "Mainly serves women" },
+  { value: "UNISEX", label: "Unisex", hint: "Serves everyone" },
+] as const;
 
 const EMPTY: FormState = {
   countryCode: "",
@@ -47,6 +56,7 @@ const EMPTY: FormState = {
   localityText: "",
   localitySlug: "",
   landmark: "",
+  salonType: "",
 };
 
 // Coordinates never enter FormState — they are not something the owner edits, so they live in
@@ -275,6 +285,10 @@ export function RegisterSalonForm() {
       setError("Please search for and select your shop's city.");
       return;
     }
+    if (!form.salonType) {
+      setError("Please choose whether your salon is Male, Female or Unisex.");
+      return;
+    }
     // Checked ahead of the schema parse so a bad postal code reads as advice, not a regex failure.
     if (!isValidPostalCode(form.countryCode, form.postalCode)) {
       setError(
@@ -296,6 +310,7 @@ export function RegisterSalonForm() {
       localityText: form.localityText.trim() || undefined,
       localitySlug: form.localitySlug || undefined,
       landmark: form.landmark.trim() || undefined,
+      salonType: form.salonType,
       ...(location.kind === "detected" ? { lat: location.lat, lng: location.lng } : {}),
     });
     if (!parsed.success) {
@@ -371,6 +386,43 @@ export function RegisterSalonForm() {
           maxLength={200}
         />
       </div>
+
+      <fieldset style={{ ...fieldWrapStyle, border: 0, padding: 0, margin: 0 }}>
+        <legend style={labelStyle}>Salon type</legend>
+        <div role="radiogroup" aria-label="Salon type" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 }}>
+          {SALON_TYPE_CHOICES.map((choice) => {
+            const checked = form.salonType === choice.value;
+            return (
+              <label
+                key={choice.value}
+                style={{
+                  display: "grid",
+                  gap: 2,
+                  padding: "10px 12px",
+                  borderRadius: "var(--bc-radius-sm)",
+                  border: `1px solid ${checked ? "var(--bc-accent)" : "var(--bc-border)"}`,
+                  background: checked ? "color-mix(in srgb, var(--bc-accent) 8%, transparent)" : "transparent",
+                  cursor: "pointer",
+                }}
+              >
+                <span style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 700, color: "var(--bc-ink)" }}>
+                  <input
+                    type="radio"
+                    name="salonType"
+                    value={choice.value}
+                    checked={checked}
+                    onChange={() => update("salonType", choice.value)}
+                    required
+                  />
+                  {choice.label}
+                </span>
+                <span style={hintStyle}>{choice.hint}</span>
+              </label>
+            );
+          })}
+        </div>
+        <p style={hintStyle}>Customers filter salons by this. You can change it later in your Services settings.</p>
+      </fieldset>
 
       <div style={fieldWrapStyle}>
         <label style={labelStyle} htmlFor="shop-phone">Phone (optional)</label>

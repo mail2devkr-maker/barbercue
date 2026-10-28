@@ -1,0 +1,24 @@
+.kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.skeleton { height: 360px; border-radius: var(--os-radius); }
+.twoCol { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.search input {
+  height: 38px; width: min(260px, 100%); padding: 0 10px; border-radius: 10px; border: 1px solid var(--os-border);
+  background: var(--os-surface-2); color: var(--os-ink); font: 15px var(--font-body); color-scheme: dark;
+}
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-weight: 600; text-align: left; }
+.cellStack strong, .cellStack small { display: block; }
+.cellStack { text-align: left; font-weight: 400; }
+.cellStack small { margin-top: 2px; color: var(--os-muted); font-size: 12px; }
+
+.bars { display: grid; gap: 12px; margin: 14px 0 0; padding: 0; list-style: none; }
+.barLabel { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 5px; color: var(--os-ink); font-size: 13px; font-variant-numeric: tabular-nums; }
+.barLabel span:last-child { color: var(--os-muted); }
+.track { height: 8px; border-radius: 999px; background: var(--os-surface-2); overflow: hidden; }
+.fill { height: 100%; border-radius: 999px; background: #3987e5; }
+
+@media (max-width: 1360px) { .kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width: 1100px) { .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } .twoCol { grid-template-columns: 1fr; } }
+@media (max-width: 640px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* Row headers (<th scope="row">) must not inherit the column-header look from owner .table th. */
+th.mono.mono, th.cellStack.cellStack { text-transform: none; letter-spacing: normal; font-size: 13.5px; color: var(--os-ink); }

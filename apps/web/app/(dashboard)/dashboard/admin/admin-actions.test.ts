@@ -1,5 +1,5 @@
 import { SalonStatus } from "@barbercue/shared";
-import { getNextShopStatus } from "./page";
+import { getNextShopStatus } from "./admin-actions";
 
 describe("platform admin shop lifecycle actions", () => {
   it("maps pending shops to the explicit Open shop action", () => {

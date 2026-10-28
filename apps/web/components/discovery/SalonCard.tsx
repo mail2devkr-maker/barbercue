@@ -1,7 +1,8 @@
 import Link from "next/link";
 import type { SalonListItemDto } from "@barbercue/shared";
-import { formatDistance, formatMoney, SHOP_CLOSED_TODAY_MESSAGE, VERIFICATION_BADGE_CAPTION } from "@barbercue/shared";
+import { formatDistance, formatMoney, SALON_TYPE_LABELS, SHOP_CLOSED_TODAY_MESSAGE, VERIFICATION_BADGE_CAPTION } from "@barbercue/shared";
 import { SalonImage } from "../ui/SalonImage";
+import { FavoriteButton } from "./FavoriteButton";
 import styles from "./salon-card.module.css";
 
 export function SalonCard({ salon, styleName }: { salon: SalonListItemDto; styleName?: string }) {
@@ -19,14 +20,17 @@ export function SalonCard({ salon, styleName }: { salon: SalonListItemDto; style
 
   return (
     <article className={styles.card}>
-      <Link href={profileHref} className={styles.imageLink} aria-label={`View ${salon.name}`}>
-        <SalonImage
-          url={salon.coverPhotoUrl}
-          alt={`${salon.name} barbershop`}
-          aspectRatio="4 / 3"
-          rounded={0}
-        />
-      </Link>
+      <div className={styles.media}>
+        <Link href={profileHref} className={styles.imageLink} aria-label={`View ${salon.name}`}>
+          <SalonImage
+            url={salon.coverPhotoUrl}
+            alt={`${salon.name} barbershop`}
+            aspectRatio="4 / 3"
+            rounded={0}
+          />
+        </Link>
+        <FavoriteButton salonId={salon.id} salonName={salon.name} />
+      </div>
 
       <div className={styles.body}>
         <div className={styles.titleRow}>
@@ -58,6 +62,11 @@ export function SalonCard({ salon, styleName }: { salon: SalonListItemDto; style
               </h3>
             </Link>
             <p className={styles.address}>{salon.addressLine}</p>
+            {salon.salonType && (
+              <span className={salon.salonTypeConfirmed ? styles.typeChip : styles.typeChipUnset}>
+                {salon.salonTypeConfirmed ? SALON_TYPE_LABELS[salon.salonType] : "Type not set"}
+              </span>
+            )}
           </div>
           {salon.ratingAverage !== null && (
             <span className={styles.rating} aria-label={`${salon.ratingAverage.toFixed(1)} out of 5`}>
@@ -72,10 +81,17 @@ export function SalonCard({ salon, styleName }: { salon: SalonListItemDto; style
               ? "New on FastQue"
               : `${salon.ratingCount} ${salon.ratingCount === 1 ? "review" : "reviews"}`}
           </span>
-          {salon.priceMin !== null && (
-            <strong>
-              From {formatMoney(salon.priceMin, salon.currency, salon.countryCode)}
+          {/* With a service selected, show THAT service's price at this salon (never "from"). */}
+          {salon.selectedService ? (
+            <strong title={`${salon.selectedService.name} · ${salon.selectedService.durationMinutes} min`}>
+              {salon.selectedService.name} {formatMoney(salon.selectedService.price, salon.currency, salon.countryCode)}
             </strong>
+          ) : (
+            salon.priceMin !== null && (
+              <strong>
+                From {formatMoney(salon.priceMin, salon.currency, salon.countryCode)}
+              </strong>
+            )
           )}
         </div>
 

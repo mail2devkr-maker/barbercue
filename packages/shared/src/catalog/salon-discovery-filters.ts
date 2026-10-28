@@ -84,3 +84,86 @@ export function validatePriceRange(min: number | null, max: number | null): Pric
   if (min !== null && max !== null && min > max) return 'min-exceeds-max';
   return null;
 }
+
+// ---------------------------------------------------------------------------------------------
+// Discovery upgrade (docs/discovery-upgrade/PLAN.md): salon type filter, popular services for
+// same-service price comparison, and sort options. Shared by the API and every client.
+
+/** Customer-facing names for SalonType values (stored as GENTS / LADIES / UNISEX). */
+export const SALON_TYPE_LABELS = { GENTS: 'Male', LADIES: 'Female', UNISEX: 'Unisex' } as const;
+export type SalonTypeFilter = keyof typeof SALON_TYPE_LABELS;
+
+/**
+ * Which stored salon types a customer's salon-type choice shows. The business rule lives here only:
+ * - Male   → Male (Gents) + Unisex salons
+ * - Female → Female (Ladies) + Unisex salons
+ * - Unisex → Unisex salons the owner CONFIRMED (see `requiresConfirmed`)
+ * - All    → no filter (the parameter is simply omitted)
+ * A salon whose type was never confirmed keeps the column default UNISEX, so it still appears for
+ * Male / Female (inclusive) but never as a confirmed "Unisex only" match.
+ */
+export const SALON_TYPE_FILTER_MATCHES: Readonly<
+  Record<SalonTypeFilter, { types: readonly SalonTypeFilter[]; requiresConfirmed: boolean }>
+> = {
+  GENTS: { types: ['GENTS', 'UNISEX'], requiresConfirmed: false },
+  LADIES: { types: ['LADIES', 'UNISEX'], requiresConfirmed: false },
+  UNISEX: { types: ['UNISEX'], requiresConfirmed: true },
+};
+
+/**
+ * A popular service customers compare across salons. Salons name their own services, so matching is
+ * a case-insensitive substring test on the service's own name (or category): any `match` term, and
+ * none of the `exclude` terms. The compared price is the cheapest active matching service at each
+ * salon, returned together with that service's own name so the comparison is never ambiguous.
+ */
+export interface PopularService {
+  id: string;
+  label: string;
+  match: readonly string[];
+  exclude?: readonly string[];
+}
+
+export const POPULAR_SERVICES: readonly PopularService[] = [
+  { id: 'haircut', label: 'Haircut', match: ['haircut', 'hair cut'], exclude: ['kid', 'child', 'baby'] },
+  { id: 'beard-styling', label: 'Beard Styling', match: ['beard'] },
+  { id: 'shaving', label: 'Shaving', match: ['shave', 'shaving'] },
+  { id: 'facial', label: 'Facial', match: ['facial'] },
+  { id: 'hair-spa', label: 'Hair Spa', match: ['hair spa'] },
+  { id: 'hair-color', label: 'Hair Color', match: ['hair colour', 'hair color', 'global colour', 'global color', 'root touch'] },
+  { id: 'massage', label: 'Massage', match: ['massage'] },
+  { id: 'cleanup', label: 'Cleanup', match: ['cleanup', 'clean up', 'clean-up'] },
+  { id: 'bleach', label: 'Bleach', match: ['bleach'] },
+  { id: 'detan', label: 'Detan', match: ['detan', 'de-tan', 'de tan'] },
+];
+
+export const popularServiceById = (id: string | null | undefined): PopularService | undefined =>
+  id ? POPULAR_SERVICES.find((service) => service.id === id) : undefined;
+
+/** Pure version of the server's matching rule (used by tests and client-side highlighting). */
+export function matchesPopularService(service: PopularService, text: string): boolean {
+  const value = text.toLowerCase();
+  return service.match.some((term) => value.includes(term)) && !(service.exclude ?? []).some((term) => value.includes(term));
+}
+
+/**
+ * Result ordering. `relevance` keeps the existing name order with cursor pagination; the others
+ * return one bounded page (same documented limit as "Near me"):
+ * - distance: nearest first — needs lat/lng
+ * - price: lowest price of the SELECTED service first — needs a selected service (never a mix of
+ *   unrelated services); clients disable it otherwise ("Select a service first to sort by price")
+ * - rating: highest average first, salons without reviews last, then by review count
+ */
+export const SALON_SORT_OPTIONS = ['relevance', 'distance', 'price', 'rating'] as const;
+export type SalonSortOption = (typeof SALON_SORT_OPTIONS)[number];
+export const SALON_SORT_LABELS: Record<SalonSortOption, string> = {
+  relevance: 'Recommended',
+  distance: 'Distance',
+  price: 'Price (selected service)',
+  rating: 'Reviews',
+};
+
+/** Minimum review score choices offered by the discovery filters ("4+ stars" etc.). */
+export const MIN_RATING_OPTIONS = [3, 3.5, 4, 4.5] as const;
+
+/** Most salon IDs one "favorites only" search may send (matches the bounded candidate cap). */
+export const SALON_SEARCH_MAX_IDS = 200;
