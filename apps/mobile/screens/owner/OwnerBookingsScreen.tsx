@@ -104,7 +104,7 @@ function BookingRow({ booking, isNew, salonId, onOpenInvoice }: { booking: Owner
  * No sound-enable gate like the web version needs — React Native has no browser autoplay policy to
  * work around, so a new booking speaks immediately while this screen is mounted.
  */
-export default function OwnerBookingsScreen({ route }: Props) {
+export default function OwnerBookingsScreen({ route, navigation }: Props) {
   const { selectedSalonId } = useSalon();
   const { t, language } = useLanguage();
   const [filter, setFilter] = useState<OwnerBookingFilter>(route.params?.filter ?? 'today');
