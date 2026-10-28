@@ -21,6 +21,7 @@ import { color, font, fontSize, lineHeightFor, radius, space } from '../lib/them
 import { Screen, SectionHeader, Card, Button } from '../components/ui';
 import { InlineError } from '../components/ui/ErrorState';
 import { OwnerVoiceSettingsCard } from '../components/owner/OwnerVoiceSettingsCard';
+import { AccountDeletionRequestCard } from '../components/account/AccountDeletionRequestCard';
 import { isCreditsEnabled } from '../lib/feature-flags';
 import type { AccountStackParamList, TabParamList } from '../navigation/types';
 
@@ -146,6 +147,7 @@ export default function AccountScreen() {
   const otherSessionCount = sessions.filter((s) => !s.current).length;
   const isCustomerOnly = user?.roles.length === 1 && user.roles[0] === Role.CUSTOMER;
   const isSalonOwner = Boolean(user?.roles.includes(Role.SALON_OWNER));
+  const needsRoleAwareDeletionRequest = Boolean(user && !isCustomerOnly);
 
   return (
     <Screen refreshing={refreshing} onRefresh={() => void handleRefresh()}>
@@ -311,6 +313,10 @@ export default function AccountScreen() {
         </Card>
       )}
 
+      {needsRoleAwareDeletionRequest && (
+        <AccountDeletionRequestCard />
+      )}
+
       <Button title={t.signOutThisDevice} variant="secondary" onPress={() => void logout()} style={styles.logoutButton} />
     </Screen>
   );
@@ -320,7 +326,6 @@ const styles = StyleSheet.create({
   card: { marginBottom: space[4] },
   cardTitle: { fontFamily: font.displaySemiBold, fontSize: fontSize.lg, color: color.ink, marginBottom: space[3] },
   privacyLink: { alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center', marginTop: space[2] },
-
   fieldRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

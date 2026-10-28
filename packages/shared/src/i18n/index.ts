@@ -598,6 +598,26 @@ export interface UiStrings {
   roleOwnerLabel: string;
   roleAdminLabel: string;
   premiumLabel: string;
+  accountDeletionRequestTitle: string;
+  accountDeletionRequestReceived: string;
+  accountDeletionStaffGuidance: string;
+  accountDeletionOwnerGuidance: string;
+  accountDeletionAdminGuidance: string;
+  accountDeletionMixedGuidance: string;
+  accountDeletionReviewGuidance: string;
+  accountDeletionCustomerGuidance: string;
+  accountDeletionDefaultGuidance: string;
+  accountDeletionPendingNotice: string;
+  accountDeletionRequestNotice: string;
+  accountDeletionConfirmPrompt: string;
+  accountDeletionStart: string;
+  accountDeletionConfirm: string;
+  accountDeletionSubmitting: string;
+  accountDeletionCancelSetup: string;
+  accountDeletionLoadError: string;
+  accountDeletionSubmitError: string;
+  accountDeletionOneShop: string;
+  accountDeletionManyShops: string;
 
   // Core booking flow: DateSelect, SlotSelect, StaffSelect, ConfirmBooking, BookingDetail,
   // MyBookings, WalkInJoin, QueueScreen, QueueStatusPanel, SalonSearch, SalonProfile.
@@ -1350,6 +1370,26 @@ const enUi: UiStrings = {
   roleOwnerLabel: 'Salon Owner',
   roleAdminLabel: 'Platform Admin',
   premiumLabel: 'Premium',
+  accountDeletionRequestTitle: 'Request account deletion',
+  accountDeletionRequestReceived: 'Request received',
+  accountDeletionStaffGuidance: 'Employment and staff permissions need review with the affected shop owner(s) ({shops}) before this account can be closed.',
+  accountDeletionOwnerGuidance: 'Review ownership of {shops} before closing this account. FastQue will not close or transfer a shop automatically.',
+  accountDeletionAdminGuidance: 'Platform administrator succession and recovery access must be reviewed before this account can be closed.',
+  accountDeletionMixedGuidance: 'This account has multiple role relationships. Resolve each affected employment, shop ownership, or platform-admin relationship ({shops}) before closure.',
+  accountDeletionReviewGuidance: 'FastQue must review this account’s role and linked operational records before closure.',
+  accountDeletionCustomerGuidance: 'Use the customer delete-account action for a customer-only account.',
+  accountDeletionDefaultGuidance: 'FastQue will review the account relationships and required operational transitions.',
+  accountDeletionPendingNotice: 'This is a pending request, not completed deletion. No shop, staff permission, administrator access, or business record has been changed. Access remains active until the required transition and approved retention review are complete.',
+  accountDeletionRequestNotice: 'Submitting creates a request for this signed-in account only. It does not close a shop, remove employment records, revoke access, or delete operational or financial data.',
+  accountDeletionConfirmPrompt: 'Confirm that you want FastQue to review this account for deletion. The request itself does not perform deletion.',
+  accountDeletionStart: 'Start deletion request',
+  accountDeletionConfirm: 'Confirm deletion request',
+  accountDeletionSubmitting: 'Submitting request…',
+  accountDeletionCancelSetup: 'Cancel request setup',
+  accountDeletionLoadError: 'Could not load account deletion status.',
+  accountDeletionSubmitError: 'Could not submit the deletion request. Please try again.',
+  accountDeletionOneShop: '1 linked shop',
+  accountDeletionManyShops: '{count} linked shops',
 
   anyStaffOption: 'Any Staff',
   staffSelectHint: 'This is a preference, not a guarantee — the salon assigns the actual barber and chair when you check in.',
@@ -2050,6 +2090,26 @@ const hiUi: UiStrings = {
   roleOwnerLabel: 'सैलून मालिक',
   roleAdminLabel: 'प्लेटफ़ॉर्म एडमिन',
   premiumLabel: 'प्रीमियम',
+  accountDeletionRequestTitle: 'खाता हटाने का अनुरोध करें',
+  accountDeletionRequestReceived: 'अनुरोध प्राप्त हुआ',
+  accountDeletionStaffGuidance: 'खाता बंद करने से पहले संबंधित सैलून मालिक को रोजगार और स्टाफ अनुमतियों की समीक्षा करनी होगी ({shops})।',
+  accountDeletionOwnerGuidance: 'खाता बंद करने से पहले {shops} के स्वामित्व की समीक्षा करें। FastQue अपने-आप कोई सैलून बंद या स्थानांतरित नहीं करेगा।',
+  accountDeletionAdminGuidance: 'खाता बंद करने से पहले प्लेटफ़ॉर्म एडमिन उत्तराधिकार और रिकवरी एक्सेस की समीक्षा करनी होगी।',
+  accountDeletionMixedGuidance: 'इस खाते में कई भूमिकाएँ जुड़ी हैं। बंद करने से पहले सभी संबंधित रोजगार, सैलून स्वामित्व या प्लेटफ़ॉर्म एडमिन संबंधों का समाधान करें ({shops})।',
+  accountDeletionReviewGuidance: 'खाता बंद करने से पहले FastQue को इस खाते की भूमिका और जुड़े परिचालन रिकॉर्ड की समीक्षा करनी होगी।',
+  accountDeletionCustomerGuidance: 'केवल ग्राहक खाते के लिए ग्राहक वाला खाता हटाने का विकल्प इस्तेमाल करें।',
+  accountDeletionDefaultGuidance: 'FastQue खाते के संबंधों और आवश्यक परिचालन बदलावों की समीक्षा करेगा।',
+  accountDeletionPendingNotice: 'यह लंबित अनुरोध है, पूरा हुआ खाता हटाना नहीं। कोई सैलून, स्टाफ अनुमति, एडमिन एक्सेस या व्यावसायिक रिकॉर्ड बदला नहीं गया है। आवश्यक बदलाव और स्वीकृत रिकॉर्ड-रिटेंशन समीक्षा पूरी होने तक एक्सेस सक्रिय रहेगा।',
+  accountDeletionRequestNotice: 'यह अनुरोध केवल इस साइन-इन खाते के लिए है। इससे कोई सैलून बंद नहीं होता, रोजगार रिकॉर्ड या एक्सेस नहीं हटता और परिचालन या वित्तीय डेटा नहीं मिटता।',
+  accountDeletionConfirmPrompt: 'पुष्टि करें कि आप FastQue से इस खाते को हटाने की समीक्षा का अनुरोध करना चाहते हैं। अनुरोध स्वयं खाता नहीं हटाता।',
+  accountDeletionStart: 'खाता हटाने का अनुरोध शुरू करें',
+  accountDeletionConfirm: 'खाता हटाने के अनुरोध की पुष्टि करें',
+  accountDeletionSubmitting: 'अनुरोध भेजा जा रहा है…',
+  accountDeletionCancelSetup: 'अनुरोध सेटअप रद्द करें',
+  accountDeletionLoadError: 'खाता हटाने की स्थिति लोड नहीं हो सकी।',
+  accountDeletionSubmitError: 'खाता हटाने का अनुरोध नहीं भेजा जा सका। कृपया फिर कोशिश करें।',
+  accountDeletionOneShop: '1 जुड़ा हुआ सैलून',
+  accountDeletionManyShops: '{count} जुड़े हुए सैलून',
 
   anyStaffOption: 'कोई भी स्टाफ',
   staffSelectHint: 'यह एक पसंद है, गारंटी नहीं — चेक-इन के समय सैलून ही असली बार्बर और कुर्सी तय करता है।',

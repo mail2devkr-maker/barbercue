@@ -61,6 +61,7 @@ describe('AuthService', () => {
     queueEntry: { updateMany: jest.Mock };
     review: { deleteMany: jest.Mock };
     auditLog: { updateMany: jest.Mock; create: jest.Mock };
+    accountDeletionRequest: { findUnique: jest.Mock; create: jest.Mock };
     $transaction: jest.Mock;
   };
   let passwordService: { hash: jest.Mock; compare: jest.Mock };
@@ -138,6 +139,10 @@ describe('AuthService', () => {
       queueEntry: { updateMany: jest.fn() },
       review: { deleteMany: jest.fn() },
       auditLog: { updateMany: jest.fn(), create: jest.fn() },
+      accountDeletionRequest: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        create: jest.fn(),
+      },
       // Supports both call shapes AuthService actually uses: the array form
       // (resetPassword's batch of writes) and the interactive-callback form (googleLogin's
       // find-or-create) — same dual-mode mock pattern as the rest of this backend's test suite.
@@ -2159,6 +2164,205 @@ describe('AuthService', () => {
         appleRevocation: 'manual_required',
       });
       expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('role-aware account deletion requests', () => {
+    const requestedAt = new Date('2026-10-28T10:00:00.000Z');
+    const subject = (overrides: Record<string, unknown> = {}) => ({
+      id: 'subject-1',
+      status: UserStatus.ACTIVE,
+      deletedAt: null,
+      roles: [{ role: Role.SALON_STAFF }],
+      ownedSalons: [],
+      staffMemberships: [{ salonId: 'salon-1' }],
+      employeeProfile: null,
+      ...overrides,
+    });
+
+    beforeEach(() => {
+      prisma.accountDeletionRequest.findUnique.mockResolvedValue(null);
+      prisma.accountDeletionRequest.create.mockResolvedValue({
+        id: 'deletion-request-1',
+        status: 'REQUESTED',
+        createdAt: requestedAt,
+      });
+    });
+
+    it('lets a staff member request deletion while preserving employment and shop permissions pending review', async () => {
+      const staff = subject({
+        roles: [{ role: Role.SALON_STAFF }],
+        staffMemberships: [{ salonId: 'salon-1' }, { salonId: 'salon-2' }],
+      });
+      prisma.user.findUnique.mockResolvedValue(staff);
+
+      await expect(service.requestAccountDeletion('subject-1')).resolves.toEqual({
+        request: {
+          id: 'deletion-request-1',
+          status: 'REQUESTED',
+          createdAt: requestedAt.toISOString(),
+        },
+        resolution: 'EMPLOYMENT_RESOLUTION_REQUIRED',
+        relatedShopCount: 2,
+      });
+
+      expect(prisma.accountDeletionRequest.create).toHaveBeenCalledWith({
+        data: { userId: 'subject-1', status: 'REQUESTED' },
+        select: { id: true, status: true, createdAt: true },
+      });
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          actorUserId: 'subject-1',
+          action: 'ACCOUNT_DELETION_REQUESTED',
+          entityType: 'AccountDeletionRequest',
+          entityId: 'deletion-request-1',
+          metadata: {
+            resolution: 'EMPLOYMENT_RESOLUTION_REQUIRED',
+            relatedShopCount: 2,
+          },
+        }),
+      });
+      expect(prisma.userRole.deleteMany).not.toHaveBeenCalled();
+      expect(prisma.user.update).not.toHaveBeenCalled();
+      expect(prisma.refreshToken.deleteMany).not.toHaveBeenCalled();
+      expect(prisma.authIdentity.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it('requires explicit ownership transfer before an owner account can close', async () => {
+      prisma.user.findUnique.mockResolvedValue(
+        subject({
+          roles: [{ role: Role.SALON_OWNER }],
+          ownedSalons: [{ id: 'salon-1' }, { id: 'salon-2' }],
+          staffMemberships: [],
+        }),
+      );
+
+      const result = await service.requestAccountDeletion('subject-1');
+      expect(result.resolution).toBe('OWNER_TRANSFER_REQUIRED');
+      expect(result.relatedShopCount).toBe(2);
+      expect(prisma.salon.findMany).not.toHaveBeenCalled();
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('routes a platform administrator to governance review instead of self-deleting', async () => {
+      prisma.user.findUnique.mockResolvedValue(
+        subject({
+          roles: [{ role: Role.PLATFORM_ADMIN }],
+          staffMemberships: [],
+        }),
+      );
+
+      const result = await service.requestAccountDeletion('subject-1');
+      expect(result.resolution).toBe('ADMIN_GOVERNANCE_REVIEW_REQUIRED');
+      expect(prisma.user.update).not.toHaveBeenCalled();
+      expect(prisma.userRole.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it('requires all role relationships to be resolved for mixed-role accounts', async () => {
+      prisma.user.findUnique.mockResolvedValue(
+        subject({
+          roles: [{ role: Role.CUSTOMER }, { role: Role.SALON_OWNER }],
+          ownedSalons: [{ id: 'salon-1' }],
+          staffMemberships: [],
+        }),
+      );
+
+      const result = await service.requestAccountDeletion('subject-1');
+      expect(result.resolution).toBe('MIXED_ROLE_RESOLUTION_REQUIRED');
+      expect(result.relatedShopCount).toBe(1);
+      expect(prisma.review.deleteMany).not.toHaveBeenCalled();
+      expect(prisma.userRole.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it('keeps the existing immediate customer deletion as the only customer-only path', async () => {
+      prisma.user.findUnique.mockResolvedValue(
+        subject({
+          roles: [{ role: Role.CUSTOMER }],
+          ownedSalons: [],
+          staffMemberships: [],
+        }),
+      );
+
+      await expect(
+        service.requestAccountDeletion('subject-1'),
+      ).rejects.toMatchObject({
+        code: AuthErrorCode.ACCOUNT_DELETION_CUSTOMER_FLOW_REQUIRED,
+      });
+      expect(prisma.accountDeletionRequest.create).not.toHaveBeenCalled();
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('returns the existing request on retries without duplicate audit events', async () => {
+      const staff = subject();
+      let stored: { id: string; status: string; createdAt: Date } | null = null;
+      prisma.user.findUnique.mockResolvedValue(staff);
+      prisma.accountDeletionRequest.findUnique.mockImplementation(async () => stored);
+      prisma.accountDeletionRequest.create.mockImplementation(async () => {
+        stored = {
+          id: 'deletion-request-1',
+          status: 'REQUESTED',
+          createdAt: requestedAt,
+        };
+        return stored;
+      });
+
+      const first = await service.requestAccountDeletion('subject-1');
+      const second = await service.requestAccountDeletion('subject-1');
+
+      expect(second).toEqual(first);
+      expect(prisma.accountDeletionRequest.create).toHaveBeenCalledTimes(1);
+      expect(prisma.auditLog.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('re-reads the authenticated account and returns a concurrent unique-key winner', async () => {
+      const staff = subject();
+      const winner = {
+        id: 'winner-request',
+        status: 'REQUESTED',
+        createdAt: requestedAt,
+      };
+      prisma.user.findUnique.mockResolvedValue(staff);
+      prisma.accountDeletionRequest.findUnique
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(winner);
+      prisma.accountDeletionRequest.create.mockRejectedValue(
+        Object.assign(new Error('unique conflict'), { code: 'P2002' }),
+      );
+
+      const result = await service.requestAccountDeletion('subject-1');
+
+      expect(result.request?.id).toBe('winner-request');
+      expect(result.resolution).toBe('EMPLOYMENT_RESOLUTION_REQUIRED');
+      expect(prisma.auditLog.create).not.toHaveBeenCalled();
+    });
+
+    it('denies inactive accounts and does not create a request', async () => {
+      prisma.user.findUnique.mockResolvedValue(
+        subject({ status: UserStatus.SUSPENDED }),
+      );
+
+      await expect(
+        service.requestAccountDeletion('subject-1'),
+      ).rejects.toMatchObject({ code: AuthErrorCode.UNAUTHENTICATED });
+      expect(prisma.accountDeletionRequest.create).not.toHaveBeenCalled();
+    });
+
+    it('derives status from the current authenticated account without accepting a target id', async () => {
+      prisma.user.findUnique.mockResolvedValue(subject());
+      prisma.accountDeletionRequest.findUnique.mockResolvedValue({
+        id: 'deletion-request-1',
+        status: 'REQUESTED',
+        createdAt: requestedAt,
+      });
+
+      const result = await service.getAccountDeletionRequest('subject-1');
+
+      expect(result.request?.id).toBe('deletion-request-1');
+      expect(prisma.accountDeletionRequest.findUnique).toHaveBeenCalledWith({
+        where: { userId: 'subject-1' },
+        select: { id: true, status: true, createdAt: true },
+      });
     });
   });
 });

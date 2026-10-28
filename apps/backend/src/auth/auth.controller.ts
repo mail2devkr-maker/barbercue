@@ -1,5 +1,6 @@
 import {
   Body,
+  BadRequestException,
   Controller,
   Delete,
   Get,
@@ -31,6 +32,7 @@ import {
   resetPasswordSchema,
   initialPasswordSchema,
   deleteAccountSchema,
+  accountDeletionRequestSchema,
   setLanguageSchema,
   staffLoginSchema,
   ownerSignupSchema,
@@ -45,6 +47,7 @@ import {
   type GoogleLoginInput,
   type InitialPasswordInput,
   type DeleteAccountInput,
+  type AccountDeletionRequestInput,
   type LogoutRequestInput,
   type OtpRequestInput,
   type OtpVerifyInput,
@@ -502,7 +505,31 @@ export class AuthController {
     );
   }
 
-  /** Customer-only deletion. No target user id is accepted: the JWT subject is authoritative. */
+  /** Current caller's role-aware deletion status; no target user id is accepted. */
+  @Get(AUTH_PATHS.accountDeletionRequest)
+  accountDeletionRequestStatus(@CurrentUser() user: AuthenticatedUser) {
+    return this.authService.getAccountDeletionRequest(user.id);
+  }
+
+  /**
+   * Starts a non-destructive request for staff, owners, administrators, and mixed-role accounts.
+   * It records only the authenticated JWT subject and never closes a shop or deletes records.
+   */
+  @Post(AUTH_PATHS.accountDeletionRequest)
+  @Throttle(AUTH_THROTTLE)
+  @HttpCode(HttpStatus.OK)
+  @UsePipes(new ZodValidationPipe(accountDeletionRequestSchema))
+  requestAccountDeletion(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() body: AccountDeletionRequestInput,
+  ) {
+    if (body.confirmation !== 'REQUEST_DELETION') {
+      throw new BadRequestException('Invalid account deletion confirmation.');
+    }
+    return this.authService.requestAccountDeletion(user.id);
+  }
+
+  /** Customer-only immediate deletion. No target user id is accepted: the JWT subject is authoritative. */
   @Delete(AUTH_PATHS.accountDeletion)
   @HttpCode(HttpStatus.OK)
   @Roles(Role.CUSTOMER)

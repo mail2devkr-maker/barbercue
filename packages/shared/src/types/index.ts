@@ -2,6 +2,8 @@ import type {
   BookingAttributionSource,
   BookingSource,
   BookingStatus,
+  AccountDeletionRequestStatus,
+  AccountDeletionResolution,
   ChairStatus,
   ChargeType,
   CreditFundingSource,
@@ -86,6 +88,20 @@ export interface AuthMethodsDto {
   phoneOtp: boolean;
   /** Owner OTP is separately authorized and issues STAFF audience only for an existing verified owner. */
   ownerPhoneOtp: boolean;
+}
+
+/**
+ * GET/POST auth/account/deletion-request. No target user or shop identifiers are returned. The
+ * resolution is recomputed from the authenticated account's current server-side relationships.
+ */
+export interface AccountDeletionRequestDto {
+  request: {
+    id: string;
+    status: AccountDeletionRequestStatus;
+    createdAt: string;
+  } | null;
+  resolution: AccountDeletionResolution;
+  relatedShopCount: number;
 }
 
 export interface EmployeeProfileDto {

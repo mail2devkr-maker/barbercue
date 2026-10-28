@@ -8,6 +8,7 @@ import { useAuth } from '../../lib/auth-context';
 import { useLanguage } from '../../lib/language-context';
 import { color, font, fontSize, space } from '../../lib/theme';
 import { Screen, SectionHeader, Card, Button, InlineError, LanguageSwitcher } from '../../components/ui';
+import { AccountDeletionRequestCard } from '../../components/account/AccountDeletionRequestCard';
 
 function roleLabel(t: UiStrings, role: string): string {
   const labels: Record<string, string> = {
@@ -35,6 +36,7 @@ export default function DashboardAccountScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [revokingId, setRevokingId] = useState<string | null>(null);
+  const isCustomerOnly = user?.roles.length === 1 && user.roles[0] === Role.CUSTOMER;
 
   const load = useCallback((isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -109,6 +111,8 @@ export default function DashboardAccountScreen() {
           ))}
         {error && <InlineError message={error} />}
       </Card>
+
+      {user && !isCustomerOnly && <AccountDeletionRequestCard />}
 
       <Button title={t.signOutThisDevice} variant="secondary" onPress={() => void logout()} style={styles.logoutButton} />
     </Screen>

@@ -996,6 +996,13 @@ export const deleteAccountSchema = z.object({
 });
 export type DeleteAccountInput = z.infer<typeof deleteAccountSchema>;
 
+// A role-aware request is deliberately separate from DELETE auth/account: it records the
+// authenticated user's request and never deletes business or operational data.
+export const accountDeletionRequestSchema = z.object({
+  confirmation: z.literal("REQUEST_DELETION"),
+});
+export type AccountDeletionRequestInput = z.infer<typeof accountDeletionRequestSchema>;
+
 // Salon photo by URL. Binary upload is not wired (no object storage is configured), so an owner
 // points at an image they already host — their Google Business profile, Instagram, or a CDN.
 //

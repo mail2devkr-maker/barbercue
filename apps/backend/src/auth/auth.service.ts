@@ -4,6 +4,8 @@ import { createHash, randomBytes } from 'crypto';
 import {
   AuthErrorCode,
   AuthProvider,
+  AccountDeletionRequestStatus,
+  AccountDeletionResolution,
   Role,
   OtpPurpose,
   SessionAudience,
@@ -11,6 +13,7 @@ import {
   type AuthSession,
   type AuthTokens,
   type AppleLoginInput,
+  type AccountDeletionRequestDto,
   Language,
   type MeResponse,
   type PasswordAudience,
@@ -38,6 +41,70 @@ const GLOBAL_ADMIN_DASHBOARD_ROLES = new Set<Role>([
   Role.SALES_ADMIN,
   Role.PLATFORM_VIEWER,
 ]);
+
+const ACCOUNT_DELETION_ADMIN_ROLES = new Set<Role>([
+  Role.PLATFORM_ADMIN,
+  Role.CO_FOUNDER,
+  Role.HR_ADMIN,
+  Role.SALES_ADMIN,
+  Role.PLATFORM_VIEWER,
+]);
+
+type AccountDeletionSubject = {
+  id: string;
+  status: UserStatus;
+  deletedAt: Date | null;
+  roles: Array<{ role: Role }>;
+  ownedSalons: Array<{ id: string }>;
+  staffMemberships: Array<{ salonId: string }>;
+  employeeProfile: { id: string } | null;
+};
+
+function accountDeletionResolution(
+  user: AccountDeletionSubject,
+): AccountDeletionRequestDto['resolution'] {
+  const roles = new Set(user.roles.map(({ role }) => role));
+  const hasAdminRole = user.roles.some(({ role }) =>
+    ACCOUNT_DELETION_ADMIN_ROLES.has(role),
+  );
+  const hasOwnerRole =
+    roles.has(Role.SALON_OWNER) || user.ownedSalons.length > 0;
+  const hasEmploymentRole =
+    roles.has(Role.SALON_STAFF) ||
+    roles.has(Role.FIELD_EXECUTIVE) ||
+    user.staffMemberships.length > 0 ||
+    user.employeeProfile !== null;
+  const hasCustomerRole = roles.has(Role.CUSTOMER);
+  const scopeCount =
+    Number(hasCustomerRole) +
+    Number(hasEmploymentRole) +
+    Number(hasOwnerRole) +
+    Number(hasAdminRole);
+
+  if (scopeCount > 1) {
+    return AccountDeletionResolution.MIXED_ROLE_RESOLUTION_REQUIRED;
+  }
+  if (hasAdminRole) {
+    return AccountDeletionResolution.ADMIN_GOVERNANCE_REVIEW_REQUIRED;
+  }
+  if (hasOwnerRole) {
+    return AccountDeletionResolution.OWNER_TRANSFER_REQUIRED;
+  }
+  if (hasEmploymentRole) {
+    return AccountDeletionResolution.EMPLOYMENT_RESOLUTION_REQUIRED;
+  }
+  if (hasCustomerRole) {
+    return AccountDeletionResolution.CUSTOMER_DIRECT_DELETE;
+  }
+  return AccountDeletionResolution.ACCOUNT_ROLE_REVIEW_REQUIRED;
+}
+
+function relatedDeletionShopCount(user: AccountDeletionSubject): number {
+  return new Set([
+    ...user.ownedSalons.map(({ id }) => id),
+    ...user.staffMemberships.map(({ salonId }) => salonId),
+  ]).size;
+}
 
 function hasGlobalAdminDashboardRole(
   roles: Array<{ role: Role; salonId: string | null }>,
@@ -1483,6 +1550,163 @@ export class AuthService {
 
   logoutAll(userId: string): Promise<void> {
     return this.tokenService.revokeAllForUser(userId);
+  }
+
+  /**
+   * Returns the caller's deletion-request state and a live resolution classification. The user id
+   * is always sourced from the authenticated controller context; the DTO intentionally exposes no
+   * salon ids, employee ids, or other account identifiers.
+   */
+  async getAccountDeletionRequest(
+    userId: string,
+  ): Promise<AccountDeletionRequestDto> {
+    const user = await this.loadAccountDeletionSubject(userId);
+    this.assertAccountDeletionSubjectActive(user);
+    const request = await this.prisma.accountDeletionRequest.findUnique({
+      where: { userId },
+      select: { id: true, status: true, createdAt: true },
+    });
+    return this.toAccountDeletionRequestDto(user, request);
+  }
+
+  /**
+   * Records a non-destructive, account-bound request. A unique userId constraint and a transaction
+   * make retries/concurrent taps idempotent. It does not disable access, transfer a shop, erase
+   * operational records, or claim that deletion is complete; those actions require an approved
+   * retention policy and a role-specific resolution workflow.
+   */
+  async requestAccountDeletion(
+    userId: string,
+  ): Promise<AccountDeletionRequestDto> {
+    const currentUser = await this.loadAccountDeletionSubject(userId);
+    this.assertAccountDeletionSubjectActive(currentUser);
+    const currentResolution = accountDeletionResolution(currentUser);
+    if (
+      currentResolution === AccountDeletionResolution.CUSTOMER_DIRECT_DELETE
+    ) {
+      throw new AppException(
+        AuthErrorCode.ACCOUNT_DELETION_CUSTOMER_FLOW_REQUIRED,
+        'Use the customer account deletion flow for this account.',
+        HttpStatus.CONFLICT,
+      );
+    }
+
+    const existing = await this.prisma.accountDeletionRequest.findUnique({
+      where: { userId },
+      select: { id: true, status: true, createdAt: true },
+    });
+    if (existing) {
+      return this.toAccountDeletionRequestDto(currentUser, existing);
+    }
+
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        // Re-read roles and relationships inside the write transaction so a stale mobile session
+        // can never turn a mixed/owner/admin account into the customer deletion path.
+        const user = await tx.user.findUnique({
+          where: { id: userId },
+          include: {
+            roles: { select: { role: true } },
+            ownedSalons: { select: { id: true } },
+            staffMemberships: { select: { salonId: true } },
+            employeeProfile: { select: { id: true } },
+          },
+        });
+        this.assertAccountDeletionSubjectActive(user);
+        const resolution = accountDeletionResolution(user);
+        if (resolution === AccountDeletionResolution.CUSTOMER_DIRECT_DELETE) {
+          throw new AppException(
+            AuthErrorCode.ACCOUNT_DELETION_CUSTOMER_FLOW_REQUIRED,
+            'Use the customer account deletion flow for this account.',
+            HttpStatus.CONFLICT,
+          );
+        }
+
+        const alreadyRequested = await tx.accountDeletionRequest.findUnique({
+          where: { userId },
+          select: { id: true, status: true, createdAt: true },
+        });
+        if (alreadyRequested) {
+          return this.toAccountDeletionRequestDto(user, alreadyRequested);
+        }
+
+        const request = await tx.accountDeletionRequest.create({
+          data: {
+            userId,
+            status: AccountDeletionRequestStatus.REQUESTED,
+          },
+          select: { id: true, status: true, createdAt: true },
+        });
+        await tx.auditLog.create({
+          data: {
+            actorUserId: userId,
+            action: 'ACCOUNT_DELETION_REQUESTED',
+            entityType: 'AccountDeletionRequest',
+            entityId: request.id,
+            metadata: {
+              resolution,
+              relatedShopCount: relatedDeletionShopCount(user),
+            },
+          },
+        });
+        return this.toAccountDeletionRequestDto(user, request);
+      });
+    } catch (error) {
+      // Concurrent requests race only on the unique account binding. If the winning request is
+      // now visible, return that same request; do not create a second audit event or mutate roles.
+      if ((error as { code?: string })?.code === 'P2002') {
+        const retry = await this.getAccountDeletionRequest(userId);
+        if (retry.request) return retry;
+      }
+      throw error;
+    }
+  }
+
+  private async loadAccountDeletionSubject(
+    userId: string,
+  ): Promise<AccountDeletionSubject | null> {
+    return this.prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        roles: { select: { role: true } },
+        ownedSalons: { select: { id: true } },
+        staffMemberships: { select: { salonId: true } },
+        employeeProfile: { select: { id: true } },
+      },
+    });
+  }
+
+  private assertAccountDeletionSubjectActive(
+    user: AccountDeletionSubject | null,
+  ): asserts user is AccountDeletionSubject {
+    if (!user || user.status !== UserStatus.ACTIVE || user.deletedAt) {
+      throw new AppException(
+        AuthErrorCode.UNAUTHENTICATED,
+        'This account is no longer active.',
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
+  }
+
+  private toAccountDeletionRequestDto(
+    user: AccountDeletionSubject,
+    request: {
+      id: string;
+      status: AccountDeletionRequestStatus;
+      createdAt: Date;
+    } | null,
+  ): AccountDeletionRequestDto {
+    return {
+      request: request
+        ? {
+            id: request.id,
+            status: request.status,
+            createdAt: request.createdAt.toISOString(),
+          }
+        : null,
+      resolution: accountDeletionResolution(user),
+      relatedShopCount: relatedDeletionShopCount(user),
+    };
   }
 
   /**
