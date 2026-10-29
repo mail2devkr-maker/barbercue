@@ -37,7 +37,7 @@ export class SalonCapabilitiesService {
     userId: string,
     salonId: string,
   ): Promise<SalonCapabilitiesDto> {
-    await this.salonAccess.assertOwnerAccess(userId, salonId);
+    await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
 
     const features = Object.fromEntries(
       FASTQUE_CAPABILITY_KEYS.map((key) => [key, { ...NOT_IMPLEMENTED }]),

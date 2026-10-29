@@ -50,6 +50,7 @@ export function SiteFooter() {
         <nav className={styles.footerLinks} aria-label="Footer">
           <div>
             <span>Customers</span>
+            <Link href="/#book-or-queue">For customers</Link>
             <Link href="/search">Find a barber</Link>
             <Link href="/assistant">Find a time</Link>
             <Link href="/offers">Offers near you</Link>
@@ -59,6 +60,7 @@ export function SiteFooter() {
           </div>
           <div>
             <span>Shops</span>
+            <Link href="/#for-shops">For shops</Link>
             <Link href="/dashboard/register-shop">Register your shop</Link>
             <Link href="/owner/login">Owner login</Link>
             <Link href="/staff/login">Staff login</Link>

@@ -153,14 +153,38 @@ export function matchesPopularService(service: PopularService, text: string): bo
  *   unrelated services); clients disable it otherwise ("Select a service first to sort by price")
  * - rating: highest average first, salons without reviews last, then by review count
  */
-export const SALON_SORT_OPTIONS = ['relevance', 'distance', 'price', 'rating'] as const;
+export const SALON_SORT_OPTIONS = [
+  'relevance',
+  'distance',
+  'price',
+  'price_desc',
+  'effective_price',
+  'offer',
+  'rating',
+  'reviews',
+  'wait',
+] as const;
 export type SalonSortOption = (typeof SALON_SORT_OPTIONS)[number];
 export const SALON_SORT_LABELS: Record<SalonSortOption, string> = {
   relevance: 'Recommended',
-  distance: 'Distance',
-  price: 'Price (selected service)',
-  rating: 'Reviews',
+  distance: 'Distance — nearest first',
+  price: 'Price — low to high',
+  price_desc: 'Price — high to low',
+  effective_price: 'Lowest price after offer',
+  offer: 'Best offer',
+  rating: 'Highest rated',
+  reviews: 'Most reviewed',
+  wait: 'Shortest queue wait',
 };
+
+/** "Live queue" filter choices: maximum estimated wait in minutes (0 = no wait right now). */
+export const MAX_WAIT_OPTIONS = [0, 15, 30, 60] as const;
+
+/**
+ * Sorts that compare prices: by the selected service's price when a service is selected, otherwise
+ * by each salon's starting price (its cheapest active service).
+ */
+export const SERVICE_PRICE_SORTS: readonly SalonSortOption[] = ['price', 'price_desc', 'effective_price'];
 
 /** Minimum review score choices offered by the discovery filters ("4+ stars" etc.). */
 export const MIN_RATING_OPTIONS = [3, 3.5, 4, 4.5] as const;

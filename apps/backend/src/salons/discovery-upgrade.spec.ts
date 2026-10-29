@@ -6,7 +6,7 @@ import {
   salonSearchQuerySchema,
   type SalonListItemDto,
 } from '@barbercue/shared';
-import { SalonsService, sortListItems } from './salons.service';
+import { SalonsService, nextOpeningOf, sortListItems } from './salons.service';
 import { FavoritesService } from './favorites.service';
 
 const item = (over: Partial<SalonListItemDto>): SalonListItemDto =>
@@ -57,6 +57,11 @@ function makeSearchService(
       findMany: jest.fn().mockResolvedValue(matches),
     },
     queueEntry: { groupBy: jest.fn().mockResolvedValue([]) },
+    offer: { findMany: jest.fn().mockResolvedValue([]) },
+    salonStaff: { groupBy: jest.fn().mockResolvedValue([]) },
+    chair: { groupBy: jest.fn().mockResolvedValue([]) },
+    manualChairOccupancy: { groupBy: jest.fn().mockResolvedValue([]) },
+    serviceSession: { findMany: jest.fn().mockResolvedValue([]) },
   };
   return {
     prisma,
@@ -173,7 +178,12 @@ describe('popular services', () => {
   it('leaves selectedService out entirely when no popular service is chosen', async () => {
     const { service, prisma } = makeSearchService([salonRow('a')]);
     const result = await service.search({});
-    expect(prisma.service.findMany).not.toHaveBeenCalled();
+    // Only the card's all-services lookup runs — no selected-service lookup.
+    expect(prisma.service.findMany).toHaveBeenCalledTimes(1);
+    expect(prisma.service.findMany.mock.calls[0][0].where).toEqual({
+      salonId: { in: ['a'] },
+      isActive: true,
+    });
     expect(result.items[0].selectedService).toBeUndefined();
     expect(result.items[0]).toMatchObject({
       salonType: 'UNISEX',
@@ -245,20 +255,10 @@ describe('sorting', () => {
     expect(result.nextCursor).toBeNull();
   });
 
-  it('rejects price sort without a service and distance sort without a location', () => {
+  it('accepts a price sort without a service, and rejects distance sort without a location', () => {
     expect(salonSearchQuerySchema.safeParse({ sort: 'price' }).success).toBe(
-      false,
+      true,
     );
-    expect(
-      salonSearchQuerySchema.safeParse({
-        sort: 'price',
-        popularService: 'haircut',
-      }).success,
-    ).toBe(true);
-    expect(
-      salonSearchQuerySchema.safeParse({ sort: 'price', service: 'hair' })
-        .success,
-    ).toBe(true);
     expect(salonSearchQuerySchema.safeParse({ sort: 'distance' }).success).toBe(
       false,
     );
@@ -337,6 +337,10 @@ describe('rating, favorites-only and open-now filters', () => {
       take: 200,
     });
     expect(result.items.map((i) => i.id)).toEqual(['open']);
+    expect(result.items[0]).toMatchObject({
+      closesAt: '21:00',
+      todayHours: { isClosed: false, openTime: '09:00', closeTime: '21:00' },
+    });
     expect(result.nextCursor).toBeNull();
   });
 
@@ -357,6 +361,234 @@ describe('rating, favorites-only and open-now filters', () => {
     expect(salonSearchQuerySchema.safeParse({ openNow: 'yes' }).success).toBe(
       false,
     );
+  });
+});
+
+describe('booking page 3.0: offers filter and new sorts', () => {
+  const priced = (
+    id: string,
+    price: number | null,
+    over: Partial<SalonListItemDto> = {},
+  ) =>
+    item({
+      id,
+      selectedService:
+        price === null
+          ? null
+          : { id, name: 'Haircut', price, durationMinutes: 30 },
+      ...over,
+    });
+  const offerOn = (
+    saving: number,
+    offerPrice: number | null,
+    conditional = false,
+  ) => ({
+    offers: [
+      {
+        saving,
+        conditional,
+        price: offerPrice === null ? null : { offerPrice },
+      } as never,
+    ],
+  });
+
+  it('price high→low, lowest price after offer, best offer and most reviewed', () => {
+    const items = [
+      priced('a', 300),
+      priced('b', 250, offerOn(100, 150)),
+      priced('c', 200, offerOn(150, null, true)),
+      priced('none', null),
+    ];
+    expect(sortListItems(items, 'price_desc').map((i) => i.id)).toEqual([
+      'a',
+      'b',
+      'c',
+      'none',
+    ]);
+    // b: ₹150 after its certain offer beats c's ₹200 (c's offer is conditional).
+    expect(sortListItems(items, 'effective_price').map((i) => i.id)).toEqual([
+      'b',
+      'c',
+      'a',
+      'none',
+    ]);
+    // A certain offer ranks above a bigger conditional one; no offer last.
+    expect(sortListItems(items, 'offer').map((i) => i.id)).toEqual([
+      'b',
+      'c',
+      'a',
+      'none',
+    ]);
+    expect(
+      sortListItems(
+        [
+          item({ id: 'few', ratingCount: 2, ratingAverage: 5 }),
+          item({ id: 'many', ratingCount: 40, ratingAverage: 4.1 }),
+        ],
+        'reviews',
+      ).map((i) => i.id),
+    ).toEqual(['many', 'few']);
+  });
+
+  it('offers only: a current published offer covering the selected service', async () => {
+    const { service, prisma } = makeSearchService([]);
+    await service.search(
+      salonSearchQuerySchema.parse({
+        offersOnly: 'true',
+        popularService: 'haircut',
+      }),
+    );
+    const offerClause = prisma.salon.findMany.mock.calls[0][0].where.AND.find(
+      (c: Record<string, unknown>) => 'offers' in c,
+    );
+    expect(offerClause.offers.some).toMatchObject({
+      status: 'ACTIVE',
+      OR: [
+        { services: { none: {} } },
+        {
+          services: {
+            some: { service: expect.objectContaining({ isActive: true }) },
+          },
+        },
+      ],
+    });
+    expect(offerClause.offers.some.validTo.gt).toBeInstanceOf(Date);
+  });
+
+  it('without a service, price sorts rank by starting price', () => {
+    for (const sort of ['price', 'price_desc', 'effective_price']) {
+      expect(salonSearchQuerySchema.safeParse({ sort }).success).toBe(true);
+    }
+    const noService = [
+      item({ id: 'mid', priceMin: 200, selectedService: undefined }),
+      item({ id: 'none', priceMin: null, selectedService: undefined }),
+      item({ id: 'low', priceMin: 90, selectedService: undefined }),
+      // A certain ₹60 offer price makes this the cheapest after offers.
+      item({
+        id: 'offer',
+        priceMin: 150,
+        selectedService: undefined,
+        offers: [{ price: { offerPrice: 60 } } as never],
+      }),
+    ];
+    expect(sortListItems(noService, 'price').map((i) => i.id)).toEqual([
+      'low',
+      'offer',
+      'mid',
+      'none',
+    ]);
+    expect(sortListItems(noService, 'price_desc').map((i) => i.id)).toEqual([
+      'mid',
+      'offer',
+      'low',
+      'none',
+    ]);
+    expect(
+      sortListItems(noService, 'effective_price').map((i) => i.id),
+    ).toEqual(['offer', 'low', 'mid', 'none']);
+  });
+});
+
+describe('live queue wait in search', () => {
+  afterEach(() => jest.useRealTimers());
+  const allDay = Array.from({ length: 7 }, (_, dayOfWeek) => ({
+    dayOfWeek,
+    isClosed: false,
+    openTime: '00:00',
+    closeTime: '23:59',
+  }));
+
+  it('estimates the wait for open salons only, and filters by the maximum wait', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-10-27T06:30:00Z'));
+    const { service, prisma } = makeSearchService([
+      salonRow('busy', { operatingHours: allDay }),
+      salonRow('quiet', { operatingHours: allDay }),
+      salonRow('closed', { operatingHours: [] }),
+    ]);
+    prisma.queueEntry.groupBy.mockImplementation(
+      (args: { where: { status?: unknown } }) =>
+        Promise.resolve(
+          args.where.status === 'WAITING'
+            ? [{ salonId: 'busy', _count: { _all: 4 } }]
+            : [],
+        ),
+    );
+    prisma.salonStaff.groupBy.mockResolvedValue([
+      { salonId: 'busy', _count: { _all: 1 } },
+      { salonId: 'quiet', _count: { _all: 2 } },
+    ]);
+    prisma.chair.groupBy.mockResolvedValue([
+      { salonId: 'busy', _count: { _all: 2 } },
+      { salonId: 'quiet', _count: { _all: 2 } },
+    ]);
+    const all = await service.search(salonSearchQuerySchema.parse({}));
+    const byId = Object.fromEntries(all.items.map((i) => [i.id, i.queueWait]));
+    expect(byId.busy).toMatchObject({
+      waitingCount: 4,
+      estimatedWaitMinutes: 120,
+    });
+    expect(byId.quiet).toMatchObject({
+      waitingCount: 0,
+      estimatedWaitMinutes: 0,
+    });
+    expect(byId.closed).toBeNull();
+    // Only the open salons were looked up.
+    expect(prisma.salonStaff.groupBy.mock.calls[0][0].where.salonId).toEqual({
+      in: ['busy', 'quiet'],
+    });
+
+    const within30 = await service.search(
+      salonSearchQuerySchema.parse({ maxWaitMinutes: '30' }),
+    );
+    expect(within30.items.map((i) => i.id)).toEqual(['quiet']);
+  });
+
+  it('shortest queue wait sort puts unknown waits last', () => {
+    const w = (id: string, minutes: number | null) =>
+      item({
+        id,
+        queueWait:
+          minutes === null
+            ? null
+            : {
+                waitingCount: 1,
+                estimatedWaitMinutes: minutes,
+                range: { min: 0, max: 5 },
+              },
+      });
+    expect(
+      sortListItems([w('a', 40), w('b', null), w('c', 5)], 'wait').map(
+        (i) => i.id,
+      ),
+    ).toEqual(['c', 'a', 'b']);
+    expect(
+      salonSearchQuerySchema.safeParse({ maxWaitMinutes: '-1' }).success,
+    ).toBe(false);
+  });
+});
+
+describe('when a closed salon next opens', () => {
+  const india = { timezone: 'Asia/Kolkata', city: { countryCode: 'IN' } };
+  const hours = Array.from({ length: 7 }, (_, dayOfWeek) => ({
+    dayOfWeek,
+    isClosed: dayOfWeek === 3, // closed on Wednesdays
+    openTime: '10:00',
+  }));
+
+  it('later today, tomorrow, or skips a closed day', () => {
+    // Mon 26 Oct 2026, 08:00 IST → opens later today.
+    expect(
+      nextOpeningOf(hours, india, new Date('2026-10-26T02:30:00Z')),
+    ).toEqual({ inDays: 0, dayOfWeek: 1, time: '10:00' });
+    // Mon 22:00 IST → tomorrow (Tuesday).
+    expect(
+      nextOpeningOf(hours, india, new Date('2026-10-26T16:30:00Z')),
+    ).toEqual({ inDays: 1, dayOfWeek: 2, time: '10:00' });
+    // Tue 22:00 IST → Wednesday is closed, so Thursday.
+    expect(
+      nextOpeningOf(hours, india, new Date('2026-10-27T16:30:00Z')),
+    ).toEqual({ inDays: 2, dayOfWeek: 4, time: '10:00' });
+    expect(nextOpeningOf([], india)).toBeNull();
   });
 });
 

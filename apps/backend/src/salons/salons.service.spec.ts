@@ -54,11 +54,15 @@ describe('SalonsService', () => {
     review: { aggregate: jest.Mock; groupBy: jest.Mock };
     service: { aggregate: jest.Mock; findMany: jest.Mock; groupBy: jest.Mock };
     queueEntry: { count: jest.Mock; groupBy: jest.Mock };
+    offer: { findMany: jest.Mock };
     locality: { findUnique: jest.Mock };
     userRole: { upsert: jest.Mock; findMany: jest.Mock };
     user: { findUniqueOrThrow: jest.Mock };
     operatingHours: { createMany: jest.Mock };
-    chair: { createMany: jest.Mock };
+    chair: { createMany: jest.Mock; groupBy: jest.Mock };
+    salonStaff: { groupBy: jest.Mock };
+    manualChairOccupancy: { groupBy: jest.Mock };
+    serviceSession: { findMany: jest.Mock };
     $transaction: jest.Mock;
   };
   let citiesService: {
@@ -95,13 +99,20 @@ describe('SalonsService', () => {
         count: jest.fn().mockResolvedValue(0),
         groupBy: jest.fn().mockResolvedValue([]),
       },
+      offer: { findMany: jest.fn().mockResolvedValue([]) },
       locality: { findUnique: jest.fn() },
       userRole: {
         upsert: jest.fn(),
         findMany: jest.fn().mockResolvedValue([]),
       },
       operatingHours: { createMany: jest.fn().mockResolvedValue({ count: 7 }) },
-      chair: { createMany: jest.fn().mockResolvedValue({ count: 10 }) },
+      chair: {
+        createMany: jest.fn().mockResolvedValue({ count: 10 }),
+        groupBy: jest.fn().mockResolvedValue([]),
+      },
+      salonStaff: { groupBy: jest.fn().mockResolvedValue([]) },
+      manualChairOccupancy: { groupBy: jest.fn().mockResolvedValue([]) },
+      serviceSession: { findMany: jest.fn().mockResolvedValue([]) },
       // registerSalon's post-grant re-read — default shape carries exactly the newly-granted
       // SALON_OWNER role so existing registerSalon tests (which don't care about the minted
       // session) keep passing without each needing to stub this individually.

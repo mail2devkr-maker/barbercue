@@ -6,6 +6,7 @@ import {
   SessionAudience,
   ChairStatus,
   QueueEntryStatus,
+  ServiceSessionStatus,
   currencyForCountry,
   haversineDistanceKm,
   type MeResponse,
@@ -21,6 +22,7 @@ import {
   type PublicSalonStatusDto,
   type ServiceSuggestionDto,
   type SalonSearchQueryInput,
+  type SalonSortOption,
   type SalonWorkplaceDto,
   type TeamMemberDto,
   SALON_TYPE_FILTER_MATCHES,
@@ -32,7 +34,19 @@ import { AppException } from '../common/exceptions/app.exception';
 import { SalonAccessService } from '../common/salon-access/salon-access.service';
 import { TokenService } from '../auth/services/token.service';
 import { CitiesService } from './cities.service';
-import { isOpenAt, resolveSalonTimeZone } from '../common/timezone/timezone';
+import {
+  isOpenAt,
+  resolveSalonTimeZone,
+  zonedDayAndMinutes,
+} from '../common/timezone/timezone';
+import { estimateQueueWait } from './queue-wait';
+import {
+  bestCertainOfferFor,
+  offerHeadline,
+  summarizeOffers,
+  type OfferRow,
+  type PricedService,
+} from './offer-summary';
 import { resolveAutoTimezone } from '../common/timezone/timezone-resolution';
 
 const DEFAULT_PAGE_SIZE = 20;
@@ -77,7 +91,12 @@ const MAX_SLUG_ATTEMPTS = 5;
 const listInclude = {
   city: true,
   locality: true,
-  photos: { where: { type: 'COVER' as const }, take: 1 },
+  // Cover first (PhotoType declares COVER before GALLERY), then the owner's order — the card's
+  // carousel/thumbnails. coverPhotoUrl still only ever uses a COVER photo.
+  photos: {
+    orderBy: [{ type: 'asc' as const }, { sortOrder: 'asc' as const }],
+    take: 6,
+  },
   operatingHours: true,
   // Phase 18 — status only; a salon with no row at all (never submitted) is simply not verified.
   verification: { select: { status: true } },
@@ -123,22 +142,148 @@ function popularServiceRelevance(
   };
 }
 
+// Without a selected service (selectedService undefined), price sorts use the salon's starting
+// price; with one, that service's price (null when the salon doesn't offer it — ranked last).
+function comparedPrice(item: SalonListItemDto): number | null {
+  return item.selectedService === undefined
+    ? item.priceMin
+    : (item.selectedService?.price ?? null);
+}
+
 /**
- * Price: cheapest selected-service price first; salons without a matching price last.
- * Rating: highest average first, unrated salons last, then more reviews first.
+ * What the customer would pay after the card's offer, when that is certain: for the selected
+ * service, or — with no service selected — the lowest of the starting price and a certain offer price.
+ */
+export function effectivePrice(item: SalonListItemDto): number | null {
+  // With a service selected, the card's offers are already narrowed to that service.
+  if (item.selectedService !== undefined)
+    return item.selectedService
+      ? (item.serviceOffers?.find(
+          (o) => o.serviceId === item.selectedService!.id,
+        )?.offerPrice ??
+          item.offers?.[0]?.price?.offerPrice ??
+          item.selectedService.price)
+      : null;
+  const prices = [
+    item.priceMin,
+    item.offers?.[0]?.price?.offerPrice ?? null,
+    ...(item.serviceOffers ?? []).map((o) => o.offerPrice),
+  ].filter((p): p is number => p !== null);
+  return prices.length ? Math.min(...prices) : null;
+}
+
+export type RankedSort = Exclude<SalonSortOption, 'relevance' | 'distance'>;
+export const RANKED_SORTS: readonly SalonSortOption[] = [
+  'wait',
+  'price',
+  'price_desc',
+  'effective_price',
+  'offer',
+  'rating',
+  'reviews',
+];
+
+/**
+ * Price: selected-service price, low→high or high→low; salons without one last either way.
+ * Effective price: the same, after the card's certain offer. Offer: certain offers first, then the
+ * largest saving; salons without an offer last. Rating: highest average first, unrated last, then
+ * more reviews. Reviews: most reviews first, then rating.
  * Stable sort, so equal values keep their incoming order (nearest-first in distance mode).
  */
 export function sortListItems(
   items: SalonListItemDto[],
-  sort: 'price' | 'rating',
+  sort: RankedSort,
 ): SalonListItemDto[] {
   const last = Number.POSITIVE_INFINITY;
-  return [...items].sort((a, b) =>
-    sort === 'price'
-      ? (a.selectedService?.price ?? last) - (b.selectedService?.price ?? last)
-      : (b.ratingAverage ?? -1) - (a.ratingAverage ?? -1) ||
-        b.ratingCount - a.ratingCount,
-  );
+  const offerRank = (item: SalonListItemDto) => {
+    const offer = item.offers?.[0];
+    return offer ? (offer.conditional ? 1 : 0) : 2;
+  };
+  return [...items].sort((a, b) => {
+    switch (sort) {
+      case 'price':
+        return (comparedPrice(a) ?? last) - (comparedPrice(b) ?? last);
+      case 'price_desc':
+        return (comparedPrice(b) ?? -1) - (comparedPrice(a) ?? -1);
+      case 'effective_price':
+        return (effectivePrice(a) ?? last) - (effectivePrice(b) ?? last);
+      case 'offer':
+        return (
+          offerRank(a) - offerRank(b) ||
+          (b.offers?.[0]?.saving ?? 0) - (a.offers?.[0]?.saving ?? 0)
+        );
+      case 'wait':
+        return (
+          (a.queueWait?.estimatedWaitMinutes ?? last) -
+          (b.queueWait?.estimatedWaitMinutes ?? last)
+        );
+      case 'reviews':
+        return (
+          b.ratingCount - a.ratingCount ||
+          (b.ratingAverage ?? -1) - (a.ratingAverage ?? -1)
+        );
+      default:
+        return (
+          (b.ratingAverage ?? -1) - (a.ratingAverage ?? -1) ||
+          b.ratingCount - a.ratingCount
+        );
+    }
+  });
+}
+
+// Today's salon-local opening hours ("HH:mm"), or null when the salon has no hours for today or
+// no trustworthy time zone (never guessed — same convention as isOpenNow).
+function todayHoursOf(
+  hours: {
+    dayOfWeek: number;
+    isClosed: boolean;
+    openTime: string;
+    closeTime: string;
+  }[],
+  salon: { timezone: string | null; city: { countryCode: string } },
+): { isClosed: boolean; openTime: string; closeTime: string } | null {
+  const timeZone = resolveSalonTimeZone({
+    timezone: salon.timezone,
+    countryCode: salon.city.countryCode,
+  });
+  if (!timeZone) return null;
+  const { dayOfWeek } = zonedDayAndMinutes(new Date(), timeZone);
+  const today = hours.find((entry) => entry.dayOfWeek === dayOfWeek);
+  return today
+    ? {
+        isClosed: today.isClosed,
+        openTime: today.openTime,
+        closeTime: today.closeTime,
+      }
+    : null;
+}
+
+// When a closed salon next opens: today (later), tomorrow, or a later weekday within the week.
+// Null when the salon lists no upcoming opening hours or has no trustworthy time zone.
+export function nextOpeningOf(
+  hours: {
+    dayOfWeek: number;
+    isClosed: boolean;
+    openTime: string;
+  }[],
+  salon: { timezone: string | null; city: { countryCode: string } },
+  now = new Date(),
+): { inDays: number; dayOfWeek: number; time: string } | null {
+  const timeZone = resolveSalonTimeZone({
+    timezone: salon.timezone,
+    countryCode: salon.city.countryCode,
+  });
+  if (!timeZone) return null;
+  const { dayOfWeek, minutes } = zonedDayAndMinutes(now, timeZone);
+  for (let inDays = 0; inDays < 7; inDays++) {
+    const day = (dayOfWeek + inDays) % 7;
+    const entry = hours.find((h) => h.dayOfWeek === day);
+    if (!entry || entry.isClosed) continue;
+    const [h, m] = entry.openTime.split(':').map(Number);
+    if (inDays === 0 && minutes >= h * 60 + m) continue;
+    return { inDays, dayOfWeek: day, time: entry.openTime };
+  }
+  return null;
 }
 
 type SalonWithListRelations = Prisma.SalonGetPayload<{
@@ -328,6 +473,27 @@ export class SalonsService {
     // review score. Unreviewed salons have no average, so they never pass a minimum.
     const extraConditions: Prisma.SalonWhereInput[] = [];
     if (query.ids) extraConditions.push({ id: { in: query.ids } });
+    // Offers only: a published offer valid now that covers the selected service (an offer with
+    // no linked services covers all of them), or any active service when none is selected.
+    if (query.offersOnly) {
+      const now = new Date();
+      const coveredService: Prisma.ServiceWhereInput = popular
+        ? { isActive: true, ...popularServiceRelevance(popular) }
+        : { isActive: true };
+      extraConditions.push({
+        offers: {
+          some: {
+            status: 'ACTIVE',
+            validFrom: { lte: now },
+            validTo: { gt: now },
+            OR: [
+              { services: { none: {} } },
+              { services: { some: { service: coveredService } } },
+            ],
+          },
+        },
+      });
+    }
     if (query.minRating !== undefined) {
       const rated = await this.prisma.review.groupBy({
         by: ['salonId'],
@@ -349,8 +515,18 @@ export class SalonsService {
     // "Open now" depends on each salon's hours in its own time zone, so it is checked per
     // candidate after loading — which makes it a bounded, single-page mode like the sorts below.
     const openNowOnly = query.openNow === true;
+    // Live queue filter: open now with an estimated wait within the limit (checked after loading,
+    // like open now, so it is a bounded single-page mode too).
+    const maxWait = query.maxWaitMinutes;
     const keepOpen = (items: SalonListItemDto[]) =>
-      openNowOnly ? items.filter((item) => item.isOpenNow === true) : items;
+      items.filter(
+        (item) =>
+          (!openNowOnly || item.isOpenNow === true) &&
+          (maxWait === undefined ||
+            (item.queueWait != null &&
+              item.queueWait.estimatedWaitMinutes <= maxWait)),
+      );
+    const checkedAfterLoad = openNowOnly || maxWait !== undefined;
 
     // "Near Me" (Phase 4): sorting by a computed haversine distance isn't something Prisma/Postgres
     // can do without a geo extension (PostGIS earthdistance), which isn't set up here. Rather than
@@ -374,7 +550,8 @@ export class SalonsService {
     // Price and rating sorts need every candidate's value before ordering, so — like "Near me" —
     // they rank a bounded candidate set in memory and return a single page (nextCursor null).
     const sort = query.sort ?? (nearMe ? 'distance' : 'relevance');
-    if (!nearMe && (sort === 'price' || sort === 'rating' || openNowOnly)) {
+    const ranked = RANKED_SORTS.includes(sort) ? (sort as RankedSort) : null;
+    if (!nearMe && (ranked || checkedAfterLoad)) {
       const candidates = await this.prisma.salon.findMany({
         where,
         orderBy: sort === 'relevance' ? { name: 'asc' } : { id: 'asc' },
@@ -385,10 +562,7 @@ export class SalonsService {
         await this.toListItems(candidates, undefined, selected),
       );
       return {
-        items: (sort === 'price' || sort === 'rating'
-          ? sortListItems(items, sort)
-          : items
-        ).slice(0, limit),
+        items: (ranked ? sortListItems(items, ranked) : items).slice(0, limit),
         nextCursor: null,
       };
     }
@@ -437,7 +611,7 @@ export class SalonsService {
       }));
       const sorted = withDistance
         .filter((w) => w.item.distanceKm !== null)
-        .filter((w) => !openNowOnly || w.item.isOpenNow === true)
+        .filter((w) => keepOpen([w.item]).length === 1)
         // The bounding box is a rectangle approximation of a circle (see boundingBoxDegrees), so a
         // corner of the box can sit slightly beyond the true requested radius — this is the actual
         // hard cutoff a caller-supplied radiusKm promises, checked against the real, unrounded
@@ -460,11 +634,13 @@ export class SalonsService {
         .map((w) => w.item);
       // Within the distance-sorted, radius-filtered set, price/rating sorts re-rank (stable, so
       // equal values stay nearest-first).
-      const ranked =
-        sort === 'price' || sort === 'rating'
-          ? sortListItems(sorted, sort)
-          : sorted;
-      return { items: ranked.slice(0, limit), nextCursor: null };
+      return {
+        items: (ranked ? sortListItems(sorted, ranked) : sorted).slice(
+          0,
+          limit,
+        ),
+        nextCursor: null,
+      };
     }
 
     const salons = await this.prisma.salon.findMany({
@@ -1021,59 +1197,89 @@ export class SalonsService {
   ): Promise<SalonListItemDto[]> {
     if (salons.length === 0) return [];
     const ids = salons.map((salon) => salon.id);
-    const [ratings, prices, waiting, matches] = await Promise.all([
-      this.prisma.review.groupBy({
-        by: ['salonId'],
-        where: { salonId: { in: ids } },
-        _avg: { rating: true },
-        _count: { rating: true },
-      }),
-      this.prisma.service.groupBy({
-        by: ['salonId'],
-        where: { salonId: { in: ids }, isActive: true },
-        _min: { price: true },
-        _max: { price: true },
-      }),
-      // Same WAITING/CALLED/IN_SERVICE whitelist getDashboardQueue/getCapacitySummary use.
-      this.prisma.queueEntry.groupBy({
-        by: ['salonId'],
-        where: {
-          salonId: { in: ids },
-          status: {
-            in: [
-              QueueEntryStatus.WAITING,
-              QueueEntryStatus.CALLED,
-              QueueEntryStatus.IN_SERVICE,
-            ],
+    const now = new Date();
+    // Queue waits only matter while a salon is open, so only those salons are queried.
+    const openIds = salons
+      .filter(
+        (salon) =>
+          !salon.isClosedForToday &&
+          isOpenNow(salon.operatingHours, salon) === true,
+      )
+      .map((salon) => salon.id);
+    const waitInputs = openIds.length
+      ? this.queueWaitInputs(openIds, now)
+      : Promise.resolve(null);
+    const [ratings, prices, waiting, matches, activeServices, offerRows] =
+      await Promise.all([
+        this.prisma.review.groupBy({
+          by: ['salonId'],
+          where: { salonId: { in: ids } },
+          _avg: { rating: true },
+          _count: { rating: true },
+        }),
+        this.prisma.service.groupBy({
+          by: ['salonId'],
+          where: { salonId: { in: ids }, isActive: true },
+          _min: { price: true },
+          _max: { price: true },
+          _avg: { durationMinutes: true },
+        }),
+        // Same WAITING/CALLED/IN_SERVICE whitelist getDashboardQueue/getCapacitySummary use.
+        this.prisma.queueEntry.groupBy({
+          by: ['salonId'],
+          where: {
+            salonId: { in: ids },
+            status: {
+              in: [
+                QueueEntryStatus.WAITING,
+                QueueEntryStatus.CALLED,
+                QueueEntryStatus.IN_SERVICE,
+              ],
+            },
           },
-        },
-        _count: { _all: true },
-      }),
-      selected
-        ? this.prisma.service.findMany({
-            where: {
-              salonId: { in: ids },
-              isActive: true,
-              ...(selected.price
-                ? {
-                    AND: [
-                      popularServiceRelevance(selected.service),
-                      { price: selected.price },
-                    ],
-                  }
-                : popularServiceRelevance(selected.service)),
-            },
-            select: {
-              id: true,
-              salonId: true,
-              name: true,
-              price: true,
-              durationMinutes: true,
-            },
-            orderBy: [{ price: 'asc' }, { name: 'asc' }],
-          })
-        : Promise.resolve([]),
-    ]);
+          _count: { _all: true },
+        }),
+        selected
+          ? this.prisma.service.findMany({
+              where: {
+                salonId: { in: ids },
+                isActive: true,
+                ...(selected.price
+                  ? {
+                      AND: [
+                        popularServiceRelevance(selected.service),
+                        { price: selected.price },
+                      ],
+                    }
+                  : popularServiceRelevance(selected.service)),
+              },
+              select: {
+                id: true,
+                salonId: true,
+                name: true,
+                price: true,
+                durationMinutes: true,
+              },
+              orderBy: [{ price: 'asc' }, { name: 'asc' }],
+            })
+          : Promise.resolve([]),
+        // Every active service (cheapest first): the card's other prices and offer coverage.
+        this.prisma.service.findMany({
+          where: { salonId: { in: ids }, isActive: true },
+          select: { id: true, salonId: true, name: true, price: true },
+          orderBy: [{ price: 'asc' }, { name: 'asc' }],
+        }),
+        this.prisma.offer.findMany({
+          where: {
+            salonId: { in: ids },
+            status: 'ACTIVE',
+            validFrom: { lte: now },
+            validTo: { gt: now },
+          },
+          include: { services: { select: { serviceId: true } } },
+          orderBy: [{ validTo: 'asc' }, { id: 'asc' }],
+        }),
+      ]);
     const ratingBy = new Map(ratings.map((r) => [r.salonId, r]));
     const priceBy = new Map(prices.map((p) => [p.salonId, p]));
     const waitingBy = new Map(waiting.map((w) => [w.salonId, w._count._all]));
@@ -1081,11 +1287,43 @@ export class SalonsService {
     const selectedBy = new Map<string, (typeof matches)[number]>();
     for (const row of matches)
       if (!selectedBy.has(row.salonId)) selectedBy.set(row.salonId, row);
+    const servicesBy = new Map<string, PricedService[]>();
+    for (const row of activeServices) {
+      const list = servicesBy.get(row.salonId) ?? [];
+      list.push({ id: row.id, name: row.name, price: Number(row.price) });
+      servicesBy.set(row.salonId, list);
+    }
+    const waitData = await waitInputs;
+    const offersBy = new Map<string, OfferRow[]>();
+    for (const row of offerRows) {
+      const list = offersBy.get(row.salonId) ?? [];
+      list.push({ ...row, serviceIds: row.services.map((s) => s.serviceId) });
+      offersBy.set(row.salonId, list);
+    }
 
     return salons.map((salon) => {
       const rating = ratingBy.get(salon.id);
       const price = priceBy.get(salon.id);
       const match = selectedBy.get(salon.id);
+      const salonServices = servicesBy.get(salon.id) ?? [];
+      const salonOffers = offersBy.get(salon.id) ?? [];
+      const selectedPriced = selected
+        ? match
+          ? { id: match.id, name: match.name, price: Number(match.price) }
+          : null
+        : undefined;
+      const summaries = summarizeOffers(
+        salonOffers,
+        salonServices,
+        selectedPriced,
+      );
+      const otherServices = salonServices
+        .filter((service) => service.id !== match?.id)
+        .slice(0, 3);
+      const openNow = salon.isClosedForToday
+        ? false
+        : isOpenNow(salon.operatingHours, salon);
+      const todayHours = todayHoursOf(salon.operatingHours, salon);
       const distanceKm =
         from && salon.lat !== null && salon.lng !== null
           ? Math.round(
@@ -1106,15 +1344,30 @@ export class SalonsService {
         postalCode: salon.postalCode,
         lat: salon.lat,
         lng: salon.lng,
-        coverPhotoUrl: salon.photos[0]?.url ?? null,
+        coverPhotoUrl:
+          salon.photos.find((photo) => photo.type === 'COVER')?.url ?? null,
+        photoUrls: salon.photos.map((photo) => photo.url),
         ratingAverage: rating?._avg.rating ?? null,
         ratingCount: rating?._count.rating ?? 0,
         priceMin: price?._min.price ? Number(price._min.price) : null,
         priceMax: price?._max.price ? Number(price._max.price) : null,
         distanceKm,
-        isOpenNow: salon.isClosedForToday
-          ? false
-          : isOpenNow(salon.operatingHours, salon),
+        isOpenNow: openNow,
+        closesAt: openNow ? (todayHours?.closeTime ?? null) : null,
+        todayHours,
+        queueWait:
+          waitData && openNow === true
+            ? estimateQueueWait({
+                waitingCount: waitData.waiting.get(salon.id) ?? 0,
+                activeStaff: waitData.staff.get(salon.id) ?? 0,
+                activeChairs: waitData.chairs.get(salon.id) ?? 0,
+                occupiedChairs: waitData.occupied.get(salon.id) ?? 0,
+                avgServiceMinutes: price?._avg?.durationMinutes ?? null,
+                activeSessions: waitData.sessions.get(salon.id) ?? [],
+              })
+            : null,
+        opensNext:
+          openNow === true ? null : nextOpeningOf(salon.operatingHours, salon),
         isClosedForToday: salon.isClosedForToday,
         verified: salon.verification?.status === VerificationStatus.APPROVED,
         waitingCount: waitingBy.get(salon.id) ?? 0,
@@ -1131,8 +1384,84 @@ export class SalonsService {
               }
             : null
           : undefined,
+        serviceCount: salonServices.length,
+        otherServices,
+        offers: summaries.slice(0, 5),
+        offerHeadline: offerHeadline(summaries),
+        // Each service shown on the card with its own best certain discount.
+        serviceOffers: [
+          ...(selectedPriced ? [selectedPriced] : []),
+          ...otherServices,
+        ]
+          .map((service) => {
+            const best = bestCertainOfferFor(salonOffers, service);
+            return best ? { serviceId: service.id, ...best } : null;
+          })
+          .filter((entry) => entry !== null),
       };
     });
+  }
+
+  /**
+   * Batched inputs for the live-queue wait of several open salons — the same counts
+   * QueueService.getQueueStatus reads for one salon: WAITING entries, ACTIVE staff, ACTIVE chairs,
+   * manually occupied chairs, and services in the chair right now.
+   */
+  private async queueWaitInputs(ids: string[], now: Date) {
+    const [waiting, staff, chairs, occupied, sessions] = await Promise.all([
+      this.prisma.queueEntry.groupBy({
+        by: ['salonId'],
+        where: { salonId: { in: ids }, status: QueueEntryStatus.WAITING },
+        _count: { _all: true },
+      }),
+      this.prisma.salonStaff.groupBy({
+        by: ['salonId'],
+        where: { salonId: { in: ids }, status: StaffMemberStatus.ACTIVE },
+        _count: { _all: true },
+      }),
+      this.prisma.chair.groupBy({
+        by: ['salonId'],
+        where: { salonId: { in: ids }, status: ChairStatus.ACTIVE },
+        _count: { _all: true },
+      }),
+      this.prisma.manualChairOccupancy.groupBy({
+        by: ['salonId'],
+        where: { salonId: { in: ids }, endedAt: null },
+        _count: { _all: true },
+      }),
+      this.prisma.serviceSession.findMany({
+        where: {
+          status: ServiceSessionStatus.ACTIVE,
+          chair: { salonId: { in: ids } },
+        },
+        select: {
+          startedAt: true,
+          service: { select: { durationMinutes: true } },
+          chair: { select: { salonId: true } },
+        },
+      }),
+    ]);
+    const counts = (rows: { salonId: string; _count: { _all: number } }[]) =>
+      new Map(rows.map((row) => [row.salonId, row._count._all]));
+    const bySalon = new Map<
+      string,
+      { durationMinutes: number; elapsedMinutes: number }[]
+    >();
+    for (const session of sessions) {
+      const list = bySalon.get(session.chair.salonId) ?? [];
+      list.push({
+        durationMinutes: session.service.durationMinutes,
+        elapsedMinutes: (now.getTime() - session.startedAt.getTime()) / 60_000,
+      });
+      bySalon.set(session.chair.salonId, list);
+    }
+    return {
+      waiting: counts(waiting),
+      staff: counts(staff),
+      chairs: counts(chairs),
+      occupied: counts(occupied),
+      sessions: bySalon,
+    };
   }
 
   /** Salons by id, in the given order, as list items (missing or inactive salons are skipped). */

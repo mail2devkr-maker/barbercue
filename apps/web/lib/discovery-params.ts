@@ -1,7 +1,9 @@
 import {
+  MAX_WAIT_OPTIONS,
   MIN_RATING_OPTIONS,
   SALON_SEARCH_MAX_IDS,
   SALON_SORT_OPTIONS,
+  SERVICE_PRICE_SORTS,
   popularServiceById,
   type SalonSortOption,
   type SalonTypeFilter,
@@ -13,8 +15,29 @@ import {
 /** Every query param the search API understands, forwarded as-is. */
 export const SEARCH_API_PARAMS = [
   "q", "shopName", "city", "countryCode", "locality", "service", "lat", "lng", "radiusKm",
-  "priceMin", "priceMax", "salonType", "popularService", "sort", "minRating", "openNow",
+  "priceMin", "priceMax", "salonType", "popularService", "sort", "minRating", "openNow", "offersOnly", "maxWaitMinutes",
 ] as const;
+
+/**
+ * Distance slider in the filter sidebar: 1–20 km in 1 km steps; the far right end (one step past
+ * the maximum) means "Any distance". Any real distance needs the customer's location.
+ */
+export const DISTANCE_SLIDER_MIN = 1;
+export const DISTANCE_SLIDER_MAX = 20;
+export const DISTANCE_SLIDER_ANY = DISTANCE_SLIDER_MAX + 1;
+
+/** Slider position → radius in km (null = any distance). */
+export function distanceFromSlider(position: number): number | null {
+  return position >= DISTANCE_SLIDER_ANY ? null : Math.max(DISTANCE_SLIDER_MIN, Math.round(position));
+}
+
+/** Radius in km → slider position (a radius under 1 km from an older link sits at the 1 km end). */
+export function sliderFromDistance(km: number | null): number {
+  return km === null ? DISTANCE_SLIDER_ANY : Math.min(DISTANCE_SLIDER_MAX, Math.max(DISTANCE_SLIDER_MIN, Math.round(km)));
+}
+
+/** "Top rated" means an average review score of at least this. */
+export const TOP_RATED_MIN = 4;
 
 export const PRICE_SLIDER_MIN = 0;
 export const PRICE_SLIDER_MAX = 2000;
@@ -30,6 +53,9 @@ export interface DiscoveryState {
   nearMe: boolean;
   minRating: number | null;
   openNow: boolean;
+  offersOnly: boolean;
+  /** Live queue: maximum estimated wait in minutes (0 = no wait right now), or null for any. */
+  maxWait: number | null;
   /** `favorites=1`: only the customer's saved salons (their IDs are sent, never put in the URL). */
   favoritesOnly: boolean;
 }
@@ -52,14 +78,15 @@ export function readDiscoveryState(params: URLSearchParams): DiscoveryState {
     nearMe,
     minRating: (MIN_RATING_OPTIONS as readonly number[]).includes(num("minRating") ?? NaN) ? num("minRating") : null,
     openNow: params.get("openNow") === "true",
+    offersOnly: params.get("offersOnly") === "true",
+    maxWait: (MAX_WAIT_OPTIONS as readonly number[]).includes(num("maxWaitMinutes") ?? NaN) ? num("maxWaitMinutes") : null,
     favoritesOnly: params.get("favorites") === "1",
   };
 }
 
-/** Why a sort option is unavailable right now, or null when it can be used. */
-export function sortUnavailableReason(option: SalonSortOption, state: Pick<DiscoveryState, "popularService" | "legacyService">): string | null {
-  if (option === "price" && !state.popularService && !state.legacyService) return "Select a service first to sort by price.";
-  return null;
+/** Price sorts compare the selected service's price; with no service, each salon's starting price. */
+export function sortsByStartingPrice(option: SalonSortOption, state: Pick<DiscoveryState, "popularService" | "legacyService">): boolean {
+  return SERVICE_PRICE_SORTS.includes(option) && !state.popularService && !state.legacyService;
 }
 
 /** Search API query string for the current URL (only known params, empty values dropped). */
@@ -69,9 +96,7 @@ export function searchApiQuery(params: URLSearchParams, favoriteIds?: Iterable<s
     const value = params.get(key);
     if (value) out.set(key, value);
   }
-  // The API rejects price sort without a service; drop it rather than show an error page.
   const state = readDiscoveryState(params);
-  if (state.sort === "price" && sortUnavailableReason("price", state)) out.delete("sort");
   if (state.favoritesOnly && favoriteIds) out.set("ids", [...favoriteIds].slice(0, SALON_SEARCH_MAX_IDS).join(","));
   return out.toString();
 }
@@ -87,16 +112,16 @@ export function withParams(params: URLSearchParams, changes: Record<string, stri
 }
 
 /**
- * Changing the compared service resets its price range (a ₹100–₹300 haircut range means nothing for
- * a facial) and a price sort that no longer has a service.
+ * Switching from one compared service to another (or clearing it) resets the price range — a
+ * ₹100–₹300 haircut range means nothing for a facial. Picking a first service keeps a range set
+ * for "any service", now applied to that service. A price sort stays (it falls back to starting price).
  */
 export function popularServiceChange(params: URLSearchParams, serviceId: string | null): Record<string, string | null> {
   const state = readDiscoveryState(params);
+  const keepRange = state.popularService === null && serviceId !== null;
   return {
     popularService: serviceId,
-    priceMin: null,
-    priceMax: null,
-    ...(serviceId === null && state.sort === "price" && !state.legacyService ? { sort: null } : {}),
+    ...(keepRange ? {} : { priceMin: null, priceMax: null }),
   };
 }
 
@@ -117,6 +142,8 @@ export function activeFilterCount(state: DiscoveryState): number {
     state.priceMin !== null || state.priceMax !== null ? "price" : null,
     state.minRating,
     state.openNow,
+    state.offersOnly,
+    state.maxWait !== null ? "wait" : null,
     state.favoritesOnly,
   ].filter(Boolean).length;
 }

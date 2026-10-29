@@ -345,16 +345,19 @@ export const salonSearchQuerySchema = z
       .enum(["true", "false"])
       .transform((value) => value === "true")
       .optional(),
+    // Live queue: only salons open now whose estimated queue wait is at most this many minutes.
+    maxWaitMinutes: z.coerce.number().int().min(0).max(240).optional(),
+    // Only salons with a current published offer (for the selected service, when one is selected).
+    offersOnly: z
+      .enum(["true", "false"])
+      .transform((value) => value === "true")
+      .optional(),
     ids: z
       .string()
       .transform((value) => value.split(",").map((id) => id.trim()).filter(Boolean))
       .pipe(z.array(z.string().uuid()).min(1).max(SALON_SEARCH_MAX_IDS))
       .optional(),
   })
-  .refine(
-    (data) => data.sort !== "price" || data.popularService !== undefined || data.service !== undefined,
-    { message: "Select a service first to sort by price.", path: ["sort"] },
-  )
   .refine(
     (data) => data.sort !== "distance" || (data.lat !== undefined && data.lng !== undefined),
     { message: "Sorting by distance needs your location.", path: ["sort"] },
