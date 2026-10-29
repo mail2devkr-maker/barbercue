@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -7,71 +7,17 @@ import {
   SHOP_CLOSED_TODAY_MESSAGE,
   SalonSetupErrorCode,
   SalonStatus,
-  type OwnerBookingDetailDto,
-  type OwnerBookingFilter,
-  type PaginatedResult,
   type SalonStatusResultDto,
   type SalonSetupReadinessDto,
-  type SalonTimezoneResultDto,
 } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../../lib/api';
-import { getRealtimeSocket, joinSalonRoom, onReconnect } from '../../lib/realtime';
 import { useSalon } from '../../lib/salon-context';
 import { useUnreadNotificationCount } from '../../lib/notifications';
 import { useLanguage } from '../../lib/language-context';
 import { fastQue, font, fontSize, lineHeightFor, premiumShadow, radius, space } from '../../lib/theme';
 import { EmptyState, Skeleton, InlineError, NotificationBell, PremiumButton, PremiumCard, PremiumScreen, PremiumSectionHeader } from '../../components/ui';
-import { CapacitySummaryPanel } from '../../components/dashboard/CapacitySummaryPanel';
+import { OwnerOverviewPanel, type OwnerOverviewActions } from '../../components/owner/OwnerOverviewPanel';
 import type { OwnerTabParamList } from '../../navigation/OwnerNavigator';
-
-const SUMMARY_COUNT_LIMIT = 50;
-
-function bookingsPath(salonId: string): string {
-  return `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.bookings}`;
-}
-
-// The dashboard-bookings API resolves `date` using the salon's IANA timezone. A rolling client
-// UTC range was previously wrong around midnight and could count an adjacent day's cancellation.
-// Fetching the existing owner-only timezone resource lets mobile request the exact salon day
-// without making any country/device-timezone assumption.
-function salonCalendarDate(timeZone: string, now = new Date()): string {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(now);
-  const value = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value;
-  const year = value('year');
-  const month = value('month');
-  const day = value('day');
-  if (!year || !month || !day) throw new Error('Could not format salon date.');
-  return `${year}-${month}-${day}`;
-}
-
-interface BookingSummary {
-  today: string;
-  upcoming: string;
-  completedToday: string;
-  cancelledNoShowToday: string;
-}
-
-async function fetchCount(
-  salonId: string,
-  filter: OwnerBookingFilter,
-  date?: string,
-): Promise<{ count: number; capped: boolean }> {
-  const params = new URLSearchParams({ filter, limit: String(SUMMARY_COUNT_LIMIT) });
-  if (date) params.set('date', date);
-  const result = await apiFetch<PaginatedResult<OwnerBookingDetailDto>>(
-    `${bookingsPath(salonId)}?${params}`,
-  );
-  return { count: result.items.length, capped: result.nextCursor !== null };
-}
-
-function formatCount(count: number, capped: boolean): string {
-  return capped ? `${count}+` : String(count);
-}
 
 // Salon status is read from SalonWorkplaceDto (via useSalon) rather than re-fetched here — the
 // workplaces list already carries it, and PATCH .../status returns the fresh value which this
@@ -84,56 +30,10 @@ export default function OwnerDashboardScreen() {
   const [updating, setUpdating] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [readiness, setReadiness] = useState<SalonSetupReadinessDto | null>(null);
-  const [summary, setSummary] = useState<BookingSummary | null>(null);
-  const [summaryError, setSummaryError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const summaryRequestIdRef = useRef(0);
+  const overviewRefresh = useRef<(() => Promise<void>) | null>(null);
   const unreadCount = useUnreadNotificationCount();
   const { t } = useLanguage();
-
-  const loadSummary = useCallback(async () => {
-    const requestId = ++summaryRequestIdRef.current;
-    if (!selectedSalonId) {
-      setSummary(null);
-      setSummaryError(null);
-      return;
-    }
-
-    setSummaryError(null);
-    try {
-      const timezone = await apiFetch<SalonTimezoneResultDto>(
-        `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${selectedSalonId}/${DASHBOARD_PATHS.timezone}`,
-      );
-      if (requestId !== summaryRequestIdRef.current) return;
-      if (!timezone.timezone) {
-        setSummary(null);
-        setSummaryError('Set your shop timezone to show accurate daily booking counts.');
-        return;
-      }
-      const date = salonCalendarDate(timezone.timezone);
-      const [today, upcoming, completed, cancelled_, noShow] = await Promise.all([
-        fetchCount(selectedSalonId, 'today'),
-        fetchCount(selectedSalonId, 'upcoming'),
-        fetchCount(selectedSalonId, 'completed', date),
-        fetchCount(selectedSalonId, 'cancelled', date),
-        fetchCount(selectedSalonId, 'no_show', date),
-      ]);
-      if (requestId !== summaryRequestIdRef.current) return;
-      setSummary({
-        today: formatCount(today.count, today.capped),
-        upcoming: formatCount(upcoming.count, upcoming.capped),
-        completedToday: formatCount(completed.count, completed.capped),
-        cancelledNoShowToday: formatCount(
-          cancelled_.count + noShow.count,
-          cancelled_.capped || noShow.capped,
-        ),
-      });
-    } catch {
-      if (requestId !== summaryRequestIdRef.current) return;
-      setSummary(null);
-      setSummaryError('Could not load today’s booking counts.');
-    }
-  }, [selectedSalonId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -144,38 +44,17 @@ export default function OwnerDashboardScreen() {
     }, [selectedSalon]),
   );
 
-  useFocusEffect(
-    useCallback(() => {
-      void loadSummary();
-    }, [loadSummary]),
-  );
+  const registerRefresh = useCallback((refresh: (() => Promise<void>) | null) => {
+    overviewRefresh.current = refresh;
+  }, []);
 
-  // Issue 4 (mobile stabilization mission) — reload() (useSalon) refetches workplaces/status,
-  // loadSummary() refetches today's counts; the spinner tracks loadSummary since it's the slower,
-  // more failure-prone of the two (reload() is effectively instant local-state from a cached list).
+  // Pull-to-refresh reloads the workplaces/status and the overview figures together.
   async function handleRefresh() {
     setRefreshing(true);
     reload();
-    await loadSummary();
+    await overviewRefresh.current?.();
     setRefreshing(false);
   }
-
-  useEffect(() => {
-    if (!selectedSalonId) return undefined;
-    const socket = getRealtimeSocket();
-    joinSalonRoom(selectedSalonId);
-    const refresh = (payload: { salonId: string }) => {
-      if (payload.salonId === selectedSalonId) void loadSummary();
-    };
-    socket.on('booking.created', refresh);
-    socket.on('booking.cancelled', refresh);
-    const unsubscribeReconnect = onReconnect(() => void loadSummary());
-    return () => {
-      socket.off('booking.created', refresh);
-      socket.off('booking.cancelled', refresh);
-      unsubscribeReconnect();
-    };
-  }, [selectedSalonId, loadSummary]);
 
   async function toggleStatus(next: 'ACTIVE' | 'SUSPENDED') {
     if (!selectedSalonId) return;
@@ -224,6 +103,17 @@ export default function OwnerDashboardScreen() {
     );
   }
 
+  const actions: OwnerOverviewActions = {
+    onNewQueueCustomer: () => navigation.navigate('OwnerQueueTab', { newCustomer: true }),
+    onNewAppointment: () => navigation.navigate('OwnerShopTab', { initial: false, screen: 'OwnerInShopAppointment' }),
+    onOpenQueue: () => navigation.navigate('OwnerQueueTab'),
+    onOpenBookings: () => navigation.navigate('OwnerBookingsTab', undefined),
+    onOpenInvoices: () => navigation.navigate('OwnerShopTab', { initial: false, screen: 'OwnerInvoices' }),
+    onOpenCancellations: () => navigation.navigate('OwnerShopTab', { initial: false, screen: 'OwnerCancellations' }),
+    onOpenStaff: () => navigation.navigate('OwnerShopTab', { initial: false, screen: 'OwnerStaff' }),
+    onOpenAnalytics: () => navigation.navigate('OwnerShopTab', { initial: false, screen: 'OwnerAnalytics' }),
+  };
+
   return (
     <PremiumScreen refreshing={refreshing} onRefresh={() => void handleRefresh()}>
       <View style={styles.headerRow}>
@@ -246,6 +136,10 @@ export default function OwnerDashboardScreen() {
             </Pressable>
           ))}
         </View>
+      )}
+
+      {workplaces.length > 1 && !selectedSalonId && (
+        <EmptyState title={t.selectShopTitle} message={t.pickShopToContinueHint} />
       )}
 
       {selectedSalon && (
@@ -272,51 +166,27 @@ export default function OwnerDashboardScreen() {
         </PremiumCard>
       )}
 
-      {selectedSalonId && <CapacitySummaryPanel salonId={selectedSalonId} />}
-
-      {summaryError && <InlineError message={summaryError} />}
-
-      {summary && (
-        <View style={styles.summaryGrid}>
-          <Pressable
-            style={styles.summaryTile}
-            onPress={() => navigation.navigate('OwnerBookingsTab', { filter: 'today' })}
-          >
-            <Text style={styles.summaryValue}>{summary.today}</Text>
-            <Text style={styles.summaryLabel}>{t.todaysBookings}</Text>
-          </Pressable>
-          <Pressable
-            style={styles.summaryTile}
-            onPress={() => navigation.navigate('OwnerBookingsTab', { filter: 'upcoming' })}
-          >
-            <Text style={styles.summaryValue}>{summary.upcoming}</Text>
-            <Text style={styles.summaryLabel}>{t.filterUpcoming}</Text>
-          </Pressable>
-          <Pressable
-            style={styles.summaryTile}
-            onPress={() => navigation.navigate('OwnerBookingsTab', { filter: 'completed' })}
-          >
-            <Text style={styles.summaryValue}>{summary.completedToday}</Text>
-            <Text style={styles.summaryLabel}>{t.completedTodayLabel}</Text>
-          </Pressable>
-          <Pressable
-            style={styles.summaryTile}
-            onPress={() => navigation.navigate('OwnerBookingsTab', { filter: 'cancelled' })}
-          >
-            <Text style={styles.summaryValue}>{summary.cancelledNoShowToday}</Text>
-            <Text style={styles.summaryLabel}>{t.cancelledNoShowToday}</Text>
-          </Pressable>
-        </View>
+      {selectedSalonId && (
+        <OwnerOverviewPanel salonId={selectedSalonId} actions={actions} registerRefresh={registerRefresh} />
       )}
 
       <View style={styles.quickLinks}>
-        <Pressable style={styles.quickLink} onPress={() => navigation.navigate('OwnerBookingsTab', undefined)}>
+        <Pressable style={styles.quickLink} onPress={actions.onOpenBookings}>
           <Text style={styles.quickLinkText}>{t.tabBookings}</Text>
         </Pressable>
-        <Pressable style={styles.quickLink} onPress={() => navigation.navigate('OwnerQueueTab')}>
+        <Pressable style={styles.quickLink} onPress={actions.onOpenQueue}>
           <Text style={styles.quickLinkText}>{t.liveQueue}</Text>
         </Pressable>
-        <Pressable style={styles.quickLink} onPress={() => navigation.navigate('OwnerShopTab')}>
+        <Pressable testID="dashboard-link-analytics" style={styles.quickLink} onPress={actions.onOpenAnalytics}>
+          <Text style={styles.quickLinkText}>{t.ownerSectionAnalytics}</Text>
+        </Pressable>
+        <Pressable testID="dashboard-link-settings" style={styles.quickLink} onPress={() => navigation.navigate('OwnerShopTab', { initial: false, screen: 'OwnerSettings' })}>
+          <Text style={styles.quickLinkText}>{t.ownerSectionSettings}</Text>
+        </Pressable>
+        <Pressable testID="dashboard-link-reviews" style={styles.quickLink} onPress={() => navigation.navigate('OwnerShopTab', { initial: false, screen: 'OwnerReviews' })}>
+          <Text style={styles.quickLinkText}>{t.ownerSectionReviews}</Text>
+        </Pressable>
+        <Pressable testID="dashboard-link-manage" style={styles.quickLink} onPress={() => navigation.navigate('OwnerShopTab', { initial: false, screen: 'OwnerShop' })}>
           <Text style={styles.quickLinkText}>{t.manageShop}</Text>
         </Pressable>
       </View>
@@ -327,18 +197,6 @@ export default function OwnerDashboardScreen() {
 const styles = StyleSheet.create({
   headerRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: space[2] },
   skeleton: { height: 140, borderRadius: radius.lg },
-  summaryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2], marginBottom: space[4] },
-  summaryTile: {
-    flexBasis: '47%',
-    flexGrow: 1,
-    backgroundColor: fastQue.card,
-    borderWidth: 1,
-    borderColor: fastQue.border,
-    borderRadius: radius.sm,
-    padding: space[3],
-  },
-  summaryValue: { fontFamily: font.displaySemiBold, fontSize: fontSize.xl, lineHeight: lineHeightFor(fontSize.xl), color: fastQue.text },
-  summaryLabel: { fontFamily: font.bodyMedium, fontSize: fontSize.xs, lineHeight: lineHeightFor(fontSize.xs), color: fastQue.textMuted, marginTop: 2 },
   pickerRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2], marginBottom: space[4] },
   pickerChip: {
     minHeight: 40,
