@@ -10,6 +10,9 @@ import styles from "./dashboard.module.css";
 
 const FASTQUE_QR_MARK_SRC = "/brand/fastque-clean-mark.png";
 const FASTQUE_LOGO_SRC = "/brand/fastque-clean-lockup-transparent.png";
+const QR_GOLD = "#FFE15C";
+const QR_MAGENTA = "#F20A83";
+const QR_BG = "#000000";
 
 async function imageToDataUri(src: string): Promise<string> {
   const response = await fetch(src);
@@ -81,7 +84,7 @@ export function QueueQrSection({ salonId, salonName }: { salonId: string; salonN
     if (!svg) return;
 
     const safeName = escapeXml(salonName);
-    const nameFontSize = Math.max(13, 20 - Math.floor(Math.max(0, salonName.length - 18) / 3));
+    const nameFontSize = Math.max(13, 27 - Math.floor(Math.max(0, salonName.length - 20) / 2));
 
     // Keep the exported/printed artwork self-contained. The live QR uses normal public assets,
     // while the downloaded SVG embeds those exact images as data URIs.
@@ -93,31 +96,30 @@ export function QueueQrSection({ salonId, salonName }: { salonId: string; salonN
       .replaceAll(`${window.location.origin}${FASTQUE_QR_MARK_SRC}`, markDataUri)
       .replaceAll(FASTQUE_QR_MARK_SRC, markDataUri);
 
-    // 4 x 6 inch upright counter stand, printed at actual size (100%, no "fit to page").
-    // The existing QR is a 200x200 SVG, scaled uniformly to 304x304. The 24px cream
-    // border equals >4 modules of quiet zone for the 53-module code. Preserve the
-    // backend-provided token and QR content; only its printable presentation changes.
+    // Consistent FastQue 4×6-inch premium stand for every salon, including existing salons.
+    // This is an actual encoded QR SVG, not an image-generated/decorative QR mockup.
+    // Keep the SAME existing token from the backend. Gold on black requires real-device
+    // camera/printed scan acceptance before production exposure.
     const posterSvg = `
       <svg xmlns="http://www.w3.org/2000/svg" width="4in" height="6in" viewBox="0 0 400 600">
         <defs>
           <linearGradient id="shopNameGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stop-color="#FFE3A1" />
-            <stop offset="34%" stop-color="#FFB24A" />
-            <stop offset="68%" stop-color="#F20A76" />
-            <stop offset="100%" stop-color="#FF5A2F" />
+            <stop offset="0%" stop-color="#FFE15C" />
+            <stop offset="52%" stop-color="#FFC65B" />
+            <stop offset="72%" stop-color="#FF3E57" />
+            <stop offset="100%" stop-color="#F20A83" />
           </linearGradient>
         </defs>
-        <rect width="400" height="600" rx="22" fill="#111017" />
-        <rect x="8" y="8" width="384" height="584" rx="19" fill="none" stroke="#6B3642" stroke-width="1.5" />
-        <image href="${logoDataUri}" x="113" y="20" width="174" height="42" preserveAspectRatio="xMidYMid meet" />
-        <text x="200" y="108" text-anchor="middle" font-family="Arial, sans-serif" font-size="${Math.max(13, 23 - Math.floor(Math.max(0, salonName.length - 24) / 2))}" font-weight="700" fill="url(#shopNameGradient)">${safeName}</text>
-        <text x="200" y="145" text-anchor="middle" font-family="Arial, sans-serif" font-size="17" fill="#F1E6DD">Scan to join the live queue</text>
-        <rect x="24" y="186" width="352" height="352" rx="12" fill="#FFF8ED" />
-        <g transform="translate(48 210) scale(1.52)">${brandedQrSvg}</g>
-        <text x="200" y="566" text-anchor="middle" font-family="Arial, sans-serif" font-size="15" font-weight="700" fill="#FFFFFF">SCAN &#8226; JOIN &#8226; GET YOUR TURN</text>
-        <text x="200" y="587" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" fill="#CDBCB9">Powered by FastQue</text>
+        <rect width="400" height="600" rx="22" fill="#000000" />
+        <rect x="8" y="8" width="384" height="584" rx="20" fill="none" stroke="#FFE15C" stroke-width="2" />
+        <image href="${logoDataUri}" x="110" y="21" width="180" height="53" preserveAspectRatio="xMidYMid meet" />
+        <text x="200" y="111" text-anchor="middle" font-family="Arial, sans-serif" font-size="${nameFontSize}" font-weight="800" fill="url(#shopNameGradient)" ${salonName.length > 33 ? 'textLength="360" lengthAdjust="spacingAndGlyphs"' : ""}>${safeName}</text>
+        <text x="200" y="150" text-anchor="middle" font-family="Arial, sans-serif" font-size="17" fill="#F7F5F4">Scan to join the live queue</text>
+        <rect x="24" y="178" width="352" height="350" rx="15" fill="#000000" stroke="#F20A83" stroke-width="4"/>
+        <g transform="translate(48 199) scale(1.52)">${brandedQrSvg}</g>
+        <text x="200" y="561" text-anchor="middle" font-family="Arial, sans-serif" font-size="17" font-weight="800" fill="#F20A83">SCAN &#8226; JOIN &#8226; GET YOUR TURN</text>
+        <text x="200" y="585" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="#C9C3C4">Powered by FastQue</text>
       </svg>`;
-
     const blob = new Blob([posterSvg], { type: "image/svg+xml" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -149,49 +151,35 @@ export function QueueQrSection({ salonId, salonName }: { salonId: string; salonN
           <div
             ref={svgWrapperRef}
             className={styles.qrBox}
-            style={{ display: "inline-flex", flexDirection: "column", alignItems: "center", gap: 8 }}
+            style={{
+              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+              boxSizing: "border-box", width: "min(100%, 400px)", padding: "16px 18px 14px",
+              borderRadius: 22, border: `2px solid ${QR_GOLD}`, backgroundColor: QR_BG, gap: 12,
+            }}
           >
-            <p
-              style={{
-                margin: 0,
-                fontSize: 20,
-                fontWeight: 800,
-                textAlign: "center",
-                letterSpacing: "0.01em",
-                background: "linear-gradient(90deg, #FFE3A1 0%, #FFB24A 34%, #F20A76 68%, #FF5A2F 100%)",
-                WebkitBackgroundClip: "text",
-                backgroundClip: "text",
-                WebkitTextFillColor: "transparent",
-                color: "#FFB24A",
-              }}
-            >
-              {salonName}
-            </p>
-            <p style={{ margin: 0, fontSize: 12, color: "#D6CDC2", textAlign: "center" }}>
-              Scan to join the queue
-            </p>
-            <QRCodeSVG
-              aria-label={`Join ${salonName} Live Queue QR code`}
-              value={qr.publicQueueUrl}
-              size={200}
-              level="H"
-              fgColor="#D89A22"
-              bgColor="#FFF8ED"
-              imageSettings={{
-                src: FASTQUE_QR_MARK_SRC,
-                width: 46,
-                height: 34,
-                excavate: true,
-                opacity: 1,
-              }}
-            />
-            <img
-              src={FASTQUE_LOGO_SRC}
-              alt="FastQue"
-              width={168}
-              height={42}
-              style={{ display: "block", objectFit: "contain", marginTop: 4 }}
-            />
+            <img src={FASTQUE_LOGO_SRC} alt="FastQue" width={180} height={53} style={{ objectFit: "contain", maxWidth: "100%" }} />
+            <p style={{ margin: 0, fontSize: "clamp(16px, 3vw, 27px)", fontWeight: 800, lineHeight: 1.2, textAlign: "center",
+              overflowWrap: "anywhere", background: `linear-gradient(90deg, ${QR_GOLD}, #FF3E57, ${QR_MAGENTA})`,
+              WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent", color: QR_GOLD,
+            }}>{salonName}</p>
+            <p style={{ margin: 0, fontSize: 15, color: "#F7F5F4", textAlign: "center" }}>Scan to join the live queue</p>
+            <div style={{ width: "100%", padding: 10, border: `4px solid ${QR_MAGENTA}`, backgroundColor: QR_BG, borderRadius: 16, boxSizing: "border-box" }}>
+              <QRCodeSVG
+                aria-label={`Join ${salonName} Live Queue QR code`}
+                value={qr.publicQueueUrl}
+                size={200}
+                style={{ display: "block", width: "100%", height: "auto" }}
+                level="H"
+                marginSize={4}
+                fgColor={QR_GOLD}
+                bgColor={QR_BG}
+                imageSettings={{
+                  src: FASTQUE_QR_MARK_SRC, width: 46, height: 34, excavate: true, opacity: 1,
+                }}
+              />
+            </div>
+            <p style={{ margin: 0, fontSize: "clamp(12px, 2.5vw, 17px)", fontWeight: 800, color: QR_MAGENTA, textAlign: "center" }}>SCAN • JOIN • GET YOUR TURN</p>
+            <p style={{ margin: 0, color: "#C9C3C4", fontSize: 12 }}>Powered by FastQue</p>
           </div>
 
           <p className={styles.hint} style={{ marginBottom: 4 }}>Public queue URL</p>
