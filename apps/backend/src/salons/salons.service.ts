@@ -22,7 +22,7 @@ import {
   type PublicSalonStatusDto,
   type ServiceSuggestionDto,
   type SalonSearchQueryInput,
-  type SalonSortOption,
+  type SalonSearchSortOption,
   type SalonWorkplaceDto,
   type TeamMemberDto,
   SALON_TYPE_FILTER_MATCHES,
@@ -172,8 +172,8 @@ export function effectivePrice(item: SalonListItemDto): number | null {
   return prices.length ? Math.min(...prices) : null;
 }
 
-export type RankedSort = Exclude<SalonSortOption, 'relevance' | 'distance'>;
-export const RANKED_SORTS: readonly SalonSortOption[] = [
+export type RankedSort = Exclude<SalonSearchSortOption, 'relevance' | 'distance'>;
+export const RANKED_SORTS: readonly SalonSearchSortOption[] = [
   'wait',
   'price',
   'price_desc',
@@ -1297,7 +1297,23 @@ export class SalonsService {
     const offersBy = new Map<string, OfferRow[]>();
     for (const row of offerRows) {
       const list = offersBy.get(row.salonId) ?? [];
-      list.push({ ...row, serviceIds: row.services.map((s) => s.serviceId) });
+      // Booking rules (minimum spend, discount cap, Happy Hours) are not in the production schema
+      // yet, so every offer is shown without them — never a rule the booking flow would not enforce.
+      list.push({
+        id: row.id,
+        title: row.title,
+        description: row.description,
+        discountType: row.discountType,
+        discountValue: row.discountValue,
+        validTo: row.validTo,
+        audience: row.audience,
+        applicableDays: [],
+        dailyStartTime: null,
+        dailyEndTime: null,
+        minimumBookingAmount: null,
+        maximumDiscountAmount: null,
+        serviceIds: row.services.map((s) => s.serviceId),
+      });
       offersBy.set(row.salonId, list);
     }
 

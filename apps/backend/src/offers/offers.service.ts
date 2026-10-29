@@ -4,8 +4,6 @@ import {
   OfferErrorCode,
   computePercentageDiscountPaise,
   decimalStringToPaise,
-  offerHasSchedule,
-  offerScheduleApplies,
   paiseToRupees,
   paiseToDecimalString,
   type CreateOfferInput,
@@ -22,10 +20,6 @@ import { Prisma } from '@prisma/client';
 import { AppException } from '../common/exceptions/app.exception';
 import { SalonAccessService } from '../common/salon-access/salon-access.service';
 import { PrismaService } from '../prisma/prisma.service';
-import {
-  resolveSalonTimeZone,
-  zonedDayAndMinutes,
-} from '../common/timezone/timezone';
 
 type OffersDb = Prisma.TransactionClient | PrismaService;
 type ServicePrice = { id: string; name: string; price: Prisma.Decimal };
@@ -81,7 +75,7 @@ export class OffersService {
     salonId: string,
     query: OfferListQuery,
   ): Promise<{ items: OfferDto[]; nextCursor: string | null }> {
-    await this.salonAccess.assertOwnerOrAdminAccess(actorUserId, salonId);
+    await this.salonAccess.assertOwnerAccess(actorUserId, salonId);
     const rows = await this.prisma.offer.findMany({
       where: {
         salonId,
@@ -115,7 +109,7 @@ export class OffersService {
     salonId: string,
     offerId: string,
   ): Promise<OfferDto> {
-    await this.salonAccess.assertOwnerOrAdminAccess(actorUserId, salonId);
+    await this.salonAccess.assertOwnerAccess(actorUserId, salonId);
     const row = await this.getOffer(this.prisma, salonId, offerId);
     if (!row) this.notFound();
     return this.toDto(row);
@@ -126,11 +120,7 @@ export class OffersService {
     salonId: string,
     input: CreateOfferInput,
   ): Promise<OfferDto> {
-    // The salon's owner, or a platform admin managing the salon (recorded in the audit log).
-    const actedAs = await this.salonAccess.assertOwnerOrAdminAccess(
-      actorUserId,
-      salonId,
-    );
+    await this.salonAccess.assertOwnerAccess(actorUserId, salonId);
     const parsed = createOfferSchema.safeParse(input);
     if (!parsed.success)
       this.invalid(
@@ -160,7 +150,6 @@ export class OffersService {
           validTo: new Date(parsed.data.validTo),
           maxRedemptions: parsed.data.maxRedemptions ?? null,
           perCustomerLimit: parsed.data.perCustomerLimit,
-          ...this.ruleData(parsed.data),
           createdByUserId: actorUserId,
         },
       });
@@ -175,7 +164,6 @@ export class OffersService {
       }
       await this.audit(tx, actorUserId, 'OFFER_DRAFT_CREATED', row.id, {
         salonId,
-        actedAs,
         kind: row.kind,
         discountType: row.discountType,
         serviceCount: parsed.data.serviceIds.length,
@@ -191,11 +179,7 @@ export class OffersService {
     offerId: string,
     input: UpdateOfferInput,
   ): Promise<OfferDto> {
-    // The salon's owner, or a platform admin managing the salon (recorded in the audit log).
-    const actedAs = await this.salonAccess.assertOwnerOrAdminAccess(
-      actorUserId,
-      salonId,
-    );
+    await this.salonAccess.assertOwnerAccess(actorUserId, salonId);
     const row = await this.prisma.$transaction(async (tx) => {
       const current = await this.lockOffer(tx, salonId, offerId);
       if (current.status === 'ACTIVE')
@@ -234,23 +218,6 @@ export class OffersService {
             : input.maxRedemptions,
         perCustomerLimit: input.perCustomerLimit ?? current.perCustomerLimit,
         serviceIds: input.serviceIds ?? existingServices,
-        minimumBookingAmount:
-          input.minimumBookingAmount === undefined
-            ? this.num(current.minimumBookingAmount)
-            : input.minimumBookingAmount,
-        maximumDiscountAmount:
-          input.maximumDiscountAmount === undefined
-            ? this.num(current.maximumDiscountAmount)
-            : input.maximumDiscountAmount,
-        applicableDays: input.applicableDays ?? current.applicableDays,
-        dailyStartTime:
-          input.dailyStartTime === undefined
-            ? current.dailyStartTime
-            : input.dailyStartTime,
-        dailyEndTime:
-          input.dailyEndTime === undefined
-            ? current.dailyEndTime
-            : input.dailyEndTime,
       };
       const parsed = createOfferSchema.safeParse(merged);
       if (!parsed.success)
@@ -272,7 +239,6 @@ export class OffersService {
           validTo: new Date(parsed.data.validTo),
           maxRedemptions: parsed.data.maxRedemptions ?? null,
           perCustomerLimit: parsed.data.perCustomerLimit,
-          ...this.ruleData(parsed.data),
         },
       });
       if (input.serviceIds !== undefined) {
@@ -289,7 +255,6 @@ export class OffersService {
       }
       await this.audit(tx, actorUserId, 'OFFER_DRAFT_UPDATED', offerId, {
         salonId,
-        actedAs,
         changedFields: Object.keys(input).sort(),
       });
       return this.getOffer(tx, salonId, offerId);
@@ -302,11 +267,7 @@ export class OffersService {
     salonId: string,
     offerId: string,
   ): Promise<OfferDto> {
-    // The salon's owner, or a platform admin managing the salon (recorded in the audit log).
-    const actedAs = await this.salonAccess.assertOwnerOrAdminAccess(
-      actorUserId,
-      salonId,
-    );
+    await this.salonAccess.assertOwnerAccess(actorUserId, salonId);
     const row = await this.prisma.$transaction(async (tx) => {
       const current = await this.lockOffer(tx, salonId, offerId);
       const now = new Date();
@@ -345,7 +306,6 @@ export class OffersService {
       });
       await this.audit(tx, actorUserId, 'OFFER_PUBLISHED', offerId, {
         salonId,
-        actedAs,
         kind: updated.kind,
         validFrom: updated.validFrom.toISOString(),
         validTo: updated.validTo.toISOString(),
@@ -360,11 +320,7 @@ export class OffersService {
     salonId: string,
     offerId: string,
   ): Promise<OfferDto> {
-    // The salon's owner, or a platform admin managing the salon (recorded in the audit log).
-    const actedAs = await this.salonAccess.assertOwnerOrAdminAccess(
-      actorUserId,
-      salonId,
-    );
+    await this.salonAccess.assertOwnerAccess(actorUserId, salonId);
     const row = await this.prisma.$transaction(async (tx) => {
       const current = await this.lockOffer(tx, salonId, offerId);
       if (current.status !== 'PAUSED') {
@@ -374,7 +330,6 @@ export class OffersService {
         });
         await this.audit(tx, actorUserId, 'OFFER_PAUSED', offerId, {
           salonId,
-          actedAs,
           wasActive: current.status === 'ACTIVE',
         });
       }
@@ -388,7 +343,7 @@ export class OffersService {
     salonId: string,
     input: CreateOfferInput,
   ): Promise<OfferPreviewDto> {
-    await this.salonAccess.assertOwnerOrAdminAccess(actorUserId, salonId);
+    await this.salonAccess.assertOwnerAccess(actorUserId, salonId);
     const parsed = createOfferSchema.safeParse(input);
     if (!parsed.success)
       this.invalid(
@@ -432,7 +387,7 @@ export class OffersService {
     offerId: string,
     input: { serviceIds: string[] },
   ): Promise<OfferPreviewDto> {
-    await this.salonAccess.assertOwnerOrAdminAccess(actorUserId, salonId);
+    await this.salonAccess.assertOwnerAccess(actorUserId, salonId);
     const offer = await this.getOffer(this.prisma, salonId, offerId);
     if (!offer) this.notFound();
     const services = await this.loadServices(
@@ -460,7 +415,7 @@ export class OffersService {
     salonId: string,
     offerId: string,
   ): Promise<OfferRedemptionStatsDto> {
-    await this.salonAccess.assertOwnerOrAdminAccess(actorUserId, salonId);
+    await this.salonAccess.assertOwnerAccess(actorUserId, salonId);
     const offer = await this.getOffer(this.prisma, salonId, offerId);
     if (!offer) this.notFound();
     const [aggregate, customers, completedBookings, cancelledBookings] =
@@ -653,11 +608,6 @@ export class OffersService {
         validTo: dto.validTo,
         maxRedemptions: dto.maxRedemptions,
         perCustomerLimit: dto.perCustomerLimit,
-        minimumBookingAmount: dto.minimumBookingAmount,
-        maximumDiscountAmount: dto.maximumDiscountAmount,
-        applicableDays: dto.applicableDays,
-        dailyStartTime: dto.dailyStartTime,
-        dailyEndTime: dto.dailyEndTime,
         serviceIds: dto.serviceIds,
         createdAt: dto.createdAt,
         updatedAt: dto.updatedAt,
@@ -685,7 +635,6 @@ export class OffersService {
     services: ServicePrice[],
     source: BookingSource,
     now = new Date(),
-    appointmentAt: Date = now,
   ): Promise<LockedOfferApplication> {
     return this.validateOfferForBooking(
       this.prisma,
@@ -696,7 +645,6 @@ export class OffersService {
       source,
       now,
       true,
-      appointmentAt,
     );
   }
 
@@ -708,7 +656,6 @@ export class OffersService {
     services: ServicePrice[],
     source: BookingSource,
     now: Date,
-    appointmentAt: Date = now,
   ): Promise<LockedOfferApplication> {
     // Block a concurrent service price/deactivation update until this booking commits, so the
     // server's campaign calculation and the persisted BookingService snapshot use one price set.
@@ -756,7 +703,6 @@ export class OffersService {
       source,
       now,
       true,
-      appointmentAt,
     );
   }
 
@@ -795,7 +741,6 @@ export class OffersService {
     source: BookingSource,
     now: Date,
     checkLimits: boolean,
-    appointmentAt: Date = now,
   ): Promise<LockedOfferApplication> {
     if (source !== BookingSource.APP && source !== BookingSource.WEB) {
       this.fail(
@@ -812,57 +757,12 @@ export class OffersService {
         'This offer is not active.',
         HttpStatus.CONFLICT,
       );
-    // Validity is judged at the appointment time (an offer for next week can't be booked for
-    // today), and an offer that has already ended can't be booked at all.
-    if (
-      now >= offer.validTo ||
-      appointmentAt < offer.validFrom ||
-      appointmentAt >= offer.validTo
-    )
+    if (now < offer.validFrom || now >= offer.validTo)
       this.fail(
         OfferErrorCode.EXPIRED,
-        'This offer is not valid for the selected time.',
+        'This offer is not currently valid.',
         HttpStatus.CONFLICT,
       );
-    if (offerHasSchedule(offer)) {
-      const salon = await db.salon.findUnique({
-        where: { id: salonId },
-        select: { timezone: true, city: { select: { countryCode: true } } },
-      });
-      const timeZone = salon
-        ? resolveSalonTimeZone({
-            timezone: salon.timezone,
-            countryCode: salon.city.countryCode,
-          })
-        : null;
-      const local = timeZone
-        ? zonedDayAndMinutes(appointmentAt, timeZone)
-        : null;
-      if (
-        !local ||
-        !offerScheduleApplies(offer, local.dayOfWeek, local.minutes)
-      )
-        this.fail(
-          OfferErrorCode.NOT_ELIGIBLE,
-          'This offer is not available at the selected day and time.',
-          HttpStatus.CONFLICT,
-        );
-    }
-    if (offer.minimumBookingAmount !== null) {
-      const subtotalPaise = services.reduce(
-        (sum, service) => sum + decimalStringToPaise(service.price.toString()),
-        0,
-      );
-      if (
-        subtotalPaise <
-        decimalStringToPaise(offer.minimumBookingAmount.toString())
-      )
-        this.fail(
-          OfferErrorCode.NOT_ELIGIBLE,
-          `This offer needs a booking of at least ${offer.currency} ${Number(offer.minimumBookingAmount)}.`,
-          HttpStatus.CONFLICT,
-        );
-    }
     const allowed = offer.services.map((x) => x.serviceId);
     const eligibleServices = allowed.length
       ? services.filter((service) => allowed.includes(service.id))
@@ -978,7 +878,6 @@ export class OffersService {
     offer: {
       discountType: string;
       discountValue: Prisma.Decimal | number;
-      maximumDiscountAmount?: Prisma.Decimal | number | null;
       services?: { serviceId: string }[];
     },
     services: ServicePrice[],
@@ -992,11 +891,6 @@ export class OffersService {
       offer.discountType === 'FLAT'
         ? decimalStringToPaise(String(offer.discountValue))
         : 0;
-    // A percentage offer's cap limits the discount across the whole booking.
-    let capRemaining =
-      offer.maximumDiscountAmount != null
-        ? decimalStringToPaise(String(offer.maximumDiscountAmount))
-        : Number.POSITIVE_INFINITY;
     return services.map((service) => {
       const basePaise = decimalStringToPaise(service.price.toString());
       let discountPaise = 0;
@@ -1009,8 +903,6 @@ export class OffersService {
               )
             : Math.min(basePaise, flatRemaining);
         if (offer.discountType === 'FLAT') flatRemaining -= discountPaise;
-        discountPaise = Math.min(discountPaise, capRemaining);
-        capRemaining -= discountPaise;
       }
       return {
         serviceId: service.id,
@@ -1143,11 +1035,6 @@ export class OffersService {
       maxRedemptions: row.maxRedemptions,
       perCustomerLimit: row.perCustomerLimit,
       serviceIds: row.services.map((x) => x.serviceId),
-      minimumBookingAmount: this.num(row.minimumBookingAmount),
-      maximumDiscountAmount: this.num(row.maximumDiscountAmount),
-      applicableDays: row.applicableDays,
-      dailyStartTime: row.dailyStartTime,
-      dailyEndTime: row.dailyEndTime,
       redemptionCount: row._count.redemptions,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
@@ -1164,26 +1051,6 @@ export class OffersService {
     await tx.auditLog.create({
       data: { actorUserId, action, entityType: 'Offer', entityId, metadata },
     });
-  }
-
-  private num(value: Prisma.Decimal | null): number | null {
-    return value === null ? null : Number(value);
-  }
-
-  private ruleData(input: CreateOfferInput) {
-    return {
-      minimumBookingAmount:
-        input.minimumBookingAmount != null
-          ? input.minimumBookingAmount.toFixed(2)
-          : null,
-      maximumDiscountAmount:
-        input.maximumDiscountAmount != null
-          ? input.maximumDiscountAmount.toFixed(2)
-          : null,
-      applicableDays: [...input.applicableDays].sort((a, b) => a - b),
-      dailyStartTime: input.dailyStartTime ?? null,
-      dailyEndTime: input.dailyEndTime ?? null,
-    };
   }
 
   private notFound(message = 'Offer not found in this shop.'): never {

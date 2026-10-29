@@ -5,7 +5,7 @@ import {
   SALON_SORT_OPTIONS,
   SERVICE_PRICE_SORTS,
   popularServiceById,
-  type SalonSortOption,
+  type SalonSearchSortOption,
   type SalonTypeFilter,
 } from "@barbercue/shared";
 
@@ -49,7 +49,7 @@ export interface DiscoveryState {
   legacyService: string | null;
   priceMin: number | null;
   priceMax: number | null;
-  sort: SalonSortOption;
+  sort: SalonSearchSortOption;
   nearMe: boolean;
   minRating: number | null;
   openNow: boolean;
@@ -74,7 +74,7 @@ export function readDiscoveryState(params: URLSearchParams): DiscoveryState {
     legacyService: params.get("service"),
     priceMin: num("priceMin"),
     priceMax: num("priceMax"),
-    sort: (SALON_SORT_OPTIONS as readonly string[]).includes(sort ?? "") ? (sort as SalonSortOption) : nearMe ? "distance" : "relevance",
+    sort: (SALON_SORT_OPTIONS as readonly string[]).includes(sort ?? "") ? (sort as SalonSearchSortOption) : nearMe ? "distance" : "relevance",
     nearMe,
     minRating: (MIN_RATING_OPTIONS as readonly number[]).includes(num("minRating") ?? NaN) ? num("minRating") : null,
     openNow: params.get("openNow") === "true",
@@ -85,7 +85,7 @@ export function readDiscoveryState(params: URLSearchParams): DiscoveryState {
 }
 
 /** Price sorts compare the selected service's price; with no service, each salon's starting price. */
-export function sortsByStartingPrice(option: SalonSortOption, state: Pick<DiscoveryState, "popularService" | "legacyService">): boolean {
+export function sortsByStartingPrice(option: SalonSearchSortOption, state: Pick<DiscoveryState, "popularService" | "legacyService">): boolean {
   return SERVICE_PRICE_SORTS.includes(option) && !state.popularService && !state.legacyService;
 }
 

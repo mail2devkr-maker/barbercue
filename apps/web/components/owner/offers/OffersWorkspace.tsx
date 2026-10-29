@@ -28,12 +28,10 @@ import {
   previewErrorText,
   previewMoney,
   redemptionText,
-  rulesText,
   servicesText,
   statusLabel,
   statusTone,
   validityText,
-  WEEKDAY_OPTIONS,
   type OfferErrors,
   type OfferForm,
 } from "../../../lib/offers";
@@ -244,7 +242,6 @@ export function OffersWorkspace({ salonId }: { salonId: string }) {
                     </div>
                     <div className={ui.hint}>
                       {timeZone ? validityText(offer, timeZone) : `${offer.validFrom} to ${offer.validTo}`} · {audienceText(offer)} · {servicesText(offer)} · {redemptionText(offer)}
-                      {rulesText(offer) ? ` · ${rulesText(offer)}` : ""}
                     </div>
                     <div className={ui.rowWrap}>
                       {canEdit(offer.status) && timeZone && <Btn small onClick={() => { setNotice(null); setEditing({ offer }); }} disabled={Boolean(editing)}>Edit</Btn>}
@@ -403,7 +400,6 @@ function OfferEditor({
     }
   }
 
-  const toggleDay = (day: number) => set({ applicableDays: form.applicableDays.includes(day) ? form.applicableDays.filter((d) => d !== day) : [...form.applicableDays, day] });
   const toggleService = (id: string) => set({ serviceIds: form.serviceIds.includes(id) ? form.serviceIds.filter((x) => x !== id) : [...form.serviceIds, id] });
 
   return (
@@ -463,17 +459,6 @@ function OfferEditor({
             </Field>
           </div>
 
-          <div className={ui.rowWrap}>
-            <Field label="Minimum booking amount (optional)" htmlFor="offer-min-spend" hint={errors.minimumBookingAmount ?? "The booked services must add up to at least this. Example: ₹100 off on bookings above ₹500."}>
-              <input id="offer-min-spend" className={ui.input} inputMode="decimal" value={form.minimumBookingAmount} onChange={(e) => set({ minimumBookingAmount: e.target.value })} aria-invalid={Boolean(errors.minimumBookingAmount)} autoComplete="off" />
-            </Field>
-            {form.discountType === "PERCENT" && (
-              <Field label="Maximum discount (optional)" htmlFor="offer-max-discount" hint={errors.maximumDiscountAmount ?? "Caps the percentage discount on one booking."}>
-                <input id="offer-max-discount" className={ui.input} inputMode="decimal" value={form.maximumDiscountAmount} onChange={(e) => set({ maximumDiscountAmount: e.target.value })} aria-invalid={Boolean(errors.maximumDiscountAmount)} autoComplete="off" />
-              </Field>
-            )}
-          </div>
-
           <fieldset className={ui.mt12} style={{ border: 0, padding: 0 }}>
             <legend className={ui.label}>Services</legend>
             <div className={ui.hint}>
@@ -492,29 +477,6 @@ function OfferEditor({
                 ))}
               </div>
             )}
-          </fieldset>
-
-          <fieldset className={ui.mt12} style={{ border: 0, padding: 0 }}>
-            <legend className={ui.label}>Happy hours (optional)</legend>
-            <div className={ui.hint}>
-              Limit the offer to some days and a time of day. It is checked against the appointment time, in your shop&apos;s timezone. Leave everything empty for any day and time.
-            </div>
-            <div className={ui.rowWrap} style={{ marginTop: 8 }} role="group" aria-label="Days">
-              {WEEKDAY_OPTIONS.map((d) => (
-                <label key={d.value} style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
-                  <input type="checkbox" checked={form.applicableDays.includes(d.value)} onChange={() => toggleDay(d.value)} />
-                  {d.label}
-                </label>
-              ))}
-            </div>
-            <div className={ui.rowWrap} style={{ marginTop: 8 }}>
-              <Field label="From" htmlFor="offer-day-start">
-                <input id="offer-day-start" type="time" className={ui.input} value={form.dailyStartTime} onChange={(e) => set({ dailyStartTime: e.target.value })} />
-              </Field>
-              <Field label="Until" htmlFor="offer-day-end" hint={errors.dailyEndTime}>
-                <input id="offer-day-end" type="time" className={ui.input} value={form.dailyEndTime} onChange={(e) => set({ dailyEndTime: e.target.value })} aria-invalid={Boolean(errors.dailyEndTime)} />
-              </Field>
-            </div>
           </fieldset>
 
           {check && (

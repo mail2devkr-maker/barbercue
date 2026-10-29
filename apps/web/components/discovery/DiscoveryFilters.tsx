@@ -12,7 +12,7 @@ import {
   formatMoney,
   popularServiceById,
   type SalonListItemDto,
-  type SalonSortOption,
+  type SalonSearchSortOption,
   type SalonTypeFilter,
 } from "@barbercue/shared";
 import {
@@ -317,11 +317,11 @@ export function FiltersPanel({
   );
 }
 
-export function SortControl({ state, onChange }: { state: DiscoveryState; onChange: (sort: SalonSortOption) => void }) {
+export function SortControl({ state, onChange }: { state: DiscoveryState; onChange: (sort: SalonSearchSortOption) => void }) {
   return (
     <div className={styles.sort}>
       <label htmlFor="discovery-sort">Sort by</label>
-      <select id="discovery-sort" value={state.sort} onChange={(e) => onChange(e.target.value as SalonSortOption)}>
+      <select id="discovery-sort" value={state.sort} onChange={(e) => onChange(e.target.value as SalonSearchSortOption)}>
         {SALON_SORT_OPTIONS.map((option) => {
           return (
             <option key={option} value={option}>

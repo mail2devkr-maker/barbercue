@@ -4,7 +4,6 @@ import {
   OFFER_KINDS,
   OfferErrorCode,
   createOfferSchema,
-  describeOfferSchedule,
   formatMoney,
 } from "@barbercue/shared";
 import type { CreateOfferInput, OfferDto, UpdateOfferInput } from "@barbercue/shared";
@@ -158,13 +157,6 @@ export interface OfferForm {
   perCustomerLimit: string;
   /** Empty means every service the shop currently has active. */
   serviceIds: string[];
-  /** Booking rules — empty means no rule. */
-  minimumBookingAmount: string;
-  maximumDiscountAmount: string;
-  /** Salon-local weekdays, 0 = Sunday. Empty means every day. */
-  applicableDays: number[];
-  dailyStartTime: string;
-  dailyEndTime: string;
 }
 
 export const EMPTY_OFFER_FORM: OfferForm = {
@@ -180,22 +172,7 @@ export const EMPTY_OFFER_FORM: OfferForm = {
   maxRedemptions: "",
   perCustomerLimit: "1",
   serviceIds: [],
-  minimumBookingAmount: "",
-  maximumDiscountAmount: "",
-  applicableDays: [],
-  dailyStartTime: "",
-  dailyEndTime: "",
 };
-
-export const WEEKDAY_OPTIONS: ReadonlyArray<{ value: number; label: string }> = [
-  { value: 1, label: "Mon" },
-  { value: 2, label: "Tue" },
-  { value: 3, label: "Wed" },
-  { value: 4, label: "Thu" },
-  { value: 5, label: "Fri" },
-  { value: 6, label: "Sat" },
-  { value: 0, label: "Sun" },
-];
 
 export function formFromOffer(offer: OfferDto, timeZone: string): OfferForm {
   return {
@@ -211,11 +188,6 @@ export function formFromOffer(offer: OfferDto, timeZone: string): OfferForm {
     maxRedemptions: offer.maxRedemptions === null ? "" : String(offer.maxRedemptions),
     perCustomerLimit: String(offer.perCustomerLimit),
     serviceIds: [...offer.serviceIds],
-    minimumBookingAmount: offer.minimumBookingAmount == null ? "" : String(offer.minimumBookingAmount),
-    maximumDiscountAmount: offer.maximumDiscountAmount == null ? "" : String(offer.maximumDiscountAmount),
-    applicableDays: [...(offer.applicableDays ?? [])],
-    dailyStartTime: offer.dailyStartTime ?? "",
-    dailyEndTime: offer.dailyEndTime ?? "",
   };
 }
 
@@ -272,19 +244,6 @@ export function buildOfferBody(form: OfferForm, timeZone: string): { body: Creat
   const per = wholeNumber(form.perCustomerLimit);
   if (per === null || per < 1 || per > 100) errors.perCustomerLimit = "Enter a whole number from 1 to 100.";
 
-  const optionalMoney = (text: string, key: "minimumBookingAmount" | "maximumDiscountAmount"): number | null => {
-    if (text.trim() === "") return null;
-    const n = money(text);
-    if (n === null || n <= 0) errors[key] = "Leave empty, or enter an amount above 0 with at most 2 decimals.";
-    return n;
-  };
-  const minimumBookingAmount = optionalMoney(form.minimumBookingAmount, "minimumBookingAmount");
-  const maximumDiscountAmount = form.discountType === "PERCENT" ? optionalMoney(form.maximumDiscountAmount, "maximumDiscountAmount") : null;
-  const start = form.dailyStartTime.trim();
-  const end = form.dailyEndTime.trim();
-  if (!start !== !end) errors.dailyEndTime = "Set both a start and an end time, or neither.";
-  else if (start && end && start >= end) errors.dailyEndTime = "The end time must be after the start time.";
-
   if (Object.keys(errors).length > 0 || value === null || !from || !to || per === null) return { body: null, errors };
 
   const candidate: Record<string, unknown> = {
@@ -299,11 +258,6 @@ export function buildOfferBody(form: OfferForm, timeZone: string): { body: Creat
     maxRedemptions,
     perCustomerLimit: per,
     serviceIds: [...new Set(form.serviceIds)],
-    minimumBookingAmount,
-    maximumDiscountAmount,
-    applicableDays: [...new Set(form.applicableDays)].sort((a, b) => a - b),
-    dailyStartTime: start || null,
-    dailyEndTime: end || null,
   };
   if (inactiveDays !== undefined) candidate.inactiveDays = inactiveDays;
   const parsed = createOfferSchema.safeParse(candidate);
@@ -337,11 +291,6 @@ export function buildOfferPatch(original: OfferDto, form: OfferForm, timeZone: s
   const a = [...next.serviceIds].sort().join(",");
   const b = [...original.serviceIds].sort().join(",");
   if (a !== b) patch.serviceIds = next.serviceIds;
-  if ((next.minimumBookingAmount ?? null) !== (original.minimumBookingAmount ?? null)) patch.minimumBookingAmount = next.minimumBookingAmount ?? null;
-  if ((next.maximumDiscountAmount ?? null) !== (original.maximumDiscountAmount ?? null)) patch.maximumDiscountAmount = next.maximumDiscountAmount ?? null;
-  if (next.applicableDays.join(",") !== [...(original.applicableDays ?? [])].sort((x, y) => x - y).join(",")) patch.applicableDays = next.applicableDays;
-  if ((next.dailyStartTime ?? null) !== (original.dailyStartTime ?? null)) patch.dailyStartTime = next.dailyStartTime ?? null;
-  if ((next.dailyEndTime ?? null) !== (original.dailyEndTime ?? null)) patch.dailyEndTime = next.dailyEndTime ?? null;
   return Object.keys(patch).length === 0 ? { body: null, errors: {} } : { body: patch as UpdateOfferInput, errors: {} };
 }
 
@@ -349,21 +298,6 @@ export function buildOfferPatch(original: OfferDto, form: OfferForm, timeZone: s
 
 export function discountText(offer: Pick<OfferDto, "discountType" | "discountValue" | "currency">): string {
   return offer.discountType === "PERCENT" ? `${offer.discountValue}% off` : `${formatMoney(offer.discountValue, offer.currency)} off`;
-}
-
-/** "Min. spend ₹500 · Up to ₹150 off · Mon–Fri, 14:00–17:00", or "" when the offer has no booking rules. */
-export function rulesText(offer: Pick<OfferDto, "minimumBookingAmount" | "maximumDiscountAmount" | "applicableDays" | "dailyStartTime" | "dailyEndTime" | "currency">): string {
-  return [
-    offer.minimumBookingAmount != null ? `Min. spend ${formatMoney(offer.minimumBookingAmount, offer.currency)}` : null,
-    offer.maximumDiscountAmount != null ? `Up to ${formatMoney(offer.maximumDiscountAmount, offer.currency)} off` : null,
-    describeOfferSchedule({
-      applicableDays: offer.applicableDays ?? [],
-      dailyStartTime: offer.dailyStartTime ?? null,
-      dailyEndTime: offer.dailyEndTime ?? null,
-    }),
-  ]
-    .filter(Boolean)
-    .join(" · ");
 }
 
 export function audienceText(offer: Pick<OfferDto, "audience" | "inactiveDays">): string {

@@ -13,9 +13,6 @@ const serviceIdsSchema = z
     "Service IDs must be unique.",
   );
 
-/** "HH:mm", 24-hour, salon-local wall time. */
-export const OFFER_TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
-
 const offerBaseSchema = z.object({
   kind: z.enum(OFFER_KINDS),
   title: z.string().trim().min(2).max(120),
@@ -40,32 +37,6 @@ const offerBaseSchema = z.object({
     .optional(),
   perCustomerLimit: z.number().int().positive().max(100).default(1),
   serviceIds: serviceIdsSchema.default([]),
-  // Booking rules (all optional, so existing offers keep working unchanged):
-  // minimum total of the booked services, a cap on the discount (percentage offers), and Happy
-  // Hours — the salon-local weekdays (0 = Sunday) and daily time window the APPOINTMENT must fall in.
-  minimumBookingAmount: z
-    .number()
-    .finite()
-    .positive()
-    .max(99_999_999.99)
-    .multipleOf(0.01)
-    .nullable()
-    .optional(),
-  maximumDiscountAmount: z
-    .number()
-    .finite()
-    .positive()
-    .max(99_999_999.99)
-    .multipleOf(0.01)
-    .nullable()
-    .optional(),
-  applicableDays: z
-    .array(z.number().int().min(0).max(6))
-    .max(7)
-    .refine((days) => new Set(days).size === days.length, "Days must be unique.")
-    .default([]),
-  dailyStartTime: z.string().regex(OFFER_TIME_PATTERN).nullable().optional(),
-  dailyEndTime: z.string().regex(OFFER_TIME_PATTERN).nullable().optional(),
 });
 
 const validateOffer = (
@@ -94,27 +65,6 @@ const validateOffer = (
       code: z.ZodIssueCode.custom,
       path: ["inactiveDays"],
       message: "inactiveDays is required for the INACTIVE audience.",
-    });
-  }
-  if (!value.dailyStartTime !== !value.dailyEndTime) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["dailyEndTime"],
-      message: "Set both a start and an end time, or neither.",
-    });
-  }
-  if (value.dailyStartTime && value.dailyEndTime && value.dailyStartTime >= value.dailyEndTime) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["dailyEndTime"],
-      message: "The end time must be after the start time.",
-    });
-  }
-  if (value.discountType === "FLAT" && value.maximumDiscountAmount != null) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["maximumDiscountAmount"],
-      message: "A maximum discount only applies to percentage offers.",
     });
   }
   if (value.audience !== "INACTIVE" && value.inactiveDays !== undefined) {
@@ -210,11 +160,6 @@ export interface OfferDto {
   maxRedemptions: number | null;
   perCustomerLimit: number;
   serviceIds: string[];
-  minimumBookingAmount: number | null;
-  maximumDiscountAmount: number | null;
-  applicableDays: number[];
-  dailyStartTime: string | null;
-  dailyEndTime: string | null;
   redemptionCount: number;
   createdAt: string;
   updatedAt: string;

@@ -9,14 +9,14 @@ import { SalonCapabilitiesService } from './capabilities.service';
 
 describe('SalonCapabilitiesService', () => {
   const salonAccess = {
-    assertOwnerOrAdminAccess: jest.fn().mockResolvedValue('OWNER'),
+    assertOwnerAccess: jest.fn().mockResolvedValue(undefined),
   };
   const config = { get: jest.fn() };
   let service: SalonCapabilitiesService;
 
   beforeEach(() => {
     jest.resetAllMocks();
-    salonAccess.assertOwnerOrAdminAccess.mockResolvedValue('OWNER');
+    salonAccess.assertOwnerAccess.mockResolvedValue(undefined);
     config.get.mockReturnValue(undefined);
     service = new SalonCapabilitiesService(
       salonAccess as unknown as SalonAccessService,
@@ -55,7 +55,7 @@ describe('SalonCapabilitiesService', () => {
       reasonCode: 'DETERMINISTIC_CATALOG_AVAILABILITY_SEARCH',
       updatedAt: null,
     });
-    expect(salonAccess.assertOwnerOrAdminAccess).toHaveBeenCalledWith(
+    expect(salonAccess.assertOwnerAccess).toHaveBeenCalledWith(
       'owner-1',
       'salon-1',
     );
@@ -107,7 +107,7 @@ describe('SalonCapabilitiesService', () => {
 
   it('rejects salon access before reading configuration or exposing capabilities', async () => {
     const denied = new ForbiddenException();
-    salonAccess.assertOwnerOrAdminAccess.mockRejectedValueOnce(denied);
+    salonAccess.assertOwnerAccess.mockRejectedValueOnce(denied);
     await expect(service.getForOwner('other-owner', 'salon-1')).rejects.toBe(
       denied,
     );

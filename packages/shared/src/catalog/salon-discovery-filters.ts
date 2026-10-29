@@ -164,8 +164,11 @@ export const SALON_SORT_OPTIONS = [
   'reviews',
   'wait',
 ] as const;
-export type SalonSortOption = (typeof SALON_SORT_OPTIONS)[number];
-export const SALON_SORT_LABELS: Record<SalonSortOption, string> = {
+/** Every sort the search API accepts. */
+export type SalonSearchSortOption = (typeof SALON_SORT_OPTIONS)[number];
+/** The four sorts the phone screen offers (kept narrow so the mobile app is untouched). */
+export type SalonSortOption = Extract<SalonSearchSortOption, 'relevance' | 'distance' | 'price' | 'rating'>;
+export const SALON_SORT_LABELS: Record<SalonSearchSortOption, string> = {
   relevance: 'Recommended',
   distance: 'Distance — nearest first',
   price: 'Price — low to high',
@@ -184,7 +187,7 @@ export const MAX_WAIT_OPTIONS = [0, 15, 30, 60] as const;
  * Sorts that compare prices: by the selected service's price when a service is selected, otherwise
  * by each salon's starting price (its cheapest active service).
  */
-export const SERVICE_PRICE_SORTS: readonly SalonSortOption[] = ['price', 'price_desc', 'effective_price'];
+export const SERVICE_PRICE_SORTS: readonly SalonSearchSortOption[] = ['price', 'price_desc', 'effective_price'];
 
 /** Minimum review score choices offered by the discovery filters ("4+ stars" etc.). */
 export const MIN_RATING_OPTIONS = [3, 3.5, 4, 4.5] as const;

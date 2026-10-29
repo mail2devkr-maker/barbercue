@@ -1408,14 +1408,6 @@ model Offer {
   validTo           DateTime          @db.Timestamptz(6)
   maxRedemptions    Int?
   perCustomerLimit  Int               @default(1)
-  // Booking rules (null / empty = no rule): minimum booked-services total, a cap on a percentage
-  // discount, and Happy Hours (salon-local weekdays 0=Sunday and an HH:mm window the appointment
-  // must fall in).
-  minimumBookingAmount  Decimal?      @db.Decimal(10, 2)
-  maximumDiscountAmount Decimal?      @db.Decimal(10, 2)
-  applicableDays        Int[]         @default([])
-  dailyStartTime        String?       @db.VarChar(5)
-  dailyEndTime          String?       @db.VarChar(5)
   createdByUserId   String
   createdAt         DateTime          @default(now()) @db.Timestamptz(6)
   updatedAt         DateTime          @updatedAt @db.Timestamptz(6)

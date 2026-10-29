@@ -7,7 +7,7 @@ import type {
   CitySearchResultDto,
   PaginatedResult,
   SalonListItemDto,
-  SalonSortOption,
+  SalonSearchSortOption,
 } from "@barbercue/shared";
 import { DISCOVERY_PATHS, POPULAR_SERVICES, formatPriceFilterLabel, popularServiceById } from "@barbercue/shared";
 import { SERVICE_CATEGORIES } from "../../../lib/editorial/manifest";
@@ -165,7 +165,7 @@ export default function SearchClient() {
     router.push(`/search?${params.toString()}`);
   }
 
-  function selectSort(sort: SalonSortOption) {
+  function selectSort(sort: SalonSearchSortOption) {
     if (sort === "distance" && !nearMeActive) {
       requestLocationThen((lat, lng) => applyChanges({ lat: String(lat), lng: String(lng), sort: "distance" }));
       return;
