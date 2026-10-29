@@ -84,11 +84,9 @@ export function layoutQueueQrPrintTitle(name: string, measure: MeasureText): Que
   // complete line with textLength instead of clipping/truncating any shop name.
   const words = title.split(' ');
   const lines = Array.from({ length: 4 }, () => '');
-  for (const word of words) {
-    const index = lines
-      .map((line, i) => ({ i, width: measure(line ? `${line} ${word}` : word, 10) }))
-      .sort((a, b) => a.width - b.width)[0].i;
-    lines[index] = lines[index] ? `${lines[index]} ${word}` : word;
+  for (let i = 0; i < words.length; i += 1) {
+    const lineIndex = Math.min(3, Math.floor((i * 4) / words.length));
+    lines[lineIndex] = lines[lineIndex] ? `${lines[lineIndex]} ${words[i]}` : words[i];
   }
   return { lines: lines.filter(Boolean), fontSize: 10, maxWidth: MAX_TEXT_WIDTH, firstBaseline: 91, lineHeight: 15 };
 }
