@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, Share, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, Share, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import {
   DASHBOARD_PATHS,
   SalonStatus,
@@ -19,6 +19,7 @@ import { filterTimeZones, isReady, isSetupIncomplete, readinessFromDetails, stat
 import { fastQue, font, fontSize, radius, space } from '../../lib/theme';
 import { InlineError, PremiumButton, PremiumCard } from '../ui';
 import { QrCode } from './QrCode';
+import { BrandLockup } from '../ui/BrandLockup';
 
 const salonBase = (salonId: string) => `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${encodeURIComponent(salonId)}`;
 
@@ -375,6 +376,13 @@ export function TimezoneSection({ salonId }: { salonId: string }) {
 
 export function QueueQrSection({ salonId, salonName }: { salonId: string; salonName: string }) {
   const { t } = useLanguage();
+  const { width } = useWindowDimensions();
+  // Fit a 4x6-inspired stand preview inside a 320dp Android owner Settings page.
+  const qrSize = Math.min(274, Math.max(184, width - 132));
+  const nameWords = salonName.trim().split(/\s+/);
+  const breakAt = Math.ceil(nameWords.length / 2);
+  const goldName = nameWords.slice(0, breakAt).join(' ');
+  const pinkName = nameWords.slice(breakAt).join(' ');
   const [qr, setQr] = useState<PublicQueueQrDto | null>(null);
   const [error, setError] = useState<string | null>(null);
   const requestRef = useRef(0);
@@ -398,10 +406,23 @@ export function QueueQrSection({ salonId, salonName }: { salonId: string; salonN
       {error ? <InlineError message={error} /> : null}
       {qr ? (
         <>
-          {/* The URL is exactly what the backend returned (the public queue link) — never rebuilt here. */}
-          <QrCode value={qr.publicQueueUrl} fallbackLabel={qr.publicQueueUrl} />
-          <Text testID="queue-qr-url" selectable style={styles.url}>
-            {qr.publicQueueUrl}
+          {/* The owner-approved branded poster is the SAME for new/existing salons.
+             The QR payload still comes from the existing backend token; never regenerate it. */}
+          <View style={styles.queuePoster} testID="queue-qr-branded-poster">
+            <BrandLockup variant="auth" />
+            <Text testID="queue-qr-salon-name" style={styles.queuePosterName} accessibilityRole="header">
+              <Text style={styles.queuePosterGold}>{goldName}</Text>
+              {pinkName ? <Text style={styles.queuePosterMagenta}>{` ${pinkName}`}</Text> : null}
+            </Text>
+            <Text style={styles.queuePosterSubtitle}>Scan to join the live queue</Text>
+            <View style={styles.queuePosterFrame}>
+              <QrCode value={qr.publicQueueUrl} size={qrSize} fallbackLabel={qr.publicQueueUrl} />
+            </View>
+            <Text style={styles.queuePosterCallout}>SCAN • JOIN • GET YOUR TURN</Text>
+            <Text style={styles.queuePosterFootnote}>Powered by FastQue</Text>
+          </View>
+          <Text testID="queue-qr-url" style={styles.url} accessibilityLabel={qr.publicQueueUrl}>
+            {t.queueQrHint}
           </Text>
           <PremiumButton
             testID="queue-qr-share"
@@ -448,4 +469,16 @@ const styles = StyleSheet.create({
   zoneText: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, color: fastQue.textSecondary },
   zoneTextSelected: { fontFamily: font.bodyBold, color: fastQue.pink },
   url: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: fastQue.textMuted, textAlign: 'center', marginTop: space[2] },
+  queuePoster: {
+    backgroundColor: '#000000', borderWidth: 2, borderColor: '#FFE15C',
+    borderRadius: 20, paddingHorizontal: space[3], paddingVertical: space[4],
+    alignItems: 'center', gap: space[3], width: '100%',
+  },
+  queuePosterName: { textAlign: 'center', fontFamily: font.bodyBold, fontSize: fontSize.lg, lineHeight: 29 },
+  queuePosterGold: { color: '#FFE15C' },
+  queuePosterMagenta: { color: '#F20A83' },
+  queuePosterSubtitle: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, color: '#F7F5F4', textAlign: 'center' },
+  queuePosterFrame: { borderWidth: 4, borderColor: '#F20A83', padding: space[2], borderRadius: 14, alignItems: 'center', backgroundColor: '#000000' },
+  queuePosterCallout: { fontFamily: font.bodyBold, fontSize: fontSize.sm, color: '#F20A83', textAlign: 'center' },
+  queuePosterFootnote: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: '#B9B2B5', textAlign: 'center' },
 });

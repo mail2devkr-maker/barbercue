@@ -253,13 +253,13 @@ describe('Owner Settings', () => {
     expect(has(r, 'timezone-option-Asia/Kolkata')).toBe(false);
   });
 
-  it('queue QR: draws a QR for the exact URL the backend returned, shows it, and shares it', async () => {
+  it('queue QR: draws a QR for the exact backend URL, keeps it accessible, and shares it', async () => {
     route();
     const share = jest.spyOn(Share, 'share').mockResolvedValue({ action: 'sharedAction' } as never);
     const r = await mount();
     await flush(8);
     expect(has(r, 'qr-code') || has(r, 'qr-fallback')).toBe(true);
-    expect(allText(r)).toContain('https://fastque.com/q/tok123');
+    expect(byTestId(r, 'qr-code')[0]?.props.accessibilityLabel ?? allText(r)).toContain('https://fastque.com/q/tok123');
     await press(r, 'queue-qr-share');
     expect(share).toHaveBeenCalledWith({ message: t.queueQrShareMessage.replace('{shop}', 'Handsome Center').replace('{url}', 'https://fastque.com/q/tok123') });
   });
