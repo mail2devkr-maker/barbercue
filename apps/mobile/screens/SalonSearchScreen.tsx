@@ -4,7 +4,11 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as Location from 'expo-location';
 import {
   DISCOVERY_PATHS,
+  FAVORITES_PATHS,
+  MIN_RATING_OPTIONS,
+  POPULAR_SERVICES,
   PRICE_FILTER_PRESETS,
+  Role,
   SHOP_CLOSED_TODAY_MESSAGE,
   SALON_DISCOVERY_CATEGORIES,
   formatDistance,
@@ -12,6 +16,8 @@ import {
   validatePriceRange,
   type PriceRangeValidationError,
   type PricePreset,
+  type SalonSortOption,
+  type SalonTypeFilter,
   type UiStrings,
 } from '@barbercue/shared';
 import type { PaginatedResult, SalonListItemDto, ServiceSuggestionDto } from '@barbercue/shared';
@@ -31,6 +37,8 @@ import {
   type FilterDropdownOption,
 } from '../components/ui';
 import { useLanguage } from '../lib/language-context';
+import { useAuth } from '../lib/auth-context';
+import { DEFAULT_DISCOVERY_FILTERS, buildDiscoveryQuery, type DiscoveryFilters } from '../lib/discovery-search';
 import type { SearchStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<SearchStackParamList, 'SalonSearch'>;
@@ -100,6 +108,19 @@ const SERVICE_CATEGORY_LABEL_KEYS: Record<string, ServiceCategoryLabelKey> = {
 };
 
 const SERVICE_ALL_ID = 'all';
+const ANY_ID = 'any';
+
+const SALON_TYPE_LABEL_KEYS: Record<SalonTypeFilter, 'salonTypeMale' | 'salonTypeFemale' | 'salonTypeUnisex'> = {
+  GENTS: 'salonTypeMale',
+  LADIES: 'salonTypeFemale',
+  UNISEX: 'salonTypeUnisex',
+};
+const SORT_LABEL_KEYS: Record<SalonSortOption, 'sortRecommended' | 'sortDistance' | 'sortPrice' | 'sortRating'> = {
+  relevance: 'sortRecommended',
+  distance: 'sortDistance',
+  price: 'sortPrice',
+  rating: 'sortRating',
+};
 
 // Below this width a single row can't fit the search field and the Search button without
 // clipping the button off the right edge (the owner-reported hard-FAIL screenshot) — stack the
@@ -276,36 +297,77 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
   const [priceMin, setPriceMin] = useState<number | null>(null);
   const [priceMax, setPriceMax] = useState<number | null>(null);
   const [service, setService] = useState<string | null>(null);
+  // Discovery upgrade (parity with apps/web's /search): salon type, a popular service to compare
+  // prices by, sort, minimum rating, open now and favorites.
+  const [discovery, setDiscovery] = useState<
+    Pick<DiscoveryFilters, 'salonType' | 'popularService' | 'sort' | 'minRating' | 'openNow' | 'favoritesOnly'>
+  >(DEFAULT_DISCOVERY_FILTERS);
+  const [notice, setNotice] = useState<string | null>(null);
+  const { user, status: authStatus } = useAuth();
+  const isCustomer = authStatus === 'authenticated' && !!user?.roles.includes(Role.CUSTOMER);
+  // The customer's saved salon IDs; null while signed out (or not loaded yet).
+  const [favoriteIds, setFavoriteIds] = useState<Set<string> | null>(null);
+
+  useEffect(() => {
+    if (!isCustomer) {
+      setFavoriteIds(null);
+      return undefined;
+    }
+    let cancelled = false;
+    apiFetch<{ salonIds: string[] }>(`${FAVORITES_PATHS.favorites}/${FAVORITES_PATHS.ids}`)
+      .then((result) => {
+        if (!cancelled) setFavoriteIds(new Set(result.salonIds));
+      })
+      .catch(() => {
+        /* hearts stay neutral; a tap still works */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isCustomer]);
+
+  async function toggleFavorite(salonId: string) {
+    if (!isCustomer) {
+      setNotice(t.favoritesSignInHint);
+      return;
+    }
+    const before = favoriteIds ?? new Set<string>();
+    const saving = !before.has(salonId);
+    const next = new Set(before);
+    if (saving) next.add(salonId);
+    else next.delete(salonId);
+    setFavoriteIds(next);
+    setNotice(null);
+    try {
+      await apiFetch(`${FAVORITES_PATHS.favorites}/${salonId}`, { method: saving ? 'POST' : 'DELETE' });
+      // In the favorites-only list, a removed salon leaves the list straight away.
+      if (!saving && discovery.favoritesOnly) setResults((items) => items.filter((item) => item.id !== salonId));
+    } catch {
+      setFavoriteIds(before);
+      setNotice(t.favoriteUpdateFailed);
+    }
+  }
 
   async function runSearch(
     isRefresh: boolean,
     coords: { lat: number; lng: number } | null,
-    filters: { radiusKm: number | null; priceMin: number | null; priceMax: number | null; service: string | null } = {
-      radiusKm,
-      priceMin,
-      priceMax,
-      service,
-    },
+    overrides: Partial<DiscoveryFilters> = {},
     queryOverride?: string,
   ) {
-    isRefresh ? setRefreshing(true) : setLoading(true);
-    setError(null);
+    const filters: DiscoveryFilters = { radiusKm, priceMin, priceMax, service, ...discovery, ...overrides };
+    const built = buildDiscoveryQuery({ text: queryOverride ?? q, coords, filters, favoriteIds: isCustomer ? favoriteIds : null });
     setSearched(true);
+    setError(null);
+    setNotice(null);
+    if (built.kind !== 'search') {
+      setResults([]);
+      setNotice(built.kind === 'favorites-sign-in' ? t.favoritesSignInHint : t.favoritesEmptyHint);
+      return;
+    }
+    isRefresh ? setRefreshing(true) : setLoading(true);
     try {
-      const params = new URLSearchParams();
-      const typedService = (queryOverride ?? q).trim();
-      if (typedService) params.set('service', typedService);
-      else if (filters.service) params.set('service', filters.service);
-      if (coords) {
-        params.set('lat', String(coords.lat));
-        params.set('lng', String(coords.lng));
-        // radiusKm is meaningless without a query point, so it only ever gets sent alongside one.
-        if (filters.radiusKm !== null) params.set('radiusKm', String(filters.radiusKm));
-      }
-      if (filters.priceMin !== null) params.set('priceMin', String(filters.priceMin));
-      if (filters.priceMax !== null) params.set('priceMax', String(filters.priceMax));
       const result = await apiFetch<PaginatedResult<SalonListItemDto>>(
-        `${DISCOVERY_PATHS.salons}?${params.toString()}`,
+        `${DISCOVERY_PATHS.salons}?${built.query}`,
       );
       setResults(result.items);
     } catch (err) {
@@ -383,6 +445,20 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
     void runSearch(false, nearMe, { radiusKm, priceMin: min, priceMax: max, service });
   }
 
+  function selectDiscovery(changes: Partial<DiscoveryFilters>) {
+    const next = { ...discovery, ...changes };
+    // A price sort needs a compared service; dropping the service drops the sort too.
+    if (next.sort === 'price' && !next.popularService && !service) next.sort = 'relevance';
+    // A new compared service starts with a fresh price range (a haircut range means nothing for a facial).
+    const resetsPrice = 'popularService' in changes && changes.popularService !== discovery.popularService;
+    if (resetsPrice) {
+      setPriceMin(null);
+      setPriceMax(null);
+    }
+    setDiscovery(next);
+    void runSearch(false, nearMe, { ...next, ...(resetsPrice ? { priceMin: null, priceMax: null } : {}) });
+  }
+
   function selectService(value: string | null) {
     setService(value);
     void runSearch(false, nearMe, { radiusKm, priceMin, priceMax, service: value });
@@ -434,6 +510,25 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
       label: t[SERVICE_CATEGORY_LABEL_KEYS[category.id]] ?? category.label,
     })),
   ];
+  const salonTypeOptions: FilterDropdownOption[] = [
+    { id: ANY_ID, label: t.salonTypeAll },
+    ...(Object.keys(SALON_TYPE_LABEL_KEYS) as SalonTypeFilter[]).map((type) => ({ id: type, label: t[SALON_TYPE_LABEL_KEYS[type]] })),
+  ];
+  const compareOptions: FilterDropdownOption[] = [
+    { id: ANY_ID, label: t.compareServiceNone },
+    ...POPULAR_SERVICES.map((entry) => ({ id: entry.id, label: entry.label })),
+  ];
+  const comparedService = POPULAR_SERVICES.find((entry) => entry.id === discovery.popularService) ?? null;
+  // Distance sort only once a location is known; price sort only once a service is compared.
+  const sortOptions: FilterDropdownOption[] = (['relevance', 'distance', 'price', 'rating'] as const)
+    .filter((option) => option !== 'distance' || nearMe)
+    .filter((option) => option !== 'price' || comparedService || service)
+    .map((option) => ({ id: option, label: t[SORT_LABEL_KEYS[option]] }));
+  const ratingOptions: FilterDropdownOption[] = [
+    { id: ANY_ID, label: t.ratingFilterAny },
+    ...MIN_RATING_OPTIONS.map((value) => ({ id: String(value), label: `${value}★+` })),
+  ];
+  const activeSort = discovery.sort === 'distance' && !nearMe ? 'relevance' : discovery.sort;
   const activeServiceCategory = SALON_DISCOVERY_CATEGORIES.find((category) => category.query === service);
   const activeDistanceOption = DISTANCE_OPTIONS.find((option) => option.value === radiusKm);
   const distanceValueLabel = activeDistanceOption ? t[activeDistanceOption.labelKey] : t.distanceFilterAny;
@@ -548,7 +643,61 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
           closeLabel={t.closeFilterMenu}
         />
       </View>
+      <View style={styles.filterRow}>
+        <FilterDropdown
+          label={t.salonTypeFilterLabel}
+          valueLabel={discovery.salonType ? t[SALON_TYPE_LABEL_KEYS[discovery.salonType]] : t.salonTypeAll}
+          options={salonTypeOptions}
+          selectedId={discovery.salonType ?? ANY_ID}
+          onSelect={(id) => selectDiscovery({ salonType: id === ANY_ID ? null : (id as SalonTypeFilter) })}
+          closeLabel={t.closeFilterMenu}
+        />
+        <FilterDropdown
+          label={t.compareServiceLabel}
+          valueLabel={comparedService?.label ?? t.compareServiceNone}
+          options={compareOptions}
+          selectedId={discovery.popularService ?? ANY_ID}
+          onSelect={(id) => selectDiscovery({ popularService: id === ANY_ID ? null : id })}
+          closeLabel={t.closeFilterMenu}
+        />
+        <FilterDropdown
+          label={t.sortLabel}
+          valueLabel={t[SORT_LABEL_KEYS[activeSort]]}
+          options={sortOptions}
+          selectedId={activeSort}
+          onSelect={(id) => selectDiscovery({ sort: id as SalonSortOption })}
+          closeLabel={t.closeFilterMenu}
+        />
+        <FilterDropdown
+          label={t.ratingFilterLabel}
+          valueLabel={discovery.minRating === null ? t.ratingFilterAny : `${discovery.minRating}★+`}
+          options={ratingOptions}
+          selectedId={discovery.minRating === null ? ANY_ID : String(discovery.minRating)}
+          onSelect={(id) => selectDiscovery({ minRating: id === ANY_ID ? null : Number(id) })}
+          closeLabel={t.closeFilterMenu}
+        />
+      </View>
+      <View style={styles.toggleRow}>
+        {[
+          { key: 'openNow' as const, label: t.openNowLabel },
+          { key: 'favoritesOnly' as const, label: t.favoritesOnlyLabel },
+        ].map((toggle) => {
+          const on = discovery[toggle.key];
+          return (
+            <Pressable
+              key={toggle.key}
+              style={[styles.toggleChip, on && styles.toggleChipOn]}
+              onPress={() => selectDiscovery({ [toggle.key]: !on })}
+              accessibilityRole="switch"
+              accessibilityState={{ checked: on }}
+            >
+              <Text style={[styles.toggleChipText, on && styles.toggleChipTextOn]}>{toggle.label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
       {!nearMe && <Text style={styles.filterHint}>{t.distanceFilterLocationHint}</Text>}
+      {notice && <Text style={styles.filterHint}>{notice}</Text>}
 
       {error && <InlineError message={error} />}
 
@@ -558,7 +707,7 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
           <Skeleton style={styles.skeletonCard} />
           <Skeleton style={styles.skeletonCard} />
         </View>
-      ) : searched && !error && results.length === 0 ? (
+      ) : searched && !error && !notice && results.length === 0 ? (
         <EmptyState title={t.noSalonsFoundTitle} message={t.noSalonsFoundHint} />
       ) : (
         <FlatList
@@ -579,18 +728,37 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
               }
             >
               <SafeImage url={item.coverPhotoUrl} alt={item.name} style={styles.cardImage} />
+              <Pressable
+                style={styles.heart}
+                onPress={() => void toggleFavorite(item.id)}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={`${favoriteIds?.has(item.id) ? t.removeFavoriteAction : t.saveFavoriteAction}: ${item.name}`}
+                accessibilityState={{ selected: !!favoriteIds?.has(item.id) }}
+              >
+                <Text style={[styles.heartText, favoriteIds?.has(item.id) && styles.heartTextOn]}>
+                  {favoriteIds?.has(item.id) ? '♥' : '♡'}
+                </Text>
+              </Pressable>
               <View style={styles.cardBody}>
                 <Text style={styles.cardTitle}>
                   {item.name}
                   {item.verified && <Text style={styles.verifiedMark}> ✓</Text>}
                 </Text>
                 <Text style={styles.cardSubtitle}>{item.addressLine}</Text>
+                <Text style={styles.cardType}>
+                  {item.salonType && item.salonTypeConfirmed ? t[SALON_TYPE_LABEL_KEYS[item.salonType]] : t.salonTypeNotSet}
+                </Text>
                 {item.ratingCount > 0 && (
                   <Text style={styles.cardMeta}>
                     ★ {item.ratingAverage?.toFixed(1)} ({item.ratingCount})
                   </Text>
                 )}
-                {item.priceMin !== null && (
+                {item.selectedService ? (
+                  <Text style={styles.cardMeta}>
+                    {item.selectedService.name} · {formatMoney(item.selectedService.price, item.currency, item.countryCode)}
+                  </Text>
+                ) : item.priceMin !== null && (
                   <Text style={styles.cardMeta}>
                     {t.startingPricePrefix}{formatMoney(item.priceMin, item.currency, item.countryCode)}
                   </Text>
@@ -707,6 +875,23 @@ const styles = StyleSheet.create({
   suggestionCategory: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: fastQue.textMuted, marginTop: 2 },
   nearMeButton: { marginBottom: space[4] },
   filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2], marginBottom: space[2] },
+  toggleRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2], marginBottom: space[2] },
+  toggleChip: {
+    minHeight: 36,
+    justifyContent: 'center',
+    paddingHorizontal: space[3],
+    borderWidth: 1,
+    borderColor: fastQue.border,
+    borderRadius: radius.pill,
+    backgroundColor: fastQue.card,
+  },
+  toggleChipOn: { borderColor: fastQue.pink, backgroundColor: 'rgba(242,10,131,0.14)' },
+  toggleChipText: { fontFamily: font.bodySemiBold, fontSize: fontSize.xs, color: fastQue.text },
+  toggleChipTextOn: { color: fastQue.pink },
+  heart: { position: 'absolute', top: space[2], right: space[2], zIndex: 1, padding: space[1] },
+  heartText: { fontSize: 22, color: fastQue.textMuted },
+  heartTextOn: { color: fastQue.pink },
+  cardType: { fontFamily: font.bodyMedium, fontSize: fontSize.xs, color: fastQue.textMuted, marginTop: space[1] },
   filterHint: {
     fontFamily: font.bodyRegular,
     fontSize: fontSize.sm,

@@ -87,16 +87,20 @@ describe('SalonServicesService', () => {
 
     it('lets an owner switch salon type without touching existing service rows', async () => {
       prisma.salon.findUnique.mockResolvedValueOnce({ salonType: SalonType.UNISEX });
-      prisma.salon.update.mockResolvedValueOnce({ salonType: SalonType.LADIES });
+      prisma.salon.update.mockResolvedValueOnce({
+        salonType: SalonType.LADIES,
+        salonTypeConfirmed: true,
+      });
 
       await expect(
         service.updateSalonType('owner-1', 'salon-1', { salonType: SalonType.LADIES }),
-      ).resolves.toEqual({ salonType: SalonType.LADIES });
+      ).resolves.toEqual({ salonType: SalonType.LADIES, salonTypeConfirmed: true });
 
+      // Saving the type is the owner's confirmation of it (discovery stops showing "type not set").
       expect(prisma.salon.update).toHaveBeenCalledWith({
         where: { id: 'salon-1' },
-        data: { salonType: SalonType.LADIES },
-        select: { salonType: true },
+        data: { salonType: SalonType.LADIES, salonTypeConfirmed: true },
+        select: { salonType: true, salonTypeConfirmed: true },
       });
       expect(prisma.service.update).not.toHaveBeenCalled();
       expect(prisma.auditLog.create).not.toHaveBeenCalled();

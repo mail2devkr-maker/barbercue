@@ -1,6 +1,8 @@
 import {
   Body,
   Controller,
+  StreamableFile,
+  Res,
   Delete,
   Get,
   Header,
@@ -11,6 +13,7 @@ import {
 } from '@nestjs/common';
 import {
   ADMIN_PATHS,
+  ADMIN_PERMISSION_ROLES,
   Role,
   decideVerificationSchema,
   updateSalonStatusSchema,
@@ -24,6 +27,9 @@ import {
   adminCrmFollowUpPageQuerySchema,
   adminCrmLeadPageQuerySchema,
   adminCrmVisitPageQuerySchema,
+  adminShopActivityQuerySchema,
+  adminAnalyticsRangeQuerySchema,
+  adminTimeseriesQuerySchema,
   resetEmployeePasswordSchema,
   updateEmployeeSchema,
   type CreateEmployeeInput,
@@ -32,6 +38,9 @@ import {
   type AdminCrmFollowUpPageQuery,
   type AdminCrmLeadPageQuery,
   type AdminCrmVisitPageQuery,
+  type AdminShopActivityQuery,
+  type AdminAnalyticsRangeQuery,
+  type AdminTimeseriesQuery,
   type DecideVerificationInput,
   type ResetEmployeePasswordInput,
   type UpdateEmployeeInput,
@@ -51,6 +60,17 @@ import { AdminEmployeeManagementService } from './admin-employee-management.serv
 import { AdminCrmService } from './admin-crm.service';
 import { AdminAccessManagementService } from './admin-access-management.service';
 import { SalonLocationService } from '../salon-setup/salon-location.service';
+import { AdminShopActivityService } from './admin-shop-activity.service';
+import { AdminExecutiveOverviewService } from './analytics/admin-executive-overview.service';
+import { AdminShopStatusService } from './analytics/admin-shop-status.service';
+import { AdminTimeseriesService } from './analytics/admin-timeseries.service';
+import { AdminCustomerAnalyticsService } from './analytics/admin-customer-analytics.service';
+import { AdminStaffAnalyticsService } from './analytics/admin-staff-analytics.service';
+import {
+  AdminDataExportService,
+  type ExportCategory,
+} from './analytics/admin-data-export.service';
+import type { Response } from 'express';
 
 /** Authentication is global; authorization is admin-role only. Monitoring routes are read-only;
  * the verification routes (Phase 18) and shop deletion are this controller's mutating surfaces —
@@ -67,6 +87,13 @@ export class AdminController {
     private readonly crm: AdminCrmService,
     private readonly access: AdminAccessManagementService,
     private readonly location: SalonLocationService,
+    private readonly shopActivity: AdminShopActivityService,
+    private readonly executive: AdminExecutiveOverviewService,
+    private readonly shopStatus: AdminShopStatusService,
+    private readonly timeseries: AdminTimeseriesService,
+    private readonly customerAnalytics: AdminCustomerAnalyticsService,
+    private readonly staffAnalytics: AdminStaffAnalyticsService,
+    private readonly dataExports: AdminDataExportService,
   ) {}
 
   @Get(ADMIN_PATHS.overview)
@@ -82,6 +109,150 @@ export class AdminController {
       user.roles.includes(Role.PLATFORM_ADMIN) ||
       user.roles.includes(Role.CO_FOUNDER);
     return this.monitoring.getOverview({ maskPii: !canViewUnmaskedOverview });
+  }
+
+  // Counts only (no contact details), so it carries the same read audience as the overview.
+  @Get(ADMIN_PATHS.shopActivity)
+  @Roles(
+    Role.PLATFORM_ADMIN,
+    Role.CO_FOUNDER,
+    Role.HR_ADMIN,
+    Role.SALES_ADMIN,
+    Role.PLATFORM_VIEWER,
+  )
+  @Header('Cache-Control', 'private, no-store')
+  shopActivityReport(
+    @Query(new ZodValidationPipe(adminShopActivityQuerySchema))
+    query: AdminShopActivityQuery,
+  ) {
+    return this.shopActivity.getActivity(query);
+  }
+
+  // Executive Command Center: company-wide business figures (service value included), so the
+  // audience is leadership plus the read-only viewer — not HR or Sales (docs/admin-dashboard-2.0).
+  @Get(`${ADMIN_PATHS.analytics}/${ADMIN_PATHS.overview}`)
+  @Roles(Role.PLATFORM_ADMIN, Role.CO_FOUNDER, Role.PLATFORM_VIEWER)
+  @Header('Cache-Control', 'private, no-store')
+  executiveOverview(
+    @Query(new ZodValidationPipe(adminAnalyticsRangeQuerySchema))
+    query: AdminAnalyticsRangeQuery,
+  ) {
+    return this.executive.getOverview(query);
+  }
+
+  // Chart builder: the same business figures as the Command Center, bucketed over time.
+  @Get(`${ADMIN_PATHS.analytics}/${ADMIN_PATHS.timeseries}`)
+  @Roles(Role.PLATFORM_ADMIN, Role.CO_FOUNDER, Role.PLATFORM_VIEWER)
+  @Header('Cache-Control', 'private, no-store')
+  analyticsTimeseries(
+    @Query(new ZodValidationPipe(adminTimeseriesQuerySchema))
+    query: AdminTimeseriesQuery,
+  ) {
+    return this.timeseries.getSeries(query);
+  }
+
+  // Live scheduled open/closed status. Counts and shop names only — the same read audience as the
+  // overview (no contact details), so field and support roles can see which shops are open.
+  @Get(`${ADMIN_PATHS.shops}/${ADMIN_PATHS.shopStatus}`)
+  @Roles(
+    Role.PLATFORM_ADMIN,
+    Role.CO_FOUNDER,
+    Role.HR_ADMIN,
+    Role.SALES_ADMIN,
+    Role.PLATFORM_VIEWER,
+  )
+  @Header('Cache-Control', 'private, no-store')
+  shopStatusReport() {
+    return this.shopStatus.getStatus();
+  }
+
+  // ---- Customers & salon staff (Admin Dashboard 2.1, phase C) ----------------------------------
+  // Analytics responses never contain contact details. Each export is its own route so a role that
+  // may download the report can never reach the contact file by changing a query parameter.
+
+  @Get(ADMIN_PATHS.customers)
+  @Roles(...ADMIN_PERMISSION_ROLES.viewCustomerAnalytics)
+  @Header('Cache-Control', 'private, no-store')
+  customerOverview(
+    @Query(new ZodValidationPipe(adminAnalyticsRangeQuerySchema))
+    query: AdminAnalyticsRangeQuery,
+  ) {
+    return this.customerAnalytics.getOverview(query);
+  }
+
+  @Get(ADMIN_PATHS.salonStaff)
+  @Roles(...ADMIN_PERMISSION_ROLES.viewStaffAnalytics)
+  @Header('Cache-Control', 'private, no-store')
+  staffOverview(
+    @Query(new ZodValidationPipe(adminAnalyticsRangeQuerySchema))
+    query: AdminAnalyticsRangeQuery,
+  ) {
+    return this.staffAnalytics.getOverview(query);
+  }
+
+  @Get(`${ADMIN_PATHS.exports}/${ADMIN_PATHS.customers}`)
+  @Roles(...ADMIN_PERMISSION_ROLES.exportCustomerReport)
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  exportCustomerReport(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query(new ZodValidationPipe(adminAnalyticsRangeQuerySchema))
+    query: AdminAnalyticsRangeQuery,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    return this.sendExport(user, 'CUSTOMER_REPORT', query, res);
+  }
+
+  @Get(`${ADMIN_PATHS.exports}/${ADMIN_PATHS.customers}/${ADMIN_PATHS.contact}`)
+  @Roles(...ADMIN_PERMISSION_ROLES.exportCustomerContacts)
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  exportCustomerContacts(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query(new ZodValidationPipe(adminAnalyticsRangeQuerySchema))
+    query: AdminAnalyticsRangeQuery,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    return this.sendExport(user, 'CUSTOMER_CONTACTS', query, res);
+  }
+
+  @Get(`${ADMIN_PATHS.exports}/${ADMIN_PATHS.salonStaff}`)
+  @Roles(...ADMIN_PERMISSION_ROLES.exportStaffPerformance)
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  exportStaffPerformance(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query(new ZodValidationPipe(adminAnalyticsRangeQuerySchema))
+    query: AdminAnalyticsRangeQuery,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    return this.sendExport(user, 'STAFF_PERFORMANCE', query, res);
+  }
+
+  @Get(
+    `${ADMIN_PATHS.exports}/${ADMIN_PATHS.salonStaff}/${ADMIN_PATHS.contact}`,
+  )
+  @Roles(...ADMIN_PERMISSION_ROLES.exportStaffContacts)
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  exportStaffContacts(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query(new ZodValidationPipe(adminAnalyticsRangeQuerySchema))
+    query: AdminAnalyticsRangeQuery,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    return this.sendExport(user, 'STAFF_CONTACTS', query, res);
+  }
+
+  private async sendExport(
+    user: AuthenticatedUser,
+    category: ExportCategory,
+    query: AdminAnalyticsRangeQuery,
+    res: Response,
+  ) {
+    const file = await this.dataExports.export(user.id, category, query);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${file.filename}"`,
+    );
+    res.setHeader('Cache-Control', 'private, no-store');
+    return new StreamableFile(file.body);
   }
 
   @Get(ADMIN_PATHS.verification)

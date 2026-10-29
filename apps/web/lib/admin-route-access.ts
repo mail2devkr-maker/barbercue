@@ -1,4 +1,4 @@
-import { Role } from "@barbercue/shared";
+import { Role, hasAdminPermission } from "@barbercue/shared";
 
 const INTERNAL_ADMIN_ROLES: ReadonlySet<Role> = new Set([
   Role.PLATFORM_ADMIN,
@@ -19,6 +19,19 @@ export function canOpenAdminPath(roles: Role[], pathname: string): boolean {
   const sales = roles.includes(Role.SALES_ADMIN);
 
   if (pathname === "/dashboard/admin") return true;
+  // Live shop status and the "planned feature" explainers carry no contact details: every internal role.
+  if (pathname.startsWith("/dashboard/admin/shops/status") || pathname.startsWith("/dashboard/admin/planned/")) return true;
+  // Customers / salon staff analytics: the same permissions the backend routes enforce.
+  if (pathname.startsWith("/dashboard/admin/customers")) return hasAdminPermission(roles, "viewCustomerAnalytics");
+  if (pathname.startsWith("/dashboard/admin/staff")) return hasAdminPermission(roles, "viewStaffAnalytics");
+  // Chart builder: same audience as GET admin/analytics/timeseries.
+  if (pathname.startsWith("/dashboard/admin/analytics")) {
+    return superAdmin || coFounder || roles.includes(Role.PLATFORM_VIEWER);
+  }
+  // Executive Command Center: mirrors GET admin/analytics/overview (PLATFORM_ADMIN, CO_FOUNDER, PLATFORM_VIEWER).
+  if (pathname.startsWith("/dashboard/admin/command-center")) {
+    return superAdmin || coFounder || roles.includes(Role.PLATFORM_VIEWER);
+  }
   if (pathname.startsWith("/dashboard/admin/access")) return superAdmin;
   // The platform CRM analytics and its cursor-paged rows are PLATFORM_ADMIN only on the server (ADMIN_CRM_ANALYTICS_V1).
   if (pathname.startsWith("/dashboard/admin/crm/analytics")) return superAdmin;

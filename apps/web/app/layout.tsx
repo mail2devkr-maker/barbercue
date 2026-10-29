@@ -1,33 +1,11 @@
 import type { Metadata, Viewport } from "next";
-import { Fraunces, Work_Sans } from "next/font/google";
+import "./fonts.css";
 import "./globals.css";
 import { AuthProvider } from "../lib/auth-context";
 import { SiteHeader } from "../components/layout/SiteHeader";
 import { SiteFooter } from "../components/layout/SiteFooter";
 import { HideOnOwnerShell } from "../components/layout/HideOnOwnerShell";
 import { UniqueVisitorTracker } from "../components/analytics/UniqueVisitorTracker";
-
-// next/font self-hosts these at build time (no runtime request to Google, no layout shift) and
-// exposes each as a CSS variable so globals.css can assign them without a hardcoded font stack
-// living in two places. Fraunces (a warm, characterful serif with real editorial presence at
-// display sizes) carries headings; Work Sans, a clean and slightly warmer alternative to the
-// ubiquitous Inter/Helvetica-everywhere look, carries body copy and UI chrome — the pairing is the
-// single biggest lever for "premium barbershop brand" over "generic SaaS dashboard".
-const fraunces = Fraunces({
-  subsets: ["latin"],
-  variable: "--font-display",
-  // Fraunces' optical-size + soft axes are what give it character at large sizes without going
-  // twee at small ones — both weights below lean on that rather than faux-bolding a single cut.
-  weight: ["500", "600"],
-  style: ["normal", "italic"],
-  display: "swap",
-});
-const workSans = Work_Sans({
-  subsets: ["latin"],
-  variable: "--font-body",
-  weight: ["400", "500", "600", "700"],
-  display: "swap",
-});
 
 export const metadata: Metadata = {
   title: {
@@ -58,7 +36,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${fraunces.variable} ${workSans.variable}`}>
+    <html lang="en">
+      <head>
+        {/* Self-hosted brand fonts (see app/fonts.css): preload the Latin faces used above the fold. */}
+        <link rel="preload" href="/fonts/fraunces-latin-normal.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
+        <link rel="preload" href="/fonts/work-sans-latin-normal.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
+      </head>
       <body>
         <UniqueVisitorTracker />
         <AuthProvider>

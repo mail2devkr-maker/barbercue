@@ -6,6 +6,7 @@ import { Role } from "@barbercue/shared";
 import { RequireRole } from "../../../../components/auth/RequireRole";
 import { useAuth } from "../../../../lib/auth-context";
 import { canOpenAdminPath } from "../../../../lib/admin-route-access";
+import { AdminShell } from "../../../../components/admin/shell/AdminShell";
 
 function AdminRouteBoundary({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
@@ -33,7 +34,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       ]}
       redirectTo="/admin/login"
     >
-      <AdminRouteBoundary>{children}</AdminRouteBoundary>
+      {/* The admin app frame (sidebar, toolbar, shared reporting period) wraps every admin page. */}
+      <AdminShell>
+        <AdminRouteBoundary>{children}</AdminRouteBoundary>
+      </AdminShell>
     </RequireRole>
   );
 }

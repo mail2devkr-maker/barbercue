@@ -7,16 +7,25 @@ import type {
   CitySearchResultDto,
   CountryDto,
   PaginatedResult,
-  PriceRangeValidationError,
   SalonListItemDto,
+  SalonSortOption,
 } from "@barbercue/shared";
-import { COUNTRY_PATHS, DISCOVERY_PATHS, PRICE_FILTER_PRESETS, formatPriceFilterLabel, validatePriceRange } from "@barbercue/shared";
+import { COUNTRY_PATHS, DISCOVERY_PATHS, formatPriceFilterLabel, popularServiceById } from "@barbercue/shared";
 import { SERVICE_CATEGORIES } from "../../../lib/editorial/manifest";
 import { SalonCard } from "../../../components/discovery/SalonCard";
+import { CompareTable, FiltersPanel, SortControl } from "../../../components/discovery/DiscoveryFilters";
+import {
+  activeFilterCount,
+  popularServiceChange,
+  readDiscoveryState,
+  searchApiQuery,
+  withParams,
+} from "../../../lib/discovery-params";
 import { ShopNameSearchField } from "../../../components/discovery/ShopNameSearchField";
 import { CitySearchField } from "../../../components/salons/CitySearchField";
 import { Button } from "../../../components/ui/Button";
 import { apiFetch } from "../../../lib/api";
+import { useFavorites } from "../../../lib/favorites";
 import styles from "./search.module.css";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api/v1";
@@ -35,12 +44,6 @@ const DISTANCE_OPTIONS: { value: number | null; label: string }[] = [
   { value: 3, label: "3 km" },
   { value: 5, label: "5 km" },
 ];
-
-const PRICE_VALIDATION_MESSAGES: Record<PriceRangeValidationError, string> = {
-  "negative-min": "Minimum price cannot be negative.",
-  "negative-max": "Maximum price cannot be negative.",
-  "min-exceeds-max": "Minimum price cannot exceed maximum price.",
-};
 
 /** Shared outside-click/Escape dismissal for every dropdown below — factored out once both
  * FilterDropdown and PriceFilterDropdown needed the identical behavior. */
@@ -153,147 +156,6 @@ function FilterDropdown({ label, value, options }: { label: string; value: strin
   );
 }
 
-/** Price is its own dropdown (not a `FilterDropdown` instance) because it has two views: the
- * scrollable preset list (49 "Up to ₹X" rows plus Any/1000+) and, once "Custom…" is picked, a
- * two-field min/max form in the same popover rather than a second modal. */
-function PriceFilterDropdown({
-  activeMin,
-  activeMax,
-  onApply,
-}: {
-  activeMin: number | null;
-  activeMax: number | null;
-  onApply: (min: number | null, max: number | null) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [customOpen, setCustomOpen] = useState(false);
-  const [minInput, setMinInput] = useState("");
-  const [maxInput, setMaxInput] = useState("");
-  const [customError, setCustomError] = useState<PriceRangeValidationError | null>(null);
-  const rootRef = useRef<HTMLDivElement>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const menuId = useId();
-
-  function close() {
-    setOpen(false);
-    setCustomOpen(false);
-    setCustomError(null);
-  }
-  useDropdownDismiss(open, close, rootRef, triggerRef);
-
-  const activePreset = PRICE_FILTER_PRESETS.find((preset) => preset.min === activeMin && preset.max === activeMax);
-  const triggerLabel = activePreset ? activePreset.label : formatPriceFilterLabel(activeMin, activeMax);
-
-  function openCustomForm() {
-    setMinInput(activeMin === null ? "" : String(activeMin));
-    setMaxInput(activeMax === null ? "" : String(activeMax));
-    setCustomError(null);
-    setCustomOpen(true);
-  }
-
-  function applyCustom() {
-    const min = minInput.trim() === "" ? null : Number(minInput);
-    const max = maxInput.trim() === "" ? null : Number(maxInput);
-    const error = validatePriceRange(min, max);
-    if (error) {
-      setCustomError(error);
-      return;
-    }
-    onApply(min, max);
-    close();
-  }
-
-  function clearCustom() {
-    setMinInput("");
-    setMaxInput("");
-    setCustomError(null);
-    onApply(null, null);
-    close();
-  }
-
-  return (
-    <div className={styles.filterDropdown} ref={rootRef}>
-      <span className={styles.filterDropdownLabel}>Price</span>
-      <button
-        type="button"
-        className={styles.filterDropdownTrigger}
-        ref={triggerRef}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-controls={menuId}
-        onClick={() => setOpen((current) => !current)}
-      >
-        <span>{triggerLabel}</span>
-        <span className={styles.filterDropdownChevron} aria-hidden="true">⌄</span>
-      </button>
-      {open && !customOpen && (
-        <div id={menuId} className={styles.filterDropdownMenu} role="listbox" aria-label="Price options">
-          {PRICE_FILTER_PRESETS.map((preset) => {
-            const selected = activeMin === preset.min && activeMax === preset.max;
-            return (
-              <button
-                key={preset.id}
-                type="button"
-                role="option"
-                className={`${styles.filterDropdownOption} ${selected ? styles.filterDropdownOptionSelected : ""}`}
-                aria-selected={selected}
-                onClick={() => {
-                  onApply(preset.min, preset.max);
-                  close();
-                }}
-              >
-                <span>{preset.label}</span>
-                {selected && <span aria-hidden="true">✓</span>}
-              </button>
-            );
-          })}
-          <button type="button" className={styles.filterDropdownOption} onClick={openCustomForm}>
-            <span>Custom…</span>
-          </button>
-        </div>
-      )}
-      {open && customOpen && (
-        <div id={menuId} className={styles.filterDropdownMenu}>
-          <button type="button" className={styles.filterDropdownBack} onClick={() => setCustomOpen(false)}>
-            ‹ Back to presets
-          </button>
-          <label className={styles.filterCustomField}>
-            <span>Minimum price</span>
-            <input
-              type="number"
-              min={0}
-              inputMode="numeric"
-              value={minInput}
-              onChange={(event) => setMinInput(event.target.value)}
-              placeholder="No minimum"
-            />
-          </label>
-          <label className={styles.filterCustomField}>
-            <span>Maximum price</span>
-            <input
-              type="number"
-              min={0}
-              inputMode="numeric"
-              value={maxInput}
-              onChange={(event) => setMaxInput(event.target.value)}
-              placeholder="No maximum"
-            />
-          </label>
-          {customError && <p className={styles.filterCustomError}>{PRICE_VALIDATION_MESSAGES[customError]}</p>}
-          <div className={styles.filterCustomActions}>
-            <Button type="button" variant="outline" className={styles.outlineOnDark} onClick={clearCustom}>
-              Clear
-            </Button>
-            <Button type="button" variant="primary" onClick={applyCustom}>
-              Apply
-            </Button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default function SearchClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -324,6 +186,46 @@ export default function SearchClient() {
   const activePriceMax = priceMaxParam !== null ? Number(priceMaxParam) : null;
   const activeService = searchParams.get("service");
   const activeServiceCategory = SERVICE_CATEGORIES.find((category) => category.query === activeService);
+  // Discovery upgrade: salon type, popular-service comparison, price slider and sort (all in the URL).
+  const discovery = readDiscoveryState(searchParams);
+  const comparedService = popularServiceById(discovery.popularService);
+  const view = comparedService && searchParams.get("view") === "compare" ? "compare" : "cards";
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const filterCount = activeFilterCount(discovery);
+  // "My favorites" sends the customer's saved salon IDs to the public search; until they are known
+  // (or when signed out / nothing saved) there is nothing to search.
+  const { savedIds, loaded: favoritesLoaded, isCustomer, ready: authReady } = useFavorites();
+  const favoritesGate: "wait" | "signin" | "empty" | null = !discovery.favoritesOnly
+    ? null
+    : !authReady
+      ? "wait"
+      : !isCustomer
+        ? "signin"
+        : !favoritesLoaded
+          ? "wait"
+          : savedIds.size === 0
+            ? "empty"
+            : null;
+  const favoriteKey = discovery.favoritesOnly ? [...savedIds].sort().join(",") : "";
+
+  function applyChanges(changes: Record<string, string | null>) {
+    const { __popularService, ...rest } = changes;
+    const switchesService = "__popularService" in changes;
+    const all: Record<string, string | null> = switchesService
+      ? { ...popularServiceChange(searchParams, __popularService ?? null), ...rest }
+      : rest;
+    if (switchesService && __popularService === null) all.view = null;
+    const query = withParams(searchParams, all);
+    router.push(`/search${query ? `?${query}` : ""}`);
+  }
+
+  function clearAllFilters() {
+    applyChanges({
+      salonType: null, __popularService: null, service: null, priceMin: null, priceMax: null, view: null,
+      minRating: null, openNow: null, favorites: null,
+    });
+  }
 
   // Shared by handleNearMe and selectRadius below — both need "ask the browser for a position,
   // then either apply it directly or bail out with the same locationError copy".
@@ -372,25 +274,12 @@ export default function SearchClient() {
     router.push(`/search?${params.toString()}`);
   }
 
-  function selectPrice(min: number | null, max: number | null) {
-    const params = new URLSearchParams(searchParams.toString());
-    if (min === null) params.delete("priceMin");
-    else params.set("priceMin", String(min));
-    if (max === null) params.delete("priceMax");
-    else params.set("priceMax", String(max));
-    router.push(`/search?${params.toString()}`);
-  }
-
-  // Category links were single-select and intentionally navigated to a service-only search. Keep
-  // that URL behavior exactly intact while presenting the choices in a compact dropdown.
-  function selectService(service: string | null) {
-    if (service !== null) {
-      router.push(`/search?service=${encodeURIComponent(service)}`);
+  function selectSort(sort: SalonSortOption) {
+    if (sort === "distance" && !nearMeActive) {
+      requestLocationThen((lat, lng) => applyChanges({ lat: String(lat), lng: String(lng), sort: "distance" }));
       return;
     }
-    const params = new URLSearchParams(searchParams.toString());
-    params.delete("service");
-    router.push(`/search${params.size ? `?${params.toString()}` : ""}`);
+    applyChanges({ sort: sort === "relevance" ? null : sort });
   }
 
   useEffect(() => {
@@ -405,18 +294,21 @@ export default function SearchClient() {
   }, []);
 
   useEffect(() => {
-    const params = new URLSearchParams();
     // city/countryCode already arrive as real slugs/codes here (from CitySearchField's own
     // selection, or a shared/bookmarked URL) — no client-side normalization needed or safe to do.
-    for (const key of ["q", "shopName", "city", "countryCode", "locality", "service", "lat", "lng", "radiusKm", "priceMin", "priceMax"]) {
-      const value = searchParams.get(key);
-      if (value) params.set(key, value);
-    }
+    const params = new URLSearchParams(searchApiQuery(searchParams, favoriteKey ? favoriteKey.split(",") : undefined));
 
     let cancelled = false;
     Promise.resolve()
       .then(() => {
         if (cancelled) return undefined;
+        if (favoritesGate) {
+          setResults([]);
+          setHasMore(false);
+          setError(null);
+          setLoading(favoritesGate === "wait");
+          return undefined;
+        }
         setLoading(true);
         setError(null);
         return fetch(`${API_BASE_URL}/${DISCOVERY_PATHS.salons}?${params.toString()}`);
@@ -427,7 +319,10 @@ export default function SearchClient() {
         return response.json() as Promise<PaginatedResult<SalonListItemDto>>;
       })
       .then((data) => {
-        if (!cancelled && data) setResults(data.items);
+        if (!cancelled && data) {
+          setResults(data.items);
+          setHasMore(data.nextCursor !== null);
+        }
       })
       .catch(() => {
         if (!cancelled) setError("We couldn’t load shops right now. Please try again.");
@@ -439,7 +334,7 @@ export default function SearchClient() {
     return () => {
       cancelled = true;
     };
-  }, [retryKey, searchParams]);
+  }, [retryKey, searchParams, favoritesGate, favoriteKey]);
 
   function handleSubmit(event?: React.FormEvent, explicitService?: string) {
     event?.preventDefault();
@@ -539,20 +434,9 @@ export default function SearchClient() {
               onSelect: () => selectRadius(option.value),
             }))}
           />
-          <PriceFilterDropdown activeMin={activePriceMin} activeMax={activePriceMax} onApply={selectPrice} />
-          <FilterDropdown
-            label="Service"
-            value={activeServiceCategory?.label ?? "All services"}
-            options={[
-              { id: "all-services", label: "All services", selected: !activeService, onSelect: () => selectService(null) },
-              ...SERVICE_CATEGORIES.map((category) => ({
-                id: category.id,
-                label: category.label,
-                selected: category.query === activeService,
-                onSelect: () => selectService(category.query),
-              })),
-            ]}
-          />
+          <button type="button" className={styles.filtersToggle} aria-expanded={filtersOpen} aria-controls="discovery-filters" onClick={() => setFiltersOpen((open) => !open)}>
+            Filters{filterCount > 0 ? ` (${filterCount})` : ""}
+          </button>
         </div>
         {!nearMeActive && <p className={styles.filterBarHint}>Choose a distance to use your current location.</p>}
       </section>
@@ -567,7 +451,27 @@ export default function SearchClient() {
         </aside>
       )}
 
+      <div className={styles.discoveryLayout}>
+      <aside id="discovery-filters" className={`${styles.filtersAside} ${filtersOpen ? styles.filtersAsideOpen : ""}`} aria-label="Search filters">
+        <FiltersPanel state={discovery} onChange={applyChanges} onClearAll={clearAllFilters} activeCount={filterCount} />
+      </aside>
       <section className={styles.results} aria-labelledby="results-heading" aria-live="polite">
+        {(activeService || ((activePriceMin !== null || activePriceMax !== null) && !comparedService)) && (
+          <div className={styles.activeChips} aria-label="Other active filters">
+            {activeService && (
+              <button type="button" className={styles.activeChip} onClick={() => applyChanges({ service: null })}>
+                Category: {activeServiceCategory?.label ?? activeService} <span aria-hidden="true">×</span>
+                <span className={styles.srOnlyText}> (remove)</span>
+              </button>
+            )}
+            {(activePriceMin !== null || activePriceMax !== null) && !comparedService && (
+              <button type="button" className={styles.activeChip} onClick={() => applyChanges({ priceMin: null, priceMax: null })}>
+                {formatPriceFilterLabel(activePriceMin, activePriceMax)}{activeService ? "" : " (any service)"} <span aria-hidden="true">×</span>
+                <span className={styles.srOnlyText}> (remove)</span>
+              </button>
+            )}
+          </div>
+        )}
         <div className={styles.resultsHeading}>
           <div>
             <p className={styles.eyebrow}>Nearby possibilities</p>
@@ -579,7 +483,21 @@ export default function SearchClient() {
                   : "Available shops"}
             </h2>
           </div>
-          {!loading && !error && results.length > 0 && <p>Real availability appears when you book.</p>}
+          <div className={styles.resultsTools}>
+            {!loading && !error && (
+              <p className={styles.resultCount}>
+                {results.length}{hasMore ? "+" : ""} {results.length === 1 ? "shop" : "shops"}
+                {comparedService ? ` offering ${comparedService.label.toLowerCase()}` : ""}
+              </p>
+            )}
+            <SortControl state={discovery} onChange={selectSort} />
+            {comparedService && (
+              <div className={styles.viewToggle} role="group" aria-label="Result view">
+                <button type="button" aria-pressed={view === "cards"} onClick={() => applyChanges({ view: null })}>Cards</button>
+                <button type="button" aria-pressed={view === "compare"} onClick={() => applyChanges({ view: "compare" })}>Compare prices</button>
+              </div>
+            )}
+          </div>
         </div>
 
         {loading && (
@@ -605,11 +523,42 @@ export default function SearchClient() {
           </div>
         )}
 
-        {!loading && !error && results.length === 0 && (
+        {!loading && favoritesGate === "signin" && (
+          <div className={styles.stateCard}>
+            <span className={styles.stateIcon} aria-hidden="true">♡</span>
+            <h2>Sign in to see your favorite salons</h2>
+            <p>Your saved salons are kept in your customer account.</p>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => router.push(`/login?next=${encodeURIComponent(`/search?${searchParams.toString()}`)}`)}
+            >
+              Sign in
+            </Button>
+          </div>
+        )}
+        {!loading && favoritesGate === "empty" && (
+          <div className={styles.stateCard}>
+            <span className={styles.stateIcon} aria-hidden="true">♡</span>
+            <h2>No favorite salons yet</h2>
+            <p>Tap the heart on any salon to save it, then come back here to compare them.</p>
+            <Button type="button" variant="secondary" onClick={() => applyChanges({ favorites: null })}>
+              Show all salons
+            </Button>
+          </div>
+        )}
+
+        {!loading && !error && !favoritesGate && results.length === 0 && (
           <div className={styles.stateCard}>
             <span className={styles.stateIcon} aria-hidden="true">⌖</span>
             <h2>No shops match that search yet</h2>
-            <p>Try a nearby city, a broader service, or clear one of your search terms.</p>
+            <p>
+              {comparedService && (discovery.priceMin !== null || discovery.priceMax !== null)
+                ? `No salon's ${comparedService.label.toLowerCase()} is priced in that range. Try widening the price range.`
+                : comparedService
+                  ? `No salon here lists ${comparedService.label.toLowerCase()} yet. Try another service or clear the filters.`
+                  : "Try a nearby city, a broader service, or clear one of your search terms."}
+            </p>
             <Button
               type="button"
               variant="secondary"
@@ -624,14 +573,19 @@ export default function SearchClient() {
           </div>
         )}
 
-        {!loading && !error && results.length > 0 && (
+        {!loading && !error && results.length > 0 && view === "compare" && comparedService && (
+          <CompareTable salons={results} serviceLabel={comparedService.label} />
+        )}
+        {!loading && !error && results.length > 0 && view === "cards" && (
           <div className={styles.grid}>
             {results.map((salon) => (
               <SalonCard key={salon.id} salon={salon} styleName={styleName} />
             ))}
           </div>
         )}
+        {!loading && !error && results.length > 0 && <p className={styles.availabilityNote}>Real availability appears when you book.</p>}
       </section>
+      </div>
     </main>
   );
 }

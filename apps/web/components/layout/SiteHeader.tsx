@@ -18,8 +18,8 @@ import { CloseIcon, LocationIcon, MenuIcon } from "../landing/icons";
 import styles from "../landing/landing.module.css";
 
 const SALON_SCOPED_PATH = /^\/dashboard\/salons\/([^/]+)(\/.*)?$/;
-// The owner/staff shell (components/owner/OwnerShell) supplies its own header on these routes.
-const OWNER_SHELL_PATH = SALON_SCOPED_PATH;
+// The owner/staff shell (components/owner/OwnerShell) and the admin shell supply their own header.
+const OWNER_SHELL_PATH = /^\/dashboard\/(salons\/[^/]+|admin)(\/.*)?$/;
 
 const PRIMARY_LINKS: ReadonlyArray<{
   href: string;

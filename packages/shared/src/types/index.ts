@@ -544,6 +544,18 @@ export interface SalonListItemDto extends SalonSummary {
   // Shop-configured percentage applied only to FastQue APP/WEB bookings. Service.price remains the
   // shop's original list price; clients use this value only for an honest pre-booking preview.
   onlineBookingDiscountPercent?: number;
+  // Discovery upgrade. salonTypeConfirmed is false for salons whose type was never chosen by the
+  // owner (salonType then only holds the UNISEX column default) — clients show "Type not set".
+  salonType?: "GENTS" | "LADIES" | "UNISEX";
+  salonTypeConfirmed?: boolean;
+  // Only when a popular service was selected: the cheapest active matching service at this salon,
+  // with its own salon-specific name. This — never priceMin — is what price comparison uses.
+  selectedService?: { id: string; name: string; price: number; durationMinutes: number } | null;
+}
+
+// GET favorites — a customer's saved salons, newest first.
+export interface FavoriteSalonDto extends SalonListItemDto {
+  favoritedAt: string;
 }
 
 // GET salons/:salonId/booking/recent-activity — Issue #13 Mission H, the per-shop "last 30
@@ -1558,6 +1570,8 @@ export interface PublicQueueQrDto {
 // returned for ACTIVE salons and never exposes inactive rows — an owner must see and manage both.
 export interface SalonTypeResultDto {
   salonType: SalonType;
+  // false until the owner has chosen the type (older salons only carry the UNISEX default).
+  salonTypeConfirmed?: boolean;
 }
 
 export interface SalonServiceDto {
@@ -1863,6 +1877,259 @@ export interface SalonContactImportPreviewDto {
 }
 
 // ---------- Platform admin monitoring ----------
+
+// GET admin/shop-activity. Bookings count by appointment date (slotStart) and queue entries by
+// joinedAt, both inside [from, to] as IST calendar days. liveNow is the current
+// WAITING + CALLED + IN_SERVICE count and ignores the date range.
+export interface AdminShopActivityCountsDto {
+  bookings: {
+    total: number;
+    confirmed: number;
+    completed: number;
+    cancelled: number;
+    noShow: number;
+  };
+  queue: {
+    joined: number;
+    served: number; // COMPLETED
+    dropped: number; // NO_SHOW + CANCELLED + EXPIRED
+    liveNow: number;
+  };
+}
+
+export interface AdminShopActivityDto extends AdminShopActivityCountsDto {
+  from: string;
+  to: string;
+  timeZone: string;
+  generatedAt: string;
+  // Only shops with a booking or queue entry in the range, or someone in the queue right now;
+  // busiest first. `bookings`/`queue` on the root are the totals across every shop.
+  shops: Array<
+    AdminShopActivityCountsDto & {
+      id: string;
+      publicId: string;
+      name: string;
+      status: SalonStatus;
+    }
+  >;
+}
+
+// GET admin/analytics/overview — Executive Command Center. Definitions: docs/admin-dashboard-2.0/PLAN.md §4.
+// `null` always means "not measurable / not tracked", never zero. Money is integer paise (INR).
+export interface AdminKpiValue {
+  current: number | null;
+  previous: number | null;
+}
+
+export type AdminAdoptionCategory =
+  | "RECENTLY_ONBOARDED"
+  | "NEVER_ACTIVATED"
+  | "AT_RISK"
+  | "HIGHLY_ACTIVE"
+  | "MODERATELY_ACTIVE"
+  | "LOW_USAGE"
+  | "DORMANT";
+
+export interface AdminExecutiveOverviewDto {
+  from: string;
+  to: string;
+  previousFrom: string;
+  previousTo: string;
+  timeZone: string;
+  generatedAt: string;
+  kpis: {
+    registeredSalons: AdminKpiValue;
+    newSalons: AdminKpiValue;
+    servingSalons: AdminKpiValue;
+    appointmentsBooked: AdminKpiValue;
+    appointmentsCompleted: AdminKpiValue;
+    walkInsServed: AdminKpiValue;
+    completedVisits: AdminKpiValue;
+    cancelled: AdminKpiValue;
+    noShow: AdminKpiValue;
+    cancellationRatePercent: AdminKpiValue;
+    noShowRatePercent: AdminKpiValue;
+    completedServiceValuePaise: AdminKpiValue;
+    walkInValueEstimatePaise: AdminKpiValue; // included in completedServiceValuePaise
+    averageVisitValuePaise: AdminKpiValue;
+    completedServiceMinutes: AdminKpiValue;
+    openSalonsNow: number; // current state, no comparison
+    platformRevenuePaise: null; // not tracked yet
+  };
+  trend: Array<{
+    date: string;
+    appointmentsCompleted: number;
+    walkInsServed: number;
+    serviceValuePaise: number;
+  }>;
+  adoption: {
+    asOf: string; // IST date the 30-day window ends on (inclusive)
+    windowDays: number;
+    totalSalons: number;
+    counts: Record<AdminAdoptionCategory, number>;
+  };
+  // Salons with any appointment or walk-in activity in the period, most completed visits first.
+  shops: Array<{
+    id: string;
+    publicId: string;
+    name: string;
+    city: string;
+    status: SalonStatus;
+    registeredAt: string;
+    adoption: AdminAdoptionCategory;
+    completedVisits: number;
+    appointmentsCompleted: number;
+    walkInsServed: number;
+    cancelled: number;
+    noShow: number;
+    serviceValuePaise: number;
+  }>;
+  shopsTotal: number; // before the row limit
+  shopsLimit: number;
+}
+
+// GET admin/analytics/timeseries. Values are null where a bucket has nothing to measure (e.g. a rate
+// with no resolved appointments) — never a fabricated 0.
+export type AdminMetricUnit = "count" | "inr" | "percent" | "hours" | "minutes";
+export interface AdminTimeseriesSeriesDto {
+  metric: string;
+  label: string;
+  unit: AdminMetricUnit;
+  values: Array<number | null>;
+  previousValues?: Array<number | null>;
+}
+export interface AdminTimeseriesDto {
+  from: string;
+  to: string;
+  granularity: "day" | "week" | "month";
+  timeZone: string;
+  generatedAt: string;
+  buckets: string[]; // bucket start dates (YYYY-MM-DD, IST)
+  previousFrom?: string;
+  previousTo?: string;
+  series: AdminTimeseriesSeriesDto[];
+}
+
+// GET admin/shops/status. Scheduled status comes from configured weekly hours in the shop's own time
+// zone; it is NOT proof the shop is physically open. Merchant-app presence is not tracked yet (null).
+export type AdminShopScheduleState = "OPEN" | "CLOSED" | "UNKNOWN";
+export interface AdminShopStatusRowDto {
+  id: string;
+  publicId: string;
+  name: string;
+  city: string;
+  status: SalonStatus;
+  timeZone: string | null;
+  scheduled: AdminShopScheduleState;
+  todayHours: string | null; // e.g. "10:00–21:00", "Closed", null = not configured
+  opensAt: string | null; // ISO instant of the next opening within 24h
+  closesAt: string | null; // ISO instant of the current/next closing within 24h
+  temporarilyClosed: boolean; // owner's "closed for today"
+  acceptingBookings: boolean; // ACTIVE and not closed for today
+  merchantOnline: null;
+  todayBookingsCreated: number;
+  todayVisitsCompleted: number;
+  todayServiceValuePaise: number;
+  quietSince: string | null; // set when scheduled open + accepting + no new booking/walk-in since opening (≥ threshold)
+}
+export interface AdminShopStatusDto {
+  generatedAt: string;
+  timeZone: string; // reporting zone for "today" counts
+  quietThresholdHours: number;
+  counts: {
+    registered: number;
+    eligible: number; // ACTIVE shops
+    scheduledOpen: number;
+    scheduledClosed: number;
+    unknownSchedule: number;
+    temporarilyClosed: number;
+    acceptingBookings: number;
+    openingWithinHour: number;
+    closingWithinHour: number;
+    openNoBookings: number;
+    merchantOnline: null;
+  };
+  // Scheduled-open ACTIVE shops per IST hour today, using the hours configured NOW (schedule history
+  // is not recorded), next to that hour's appointments and walk-ins.
+  hourly: Array<{ hour: number; scheduledOpen: number; appointments: number; walkIns: number }>;
+  shops: AdminShopStatusRowDto[];
+}
+
+// GET admin/customers — privacy-safe customer analytics. Account customers only (guest visits have
+// no stable identity). NO contact fields: a customer is identified by a masked, non-reversible ID.
+export interface AdminCustomerRowDto {
+  maskedId: string; // e.g. "C-3F9A2B71C0"
+  firstVisitAt: string | null; // first completed visit ever
+  lastVisitAt: string | null;
+  completedVisits: number; // in the period
+  cancelled: number; // in the period
+  noShow: number; // in the period
+  serviceValuePaise: number; // in the period
+  preferredCategory: string | null; // most-visited category in the period
+}
+export interface AdminCustomerOverviewDto {
+  from: string;
+  to: string;
+  timeZone: string;
+  generatedAt: string;
+  kpis: {
+    customersEver: number; // with ≥1 completed visit up to the end of the period
+    activeCustomers: number; // with ≥1 completed visit in the period
+    newCustomers: number; // first-ever completed visit in the period
+    returningCustomers: number;
+    completedVisits: number;
+    averageVisitsPerActive: number | null;
+    averageVisitValuePaise: number | null;
+    repeatRatePercent: number | null; // active customers with ≥2 visits ÷ active customers
+    noShowRatePercent: number | null; // no-shows ÷ (completed + no-show) appointments
+  };
+  sources: Array<{ source: string; label: string; count: number }>;
+  categories: Array<{ category: string; visits: number }>;
+  customers: AdminCustomerRowDto[];
+  customersTotal: number;
+  customersLimit: number;
+}
+
+// GET admin/staff — salon staff (barbers, stylists), NOT FastQue employees. No contact fields.
+export interface AdminStaffRowDto {
+  id: string;
+  displayName: string;
+  salonName: string;
+  salonPublicId: string;
+  city: string;
+  role: string;
+  status: string;
+  servingNow: boolean;
+  completedServices: number; // completed service sessions that ended in the period
+  distinctServices: number;
+  serviceMinutes: number;
+  averageServiceMinutes: number | null;
+  serviceValuePaise: number; // current menu price of each completed service (estimate)
+  scheduledMinutes: number | null; // configured working hours over the period; null = not set
+  utilizationPercent: number | null;
+}
+export interface AdminStaffOverviewDto {
+  from: string;
+  to: string;
+  timeZone: string;
+  generatedAt: string;
+  kpis: {
+    registeredStaff: number;
+    activeStaff: number;
+    shopsWithStaff: number;
+    averageStaffPerShop: number | null;
+    scheduledToday: number; // active staff whose working hours include today
+    servingNow: number;
+    completedServices: number;
+    serviceHours: number;
+    averageServiceMinutes: number | null;
+    serviceValuePaise: number;
+    utilizationPercent: number | null; // over staff with working hours set
+  };
+  staff: AdminStaffRowDto[];
+  staffTotal: number;
+  staffLimit: number;
+}
 
 export interface PlatformAdminOverviewDto {
   generatedAt: string;
