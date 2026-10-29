@@ -5,6 +5,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { DASHBOARD_PATHS } from "@barbercue/shared";
 import type { PublicQueueQrDto } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../lib/api";
+import { layoutQueueQrPrintTitle } from "../../lib/queue-qr-print-title";
 import { Button } from "../ui/Button";
 import styles from "./dashboard.module.css";
 
@@ -83,8 +84,20 @@ export function QueueQrSection({ salonId, salonName }: { salonId: string; salonN
     const svg = svgWrapperRef.current?.querySelector("svg");
     if (!svg) return;
 
-    const safeName = escapeXml(salonName);
-    const nameFontSize = Math.max(13, 27 - Math.floor(Math.max(0, salonName.length - 20) / 2));
+    // The on-screen HTML can wrap naturally; SVG <text> cannot.
+    // Measure and explicitly emit <tspan> lines in the physical 4x6in export.
+    const canvasContext = document.createElement("canvas").getContext("2d");
+    const measureName = (value: string, size: number) => {
+      if (!canvasContext) return Array.from(value).length * size * 0.7;
+      canvasContext.font = `800 ${size}px Arial, sans-serif`;
+      return canvasContext.measureText(value).width;
+    };
+    const titleLayout = layoutQueueQrPrintTitle(salonName, measureName);
+    const printableTitleSvg = `<text x="200" y="${titleLayout.firstBaseline}" text-anchor="middle" font-family="Arial, sans-serif" font-size="${titleLayout.fontSize}" font-weight="800" fill="url(#shopNameGradient)">${titleLayout.lines.map((line, index) => {
+      const stretch = measureName(line, titleLayout.fontSize) > titleLayout.maxWidth
+        ? ` textLength="${titleLayout.maxWidth}" lengthAdjust="spacingAndGlyphs"` : "";
+      return `<tspan x="200" dy="${index === 0 ? 0 : titleLayout.lineHeight}"${stretch}>${escapeXml(line)}</tspan>`;
+    }).join("")}</text>`;
 
     // Keep the exported/printed artwork self-contained. The live QR uses normal public assets,
     // while the downloaded SVG embeds those exact images as data URIs.
@@ -121,8 +134,8 @@ export function QueueQrSection({ salonId, salonName }: { salonId: string; salonN
         <rect width="400" height="600" rx="22" fill="#000000" />
         <rect x="8" y="8" width="384" height="584" rx="20" fill="none" stroke="#FFE15C" stroke-width="2" />
         <image href="${logoDataUri}" x="110" y="21" width="180" height="53" preserveAspectRatio="xMidYMid meet" />
-        <text x="200" y="111" text-anchor="middle" font-family="Arial, sans-serif" font-size="${nameFontSize}" font-weight="800" fill="url(#shopNameGradient)" ${salonName.length > 33 ? 'textLength="360" lengthAdjust="spacingAndGlyphs"' : ""}>${safeName}</text>
-        <text x="200" y="150" text-anchor="middle" font-family="Arial, sans-serif" font-size="17" fill="#F7F5F4">Scan to join the live queue</text>
+        ${printableTitleSvg}
+        <text x="200" y="${titleLayout.lines.length >= 3 ? 160 : titleLayout.lines.length === 2 ? 157 : 150}" text-anchor="middle" font-family="Arial, sans-serif" font-size="17" fill="#F7F5F4">Scan to join the live queue</text>
         <rect x="24" y="178" width="352" height="350" rx="15" fill="#000000" stroke="#F20A83" stroke-width="4"/>
         <g transform="translate(48 199) scale(1.52)">${brandedQrSvg}</g>
         <text x="200" y="561" text-anchor="middle" font-family="Arial, sans-serif" font-size="17" font-weight="800" fill="#F20A83">SCAN &#8226; JOIN &#8226; GET YOUR TURN</text>
