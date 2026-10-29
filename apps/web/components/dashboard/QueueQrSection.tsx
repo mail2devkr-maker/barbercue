@@ -97,7 +97,7 @@ export function QueueQrSection({ salonId, salonName }: { salonId: string; salonN
     // The existing QR is a 200x200 SVG, scaled uniformly to 304x304. The 24px cream
     // border equals >4 modules of quiet zone for the 53-module code. Preserve the
     // backend-provided token and QR content; only its printable presentation changes.
-    const posterSvg = \`
+    const posterSvg = `
       <svg xmlns="http://www.w3.org/2000/svg" width="4in" height="6in" viewBox="0 0 400 600">
         <defs>
           <linearGradient id="shopNameGradient" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -109,14 +109,14 @@ export function QueueQrSection({ salonId, salonName }: { salonId: string; salonN
         </defs>
         <rect width="400" height="600" rx="22" fill="#111017" />
         <rect x="8" y="8" width="384" height="584" rx="19" fill="none" stroke="#6B3642" stroke-width="1.5" />
-        <image href="\${logoDataUri}" x="113" y="20" width="174" height="42" preserveAspectRatio="xMidYMid meet" />
-        <text x="200" y="108" text-anchor="middle" font-family="Arial, sans-serif" font-size="\${Math.max(13, 23 - Math.floor(Math.max(0, salonName.length - 24) / 2))}" font-weight="700" fill="url(#shopNameGradient)">\${safeName}</text>
+        <image href="${logoDataUri}" x="113" y="20" width="174" height="42" preserveAspectRatio="xMidYMid meet" />
+        <text x="200" y="108" text-anchor="middle" font-family="Arial, sans-serif" font-size="${Math.max(13, 23 - Math.floor(Math.max(0, salonName.length - 24) / 2))}" font-weight="700" fill="url(#shopNameGradient)">${safeName}</text>
         <text x="200" y="145" text-anchor="middle" font-family="Arial, sans-serif" font-size="17" fill="#F1E6DD">Scan to join the live queue</text>
         <rect x="24" y="186" width="352" height="352" rx="12" fill="#FFF8ED" />
-        <g transform="translate(48 210) scale(1.52)">\${brandedQrSvg}</g>
+        <g transform="translate(48 210) scale(1.52)">${brandedQrSvg}</g>
         <text x="200" y="566" text-anchor="middle" font-family="Arial, sans-serif" font-size="15" font-weight="700" fill="#FFFFFF">SCAN &#8226; JOIN &#8226; GET YOUR TURN</text>
         <text x="200" y="587" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" fill="#CDBCB9">Powered by FastQue</text>
-      </svg>\`;
+      </svg>`;
 
     const blob = new Blob([posterSvg], { type: "image/svg+xml" });
     const url = URL.createObjectURL(blob);
