@@ -92,7 +92,15 @@ export function QueueQrSection({ salonId, salonName }: { salonId: string; salonN
       imageToDataUri(FASTQUE_QR_MARK_SRC),
       imageToDataUri(FASTQUE_LOGO_SRC),
     ]);
-    const brandedQrSvg = svg.outerHTML
+    // The on-screen responsive SVG has width:100%; height:auto. That CSS is not
+    // valid for a nested SVG in an exported standalone 4x6in document (some
+    // renderers leave the printable QR blank). Clone without responsive CSS and
+    // set deterministic pixel dimensions before embedding the real QR vector.
+    const printableQr = svg.cloneNode(true) as SVGSVGElement;
+    printableQr.removeAttribute("style");
+    printableQr.setAttribute("width", "200");
+    printableQr.setAttribute("height", "200");
+    const brandedQrSvg = printableQr.outerHTML
       .replaceAll(`${window.location.origin}${FASTQUE_QR_MARK_SRC}`, markDataUri)
       .replaceAll(FASTQUE_QR_MARK_SRC, markDataUri);
 
