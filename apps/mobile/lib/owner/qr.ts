@@ -17,10 +17,11 @@ export interface QrLayout {
   rows: QrRun[][];
 }
 
-export const QR_QUIET_ZONE = 2;
+// ISO QR Code quiet zone: four empty modules on every side.
+export const QR_QUIET_ZONE = 4;
 
 export function buildQrLayout(text: string): QrLayout {
-  const symbol = QRCode.create(text, { errorCorrectionLevel: 'M' });
+  const symbol = QRCode.create(text, { errorCorrectionLevel: 'H' });
   const { size, data } = symbol.modules;
   const total = size + QR_QUIET_ZONE * 2;
   const rows: QrRun[][] = [];
