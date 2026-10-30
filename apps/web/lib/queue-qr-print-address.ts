@@ -74,15 +74,35 @@ export function layoutQueueQrPrintAddress(address: string, measure: MeasureText)
     }
   }
 
-  // Last resort: no address is truncated. The SVG renderer proportionally
-  // compresses oversize lines with textLength; keep at most four footer rows.
+  // Last resort for unusually long addresses: still auto-wrap instead of
+  // assuming fixed breaks or silently dropping the last part of the address.
+  // Distribute actual words across four rows by measured width. For a single
+  // unbroken token, split into four code-point chunks; the SVG export uses
+  // textLength only if even these rows are wider than the footer.
   const words = normalized.split(" ");
   const rows = Array.from({ length: 4 }, () => "");
-  for (let index = 0; index < words.length; index += 1) {
-    const row = Math.min(3, Math.floor((index * 4) / words.length));
-    rows[row] = rows[row] ? `${rows[row]} ${words[index]}` : words[index];
+  for (const word of words) {
+    const target = rows
+      .map((row, index) => ({ index, width: measure(row, 7) }))
+      .sort((left, right) => left.width - right.width || left.index - right.index)[0].index;
+    rows[target] = rows[target] ? `${rows[target]} ${word}` : word;
   }
-  const lines = rows.filter(Boolean);
+  // Preserve natural word order (rather than the greedy width distribution
+  // above, which can scramble address components) while balancing lengths.
+  // A long continuous address can be split safely by code point.
+  const chars = Array.from(normalized);
+  const wordRows = words.length > 1 ? Array.from({ length: 4 }, () => "") : null;
+  if (wordRows) {
+    let row = 0;
+    for (const word of words) {
+      const next = wordRows[row] ? `${wordRows[row]} ${word}` : word;
+      if (row < 3 && wordRows[row] && measure(next, 7) > Math.max(MAX_WIDTH, measure(normalized, 7) / 4)) row += 1;
+      wordRows[row] = wordRows[row] ? `${wordRows[row]} ${word}` : word;
+    }
+  }
+  const lines = (wordRows ? wordRows.filter(Boolean) : Array.from({ length: 4 }, (_, index) =>
+    chars.slice(Math.floor(index * chars.length / 4), Math.floor((index + 1) * chars.length / 4)).join("")
+  )).filter(Boolean);
   return {
     lines,
     fontSize: 7,
