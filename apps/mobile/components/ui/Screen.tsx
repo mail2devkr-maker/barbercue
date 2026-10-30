@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { KeyboardAvoidingView, Platform, RefreshControl, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { color, space } from '../../lib/theme';
 
@@ -27,11 +27,9 @@ export function Screen({ children, scroll = true, refreshing, onRefresh, content
     paddingBottom: edges.includes('bottom') ? insets.bottom : 0,
   };
 
-  if (!scroll) {
-    return <View style={[styles.root, padding, contentStyle]}>{children}</View>;
-  }
-
-  return (
+  const content = !scroll ? (
+    <View style={[styles.root, padding, contentStyle]}>{children}</View>
+  ) : (
     <ScrollView
       style={styles.root}
       contentContainerStyle={[styles.scrollContent, padding, contentStyle]}
@@ -45,6 +43,14 @@ export function Screen({ children, scroll = true, refreshing, onRefresh, content
       {children}
     </ScrollView>
   );
+
+  // Android-only JS fix for the installed Play runtime: keep the active scrollable screen inside
+  // a keyboard-aware available-height container. Android's own soft-input resize handles the
+  // actual keyboard inset; do not add padding/height here (which can double-shift on Android).
+  // iOS remains unchanged for the independent release track.
+  return Platform.OS === 'android' ? (
+    <KeyboardAvoidingView style={styles.root}>{content}</KeyboardAvoidingView>
+  ) : content;
 }
 
 const styles = StyleSheet.create({

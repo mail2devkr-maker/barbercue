@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -31,8 +33,9 @@ export function PremiumScreen({
 }) {
   const insets = useSafeAreaInsets();
   const padding = { paddingTop: insets.top + space[3], paddingBottom: insets.bottom + space[7] };
-  if (!scroll) return <View style={[styles.screen, padding, contentStyle]}>{children}</View>;
-  return (
+  const content = !scroll ? (
+    <View style={[styles.screen, padding, contentStyle]}>{children}</View>
+  ) : (
     <ScrollView
       style={styles.screen}
       contentContainerStyle={[styles.content, padding, contentStyle]}
@@ -42,6 +45,10 @@ export function PremiumScreen({
       {children}
     </ScrollView>
   );
+  // Matches Screen: Android-only layout adjustment without a new native module/build.
+  return Platform.OS === 'android' ? (
+    <KeyboardAvoidingView style={styles.screen}>{content}</KeyboardAvoidingView>
+  ) : content;
 }
 
 export function PremiumCard({ children, style, strong = false }: { children: ReactNode; style?: StyleProp<ViewStyle>; strong?: boolean }) {
