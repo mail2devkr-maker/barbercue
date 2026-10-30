@@ -22,7 +22,7 @@ type Rendered = ReturnType<typeof TestRenderer.create>;
 async function render(component: typeof Screen | typeof PremiumScreen, scroll = true): Promise<Rendered> {
   let tree!: Rendered;
   await act(async () => {
-    tree = TestRenderer.create(createElement(component, { scroll }, createElement(TextInput, { testID: 'typing-field' })));
+    tree = TestRenderer.create(createElement(component, { scroll, children: createElement(TextInput, { testID: 'typing-field' }) }));
   });
   return tree;
 }
