@@ -256,7 +256,7 @@ export function QueueQrSection({ salonId, salonName }: { salonId: string; salonN
             <Button type="button" variant="outline" disabled={addressLoading || !salonAddress} onClick={() => void handleDownload()}>
               Download QR
             </Button>
-            <Button type="button" variant="outline" onClick={() => window.print()}>
+            <Button type="button" variant="outline" disabled={addressLoading || !salonAddress} onClick={() => window.print()}>
               Print
             </Button>
           </div>
