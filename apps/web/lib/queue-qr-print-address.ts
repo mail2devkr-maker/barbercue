@@ -74,35 +74,32 @@ export function layoutQueueQrPrintAddress(address: string, measure: MeasureText)
     }
   }
 
-  // Last resort for unusually long addresses: still auto-wrap instead of
-  // assuming fixed breaks or silently dropping the last part of the address.
-  // Distribute actual words across four rows by measured width. For a single
-  // unbroken token, split into four code-point chunks; the SVG export uses
-  // textLength only if even these rows are wider than the footer.
+  // Last resort for unusually long addresses: auto-wrap into no more than
+  // four lines without clipping or reordering any of the owner's address.
+  // A continuous non-spaced string is divided by code point; a longer set of
+  // words is split at word boundaries, with textLength reserved for cases
+  // that physically cannot fit at our minimum readable footer font.
   const words = normalized.split(" ");
-  const rows = Array.from({ length: 4 }, () => "");
-  for (const word of words) {
-    const target = rows
-      .map((row, index) => ({ index, width: measure(row, 7) }))
-      .sort((left, right) => left.width - right.width || left.index - right.index)[0].index;
-    rows[target] = rows[target] ? `${rows[target]} ${word}` : word;
-  }
-  // Preserve natural word order (rather than the greedy width distribution
-  // above, which can scramble address components) while balancing lengths.
-  // A long continuous address can be split safely by code point.
-  const chars = Array.from(normalized);
-  const wordRows = words.length > 1 ? Array.from({ length: 4 }, () => "") : null;
-  if (wordRows) {
-    let row = 0;
+  let lines: string[];
+  if (words.length === 1) {
+    const chars = Array.from(normalized);
+    lines = Array.from({ length: 4 }, (_, index) =>
+      chars.slice(Math.floor(index * chars.length / 4), Math.floor((index + 1) * chars.length / 4)).join("")
+    ).filter(Boolean);
+  } else {
+    const targetWidth = Math.max(MAX_WIDTH, measure(normalized, 7) / 4);
+    const rows = [""];
     for (const word of words) {
-      const next = wordRows[row] ? `${wordRows[row]} ${word}` : word;
-      if (row < 3 && wordRows[row] && measure(next, 7) > Math.max(MAX_WIDTH, measure(normalized, 7) / 4)) row += 1;
-      wordRows[row] = wordRows[row] ? `${wordRows[row]} ${word}` : word;
+      const last = rows.length - 1;
+      const next = rows[last] ? `${rows[last]} ${word}` : word;
+      if (rows[last] && rows.length < 4 && measure(next, 7) > targetWidth) {
+        rows.push(word);
+      } else {
+        rows[last] = next;
+      }
     }
+    lines = rows.filter(Boolean);
   }
-  const lines = (wordRows ? wordRows.filter(Boolean) : Array.from({ length: 4 }, (_, index) =>
-    chars.slice(Math.floor(index * chars.length / 4), Math.floor((index + 1) * chars.length / 4)).join("")
-  )).filter(Boolean);
   return {
     lines,
     fontSize: 7,
