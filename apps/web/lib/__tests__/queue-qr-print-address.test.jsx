@@ -33,7 +33,9 @@ describe("4x6-inch queue poster bottom address", () => {
     ]) {
       const layout = layoutQueueQrPrintAddress(input, approximateCanvasMeasure);
       expect(layout.lines.length).toBeLessThanOrEqual(4);
-      expect(layout.lines.join(" ")).toBe(input);
+      // Automatic word/character wrapping may split a non-spaced address;
+      // only the visual newline boundaries are allowed to differ.
+      expect(layout.lines.join(input.includes(" ") ? " " : "")).toBe(input);
       expect(layout.firstBaseline + (layout.lines.length - 1) * layout.lineHeight).toBe(587);
     }
   });
