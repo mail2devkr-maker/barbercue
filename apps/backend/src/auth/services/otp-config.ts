@@ -56,12 +56,21 @@ export function isOtpPhoneAllowed(phone: string): boolean {
   return otpPhoneCallingCode(phone) !== null;
 }
 
+/** Existing POST path remains the default; an unsupported configured mode must fail closed. */
+export function otpProviderApiMode(): 'post' | 'manual-v1' | null {
+  const value = process.env.OTP_PROVIDER_API_MODE?.trim();
+  if (!value || value === 'post') return 'post';
+  if (value === 'manual-v1') return 'manual-v1';
+  return null;
+}
+
 export function isPhoneOtpConfigured(): boolean {
   const apiKey = process.env.OTP_PROVIDER_API_KEY?.trim();
   const template = process.env.OTP_PROVIDER_TEMPLATE_NAME?.trim();
   const providerConfigured = Boolean(
     process.env.NODE_ENV === 'production' &&
     apiKey &&
+    otpProviderApiMode() &&
     template &&
     /^[A-Za-z0-9_-]{1,64}$/.test(template),
   );
