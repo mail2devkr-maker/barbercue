@@ -10,7 +10,6 @@
  * including written provider authorization for this exact shared template.
  */
 import { randomInt } from 'node:crypto';
-import { TwoFactorOtpSender } from '../src/auth/services/two-factor-otp-sender';
 
 const EXPECTED_LIVE_FLAG = 'SEND_EXACTLY_ONE_SMS';
 const EXPECTED_CONFIRMATION = 'YES';
@@ -56,6 +55,9 @@ async function main(): Promise<void> {
 
   const otp = randomInt(0, 1_000_000).toString().padStart(6, '0');
   // The adapter's success means PROVIDER ACCEPTANCE, never confirmed handset delivery.
+  // Delay loading NestJS and the application adapter until every safety gate passed.
+  // This also makes an offline dry run independent of backend packages.
+  const { TwoFactorOtpSender } = await import('../src/auth/services/two-factor-otp-sender');
   await new TwoFactorOtpSender().sendOtp(phone, otp);
   console.log('PROVIDER_ACCEPTED: exactly one send request was accepted.');
   console.log('Check the consented handset for a SIX-digit OTP and correct sender/content.');
