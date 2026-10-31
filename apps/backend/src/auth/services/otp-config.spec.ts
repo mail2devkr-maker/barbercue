@@ -5,12 +5,14 @@ import {
   otpDeliveryLimits,
   otpHashSecret,
   otpPhoneCallingCode,
+  otpProviderApiMode,
 } from './otp-config';
 
 describe('OTP configuration', () => {
   const original = {
     nodeEnv: process.env.NODE_ENV,
     apiKey: process.env.OTP_PROVIDER_API_KEY,
+    providerMode: process.env.OTP_PROVIDER_API_MODE,
     template: process.env.OTP_PROVIDER_TEMPLATE_NAME,
     hashSecret: process.env.OTP_HASH_SECRET,
     callingCodes: process.env.OTP_ALLOWED_COUNTRY_CALLING_CODES,
@@ -23,6 +25,7 @@ describe('OTP configuration', () => {
   beforeEach(() => {
     process.env.NODE_ENV = 'production';
     delete process.env.OTP_PROVIDER_API_KEY;
+    delete process.env.OTP_PROVIDER_API_MODE;
     delete process.env.OTP_PROVIDER_TEMPLATE_NAME;
     delete process.env.OTP_HASH_SECRET;
     delete process.env.OTP_ALLOWED_COUNTRY_CALLING_CODES;
@@ -37,6 +40,8 @@ describe('OTP configuration', () => {
     else process.env.NODE_ENV = original.nodeEnv;
     if (original.apiKey === undefined) delete process.env.OTP_PROVIDER_API_KEY;
     else process.env.OTP_PROVIDER_API_KEY = original.apiKey;
+    if (original.providerMode === undefined) delete process.env.OTP_PROVIDER_API_MODE;
+    else process.env.OTP_PROVIDER_API_MODE = original.providerMode;
     if (original.template === undefined)
       delete process.env.OTP_PROVIDER_TEMPLATE_NAME;
     else process.env.OTP_PROVIDER_TEMPLATE_NAME = original.template;
@@ -126,5 +131,25 @@ describe('OTP configuration', () => {
       perCountryDaily: 5,
     });
     expect(isPhoneOtpConfigured()).toBe(true);
+  });
+
+  it('keeps POST as default, enables manual-v1 only by explicit selection, and rejects unknown modes', () => {
+    expect(otpProviderApiMode()).toBe('post');
+    process.env.OTP_PROVIDER_API_KEY = 'synthetic-test-key';
+    process.env.OTP_PROVIDER_TEMPLATE_NAME = 'OTP1';
+    process.env.OTP_HASH_SECRET = 'synthetic-secret-at-least-thirty-two-bytes-long';
+    process.env.OTP_ALLOWED_COUNTRY_CALLING_CODES = '91';
+    process.env.OTP_MAX_DAILY_GLOBAL_SENDS = '10';
+    process.env.OTP_MAX_ROLLING_24H_GLOBAL_SENDS = '10';
+    process.env.OTP_MAX_DAILY_PER_COUNTRY_SENDS = '10';
+    expect(isPhoneOtpConfigured()).toBe(true);
+
+    process.env.OTP_PROVIDER_API_MODE = 'manual-v1';
+    expect(otpProviderApiMode()).toBe('manual-v1');
+    expect(isPhoneOtpConfigured()).toBe(true);
+
+    process.env.OTP_PROVIDER_API_MODE = 'AUTOGEN';
+    expect(otpProviderApiMode()).toBeNull();
+    expect(isPhoneOtpConfigured()).toBe(false);
   });
 });
