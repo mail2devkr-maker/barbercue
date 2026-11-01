@@ -255,6 +255,15 @@ export class AdminController {
     return new StreamableFile(file.body);
   }
 
+  // All-time unique served customers, one row each. A bulk per-customer list, so unlike the overview
+  // total it follows the customer report: no read-only viewer, always audited, phones always masked.
+  @Get(`${ADMIN_PATHS.analytics}/${ADMIN_PATHS.customersServed}`)
+  @Roles(...ADMIN_PERMISSION_ROLES.exportCustomerReport)
+  @Header('Cache-Control', 'private, no-store')
+  servedCustomers(@CurrentUser() user: AuthenticatedUser) {
+    return this.executive.getServedCustomers(user.id);
+  }
+
   @Get(ADMIN_PATHS.verification)
   @Roles(Role.PLATFORM_ADMIN, Role.CO_FOUNDER)
   listVerification(
