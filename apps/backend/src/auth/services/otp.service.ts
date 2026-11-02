@@ -22,6 +22,10 @@ const MAX_VERIFY_ATTEMPTS = 5;
 const MAX_REQUESTS_PER_WINDOW = 3;
 const REQUEST_WINDOW_MINUTES = 10;
 const MAX_REQUESTS_PER_DAY = 10;
+// Minimum gap between two SMS sends to the same number, whatever the purpose. Each send costs a
+// provider credit and, with the response lost or the owner unsure which message is current, an
+// immediate second send only produces two codes on the handset.
+const RESEND_COOLDOWN_SECONDS = 45;
 const HMAC_HASH_VERSION = 'HMAC_SHA256_V1';
 const LEGACY_HASH_VERSION = 'LEGACY_SHA256';
 const OTP_DELIVERY_BUDGET_LOCK = 'fastque:otp-delivery-budget:v1';
@@ -108,6 +112,31 @@ export class OtpService {
         await tx.otpDeliveryAttempt.deleteMany({
           where: { createdAt: { lt: retentionStart } },
         });
+
+        // Read under the advisory lock so two concurrent requests cannot both pass the gap check.
+        // Failed and ambiguous sends leave a row too, so they also hold the cooldown.
+        const lastRequest = await tx.otpRequest.findFirst({
+          where: {
+            phone,
+            createdAt: {
+              gt: new Date(now.getTime() - RESEND_COOLDOWN_SECONDS * 1_000),
+            },
+          },
+          orderBy: { createdAt: 'desc' },
+          select: { createdAt: true },
+        });
+        if (lastRequest) {
+          const retryAfterSeconds = Math.max(
+            1,
+            Math.ceil(
+              (lastRequest.createdAt.getTime() +
+                RESEND_COOLDOWN_SECONDS * 1_000 -
+                now.getTime()) /
+                1_000,
+            ),
+          );
+          throw this.rateLimited({ retryAfterSeconds });
+        }
 
         const [
           globalDailyCount,
@@ -303,11 +332,12 @@ export class OtpService {
     );
   }
 
-  private rateLimited(): AppException {
+  private rateLimited(details?: { retryAfterSeconds: number }): AppException {
     return new AppException(
       AuthErrorCode.OTP_RATE_LIMITED,
       'Too many OTP requests for this number. Please wait before trying again.',
       HttpStatus.TOO_MANY_REQUESTS,
+      details,
     );
   }
 
