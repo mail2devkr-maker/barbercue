@@ -200,6 +200,141 @@ describe('OtpService', () => {
       expect(otpSender.sendOtp).not.toHaveBeenCalled();
     });
 
+    describe('owner-only pilot restriction', () => {
+      const PILOT_PHONE = '+919876500001';
+
+      afterEach(() => {
+        delete process.env.OTP_PILOT_ALLOWED_PHONES;
+      });
+
+      it('rejects a non-pilot number before any transaction, ledger row or SMS', async () => {
+        process.env.OTP_PILOT_ALLOWED_PHONES = PILOT_PHONE;
+
+        await expect(service.requestOtp(PHONE)).rejects.toMatchObject({
+          code: AuthErrorCode.OTP_DELIVERY_FAILED,
+          status: 400,
+        });
+        expect(prisma.$transaction).not.toHaveBeenCalled();
+        expect(prisma.otpRequest.create).not.toHaveBeenCalled();
+        expect(prisma.otpDeliveryAttempt.create).not.toHaveBeenCalled();
+        expect(otpSender.sendOtp).not.toHaveBeenCalled();
+      });
+
+      it('sends to the pilot number, for every purpose', async () => {
+        process.env.OTP_PILOT_ALLOWED_PHONES = PILOT_PHONE;
+
+        await service.requestOtp(PILOT_PHONE);
+        await service.requestOtp(PILOT_PHONE, OtpPurpose.PHONE_LINK, 'owner-1');
+
+        expect(otpSender.sendOtp).toHaveBeenCalledTimes(2);
+        expect(otpSender.sendOtp).toHaveBeenCalledWith(
+          PILOT_PHONE,
+          expect.stringMatching(/^\d{6}$/),
+        );
+      });
+
+      it('blocks every number when the pilot value is malformed (fail closed)', async () => {
+        process.env.OTP_PILOT_ALLOWED_PHONES = 'oops';
+
+        await expect(service.requestOtp(PILOT_PHONE)).rejects.toMatchObject({
+          code: AuthErrorCode.OTP_DELIVERY_FAILED,
+        });
+        expect(otpSender.sendOtp).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('45-second resend cooldown', () => {
+      it('rejects a second request 10 seconds after the first, with the remaining wait, before any send', async () => {
+        prisma.otpRequest.findFirst.mockResolvedValueOnce({
+          createdAt: new Date(Date.now() - 10_000),
+        });
+
+        const failure = await service.requestOtp(PHONE).catch((e) => e);
+
+        expect(failure).toMatchObject({
+          code: AuthErrorCode.OTP_RATE_LIMITED,
+          status: 429,
+        });
+        const { retryAfterSeconds } = failure.details as {
+          retryAfterSeconds: number;
+        };
+        expect(retryAfterSeconds).toBeGreaterThanOrEqual(34);
+        expect(retryAfterSeconds).toBeLessThanOrEqual(35);
+        expect(prisma.otpRequest.updateMany).not.toHaveBeenCalled();
+        expect(prisma.otpRequest.create).not.toHaveBeenCalled();
+        expect(prisma.otpDeliveryAttempt.create).not.toHaveBeenCalled();
+        expect(otpSender.sendOtp).not.toHaveBeenCalled();
+      });
+
+      it('never reports a zero or negative wait at the very edge of the window', async () => {
+        prisma.otpRequest.findFirst.mockResolvedValueOnce({
+          createdAt: new Date(Date.now() - 44_999),
+        });
+
+        const failure = await service.requestOtp(PHONE).catch((e) => e);
+
+        expect(failure.details).toEqual({ retryAfterSeconds: 1 });
+      });
+
+      it('looks only 45 seconds back, for any purpose, and only after taking the advisory lock', async () => {
+        const before = Date.now();
+        await service.requestOtp(PHONE);
+
+        const query = prisma.otpRequest.findFirst.mock.calls[0][0] as {
+          where: { phone: string; createdAt: { gt: Date }; purpose?: unknown };
+        };
+        expect(query.where.phone).toBe(PHONE);
+        expect(query.where).not.toHaveProperty('purpose');
+        expect(query.where).not.toHaveProperty('subjectUserId');
+        const lookBackMs = before - query.where.createdAt.gt.getTime();
+        expect(lookBackMs).toBeGreaterThanOrEqual(45_000 - 1_000);
+        expect(lookBackMs).toBeLessThanOrEqual(45_000 + 1_000);
+        expect(prisma.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(
+          prisma.otpRequest.findFirst.mock.invocationCallOrder[0],
+        );
+      });
+
+      it('allows the next request once no row is inside the 45-second window', async () => {
+        prisma.otpRequest.findFirst.mockResolvedValueOnce(null);
+
+        await expect(service.requestOtp(PHONE)).resolves.toEqual({
+          expiresInSeconds: 300,
+        });
+        expect(otpSender.sendOtp).toHaveBeenCalledTimes(1);
+      });
+
+      it('lets an undelivered or ambiguous send hold the cooldown too, so a retry cannot double-charge', async () => {
+        otpSender.sendOtp.mockRejectedValueOnce(new Error('synthetic timeout'));
+        await expect(service.requestOtp(PHONE)).rejects.toMatchObject({
+          code: AuthErrorCode.OTP_DELIVERY_FAILED,
+        });
+        // The failed attempt's row (consumed, but still stored) is what the next call finds.
+        const stored = prisma.otpRequest.create.mock.calls[0][0] as {
+          data: { createdAt: Date };
+        };
+        prisma.otpRequest.findFirst.mockResolvedValueOnce({
+          createdAt: stored.data.createdAt,
+        });
+
+        await expect(service.requestOtp(PHONE)).rejects.toMatchObject({
+          code: AuthErrorCode.OTP_RATE_LIMITED,
+        });
+        expect(otpSender.sendOtp).toHaveBeenCalledTimes(1);
+      });
+
+      it('keeps every existing ceiling in force when the cooldown has passed', async () => {
+        prisma.otpRequest.findFirst.mockResolvedValue(null);
+        prisma.otpRequest.count
+          .mockResolvedValueOnce(3)
+          .mockResolvedValueOnce(3);
+
+        await expect(service.requestOtp(PHONE)).rejects.toMatchObject({
+          code: AuthErrorCode.OTP_RATE_LIMITED,
+        });
+        expect(otpSender.sendOtp).not.toHaveBeenCalled();
+      });
+    });
+
     it('fails closed at the global daily ceiling before creating a challenge or dispatching', async () => {
       prisma.otpDeliveryAttempt.count.mockResolvedValueOnce(100);
 

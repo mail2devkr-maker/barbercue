@@ -17,10 +17,12 @@ describe('TwoFactorOtpSender', () => {
   let loggerErrorSpy: jest.SpyInstance;
   const originalApiKey = process.env.OTP_PROVIDER_API_KEY;
   const originalTemplate = process.env.OTP_PROVIDER_TEMPLATE_NAME;
+  const originalMode = process.env.OTP_PROVIDER_API_MODE;
 
   beforeEach(async () => {
     process.env.OTP_PROVIDER_API_KEY = 'synthetic-test-provider-key';
     process.env.OTP_PROVIDER_TEMPLATE_NAME = 'FASTQUE_LOGIN_TEST';
+    delete process.env.OTP_PROVIDER_API_MODE;
     fetchSpy = jest.spyOn(global, 'fetch');
     loggerErrorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation();
 
@@ -36,6 +38,8 @@ describe('TwoFactorOtpSender', () => {
     if (originalTemplate === undefined)
       delete process.env.OTP_PROVIDER_TEMPLATE_NAME;
     else process.env.OTP_PROVIDER_TEMPLATE_NAME = originalTemplate;
+    if (originalMode === undefined) delete process.env.OTP_PROVIDER_API_MODE;
+    else process.env.OTP_PROVIDER_API_MODE = originalMode;
     jest.useRealTimers();
     jest.restoreAllMocks();
   });
@@ -201,5 +205,82 @@ describe('TwoFactorOtpSender', () => {
     expect(loggerErrorSpy).toHaveBeenCalledWith(
       '2Factor OTP request timed out.',
     );
+  });
+
+  it('sends FastQue-generated six-digit OTP through the manual-v1 URL with OTP1', async () => {
+    process.env.OTP_PROVIDER_API_MODE = 'manual-v1';
+    process.env.OTP_PROVIDER_TEMPLATE_NAME = 'OTP1';
+    fetchSpy.mockResolvedValue(
+      jsonResponse(200, { Status: 'Success', Details: 'synthetic-session-id' }),
+    );
+
+    await service.sendOtp('+919876543210', '012345');
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'https://2factor.in/API/V1/synthetic-test-provider-key/SMS/919876543210/012345/OTP1',
+      expect.objectContaining({
+        method: 'GET',
+        redirect: 'error',
+        cache: 'no-store',
+        signal: expect.any(AbortSignal),
+      }),
+    );
+    const request = fetchSpy.mock.calls[0][1];
+    expect(request?.headers).toBeUndefined();
+    expect(request?.body).toBeUndefined();
+  });
+
+  it('accepts only legacy Success with a nonempty session and never treats errors as delivery', async () => {
+    process.env.OTP_PROVIDER_API_MODE = 'manual-v1';
+    for (const providerResponse of [
+      { Status: 'Error', Details: 'invalid template' },
+      { Status: 'Success', Details: '' },
+      { Status: 'sent', Details: 'synthetic-session-id' },
+      { status: 'sent', session_id: 'post-format' },
+      {},
+    ]) {
+      fetchSpy.mockResolvedValueOnce(jsonResponse(200, providerResponse));
+      await expect(
+        service.sendOtp('+919876543210', '654321'),
+      ).rejects.toMatchObject({ code: AuthErrorCode.OTP_DELIVERY_FAILED });
+    }
+    expect(fetchSpy).toHaveBeenCalledTimes(5);
+  });
+
+  it('fails closed on malformed OTP, phone, template or unknown mode before calling provider', async () => {
+    process.env.OTP_PROVIDER_API_MODE = 'manual-v1';
+    await expect(service.sendOtp('+919876543210', '1234')).rejects.toMatchObject({
+      code: AuthErrorCode.OTP_DELIVERY_FAILED,
+    });
+    await expect(service.sendOtp('9876543210', '123456')).rejects.toMatchObject({
+      code: AuthErrorCode.OTP_DELIVERY_FAILED,
+    });
+    process.env.OTP_PROVIDER_TEMPLATE_NAME = 'template with spaces';
+    await expect(service.sendOtp('+919876543210', '123456')).rejects.toMatchObject({
+      code: AuthErrorCode.OTP_DELIVERY_FAILED,
+    });
+    process.env.OTP_PROVIDER_TEMPLATE_NAME = 'OTP1';
+    process.env.OTP_PROVIDER_API_MODE = 'unsupported-provider-mode';
+    await expect(service.sendOtp('+919876543210', '123456')).rejects.toMatchObject({
+      code: AuthErrorCode.OTP_DELIVERY_FAILED,
+    });
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('never logs the sensitive legacy URL, OTP, provider error body, phone or API key', async () => {
+    process.env.OTP_PROVIDER_API_MODE = 'manual-v1';
+    process.env.OTP_PROVIDER_TEMPLATE_NAME = 'OTP1';
+    fetchSpy.mockRejectedValueOnce(
+      new Error('https://2factor.in/API/V1/synthetic-test-provider-key/SMS/919876543210/987654/OTP1'),
+    );
+    await expect(service.sendOtp('+919876543210', '987654')).rejects.toMatchObject({
+      code: AuthErrorCode.OTP_DELIVERY_FAILED,
+    });
+    const logs = loggerErrorSpy.mock.calls.map((call) => String(call[0])).join('\\n');
+    expect(logs).not.toContain('synthetic-test-provider-key');
+    expect(logs).not.toContain('919876543210');
+    expect(logs).not.toContain('987654');
+    expect(logs).not.toContain('https://');
   });
 });

@@ -62,18 +62,42 @@ maybe(
       return req;
     };
 
+    /**
+     * The auth routes carry an IP-based throttle (5 per minute per route). The cooldown tests send
+     * more requests than that, so each of their calls presents its own synthetic client address
+     * through X-Forwarded-For (trust proxy is enabled for this test app). The throttle itself is
+     * not under test here.
+     */
+    let nextSyntheticClient = 1;
+    const postFromFreshClient = (path: string, bearer?: string) =>
+      post(path, bearer).set(
+        'X-Forwarded-For',
+        `10.77.${Math.floor(nextSyntheticClient / 250)}.${(nextSyntheticClient++ % 250) + 1}`,
+      );
+
     async function requestCode(
       path: string,
       destination: string,
       bearer?: string,
+      via: typeof post = post,
     ) {
       fixturePhones.add(destination);
       const before = fakeOtpSender.sendOtp.mock.calls.length;
-      await post(path, bearer).send({ phone: destination }).expect(201);
+      await via(path, bearer).send({ phone: destination }).expect(201);
       expect(fakeOtpSender.sendOtp.mock.calls.length).toBe(before + 1);
       const code = receivedCodes.get(destination);
       expect(code).toMatch(/^\d{6}$/);
       return code as string;
+    }
+
+    /**
+     * The server holds a 45-second per-number resend cooldown measured from OtpRequest.createdAt.
+     * Instead of sleeping, move that number's stored challenges back in time by one uniform offset
+     * (their relative order, and so which one is "latest", is preserved). Every window cap still
+     * counts them, because 46 seconds is far inside the 10-minute and 24-hour windows.
+     */
+    async function passResendCooldown(destination: string, seconds = 46) {
+      await prisma.$executeRaw`UPDATE "otp_requests" SET "createdAt" = "createdAt" - make_interval(secs => ${seconds}) WHERE "phone" = ${destination}`;
     }
 
     beforeAll(async () => {
@@ -92,6 +116,11 @@ maybe(
         .useValue(fakeOtpSender)
         .compile();
       app = moduleFixture.createNestApplication();
+      (
+        app.getHttpAdapter().getInstance() as {
+          set(name: string, value: unknown): void;
+        }
+      ).set('trust proxy', true);
       app.setGlobalPrefix('api/v1');
       app.useGlobalFilters(new AllExceptionsFilter());
       await app.init();
@@ -185,6 +214,7 @@ maybe(
         orderBy: { createdAt: 'desc' },
       });
       expect(firstChallenge).not.toBeNull();
+      await passResendCooldown(destination);
       const currentCode = await requestCode(
         `auth/${AUTH_PATHS.otpRequest}`,
         destination,
@@ -229,6 +259,7 @@ maybe(
       expect(replay.status).toBe(400);
       expect(replay.body.error.code).toBe(AuthErrorCode.OTP_INVALID);
 
+      await passResendCooldown(destination);
       const nextCode = await requestCode(
         `auth/${AUTH_PATHS.otpRequest}`,
         destination,
@@ -459,10 +490,187 @@ maybe(
         }),
       );
 
+      await passResendCooldown(ownerPhone);
       const oldPhoneResult = await post(`auth/${AUTH_PATHS.ownerOtpRequest}`)
         .send({ phone: ownerPhone })
         .expect(201);
       expect(oldPhoneResult.body).toEqual({ expiresInSeconds: 300 });
+    }, 60_000);
+
+    it('rejects an immediate resend with 429 and no SMS, then resends and supersedes only after the 45-second cooldown, with the window caps intact', async () => {
+      const destination = phone(8);
+      const requestPath = `auth/${AUTH_PATHS.otpRequest}`;
+      const sends = () => fakeOtpSender.sendOtp.mock.calls.length;
+      const firstCode = await requestCode(
+        requestPath,
+        destination,
+        undefined,
+        postFromFreshClient,
+      );
+      const sendsAfterFirst = sends();
+      const first = await prisma.otpRequest.findFirstOrThrow({
+        where: {
+          phone: destination,
+          purpose: OtpPurpose.LOGIN,
+          verifiedAt: null,
+        },
+      });
+
+      const immediate = await postFromFreshClient(requestPath).send({
+        phone: destination,
+      });
+      expect(immediate.status).toBe(429);
+      expect(immediate.body.error.code).toBe(AuthErrorCode.OTP_RATE_LIMITED);
+      expect(immediate.body.error.details.retryAfterSeconds).toBeGreaterThan(0);
+      expect(
+        immediate.body.error.details.retryAfterSeconds,
+      ).toBeLessThanOrEqual(45);
+      expect(sends()).toBe(sendsAfterFirst);
+      expect(receivedCodes.get(destination)).toBe(firstCode);
+      expect(
+        await prisma.otpRequest.count({ where: { phone: destination } }),
+      ).toBe(1);
+      const untouched = await prisma.otpRequest.findUniqueOrThrow({
+        where: { id: first.id },
+      });
+      expect(untouched.verifiedAt).toBeNull();
+      expect(untouched.attempts).toBe(0);
+
+      // 30 seconds after the send is still inside the window; 16 more seconds is outside it.
+      await passResendCooldown(destination, 30);
+      const stillBlocked = await postFromFreshClient(requestPath).send({
+        phone: destination,
+      });
+      expect(stillBlocked.status).toBe(429);
+      expect(sends()).toBe(sendsAfterFirst);
+      await passResendCooldown(destination, 16);
+      const secondCode = await requestCode(
+        requestPath,
+        destination,
+        undefined,
+        postFromFreshClient,
+      );
+      const superseded = await prisma.otpRequest.findUniqueOrThrow({
+        where: { id: first.id },
+      });
+      expect(superseded.verifiedAt).toBeInstanceOf(Date);
+      if (secondCode !== firstCode) {
+        const stale = await postFromFreshClient(
+          `auth/${AUTH_PATHS.otpVerify}`,
+        ).send({
+          phone: destination,
+          code: firstCode,
+        });
+        expect(stale.status).toBe(400);
+        expect(stale.body.error.code).toBe(AuthErrorCode.OTP_INVALID);
+      }
+      const valid = await postFromFreshClient(
+        `auth/${AUTH_PATHS.otpVerify}`,
+      ).send({
+        phone: destination,
+        code: secondCode,
+      });
+      expect(valid.status).toBe(201);
+      fixtureUserIds.add(valid.body.user.id as string);
+
+      // The 3-per-10-minute cap still holds once the cooldown is out of the way: the third send
+      // is admitted and the fourth is refused by the cap, not by the cooldown (no retryAfterSeconds).
+      await passResendCooldown(destination);
+      await requestCode(
+        requestPath,
+        destination,
+        undefined,
+        postFromFreshClient,
+      );
+      await passResendCooldown(destination);
+      const sendsBeforeCap = sends();
+      const capped = await postFromFreshClient(requestPath).send({
+        phone: destination,
+      });
+      expect(capped.status).toBe(429);
+      expect(capped.body.error.code).toBe(AuthErrorCode.OTP_RATE_LIMITED);
+      expect(capped.body.error.details).toBeUndefined();
+      expect(sends()).toBe(sendsBeforeCap);
+    }, 60_000);
+
+    it('keeps the original code valid when an immediate resend is refused', async () => {
+      const destination = phone(9);
+      const requestPath = `auth/${AUTH_PATHS.otpRequest}`;
+      const code = await requestCode(
+        requestPath,
+        destination,
+        undefined,
+        postFromFreshClient,
+      );
+      const sendsAfterFirst = fakeOtpSender.sendOtp.mock.calls.length;
+
+      const immediate = await postFromFreshClient(requestPath).send({
+        phone: destination,
+      });
+      expect(immediate.status).toBe(429);
+      expect(fakeOtpSender.sendOtp.mock.calls.length).toBe(sendsAfterFirst);
+
+      const valid = await postFromFreshClient(
+        `auth/${AUTH_PATHS.otpVerify}`,
+      ).send({
+        phone: destination,
+        code,
+      });
+      expect(valid.status).toBe(201);
+      expect(valid.body.user.audience).toBe(SessionAudience.CUSTOMER);
+      fixtureUserIds.add(valid.body.user.id as string);
+      const replay = await postFromFreshClient(
+        `auth/${AUTH_PATHS.otpVerify}`,
+      ).send({
+        phone: destination,
+        code,
+      });
+      expect(replay.status).toBe(400);
+    }, 60_000);
+
+    it('owner-only pilot: a non-pilot number is refused with no SMS, challenge or ledger row, the pilot number logs in, and auth/methods is unchanged', async () => {
+      const pilot = phone(10);
+      const stranger = phone(11);
+      const requestPath = `auth/${AUTH_PATHS.otpRequest}`;
+      const methodsPath = `/api/v1/auth/${AUTH_PATHS.methods}`;
+      const methodsBefore = (
+        await request(app.getHttpServer()).get(methodsPath)
+      ).body;
+      process.env.OTP_PILOT_ALLOWED_PHONES = pilot;
+      try {
+        const methodsDuring = await request(app.getHttpServer())
+          .get(methodsPath)
+          .expect(200);
+        expect(methodsDuring.body).toEqual(methodsBefore);
+
+        fixturePhones.add(stranger);
+        const sendsBefore = fakeOtpSender.sendOtp.mock.calls.length;
+        const attemptsBefore = await prisma.otpDeliveryAttempt.count();
+        const refused = await postFromFreshClient(requestPath).send({
+          phone: stranger,
+        });
+        expect(refused.status).toBe(400);
+        expect(fakeOtpSender.sendOtp.mock.calls.length).toBe(sendsBefore);
+        expect(await prisma.otpDeliveryAttempt.count()).toBe(attemptsBefore);
+        expect(
+          await prisma.otpRequest.count({ where: { phone: stranger } }),
+        ).toBe(0);
+
+        const code = await requestCode(
+          requestPath,
+          pilot,
+          undefined,
+          postFromFreshClient,
+        );
+        const session = await postFromFreshClient(
+          `auth/${AUTH_PATHS.otpVerify}`,
+        ).send({ phone: pilot, code });
+        expect(session.status).toBe(201);
+        expect(session.body.user.audience).toBe(SessionAudience.CUSTOMER);
+        fixtureUserIds.add(session.body.user.id as string);
+      } finally {
+        delete process.env.OTP_PILOT_ALLOWED_PHONES;
+      }
     }, 60_000);
 
     it('returns phone-auth capability only for the explicitly replaced synthetic sender in test mode', async () => {
