@@ -628,6 +628,51 @@ maybe(
       expect(replay.status).toBe(400);
     }, 60_000);
 
+    it('owner-only pilot: a non-pilot number is refused with no SMS, challenge or ledger row, the pilot number logs in, and auth/methods is unchanged', async () => {
+      const pilot = phone(10);
+      const stranger = phone(11);
+      const requestPath = `auth/${AUTH_PATHS.otpRequest}`;
+      const methodsPath = `/api/v1/auth/${AUTH_PATHS.methods}`;
+      const methodsBefore = (
+        await request(app.getHttpServer()).get(methodsPath)
+      ).body;
+      process.env.OTP_PILOT_ALLOWED_PHONES = pilot;
+      try {
+        const methodsDuring = await request(app.getHttpServer())
+          .get(methodsPath)
+          .expect(200);
+        expect(methodsDuring.body).toEqual(methodsBefore);
+
+        fixturePhones.add(stranger);
+        const sendsBefore = fakeOtpSender.sendOtp.mock.calls.length;
+        const attemptsBefore = await prisma.otpDeliveryAttempt.count();
+        const refused = await postFromFreshClient(requestPath).send({
+          phone: stranger,
+        });
+        expect(refused.status).toBe(400);
+        expect(fakeOtpSender.sendOtp.mock.calls.length).toBe(sendsBefore);
+        expect(await prisma.otpDeliveryAttempt.count()).toBe(attemptsBefore);
+        expect(
+          await prisma.otpRequest.count({ where: { phone: stranger } }),
+        ).toBe(0);
+
+        const code = await requestCode(
+          requestPath,
+          pilot,
+          undefined,
+          postFromFreshClient,
+        );
+        const session = await postFromFreshClient(
+          `auth/${AUTH_PATHS.otpVerify}`,
+        ).send({ phone: pilot, code });
+        expect(session.status).toBe(201);
+        expect(session.body.user.audience).toBe(SessionAudience.CUSTOMER);
+        fixtureUserIds.add(session.body.user.id as string);
+      } finally {
+        delete process.env.OTP_PILOT_ALLOWED_PHONES;
+      }
+    }, 60_000);
+
     it('returns phone-auth capability only for the explicitly replaced synthetic sender in test mode', async () => {
       const methods = await request(app.getHttpServer())
         .get(`/api/v1/auth/${AUTH_PATHS.methods}`)

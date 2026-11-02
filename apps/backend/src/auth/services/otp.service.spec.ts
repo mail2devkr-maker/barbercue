@@ -200,6 +200,49 @@ describe('OtpService', () => {
       expect(otpSender.sendOtp).not.toHaveBeenCalled();
     });
 
+    describe('owner-only pilot restriction', () => {
+      const PILOT_PHONE = '+919876500001';
+
+      afterEach(() => {
+        delete process.env.OTP_PILOT_ALLOWED_PHONES;
+      });
+
+      it('rejects a non-pilot number before any transaction, ledger row or SMS', async () => {
+        process.env.OTP_PILOT_ALLOWED_PHONES = PILOT_PHONE;
+
+        await expect(service.requestOtp(PHONE)).rejects.toMatchObject({
+          code: AuthErrorCode.OTP_DELIVERY_FAILED,
+          status: 400,
+        });
+        expect(prisma.$transaction).not.toHaveBeenCalled();
+        expect(prisma.otpRequest.create).not.toHaveBeenCalled();
+        expect(prisma.otpDeliveryAttempt.create).not.toHaveBeenCalled();
+        expect(otpSender.sendOtp).not.toHaveBeenCalled();
+      });
+
+      it('sends to the pilot number, for every purpose', async () => {
+        process.env.OTP_PILOT_ALLOWED_PHONES = PILOT_PHONE;
+
+        await service.requestOtp(PILOT_PHONE);
+        await service.requestOtp(PILOT_PHONE, OtpPurpose.PHONE_LINK, 'owner-1');
+
+        expect(otpSender.sendOtp).toHaveBeenCalledTimes(2);
+        expect(otpSender.sendOtp).toHaveBeenCalledWith(
+          PILOT_PHONE,
+          expect.stringMatching(/^\d{6}$/),
+        );
+      });
+
+      it('blocks every number when the pilot value is malformed (fail closed)', async () => {
+        process.env.OTP_PILOT_ALLOWED_PHONES = 'oops';
+
+        await expect(service.requestOtp(PILOT_PHONE)).rejects.toMatchObject({
+          code: AuthErrorCode.OTP_DELIVERY_FAILED,
+        });
+        expect(otpSender.sendOtp).not.toHaveBeenCalled();
+      });
+    });
+
     describe('45-second resend cooldown', () => {
       it('rejects a second request 10 seconds after the first, with the remaining wait, before any send', async () => {
         prisma.otpRequest.findFirst.mockResolvedValueOnce({

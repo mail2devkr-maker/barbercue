@@ -80,7 +80,7 @@ export class OtpService {
     if (!isOtpPhoneAllowed(phone)) {
       throw new AppException(
         AuthErrorCode.OTP_DELIVERY_FAILED,
-        'Phone verification is not available for this country.',
+        'Phone verification is not available for this number.',
         HttpStatus.BAD_REQUEST,
       );
     }
