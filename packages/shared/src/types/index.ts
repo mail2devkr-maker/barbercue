@@ -1412,6 +1412,13 @@ export const NOTIFICATION_TYPES = [
   // (low, predicted to run out, or out) and stock expiring or expired.
   "owner.inventory.reorder",
   "owner.inventory.expiring",
+  // Salon onboarding (onboarding.ts). In-app only; email/SMS stay unavailable until configured.
+  "onboarding.submitted",
+  "onboarding.changes_requested",
+  "onboarding.approved",
+  "onboarding.rejected",
+  "onboarding.owner_activated",
+  "onboarding.published",
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 

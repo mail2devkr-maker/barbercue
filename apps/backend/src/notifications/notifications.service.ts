@@ -38,6 +38,13 @@ const TYPE_CATEGORY: Record<NotificationType, NotificationCategory> = {
   // Inventory Phase 3 — stock reminders for the owner (no inventory category exists yet).
   'owner.inventory.reorder': NotificationCategory.REMINDERS,
   'owner.inventory.expiring': NotificationCategory.REMINDERS,
+  // Salon onboarding workflow notices are operational, so they ride the default-on category.
+  'onboarding.submitted': NotificationCategory.BOOKING_UPDATES,
+  'onboarding.changes_requested': NotificationCategory.BOOKING_UPDATES,
+  'onboarding.approved': NotificationCategory.BOOKING_UPDATES,
+  'onboarding.rejected': NotificationCategory.BOOKING_UPDATES,
+  'onboarding.owner_activated': NotificationCategory.BOOKING_UPDATES,
+  'onboarding.published': NotificationCategory.BOOKING_UPDATES,
 };
 
 const ALL_CATEGORIES: NotificationCategory[] = [
