@@ -30,6 +30,16 @@ describe('friendlyQueueActionError', () => {
   });
   afterEach(() => warn.mockRestore());
 
+  it('tells the operator the real reason when automatic assignment cannot seat someone', () => {
+    const err = Object.assign(new Error('Every qualified barber is busy or booked for an appointment.'), {
+      status: 409,
+      code: 'NO_ELIGIBLE_BARBER',
+    });
+    expect(friendlyQueueActionError(err, t, 'assign')).toBe('Every qualified barber is busy or booked for an appointment.');
+    const notArrived = Object.assign(new Error('This customer has not arrived yet.'), { status: 409, code: 'CUSTOMER_NOT_ARRIVED' });
+    expect(friendlyQueueActionError(notArrived, t, 'assign')).toBe('This customer has not arrived yet.');
+  });
+
   it('never shows raw router text such as "Cannot POST /api/v1/..."', () => {
     const err = Object.assign(new Error('Cannot POST /api/v1/queue-entries/abc/call'), {
       status: 404,

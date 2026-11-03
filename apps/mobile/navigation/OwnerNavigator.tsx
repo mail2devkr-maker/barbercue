@@ -23,7 +23,8 @@ import { OwnerArrivalPromptCoordinator } from '../components/owner/OwnerArrivalP
 
 export type OwnerTabParamList = {
   OwnerDashboardTab: undefined;
-  OwnerQueueTab: undefined;
+  // `newCustomer` opens the "New Live Queue customer" sheet straight away (Dashboard quick action).
+  OwnerQueueTab: { newCustomer?: boolean } | undefined;
   // Optional initial filter so the Dashboard tab's booking summary cards can deep-link straight
   // into e.g. "Today" or "Cancelled" instead of always landing on the tab's own default.
   OwnerBookingsTab: { filter?: OwnerBookingFilter } | undefined;

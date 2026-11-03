@@ -3,10 +3,10 @@ import type { BookingDetailDto, UiStrings } from '@barbercue/shared';
 
 // The web app is a separate Railway service from the backend API (see .env.example) — its origin
 // can't be derived from EXPO_PUBLIC_API_BASE_URL the way apps/web derives the realtime socket
-// origin from its own API base URL. Falls back to localhost so dev builds still produce a
-// clickable (if wrong-for-device) link rather than crashing; production sets this via the EAS
+// origin from its own API base URL. Development builds fall back to localhost so they still produce a
+// clickable (if wrong-for-device) link; a RELEASE build with the EAS variable missing falls back to the public website, never to localhost. Production sets this via the EAS
 // "preview"/"production" environment, same as EXPO_PUBLIC_API_BASE_URL.
-const WEB_ORIGIN = process.env.EXPO_PUBLIC_WEB_ORIGIN ?? 'http://localhost:3001';
+const WEB_ORIGIN = process.env.EXPO_PUBLIC_WEB_ORIGIN ?? (__DEV__ ? 'http://localhost:3001' : 'https://fastque.com');
 
 // Same Google Maps plain web deep-link format as apps/web/lib/booking-actions.ts — no Maps SDK/API
 // key needed, and Linking.openURL hands it to the native Google Maps app when installed.

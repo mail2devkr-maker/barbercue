@@ -241,7 +241,8 @@ describe('operator actions use the authoritative /dashboard routes', () => {
     await press(t.confirmAssignmentAction);
     const [call] = postCalls();
     expect(call.path).toBe('dashboard/queue-entries/q1/assign');
-    expect(JSON.parse(call.init.body)).toEqual({ staffId: 'st1', chairId: 'ch1', serviceId: 'sv1' });
+    // Assigning only RESERVES the barber and chair: the service is started by a separate, explicit action.
+    expect(JSON.parse(call.init.body)).toEqual({ staffId: 'st1', chairId: 'ch1', startService: false, serviceId: 'sv1' });
     expect(call.init.headers['Idempotency-Key']).toBe('idem-key');
   });
 
@@ -298,7 +299,7 @@ describe('operator actions use the authoritative /dashboard routes', () => {
       entry({ status: 'IN_SERVICE', arrivedAt: '2026-09-20T10:05:00.000Z', activeServiceSessionId: 'sess1', assignedStaffName: 'Sam', assignedChairLabel: 'Chair 1' }),
     ];
     await render();
-    await press(t.completeAction);
+    await press(t.completeServiceAction);
     expect(alertSpy).toHaveBeenCalledWith(t.confirmCompleteServiceTitle, t.confirmCompleteServiceBody, expect.any(Array));
     expect(postCalls()).toHaveLength(0);
     await confirmAlert();
@@ -347,7 +348,7 @@ describe('arrival state and lifecycle', () => {
     queue = [entry({ status: 'IN_SERVICE', arrivedAt: '2026-09-20T10:05:00.000Z', activeServiceSessionId: 'sess1' })];
     await render();
     expect(hasButton(t.cancelAction)).toBe(false);
-    expect(hasButton(t.completeAction)).toBe(true);
+    expect(hasButton(t.completeServiceAction)).toBe(true);
   });
 });
 
