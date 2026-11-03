@@ -60,6 +60,15 @@ export const EMPLOYEE_PATHS = {
   onboard: 'onboard',
   voiceVisitLogs: 'voice-visit-logs',
   shop: 'shop',
+  // Salon onboarding applications (see onboarding.ts for the full route map).
+  onboarding: 'onboarding',
+  counts: 'counts',
+  services: 'services',
+  media: 'media',
+  file: 'file',
+  extract: 'extract',
+  submit: 'submit',
+  analytics: 'analytics',
 } as const;
 
 export const EMPLOYEE_RESERVED_ID_MIN = 1;
@@ -112,6 +121,9 @@ export const ADMIN_PATHS = {
   leads: 'leads',
   visits: 'visits',
   followUps: 'follow-ups',
+  // Salon onboarding review queue: admin/onboarding[/kpis|/analytics|/:id[/...]].
+  onboarding: 'onboarding',
+  kpis: 'kpis',
 } as const;
 
 // Admin data permissions → the roles that hold them (enforced by the backend's RolesGuard on each
