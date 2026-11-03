@@ -35,6 +35,7 @@ import { EmployeeModule } from './employee/employee.module';
 import { DbDeadlineSchedulerModule } from './common/db-deadline-scheduler/db-deadline-scheduler.module';
 import { SiteMetricsModule } from './site-metrics/site-metrics.module';
 import { OwnerOpsModule } from './owner-ops/owner-ops.module';
+import { AssistantModule } from './assistant/assistant.module';
 import { SalonDescriptionModule } from './salon-description/salon-description.module';
 import { InventoryModule } from './inventory/inventory.module';
 
@@ -66,6 +67,8 @@ import { InventoryModule } from './inventory/inventory.module';
     // Owner-operations routes (dashboard/..., invoices/mine) — registered before SalonsModule like
     // the other salon-scoped controllers above.
     OwnerOpsModule,
+    // Action Assistant (issue #362): own assistant/* routes; reuses the modules above.
+    AssistantModule,
     SalonDescriptionModule,
     InventoryModule,
     SalonsModule,
