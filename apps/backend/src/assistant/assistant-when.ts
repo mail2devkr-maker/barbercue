@@ -102,6 +102,12 @@ export function timesIn(text: string, bareHours = false): string[] {
     let h = Number(m[1]);
     const min = m[2] ? Number(m[2]) : 0;
     if (h > 23 || min > 59) continue;
+    // "03:07" (a leading zero) is a 24-hour clock time: take it literally, never as p.m.
+    const literal24h = m[1].length === 2 && m[1].startsWith('0');
+    if (literal24h) {
+      out.push(`${m[1]}:${String(min).padStart(2, '0')}`);
+      continue;
+    }
     if (marker.startsWith('p') && h < 12) h += 12;
     else if (marker.startsWith('a') && h === 12) h = 0;
     else if (

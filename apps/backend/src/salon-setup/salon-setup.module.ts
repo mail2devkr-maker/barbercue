@@ -58,6 +58,8 @@ import { AssignmentReleaseModule } from '../queue/assignment-release.module';
     SalonServicesService,
     SalonStaffService,
     SalonOperatingHoursService,
+    SalonChairsService,
+    StaffWorkingHoursService,
   ],
 })
 export class SalonSetupModule {}

@@ -8,6 +8,13 @@ const SHOP_TEAM: Role[] = [
   Role.PLATFORM_ADMIN,
 ];
 const CUSTOMERS: Role[] = [Role.CUSTOMER];
+const OWNERS: Role[] = [Role.SALON_OWNER];
+const PLATFORM_READERS: Role[] = [
+  Role.PLATFORM_ADMIN,
+  Role.CO_FOUNDER,
+  Role.PLATFORM_VIEWER,
+];
+const EVERYONE: Role[] = Object.values(Role);
 
 const read = (
   title: string,
@@ -166,23 +173,24 @@ export const ASSISTANT_ACTIONS: Record<AssistantActionId, ActionDef> = {
     'STAFF_OR_ADMIN',
     ['Walk-in add karo Amit haircut'],
   ),
-  // ---- schedule and customers
+  // ---- schedule and customers (the shop bookings list is owner/admin only in FastQue, so these are too;
+  //      barbers keep using the Live Queue)
   [AssistantActionId.SCHEDULE_VIEW]: read(
     'Show appointments',
-    SHOP_TEAM,
-    'STAFF_OR_ADMIN',
+    SHOP_MANAGERS,
+    'OWNER_OR_ADMIN',
     ['Aaj ke appointments dikhao', 'Kal ki bookings'],
   ),
   [AssistantActionId.BOOKING_CANCEL_BY_SHOP]: write(
     'Cancel an appointment',
-    SHOP_TEAM,
-    'STAFF_OR_ADMIN',
+    SHOP_MANAGERS,
+    'OWNER_OR_ADMIN',
     ['Aaj 5 baje ka appointment cancel karo'],
   ),
   [AssistantActionId.BOOKING_RESCHEDULE_BY_SHOP]: write(
     'Reschedule an appointment',
-    SHOP_TEAM,
-    'STAFF_OR_ADMIN',
+    SHOP_MANAGERS,
+    'OWNER_OR_ADMIN',
     ['Kal 5 baje wala appointment 6 baje kar do'],
   ),
   [AssistantActionId.CUSTOMERS_FIND]: read(
@@ -236,5 +244,135 @@ export const ASSISTANT_ACTIONS: Record<AssistantActionId, ActionDef> = {
     CUSTOMERS,
     'SELF',
     ['Kal shaam 5 baje haircut book karo'],
+  ),
+  // ---- batch 3: shop
+  [AssistantActionId.CHAIRS_LIST]: read(
+    'Show chairs',
+    SHOP_MANAGERS,
+    'OWNER_OR_ADMIN',
+    ['Chairs dikhao'],
+  ),
+  [AssistantActionId.CHAIRS_ADD]: write(
+    'Add a chair',
+    SHOP_MANAGERS,
+    'OWNER_OR_ADMIN',
+    ['Naya chair add karo Chair 3'],
+  ),
+  [AssistantActionId.CHAIRS_SET_STATUS]: write(
+    'Activate, deactivate or repair a chair',
+    SHOP_MANAGERS,
+    'OWNER_OR_ADMIN',
+    ['Chair 2 maintenance mein daalo', 'Chair 2 band karo'],
+  ),
+  [AssistantActionId.STAFF_HOURS_VIEW]: read(
+    'Show a staff member’s weekly hours',
+    SHOP_MANAGERS,
+    'OWNER_OR_ADMIN',
+    ['Ravi staff ki timing dikhao'],
+  ),
+  [AssistantActionId.STAFF_HOURS_SET]: write(
+    'Change a staff member’s weekly hours',
+    SHOP_MANAGERS,
+    'OWNER_OR_ADMIN',
+    ['Ravi staff ka Sunday off karo', 'Barber Ravi Monday 10 se 6 kaam karega'],
+  ),
+  [AssistantActionId.BOOKING_NO_SHOW]: write(
+    'Mark an appointment as no-show',
+    SHOP_MANAGERS,
+    'OWNER_OR_ADMIN',
+    ['Aaj 5 baje wala appointment no show'],
+  ),
+  [AssistantActionId.OFFERS_LIST]: read('Show offers', OWNERS, 'OWNER_ONLY', [
+    'Offers dikhao',
+  ]),
+  [AssistantActionId.OFFERS_PAUSE]: write(
+    'Pause an offer',
+    OWNERS,
+    'OWNER_ONLY',
+    ['Diwali offer pause karo'],
+  ),
+  [AssistantActionId.OFFERS_PUBLISH]: write(
+    'Publish an offer',
+    OWNERS,
+    'OWNER_ONLY',
+    ['Diwali offer live karo'],
+  ),
+  [AssistantActionId.REVIEWS_LIST]: read(
+    'Show reviews',
+    SHOP_MANAGERS,
+    'OWNER_OR_ADMIN',
+    ['Reviews dikhao'],
+  ),
+  [AssistantActionId.REVIEWS_REPLY]: write(
+    'Reply to a review',
+    SHOP_MANAGERS,
+    'OWNER_OR_ADMIN',
+    ['Review ka jawab do: Thank you, phir aaiye!'],
+  ),
+  [AssistantActionId.INVOICES_LIST]: read(
+    'Show invoices',
+    SHOP_MANAGERS,
+    'OWNER_OR_ADMIN',
+    ['Invoices dikhao'],
+  ),
+  [AssistantActionId.REVENUE_REPORT]: read(
+    'Revenue report',
+    SHOP_MANAGERS,
+    'OWNER_OR_ADMIN',
+    ['Is hafte ki sales report', 'Is mahine ki kamai report'],
+  ),
+  // ---- batch 3: everyone
+  [AssistantActionId.NOTIFICATIONS_LIST]: read(
+    'Show my notifications',
+    EVERYONE,
+    'ANY_SIGNED_IN',
+    ['Notifications dikhao'],
+  ),
+  [AssistantActionId.NOTIFICATIONS_READ_ALL]: write(
+    'Mark all notifications read',
+    EVERYONE,
+    'ANY_SIGNED_IN',
+    ['Sab notifications read karo'],
+  ),
+  // ---- batch 3: customer
+  [AssistantActionId.MY_QUEUE_JOIN]: write(
+    'Join this salon’s queue',
+    CUSTOMERS,
+    'SELF',
+    ['Mujhe queue mein lagao haircut'],
+  ),
+  [AssistantActionId.MY_FAVORITES]: read(
+    'Show my favorite salons',
+    CUSTOMERS,
+    'SELF',
+    ['Meri favorite salons dikhao'],
+  ),
+  [AssistantActionId.MY_FAVORITE_ADD]: write(
+    'Save this salon as a favorite',
+    CUSTOMERS,
+    'SELF',
+    ['Is salon ko favorite karo'],
+  ),
+  [AssistantActionId.MY_FAVORITE_REMOVE]: write(
+    'Remove a favorite salon',
+    CUSTOMERS,
+    'SELF',
+    ['Favorite se hatao'],
+  ),
+  [AssistantActionId.MY_INVOICES]: read('Show my bills', CUSTOMERS, 'SELF', [
+    'Mere bills dikhao',
+  ]),
+  // ---- batch 3: platform (read-only; the platform viewer included)
+  [AssistantActionId.ADMIN_OVERVIEW]: read(
+    'Platform overview (last 30 days)',
+    PLATFORM_READERS,
+    'PLATFORM',
+    ['Platform overview dikhao'],
+  ),
+  [AssistantActionId.ADMIN_SHOP_STATUS]: read(
+    'Which shops are open now',
+    PLATFORM_READERS,
+    'PLATFORM',
+    ['Kitni shops open hain'],
   ),
 };

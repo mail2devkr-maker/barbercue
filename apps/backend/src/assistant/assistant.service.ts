@@ -9,6 +9,7 @@ import {
 import { randomUUID } from 'crypto';
 import {
   AssistantActionId,
+  SessionAudience,
   type AssistantCapabilitiesDto,
   type AssistantConfirmationInput,
   type AssistantPreviewRow,
@@ -30,6 +31,17 @@ import { BookingsService } from '../bookings/bookings.service';
 import { AvailabilityService } from '../bookings/availability.service';
 import { DashboardBookingsService } from '../dashboard-bookings/dashboard-bookings.service';
 import { DashboardCustomersService } from '../dashboard-customers/dashboard-customers.service';
+import { SalonChairsService } from '../salon-setup/salon-chairs.service';
+import { StaffWorkingHoursService } from '../salon-setup/staff-working-hours.service';
+import { BookingNoShowService } from '../bookings/booking-no-show.service';
+import { OffersService } from '../offers/offers.service';
+import { DashboardReviewsService } from '../dashboard-reviews/dashboard-reviews.service';
+import { InvoicesService } from '../owner-ops/invoices.service';
+import { RevenueReportService } from '../owner-ops/revenue-report.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { FavoritesService } from '../salons/favorites.service';
+import { AdminExecutiveOverviewService } from '../admin/analytics/admin-executive-overview.service';
+import { AdminShopStatusService } from '../admin/analytics/admin-shop-status.service';
 import {
   ConfirmationLedger,
   fingerprint,
@@ -55,6 +67,7 @@ import {
 import { SHOP_CATALOG_HANDLERS } from './actions/shop-catalog.actions';
 import { SHOP_OPS_HANDLERS } from './actions/shop-ops.actions';
 import { CUSTOMER_HANDLERS } from './actions/customer.actions';
+import { BATCH3_HANDLERS } from './actions/batch3.actions';
 
 export { ASSISTANT_ACTIONS };
 
@@ -64,6 +77,7 @@ export const ASSISTANT_HANDLERS: HandlerMap = {
   ...SHOP_CATALOG_HANDLERS,
   ...SHOP_OPS_HANDLERS,
   ...CUSTOMER_HANDLERS,
+  ...BATCH3_HANDLERS,
 };
 
 const UNRELEASED: Record<'inventory' | 'onboarding', string> = {
@@ -98,6 +112,17 @@ export class AssistantService {
     shopBookings: ShopBookingActionsService,
     dashboardBookings: DashboardBookingsService,
     dashboardCustomers: DashboardCustomersService,
+    chairs: SalonChairsService,
+    staffHours: StaffWorkingHoursService,
+    noShow: BookingNoShowService,
+    offers: OffersService,
+    reviews: DashboardReviewsService,
+    invoices: InvoicesService,
+    revenue: RevenueReportService,
+    notifications: NotificationsService,
+    favorites: FavoritesService,
+    executive: AdminExecutiveOverviewService,
+    shopStatus: AdminShopStatusService,
     @Inject(ASSISTANT_INTERPRETER)
     private readonly interpreter: IntentInterpreter,
     @Inject(ASSISTANT_TRANSCRIBER) private readonly transcriber: Transcriber,
@@ -115,6 +140,17 @@ export class AssistantService {
       shopBookings,
       dashboardBookings,
       dashboardCustomers,
+      chairs,
+      staffHours,
+      noShow,
+      offers,
+      reviews,
+      invoices,
+      revenue,
+      notifications,
+      favorites,
+      executive,
+      shopStatus,
     };
   }
 
@@ -382,13 +418,22 @@ export class AssistantService {
     if (!def.roles.some((r) => user.roles.includes(r)))
       throw new ForbiddenException('role');
     if (def.access === 'ANY_SIGNED_IN' || def.access === 'SELF') return;
+    // Platform figures: a platform role is not enough on its own - it must come from an
+    // ADMIN-audience (TOTP) session, exactly as RolesGuard requires for the admin routes.
+    if (def.access === 'PLATFORM') {
+      if (user.audience !== SessionAudience.ADMIN)
+        throw new ForbiddenException('audience');
+      return;
+    }
     if (!salonId) {
       throw new Reply({
         status: 'NEEDS_INPUT',
         message: 'Open the shop you want to work on first, then ask again.',
       });
     }
-    if (def.access === 'OWNER_OR_ADMIN')
+    if (def.access === 'OWNER_ONLY')
+      await this.access.assertOwnerAccess(user.id, salonId);
+    else if (def.access === 'OWNER_OR_ADMIN')
       await this.access.assertOwnerOrAdminAccess(user.id, salonId);
     else await this.access.assertAccessOrAdminAccess(user.id, salonId);
   }

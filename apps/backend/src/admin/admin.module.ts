@@ -19,6 +19,8 @@ import { AdminDataExportService } from './analytics/admin-data-export.service';
 @Module({
   imports: [SalonSetupModule, AuthModule],
   controllers: [AdminController],
+  // Read-only reuse by the Action Assistant (issue #362); access is enforced there per action.
+  exports: [AdminExecutiveOverviewService, AdminShopStatusService],
   providers: [
     AdminMonitoringService,
     AdminVerificationService,

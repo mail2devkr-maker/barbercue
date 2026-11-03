@@ -216,12 +216,12 @@ function queueHandler(
 
 // ---------------------------------------------------------------- appointments (shop side)
 
-const ACTIVE_BOOKING: string[] = [
+export const ACTIVE_BOOKING: string[] = [
   BookingStatus.CONFIRMED,
   BookingStatus.PENDING_PAYMENT,
 ];
 
-async function dayBookings(
+export async function dayBookings(
   c: Ctx,
   date: string,
 ): Promise<OwnerBookingDetailDto[]> {
@@ -238,10 +238,10 @@ async function dayBookings(
   return page.items;
 }
 
-const bookingLabel = (b: OwnerBookingDetailDto, tz: string) =>
+export const bookingLabel = (b: OwnerBookingDetailDto, tz: string) =>
   `${localTime(b.slotStart, tz)} · ${b.serviceName}${b.guestName ? ` · ${b.guestName}` : ''}`;
 
-function chooseBooking(
+export function chooseBooking(
   c: PlanCtx,
   rows: OwnerBookingDetailDto[],
   tz: string,

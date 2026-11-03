@@ -18,7 +18,7 @@ import { parseAssistantText, type ParsedIntent } from './assistant-parser';
  * schema as the rules, and anything else falls back to the rules. The model never chooses the user,
  * the shop or an existing record - the executor resolves and re-authorizes those itself.
  */
-export type Surface = 'shop' | 'customer';
+export type Surface = 'shop' | 'customer' | 'admin';
 
 export interface IntentInterpreter {
   readonly name: 'rules' | 'local';

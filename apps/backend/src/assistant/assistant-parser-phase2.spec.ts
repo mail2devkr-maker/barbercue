@@ -18,6 +18,8 @@ describe('assistant days and times', () => {
     ['raat 8 baje', ['20:00']],
     ['shaam 8:30 baje', ['20:30']],
     ['subah 8 baje', ['08:00']],
+    ['03:07 par', ['03:07']],
+    ['09:30 se 06:00', ['09:30', '06:00']],
   ])('%s', (text, expected) => {
     expect(timesIn(text)).toEqual(expected);
   });

@@ -18,6 +18,17 @@ import type { BookingsService } from '../../bookings/bookings.service';
 import type { AvailabilityService } from '../../bookings/availability.service';
 import type { DashboardBookingsService } from '../../dashboard-bookings/dashboard-bookings.service';
 import type { DashboardCustomersService } from '../../dashboard-customers/dashboard-customers.service';
+import type { SalonChairsService } from '../../salon-setup/salon-chairs.service';
+import type { StaffWorkingHoursService } from '../../salon-setup/staff-working-hours.service';
+import type { BookingNoShowService } from '../../bookings/booking-no-show.service';
+import type { OffersService } from '../../offers/offers.service';
+import type { DashboardReviewsService } from '../../dashboard-reviews/dashboard-reviews.service';
+import type { InvoicesService } from '../../owner-ops/invoices.service';
+import type { RevenueReportService } from '../../owner-ops/revenue-report.service';
+import type { NotificationsService } from '../../notifications/notifications.service';
+import type { FavoritesService } from '../../salons/favorites.service';
+import type { AdminExecutiveOverviewService } from '../../admin/analytics/admin-executive-overview.service';
+import type { AdminShopStatusService } from '../../admin/analytics/admin-shop-status.service';
 import type { SealedWrite } from '../assistant-confirmation';
 import { matchByName } from '../assistant-parser';
 
@@ -29,8 +40,18 @@ import { matchByName } from '../assistant-parser';
  */
 
 /** Who may ask, and which shop-level check runs before plan AND before execute. */
+/**
+ * OWNER_OR_ADMIN / STAFF_OR_ADMIN: shop-level checks; OWNER_ONLY: the shop's actual owner (offers);
+ * SELF: the signed-in customer's own records; PLATFORM: a platform role from an ADMIN-audience
+ * (TOTP) session, exactly like RolesGuard; ANY_SIGNED_IN: anyone with a session.
+ */
 export type Access =
-  'OWNER_OR_ADMIN' | 'STAFF_OR_ADMIN' | 'SELF' | 'ANY_SIGNED_IN';
+  | 'OWNER_OR_ADMIN'
+  | 'STAFF_OR_ADMIN'
+  | 'OWNER_ONLY'
+  | 'SELF'
+  | 'PLATFORM'
+  | 'ANY_SIGNED_IN';
 
 export interface ActionDef {
   title: string;
@@ -56,6 +77,17 @@ export interface Deps {
   shopBookings: ShopBookingActionsService;
   dashboardBookings: DashboardBookingsService;
   dashboardCustomers: DashboardCustomersService;
+  chairs: SalonChairsService;
+  staffHours: StaffWorkingHoursService;
+  noShow: BookingNoShowService;
+  offers: OffersService;
+  reviews: DashboardReviewsService;
+  invoices: InvoicesService;
+  revenue: RevenueReportService;
+  notifications: NotificationsService;
+  favorites: FavoritesService;
+  executive: AdminExecutiveOverviewService;
+  shopStatus: AdminShopStatusService;
 }
 
 export interface PlanCtx {

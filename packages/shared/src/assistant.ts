@@ -29,7 +29,7 @@ export const assistantTurnSchema = z.object({
   inputMode: z.enum(["text", "voice"]).default("text"),
   // Which screen the drawer is on. Only picks between same-worded intents ("cancel my
   // appointment" vs a shop cancelling one); it never grants anything.
-  surface: z.enum(["shop", "customer"]).default("shop"),
+  surface: z.enum(["shop", "customer", "admin"]).default("shop"),
 });
 export type AssistantTurnInput = z.infer<typeof assistantTurnSchema>;
 
@@ -74,6 +74,32 @@ export const AssistantActionId = {
   MY_QUEUE_STATUS: "me.queueStatus",
   MY_QUEUE_LEAVE: "me.leaveQueue",
   BOOK_APPOINTMENT: "me.book",
+  // Batch 3 — shop
+  CHAIRS_LIST: "chairs.list",
+  CHAIRS_ADD: "chairs.add",
+  CHAIRS_SET_STATUS: "chairs.setStatus",
+  STAFF_HOURS_VIEW: "staffHours.view",
+  STAFF_HOURS_SET: "staffHours.set",
+  BOOKING_NO_SHOW: "bookings.noShow",
+  OFFERS_LIST: "offers.list",
+  OFFERS_PAUSE: "offers.pause",
+  OFFERS_PUBLISH: "offers.publish",
+  REVIEWS_LIST: "reviews.list",
+  REVIEWS_REPLY: "reviews.reply",
+  INVOICES_LIST: "invoices.list",
+  REVENUE_REPORT: "revenue.report",
+  // Batch 3 — everyone
+  NOTIFICATIONS_LIST: "notifications.list",
+  NOTIFICATIONS_READ_ALL: "notifications.readAll",
+  // Batch 3 — customer
+  MY_QUEUE_JOIN: "me.joinQueue",
+  MY_FAVORITES: "me.favorites",
+  MY_FAVORITE_ADD: "me.favoriteAdd",
+  MY_FAVORITE_REMOVE: "me.favoriteRemove",
+  MY_INVOICES: "me.invoices",
+  // Batch 3 — platform (read-only)
+  ADMIN_OVERVIEW: "admin.overview",
+  ADMIN_SHOP_STATUS: "admin.shopStatus",
 } as const;
 export type AssistantActionId = (typeof AssistantActionId)[keyof typeof AssistantActionId];
 
@@ -122,7 +148,13 @@ export type AssistantResource =
   | "bookings"
   | "customers"
   | "myBookings"
-  | "myQueue";
+  | "myQueue"
+  | "chairs"
+  | "staffHours"
+  | "offers"
+  | "reviews"
+  | "notifications"
+  | "favorites";
 
 export type AssistantCapabilityState = "SUPPORTED" | "DENIED" | "UNAVAILABLE";
 
