@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ASSISTANT_PATHS, type AssistantTurnDto } from "@barbercue/shared";
+import { ASSISTANT_PATHS, type AssistantCapabilitiesDto, type AssistantTurnDto } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../lib/api";
 import { announceAssistantChange } from "../../lib/assistant-events";
 import { speak, useSpeechInput, type SpeechLang } from "../../lib/use-speech";
+import { VOICE_NOTICE, readVoiceConsent, saveVoiceConsent, useLocalVoice, type VoiceProvider } from "../../lib/use-local-voice";
 import styles from "./action-assistant.module.css";
 
 type Entry =
@@ -56,13 +57,22 @@ function MicIcon() {
 let seq = 0;
 const nextId = () => `a${(seq += 1)}`;
 
-export function ActionAssistant({ salonId }: { salonId?: string }) {
+const EXAMPLES: Record<"shop" | "customer", string[]> = {
+  shop: ["Aaj ki queue dikhao", "Haircut ₹200 se ₹150 karo", "Sunday band rakho", "Aaj ke appointments dikhao"],
+  customer: ["Meri bookings dikhao", "Kal shaam 5 baje haircut book karo", "Meri queue ka status batao", "Haircut salon dhoondo"],
+};
+
+export function ActionAssistant({ salonId, surface = "shop" }: { salonId?: string; surface?: "shop" | "customer" }) {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [lang, setLang] = useState<SpeechLang>("hi-IN");
   const [readAloud, setReadAloud] = useState(false);
   const [log, setLog] = useState<Entry[]>([]);
+  // What this server offers for voice; the private (local) recognizer is preferred when available.
+  const [voice, setVoice] = useState<AssistantCapabilitiesDto["voice"] | null>(null);
+  // A voice provider is used only after this person has read and accepted its privacy notice.
+  const [consentFor, setConsentFor] = useState<VoiceProvider | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -70,10 +80,17 @@ export function ActionAssistant({ salonId }: { salonId?: string }) {
     endRef.current?.scrollIntoView?.({ block: "end" });
   }, [log]);
 
-  // A new shop (or account) never inherits an open confirmation from the previous one.
+  // A new shop, screen or account never inherits an open confirmation from the previous one.
   useEffect(() => {
     setLog([]);
-  }, [salonId]);
+  }, [salonId, surface]);
+
+  useEffect(() => {
+    if (!open || voice) return;
+    apiFetch<AssistantCapabilitiesDto>(`${ASSISTANT_PATHS.assistant}/${ASSISTANT_PATHS.capabilities}`)
+      .then((caps) => setVoice(caps.voice))
+      .catch(() => setVoice({ browser: true, local: false }));
+  }, [open, voice]);
 
   const settle = useCallback(
     (pendingId: string, turn: AssistantTurnDto) => {
@@ -108,7 +125,7 @@ export function ActionAssistant({ salonId }: { salonId?: string }) {
       try {
         const turn = await apiFetch<AssistantTurnDto>(`${ASSISTANT_PATHS.assistant}/${ASSISTANT_PATHS.turns}`, {
           method: "POST",
-          body: JSON.stringify({ text: value, inputMode: voice ? "voice" : "text", ...(salonId ? { salonId } : {}) }),
+          body: JSON.stringify({ text: value, inputMode: voice ? "voice" : "text", surface, ...(salonId ? { salonId } : {}) }),
         });
         settle(pendingId, turn);
       } catch (err) {
@@ -117,7 +134,7 @@ export function ActionAssistant({ salonId }: { salonId?: string }) {
         setBusy(false);
       }
     },
-    [busy, salonId, settle],
+    [busy, salonId, settle, surface],
   );
 
   async function decide(entryId: string, token: string, decision: "confirm" | "cancel") {
@@ -140,6 +157,30 @@ export function ActionAssistant({ salonId }: { salonId?: string }) {
   }
 
   const speech = useSpeechInput(lang, (heard) => void send(heard, true));
+  const local = useLocalVoice(lang === "en-IN" ? "en" : "hi", (heard) => void send(heard, true));
+  const provider: VoiceProvider | null = voice?.local ? "local" : speech.supported ? "browser" : null;
+  const listening = provider === "local" ? local.recording : speech.listening;
+  const voiceError = provider === "local" ? local.error : speech.error;
+
+  function startVoice(chosen: VoiceProvider) {
+    if (chosen === "local") void local.start();
+    else speech.start();
+  }
+
+  function toggleVoice() {
+    if (!provider) return;
+    if (listening) {
+      if (provider === "local") local.stop();
+      else speech.stop();
+      return;
+    }
+    // Ask once per provider, before the microphone is ever opened.
+    if (!readVoiceConsent().includes(provider)) {
+      setConsentFor(provider);
+      return;
+    }
+    startVoice(provider);
+  }
 
   return (
     <>
@@ -153,14 +194,14 @@ export function ActionAssistant({ salonId }: { salonId?: string }) {
               <strong>FastQue Assistant</strong>
               <p className={styles.sub}>Bol kar ya likh kar batayein · Speak or type</p>
             </div>
-            <button type="button" className={styles.close} onClick={() => { speech.stop(); setOpen(false); }} aria-label="Close assistant">×</button>
+            <button type="button" className={styles.close} onClick={() => { speech.stop(); local.stop(); setOpen(false); }} aria-label="Close assistant">×</button>
           </header>
 
           <div className={styles.log} aria-live="polite">
             {log.length === 0 && (
               <div className={styles.empty}>
                 <p>Try:</p>
-                {["Aaj ki queue dikhao", "Haircut ₹200 se ₹150 karo", "Ravi ko staff mein add karo", "Aaj ki sales batao"].map((ex) => (
+                {EXAMPLES[surface].map((ex) => (
                   <button key={ex} type="button" className={styles.chip} onClick={() => void send(ex)}>{ex}</button>
                 ))}
               </div>
@@ -193,7 +234,33 @@ export function ActionAssistant({ salonId }: { salonId?: string }) {
                 <input type="checkbox" checked={readAloud} onChange={(ev) => setReadAloud(ev.target.checked)} /> Read replies aloud
               </label>
             </div>
-            {speech.error && <p className={styles.voiceError} role="alert">{speech.error}</p>}
+            {consentFor && (
+              <div className={styles.consent} role="dialog" aria-labelledby="assistant-voice-consent">
+                <p id="assistant-voice-consent"><strong>Before you use the microphone</strong></p>
+                <p>{VOICE_NOTICE[consentFor]}</p>
+                <div className={styles.decide}>
+                  <button
+                    type="button"
+                    className={styles.confirm}
+                    onClick={() => {
+                      const chosen = consentFor;
+                      saveVoiceConsent(chosen);
+                      setConsentFor(null);
+                      startVoice(chosen);
+                    }}
+                  >
+                    Allow microphone
+                  </button>
+                  <button type="button" className={styles.cancel} onClick={() => setConsentFor(null)}>Not now</button>
+                </div>
+              </div>
+            )}
+            {(listening || local.working) && (
+              <p className={styles.listening} role="status">
+                {local.working ? "Turning your voice into text…" : "Listening… tap the microphone again to stop."}
+              </p>
+            )}
+            {voiceError && <p className={styles.voiceError} role="alert">{voiceError}</p>}
             <div className={styles.inputRow}>
               <input
                 ref={inputRef}
@@ -203,16 +270,17 @@ export function ActionAssistant({ salonId }: { salonId?: string }) {
                 placeholder="e.g. Massage price 10% badha do"
                 aria-label="Message to the assistant"
                 maxLength={500}
-                disabled={speech.listening}
+                disabled={listening || local.working}
               />
-              {speech.supported && (
+              {provider && (
                 <button
                   type="button"
-                  className={`${styles.mic} ${speech.listening ? styles.micOn : ""}`}
-                  onClick={() => (speech.listening ? speech.stop() : speech.start())}
-                  aria-pressed={speech.listening}
-                  aria-label={speech.listening ? "Stop listening" : "Speak"}
-                  disabled={busy}
+                  className={`${styles.mic} ${listening ? styles.micOn : ""}`}
+                  onClick={toggleVoice}
+                  aria-pressed={listening}
+                  aria-label={listening ? "Stop listening" : "Speak"}
+                  title={provider === "local" ? "Private voice (FastQue server)" : "Browser voice"}
+                  disabled={busy || local.working}
                 >
                   <MicIcon />
                 </button>

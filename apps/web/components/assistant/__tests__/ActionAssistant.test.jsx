@@ -38,15 +38,34 @@ const applied = {
   navigateTo: '/dashboard/salons/s1/services',
 };
 
+/** apiFetch by URL: capabilities answer from `voice`; turns/confirmations take the next queued reply. */
+function route(replies, voice = { browser: true, local: false }) {
+  const queue = [...replies];
+  apiFetch.mockImplementation((path) => {
+    if (path === 'assistant/capabilities') return Promise.resolve({ interpreter: 'rules', voice, actions: [] });
+    const next = queue.shift();
+    return next instanceof Error ? Promise.reject(next) : Promise.resolve(next);
+  });
+}
+const callsTo = (path) => apiFetch.mock.calls.filter(([p]) => p === path);
+
 describe('ActionAssistant drawer', () => {
   let events;
+  let storage;
   beforeEach(() => {
     apiFetch.mockReset();
     events = [];
+    storage = {};
     globalThis.window = {
       dispatchEvent: (e) => events.push(e),
       addEventListener: jest.fn(),
       removeEventListener: jest.fn(),
+      localStorage: {
+        getItem: (k) => storage[k] ?? null,
+        setItem: (k, v) => {
+          storage[k] = v;
+        },
+      },
     };
     globalThis.CustomEvent = class {
       constructor(type, init) {
@@ -59,57 +78,122 @@ describe('ActionAssistant drawer', () => {
     delete globalThis.window;
   });
 
-  async function openAndSay(text) {
+  async function open(props = { salonId: 's1' }) {
     let tree;
-    await act(async () => { tree = TestRenderer.create(<ActionAssistant salonId="s1" />); });
+    await act(async () => { tree = TestRenderer.create(<ActionAssistant {...props} />); });
     await act(async () => byText(tree, 'button', '✦ Assistant').props.onClick());
+    return tree;
+  }
+  async function say(tree, text) {
     const input = tree.root.findByProps({ 'aria-label': 'Message to the assistant' });
     await act(async () => input.props.onChange({ target: { value: text } }));
     await act(async () => tree.root.findByType('form').props.onSubmit({ preventDefault() {} }));
-    return tree;
   }
 
   it('previews first, saves only on Confirm, then tells open pages to reload', async () => {
-    apiFetch.mockResolvedValueOnce(preview);
-    const tree = await openAndSay('Haircut ₹200 se ₹150 karo');
-    expect(apiFetch).toHaveBeenCalledWith('assistant/turns', expect.objectContaining({ method: 'POST' }));
-    expect(JSON.parse(apiFetch.mock.calls[0][1].body)).toEqual({ text: 'Haircut ₹200 se ₹150 karo', inputMode: 'text', salonId: 's1' });
+    route([preview, applied]);
+    const tree = await open();
+    await say(tree, 'Haircut ₹200 se ₹150 karo');
+    expect(JSON.parse(callsTo('assistant/turns')[0][1].body)).toEqual({
+      text: 'Haircut ₹200 se ₹150 karo',
+      inputMode: 'text',
+      surface: 'shop',
+      salonId: 's1',
+    });
     const card = tree.root.find((n) => n.props['data-status'] === 'NEEDS_CONFIRMATION');
     expect(textOf(card)).toContain('₹200');
     expect(textOf(card)).toContain('₹150');
     expect(events).toHaveLength(0);
 
-    apiFetch.mockResolvedValueOnce(applied);
     await act(async () => byText(tree, 'button', 'Confirm').props.onClick());
-    expect(apiFetch).toHaveBeenLastCalledWith('assistant/confirmations', expect.objectContaining({ method: 'POST' }));
-    expect(JSON.parse(apiFetch.mock.calls[1][1].body)).toEqual({ token: 'sealed-token-1234567890', decision: 'confirm' });
-    const done = tree.root.find((n) => n.props['data-status'] === 'DONE');
-    expect(textOf(done)).toContain('Saved by FastQue');
+    expect(JSON.parse(callsTo('assistant/confirmations')[0][1].body)).toEqual({ token: 'sealed-token-1234567890', decision: 'confirm' });
+    expect(textOf(tree.root.find((n) => n.props['data-status'] === 'DONE'))).toContain('Saved by FastQue');
     expect(events.map((e) => e.detail)).toEqual([['services', 'overview']]);
     expect(tree.root.findAll((n) => n.type === 'button' && textOf(n) === 'Confirm')).toHaveLength(0);
     expect(textOf(tree.root.find((n) => n.props['data-status'] === 'NEEDS_CONFIRMATION'))).toContain('Decision sent');
   });
 
+  it('sends the customer surface and shows customer examples on customer screens', async () => {
+    route([{ ...applied, refresh: ['myBookings'], status: 'DONE', action: null, message: 'You have no upcoming appointments.' }]);
+    const tree = await open({ surface: 'customer' });
+    expect(textOf(tree.root)).toContain('Meri bookings dikhao');
+    expect(textOf(tree.root)).not.toContain('Sunday band rakho');
+    await say(tree, 'meri bookings dikhao');
+    expect(JSON.parse(callsTo('assistant/turns')[0][1].body)).toEqual({ text: 'meri bookings dikhao', inputMode: 'text', surface: 'customer' });
+  });
+
   it('never shows success when the server refuses or is unreachable', async () => {
-    apiFetch.mockRejectedValueOnce(new Error('offline'));
-    const tree = await openAndSay('Facial service hata do');
-    const card = tree.root.find((n) => n.props['data-status'] === 'FAILED');
-    expect(textOf(card)).toContain('Nothing was changed');
+    route([new Error('offline')]);
+    const tree = await open();
+    await say(tree, 'Facial service hata do');
+    expect(textOf(tree.root.find((n) => n.props['data-status'] === 'FAILED'))).toContain('Nothing was changed');
     expect(events).toHaveLength(0);
   });
 
   it('shows a denial plainly', async () => {
-    apiFetch.mockResolvedValueOnce({ ...preview, status: 'DENIED', confirmation: undefined, preview: undefined, message: 'Your account is not allowed to do that here. Nothing was changed.' });
-    const tree = await openAndSay('Facial service hata do');
+    route([{ ...preview, status: 'DENIED', confirmation: undefined, preview: undefined, message: 'Your account is not allowed to do that here. Nothing was changed.' }]);
+    const tree = await open();
+    await say(tree, 'Facial service hata do');
     expect(textOf(tree.root.find((n) => n.props['data-status'] === 'DENIED'))).toContain('Not allowed');
   });
 
-  it('works without voice: no microphone button when the browser has none', async () => {
-    let tree;
-    await act(async () => { tree = TestRenderer.create(<ActionAssistant salonId="s1" />); });
-    await act(async () => byText(tree, 'button', '✦ Assistant').props.onClick());
+  it('works without voice: no microphone button when the browser has none and no private server', async () => {
+    route([]);
+    const tree = await open();
     expect(tree.root.findAll((n) => n.props['aria-label'] === 'Speak')).toHaveLength(0);
     expect(tree.root.findByProps({ 'aria-label': 'Message to the assistant' })).toBeTruthy();
+  });
+
+  describe('microphone consent', () => {
+    let started;
+    beforeEach(() => {
+      started = [];
+      class FakeRecognition {
+        start() {
+          started.push(this.lang);
+        }
+        stop() {}
+        abort() {}
+      }
+      globalThis.window.webkitSpeechRecognition = FakeRecognition;
+    });
+
+    it('explains that the browser may send audio to Google and opens the mic only after Allow', async () => {
+      route([]);
+      const tree = await open();
+      await act(async () => tree.root.findByProps({ 'aria-label': 'Speak' }).props.onClick());
+      expect(started).toEqual([]);
+      expect(textOf(tree.root)).toContain('sent to Google');
+
+      await act(async () => byText(tree, 'button', 'Not now').props.onClick());
+      expect(started).toEqual([]);
+      expect(textOf(tree.root)).not.toContain('sent to Google');
+
+      await act(async () => tree.root.findByProps({ 'aria-label': 'Speak' }).props.onClick());
+      await act(async () => byText(tree, 'button', 'Allow microphone').props.onClick());
+      expect(started).toEqual(['hi-IN']);
+      expect(JSON.parse(storage['fastque.assistant.voiceConsent.v1'])).toEqual(['browser']);
+    });
+
+    it('does not ask again once this person has agreed', async () => {
+      storage['fastque.assistant.voiceConsent.v1'] = JSON.stringify(['browser']);
+      route([]);
+      const tree = await open();
+      await act(async () => tree.root.findByProps({ 'aria-label': 'Speak' }).props.onClick());
+      expect(started).toEqual(['hi-IN']);
+      expect(textOf(tree.root)).not.toContain('Before you use the microphone');
+    });
+
+    it('prefers the private FastQue server when it is set up, with its own notice', async () => {
+      route([], { browser: true, local: true });
+      const tree = await open();
+      const mic = tree.root.findByProps({ 'aria-label': 'Speak' });
+      expect(mic.props.title).toBe('Private voice (FastQue server)');
+      await act(async () => mic.props.onClick());
+      expect(textOf(tree.root)).toContain("FastQue's own private server");
+      expect(textOf(tree.root)).not.toContain('sent to Google');
+      expect(started).toEqual([]);
+    });
   });
 
   it('explains voice failures in plain words', () => {
