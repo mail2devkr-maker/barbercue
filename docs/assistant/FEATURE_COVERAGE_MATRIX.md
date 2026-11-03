@@ -7,8 +7,9 @@ Branch `claude/fastque-action-assistant-362`, Draft PR #363. **Nothing here is d
   - `P1` = `test/assistant-actions.e2e-spec.ts`
   - `P2` = `test/assistant-phase2.e2e-spec.ts`
   - `B3` = `test/assistant-batch3.e2e-spec.ts`
+  - `B4` = `test/assistant-batch4.e2e-spec.ts`
   - `unit` = parser, interpreter and transcriber specs
-- **CI** is the GitHub *Owner Operations Certification* workflow, which runs P1, P2 and B3.
+- **CI** is the GitHub *Owner Operations Certification* workflow, which runs P1, P2, B3 and B4.
 - **Live** and **Physical** are "no" for every row, because the assistant has never been deployed and has never had a real-microphone or real-device test.
 
 All 32 actions share these rules:
@@ -18,7 +19,7 @@ All 32 actions share these rules:
 - Every step writes an audit row with no transcript text.
 - The screen updates only after the server reports success (`refresh` → the page re-fetches from the API).
 
-## 1. Actions the assistant runs (54)
+## 1. Actions the assistant runs (58)
 
 **Access levels**
 - `owner/admin` = `assertOwnerOrAdminAccess` (the shop owner or a delegated platform admin).
@@ -84,6 +85,10 @@ All 32 actions share these rules:
 | 52 | `me.invoices` | Customer | `InvoicesService.listMine` | self | – | "Mere bills dikhao" | B3 |
 | 53 | `admin.overview` | Platform admin, co-founder, viewer | `AdminExecutiveOverviewService.getOverview` (last 30 days; read) | platform | – | "Platform overview dikhao" | B3 (wrong audience and shop owner denied) |
 | 54 | `admin.shopStatus` | Platform admin, co-founder, viewer | `AdminShopStatusService.getStatus` (read) | platform | – | "Kitni shops open hain" | B3 (viewer read-only) |
+| 55 | `queue.assign` | Owner, staff, admin | `QueueService.assign` with `startService:false` — **never picks**: both barber and chair must be named or tapped from the offered free pairs | team/admin | yes | "Token 5 Ravi Chair 1 assign karo" | B4 (free pairs only; busy barber/chair not offered) |
+| 56 | `queue.start` | Owner, staff, admin | `QueueService.startService` (assigned customers only) | team/admin | yes | "Token 5 start karo" | B4 |
+| 57 | `bookings.inShop` | Owner, staff, admin | `ShopBookingActionsService.createInShop` — mobile saved **only** when the operator says the customer agreed; idempotency key = confirmation nonce | team/admin | yes | "Amit ke liye kal 5 baje haircut appointment book karo" | B4 (books once; phone not saved without consent) |
+| 58 | `bookings.correctCompleted` | Owner, staff, admin | `BookingNoShowService.correctToCompleted` — warns that the no-show charge is removed | team/admin | yes | "5 baje wala appointment no show galat tha, completed karo" | B4 |
 
 **Cross-cutting negative tests**
 - Another shop's owner is denied, even when the request names the victim shop.
@@ -106,10 +111,7 @@ The full route list is in [ROUTE_INVENTORY.md](ROUTE_INVENTORY.md). Status meani
 
 | Area | Persona | Existing API | Status | Blocker or reason |
 |---|---|---|---|---|
-| Queue: assign a barber or chair, start a service | Owner, staff | `QueueService.assign/startService` | BLOCKED | Needs a deliberate chair and barber choice; kept in the Live Queue console until a picker UI exists |
-| In-shop appointment for a walk-up caller | Owner, staff | `BookingsService.createInShop` | NEXT | Phone needs the recorded consent flow |
 | Invoices: issue, record payment, void; CSV downloads | Owner | `InvoicesService` | BLOCKED | Money movement; needs owner sign-off on confirmation strength. Lists and the report are done (#44, #45) |
-| Booking: correct a no-show to completed | Owner, staff | `BookingNoShowService.correctToCompleted` | NEXT | A correction of a charge; needs a strong confirmation |
 | Offers: create or edit (wording, discount, dates) | Owner | `OffersService.create/update` | NEXT | Many fields; best as a guided form card |
 | Salon profile, description, timezone, payment QR | Owner | salon-setup services | NEXT | – |
 | Photos (upload, cover) | Owner | `SalonPhotosService` | BLOCKED | A file upload can't come from a sentence; link to the page |

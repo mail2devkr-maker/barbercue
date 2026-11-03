@@ -1,6 +1,7 @@
 import { AssistantActionId } from '@barbercue/shared';
 import { parsePhase2, type Phase2Intent } from './assistant-parser-phase2';
 import { parsePhase3, type Phase3Intent } from './assistant-parser-phase3';
+import { parsePhase4, type Phase4Intent } from './assistant-parser-phase4';
 
 /**
  * Deterministic English / Hindi / Hinglish interpreter for the Action Assistant (issue #362).
@@ -48,7 +49,8 @@ export type ParsedIntent =
     }
   | { action: 'unreleased'; feature: 'inventory' | 'onboarding' }
   | Phase2Intent
-  | Phase3Intent;
+  | Phase3Intent
+  | Phase4Intent;
 
 export function normalizeText(text: string): string {
   return (
@@ -162,6 +164,10 @@ export function parseAssistantText(
   if (ONBOARDING.test(text))
     return { action: 'unreleased', feature: 'onboarding' };
 
+  if (surface === 'shop') {
+    const phase4 = parsePhase4(text, raw, year);
+    if (phase4) return phase4;
+  }
   const phase3 = parsePhase3(text, raw, surface, year);
   if (phase3) return phase3;
   // The platform admin screens only offer platform actions; shop and customer phrases do not apply.

@@ -68,6 +68,7 @@ import { SHOP_CATALOG_HANDLERS } from './actions/shop-catalog.actions';
 import { SHOP_OPS_HANDLERS } from './actions/shop-ops.actions';
 import { CUSTOMER_HANDLERS } from './actions/customer.actions';
 import { BATCH3_HANDLERS } from './actions/batch3.actions';
+import { BATCH4_HANDLERS } from './actions/batch4.actions';
 
 export { ASSISTANT_ACTIONS };
 
@@ -78,6 +79,7 @@ export const ASSISTANT_HANDLERS: HandlerMap = {
   ...SHOP_OPS_HANDLERS,
   ...CUSTOMER_HANDLERS,
   ...BATCH3_HANDLERS,
+  ...BATCH4_HANDLERS,
 };
 
 const UNRELEASED: Record<'inventory' | 'onboarding', string> = {

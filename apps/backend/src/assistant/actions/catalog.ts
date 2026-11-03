@@ -375,4 +375,29 @@ export const ASSISTANT_ACTIONS: Record<AssistantActionId, ActionDef> = {
     'PLATFORM',
     ['Kitni shops open hain'],
   ),
+  // ---- batch 4: explicit choices and stronger confirmations
+  [AssistantActionId.QUEUE_ASSIGN]: write(
+    'Seat a customer with a barber and chair',
+    SHOP_TEAM,
+    'STAFF_OR_ADMIN',
+    ['Token 5 Ravi Chair 1 assign karo'],
+  ),
+  [AssistantActionId.QUEUE_START]: write(
+    'Start a service',
+    SHOP_TEAM,
+    'STAFF_OR_ADMIN',
+    ['Token 5 start karo'],
+  ),
+  [AssistantActionId.BOOKING_IN_SHOP]: write(
+    'Book an appointment for a walk-up caller',
+    SHOP_TEAM,
+    'STAFF_OR_ADMIN',
+    ['Amit ke liye kal 5 baje haircut appointment book karo'],
+  ),
+  [AssistantActionId.BOOKING_CORRECT_COMPLETED]: write(
+    'Correct a no-show to completed',
+    SHOP_TEAM,
+    'STAFF_OR_ADMIN',
+    ['5 baje wala appointment no show galat tha, completed karo'],
+  ),
 };

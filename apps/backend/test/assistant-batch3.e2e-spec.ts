@@ -9,6 +9,7 @@ import { AppModule } from '../src/app.module';
 import { AllExceptionsFilter } from '../src/common/filters/all-exceptions.filter';
 import { TokenService } from '../src/auth/services/token.service';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { ASSISTANT_ACTIONS } from '../src/assistant/actions/catalog';
 
 /**
  * Action Assistant batch 3 (issue #362) over real HTTP on a DISPOSABLE local database: chairs,
@@ -177,9 +178,9 @@ maybe('Action Assistant batch 3 (e2e, disposable local database)', () => {
     await app?.close();
   });
 
-  it('advertises 54 actions', async () => {
+  it('advertises every catalogued action, none unavailable', async () => {
     const caps = (await request(app.getHttpServer()).get('/api/v1/assistant/capabilities').set('Authorization', `Bearer ${tok.salonOwner}`).expect(200)).body;
-    expect(caps.actions).toHaveLength(54);
+    expect(caps.actions).toHaveLength(Object.keys(ASSISTANT_ACTIONS).length);
     expect(caps.actions.filter((a: { state: string }) => a.state === 'UNAVAILABLE')).toHaveLength(0);
   });
 

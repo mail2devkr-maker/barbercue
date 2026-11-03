@@ -100,6 +100,11 @@ export const AssistantActionId = {
   // Batch 3 — platform (read-only)
   ADMIN_OVERVIEW: "admin.overview",
   ADMIN_SHOP_STATUS: "admin.shopStatus",
+  // Batch 4 — shop operations that need an explicit choice or a stronger confirmation
+  QUEUE_ASSIGN: "queue.assign",
+  QUEUE_START: "queue.start",
+  BOOKING_IN_SHOP: "bookings.inShop",
+  BOOKING_CORRECT_COMPLETED: "bookings.correctCompleted",
 } as const;
 export type AssistantActionId = (typeof AssistantActionId)[keyof typeof AssistantActionId];
 
