@@ -87,6 +87,7 @@ describe('ActionAssistant drawer', () => {
     expect(textOf(done)).toContain('Saved by FastQue');
     expect(events.map((e) => e.detail)).toEqual([['services', 'overview']]);
     expect(tree.root.findAll((n) => n.type === 'button' && textOf(n) === 'Confirm')).toHaveLength(0);
+    expect(textOf(tree.root.find((n) => n.props['data-status'] === 'NEEDS_CONFIRMATION'))).toContain('Decision sent');
   });
 
   it('never shows success when the server refuses or is unreachable', async () => {

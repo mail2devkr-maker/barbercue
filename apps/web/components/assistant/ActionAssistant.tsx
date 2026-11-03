@@ -45,6 +45,14 @@ function stagesFor(turn: AssistantTurnDto): Array<{ label: string; state: "done"
   return list;
 }
 
+function MicIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path fill="currentColor" d="M12 15a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-2.08A7 7 0 0 0 19 12h-2Z" />
+    </svg>
+  );
+}
+
 let seq = 0;
 const nextId = () => `a${(seq += 1)}`;
 
@@ -160,7 +168,7 @@ export function ActionAssistant({ salonId }: { salonId?: string }) {
             {log.map((e) =>
               e.kind === "user" ? (
                 <div key={e.id} className={styles.user}>
-                  {e.voice && <span className={styles.voiceTag} aria-label="spoken">🎙</span>}
+                  {e.voice && <span className={styles.voiceTag} role="img" aria-label="spoken"><MicIcon /></span>}
                   {e.text}
                 </div>
               ) : e.kind === "pending" ? (
@@ -206,7 +214,7 @@ export function ActionAssistant({ salonId }: { salonId?: string }) {
                   aria-label={speech.listening ? "Stop listening" : "Speak"}
                   disabled={busy}
                 >
-                  🎙
+                  <MicIcon />
                 </button>
               )}
               <button type="submit" className={styles.send} disabled={busy || !text.trim()}>Send</button>
@@ -235,7 +243,7 @@ function TurnCard({
   return (
     <article className={`${styles.card} ${tone}`} data-status={turn.status}>
       <div className={styles.cardHead}>
-        <span className={styles.badge}>{STATUS_LABEL[turn.status]}</span>
+        <span className={styles.badge}>{entry.settled && turn.status === "NEEDS_CONFIRMATION" ? "Decision sent" : STATUS_LABEL[turn.status]}</span>
         {turn.action && <span className={styles.actionTitle}>{turn.action.title}</span>}
       </div>
       <ol className={styles.stages} aria-label="Progress">

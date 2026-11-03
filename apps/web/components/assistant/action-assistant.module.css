@@ -87,6 +87,8 @@
   overflow-wrap: anywhere;
 }
 .voiceTag {
+  display: inline-flex;
+  vertical-align: -3px;
   margin-right: 6px;
 }
 .pending {
@@ -278,6 +280,9 @@
   font-size: 16px;
 }
 .mic {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 44px;
   border: 1px solid var(--bc-border);
   border-radius: 10px;
