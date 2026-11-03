@@ -72,6 +72,8 @@ The model only chooses the intent and its slots. Matching to real rows, authoriz
 
 ## 5. Coverage matrix
 
+**Superseded by [FEATURE_COVERAGE_MATRIX.md](FEATURE_COVERAGE_MATRIX.md)**, which covers Phase 2's 32 actions, the remaining areas with blockers, and voice and privacy. The table below is the Phase 1 snapshot.
+
 The full route inventory is in [ROUTE_INVENTORY.md](ROUTE_INVENTORY.md), generated from the controllers: 314 routes, 27 modules. Assistant coverage by role:
 
 | Role | Action | Assistant | Confirm | Test gate | Live? |
