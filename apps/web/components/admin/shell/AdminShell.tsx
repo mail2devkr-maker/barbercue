@@ -14,6 +14,7 @@ import { COMMAND_CENTER_PRESETS, formatRangeLabel } from "../shop-activity-range
 import { ADMIN_NAV_GROUPS, activeAdminItem, adminNavFor, hrefOf } from "./admin-nav";
 import { AdminFiltersProvider, useAdminFilters } from "./admin-filters";
 import shell from "./admin-shell.module.css";
+import { ActionAssistant } from "../../assistant/ActionAssistant";
 
 const ROLE_LABEL: Partial<Record<Role, string>> = {
   [Role.PLATFORM_ADMIN]: "Platform admin",
@@ -213,6 +214,8 @@ function ShellInner({ children }: { children: ReactNode }) {
           <div id="admin-main" className={`${ui.content} ${shell.content}`} tabIndex={-1}>
             {children}
           </div>
+          {/* Platform figures only (read-only); every request is re-checked against this admin session. */}
+          <ActionAssistant surface="admin" />
         </div>
       </div>
     </div>

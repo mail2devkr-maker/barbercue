@@ -4,6 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { FAVORITES_PATHS, type FavoriteSalonDto } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../../../lib/api";
+import { useAssistantRefresh } from "../../../../lib/assistant-events";
+import { reloadFavoritesFor } from "../../../../lib/favorites";
+import { useAuth } from "../../../../lib/auth-context";
 import { sortFavorites, useFavorites, type FavoriteSort } from "../../../../lib/favorites";
 import { SalonCard } from "../../../../components/discovery/SalonCard";
 import styles from "./favorites.module.css";
@@ -14,6 +17,12 @@ export default function FavoritesPage() {
   const [error, setError] = useState<string | null>(null);
   const [sort, setSort] = useState<FavoriteSort>("recent");
   const { isFavorite, loaded } = useFavorites();
+  const { user } = useAuth();
+  // Saved or removed through the Assistant: reload the list and the shared hearts from the server.
+  useAssistantRefresh("favorites", () => {
+    if (user) void reloadFavoritesFor(user.id);
+    apiFetch<FavoriteSalonDto[]>(FAVORITES_PATHS.favorites).then(setItems).catch(() => undefined);
+  });
 
   useEffect(() => {
     apiFetch<FavoriteSalonDto[]>(FAVORITES_PATHS.favorites)

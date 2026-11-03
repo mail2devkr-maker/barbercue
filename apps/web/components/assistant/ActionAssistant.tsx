@@ -57,12 +57,13 @@ function MicIcon() {
 let seq = 0;
 const nextId = () => `a${(seq += 1)}`;
 
-const EXAMPLES: Record<"shop" | "customer", string[]> = {
+const EXAMPLES: Record<"shop" | "customer" | "admin", string[]> = {
   shop: ["Aaj ki queue dikhao", "Haircut ₹200 se ₹150 karo", "Sunday band rakho", "Aaj ke appointments dikhao"],
   customer: ["Meri bookings dikhao", "Kal shaam 5 baje haircut book karo", "Meri queue ka status batao", "Haircut salon dhoondo"],
+  admin: ["Platform overview dikhao", "Kitni shops open hain", "Notifications dikhao"],
 };
 
-export function ActionAssistant({ salonId, surface = "shop" }: { salonId?: string; surface?: "shop" | "customer" }) {
+export function ActionAssistant({ salonId, surface = "shop" }: { salonId?: string; surface?: "shop" | "customer" | "admin" }) {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);

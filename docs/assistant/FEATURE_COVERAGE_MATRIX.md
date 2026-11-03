@@ -6,8 +6,9 @@ Branch `claude/fastque-action-assistant-362`, Draft PR #363. **Nothing here is d
 - **Test** is where each action is proven on a throwaway Postgres:
   - `P1` = `test/assistant-actions.e2e-spec.ts`
   - `P2` = `test/assistant-phase2.e2e-spec.ts`
+  - `B3` = `test/assistant-batch3.e2e-spec.ts`
   - `unit` = parser, interpreter and transcriber specs
-- **CI** is the GitHub *Owner Operations Certification* workflow, which runs P1 and P2.
+- **CI** is the GitHub *Owner Operations Certification* workflow, which runs P1, P2 and B3.
 - **Live** and **Physical** are "no" for every row, because the assistant has never been deployed and has never had a real-microphone or real-device test.
 
 All 32 actions share these rules:
@@ -17,10 +18,12 @@ All 32 actions share these rules:
 - Every step writes an audit row with no transcript text.
 - The screen updates only after the server reports success (`refresh` → the page re-fetches from the API).
 
-## 1. Actions the assistant runs (32)
+## 1. Actions the assistant runs (54)
 
 **Access levels**
 - `owner/admin` = `assertOwnerOrAdminAccess` (the shop owner or a delegated platform admin).
+- `owner only` = `assertOwnerAccess`: the shop's actual owner, no delegated admin (offers, as in FastQue).
+- `platform` = a platform role **and** an ADMIN-audience (TOTP) session, exactly like FastQue's role guard.
 - `team/admin` = `assertAccessOrAdminAccess` (owner, the shop's staff, or a delegated platform admin).
 - `self` = the signed-in customer's own records only.
 
@@ -46,9 +49,9 @@ All 32 actions share these rules:
 | 18 | `queue.cancel` | Owner, staff, admin | `QueueService.cancelByStaff` | team/admin | yes | "Token 4 cancel karo" | P2 (stale refused) |
 | 19 | `queue.complete` | Owner, staff, admin | `QueueService.completeSession` (active session only) | team/admin | yes | "Token 4 ho gaya" | unit |
 | 20 | `queue.addWalkIn` | Owner, staff, admin | `QueueService.createOperatorEntry` (name and service; no phone without recorded consent) | team/admin | yes | "Walk-in add karo Amit" | P2 |
-| 21 | `schedule.view` | Owner, staff, admin | `DashboardBookingsService.list(date)` (phones masked) | team/admin | – | "Kal ke appointments dikhao" | P2 |
-| 22 | `bookings.cancelByShop` | Owner, staff, admin | `ShopBookingActionsService.cancel` (notifies the customer) | team/admin | yes | "Kal raat 8 baje ka appointment cancel karo" | P2 |
-| 23 | `bookings.rescheduleByShop` | Owner, staff, admin | `ShopBookingActionsService.reschedule` | team/admin | yes | "Kal 7 baje wala appointment 8 baje kar do" | P2 |
+| 21 | `schedule.view` | Owner, admin | `DashboardBookingsService.list(date)` (phones masked; this list is owner/admin only in FastQue) | owner/admin | – | "Kal ke appointments dikhao" | P2 |
+| 22 | `bookings.cancelByShop` | Owner, admin | `ShopBookingActionsService.cancel` (notifies the customer) | owner/admin | yes | "Kal raat 8 baje ka appointment cancel karo" | P2 |
+| 23 | `bookings.rescheduleByShop` | Owner, admin | `ShopBookingActionsService.reschedule` | owner/admin | yes | "Kal 7 baje wala appointment 8 baje kar do" | P2 |
 | 24 | `customers.find` | Owner, admin | `DashboardCustomersService.list` (phones masked) | owner/admin | – | "Customer Amit dhundo" | P2 (staff denied) |
 | 25 | `insights.today` | Owner, admin | `OwnerAssistantService.query` (deterministic) | owner/admin | – | "Aaj ki sales batao" | P1 |
 | 26 | `salons.search` | Anyone signed in | `CustomerAssistantSearchService.search` | signed in | – | "Haircut salon dhoondo" | unit |
@@ -59,6 +62,29 @@ All 32 actions share these rules:
 | 31 | `me.queueStatus` | Customer | `QueueService.getActiveForCustomer` | self | – | "Meri queue ka status batao" | P2 |
 | 32 | `me.leaveQueue` | Customer | `QueueService.cancelByCustomer` | self | yes | "Queue chhod do" | P2 |
 
+| 33 | `chairs.list` | Owner, admin | `SalonChairsService.list` | owner/admin | – | "Chairs dikhao" | B3 |
+| 34 | `chairs.add` | Owner, admin | `SalonChairsService.create` | owner/admin | yes | "Naya chair add karo Chair 3" | B3 (barber denied) |
+| 35 | `chairs.setStatus` | Owner, admin | `SalonChairsService.update{status}`: in use, off, under repair | owner/admin | yes | "Chair 2 maintenance mein daalo" | B3 |
+| 36 | `staffHours.view` | Owner, admin | `StaffWorkingHoursService.list` | owner/admin | – | "Ravi staff ki timing dikhao" | B3 |
+| 37 | `staffHours.set` | Owner, admin | `StaffWorkingHoursService.set` (whole week; days that followed the shop's hours are shown as becoming fixed) | owner/admin | yes | "Ravi staff ka Sunday off karo" | B3 (barber denied) |
+| 38 | `bookings.noShow` | Owner, admin | `BookingNoShowService.markNoShow` (after the arrival grace; the shop's no-show rule applies) | owner/admin | yes | "3 nov 17:05 wala appointment no show" | B3 (barber and other owner denied) |
+| 39 | `offers.list` | Owner | `OffersService.listForOwner` | owner only | – | "Offers dikhao" | B3 (barber and platform admin denied) |
+| 40 | `offers.publish` | Owner | `OffersService.publish` (public impact, stated in the preview) | owner only | yes | "Diwali offer live karo" | B3 |
+| 41 | `offers.pause` | Owner | `OffersService.pause` | owner only | yes | "Diwali offer pause karo" | B3 |
+| 42 | `reviews.list` | Owner, admin | `DashboardReviewsService.list` | owner/admin | – | "Reviews dikhao" | B3 |
+| 43 | `reviews.reply` | Owner, admin | `DashboardReviewsService.respond` (the owner's own words; the latest unanswered review unless one is named) | owner/admin | yes | "Review ka jawab do: Thank you!" | B3 (no second reply) |
+| 44 | `invoices.list` | Owner, admin | `InvoicesService.list` (read) | owner/admin | – | "Invoices dikhao" | B3 |
+| 45 | `revenue.report` | Owner, admin | `RevenueReportService.getReport` (this week or this month; read) | owner/admin | – | "Is hafte ki sales report" | B3 (barber and customer denied) |
+| 46 | `notifications.list` | Everyone | `NotificationsService.listMine` and `unreadCount` (own only) | signed in | – | "Notifications dikhao" | B3 |
+| 47 | `notifications.readAll` | Everyone | `NotificationsService.markAllRead` (own only) | signed in | yes | "Sab notifications read karo" | B3 (another user's unread untouched) |
+| 48 | `me.joinQueue` | Customer | `QueueService.joinWalkIn` on the salon page (a mobile number is asked for first) | self | yes | "Mujhe queue mein lagao haircut" | B3 (no double join) |
+| 49 | `me.favorites` | Customer | `FavoritesService.list` | self | – | "Meri favorite salons dikhao" | B3 |
+| 50 | `me.favoriteAdd` | Customer | `FavoritesService.add` (salon page) | self | yes | "Is salon ko favorite karo" | B3 (owner denied) |
+| 51 | `me.favoriteRemove` | Customer | `FavoritesService.remove` | self | yes | "Favorite se hatao" | B3 |
+| 52 | `me.invoices` | Customer | `InvoicesService.listMine` | self | – | "Mere bills dikhao" | B3 |
+| 53 | `admin.overview` | Platform admin, co-founder, viewer | `AdminExecutiveOverviewService.getOverview` (last 30 days; read) | platform | – | "Platform overview dikhao" | B3 (wrong audience and shop owner denied) |
+| 54 | `admin.shopStatus` | Platform admin, co-founder, viewer | `AdminShopStatusService.getStatus` (read) | platform | – | "Kitni shops open hain" | B3 (viewer read-only) |
+
 **Cross-cutting negative tests**
 - Another shop's owner is denied, even when the request names the victim shop.
 - The platform viewer and customers cannot run shop actions, and each denial is audited.
@@ -68,6 +94,8 @@ All 32 actions share these rules:
 - Replayed and stale confirmations are refused.
 - A service name written as an instruction stays data.
 - Inventory and onboarding requests return UNAVAILABLE.
+- A platform role from a non-admin (no TOTP) session cannot read platform figures.
+- The platform viewer stays read-only on every screen.
 
 ## 2. FastQue capabilities not yet run by the assistant
 
@@ -78,24 +106,19 @@ The full route list is in [ROUTE_INVENTORY.md](ROUTE_INVENTORY.md). Status meani
 
 | Area | Persona | Existing API | Status | Blocker or reason |
 |---|---|---|---|---|
-| Chairs (list, add, deactivate) | Owner | `SalonChairsService` | NEXT | – |
-| Staff working hours, weekly off | Owner | `StaffWorkingHoursService.list/set` | NEXT | – |
 | Queue: assign a barber or chair, start a service | Owner, staff | `QueueService.assign/startService` | BLOCKED | Needs a deliberate chair and barber choice; kept in the Live Queue console until a picker UI exists |
 | In-shop appointment for a walk-up caller | Owner, staff | `BookingsService.createInShop` | NEXT | Phone needs the recorded consent flow |
-| Booking no-show / correct to completed | Owner, staff | `BookingNoShowService` | NEXT | – |
-| Offers / daily deals | Owner | offers module | NEXT | – |
-| Invoices / revenue report / CSV | Owner | `InvoicesService`, revenue report | NEXT (read) | Downloads stay as page links |
+| Invoices: issue, record payment, void; CSV downloads | Owner | `InvoicesService` | BLOCKED | Money movement; needs owner sign-off on confirmation strength. Lists and the report are done (#44, #45) |
+| Booking: correct a no-show to completed | Owner, staff | `BookingNoShowService.correctToCompleted` | NEXT | A correction of a charge; needs a strong confirmation |
+| Offers: create or edit (wording, discount, dates) | Owner | `OffersService.create/update` | NEXT | Many fields; best as a guided form card |
 | Salon profile, description, timezone, payment QR | Owner | salon-setup services | NEXT | – |
 | Photos (upload, cover) | Owner | `SalonPhotosService` | BLOCKED | A file upload can't come from a sentence; link to the page |
 | Shop open/close for today | Owner | `SalonActivationService` | BLOCKED | Owner decision: an instant public effect needs a stronger confirmation |
-| Reviews (reply) | Owner | dashboard-reviews | NEXT | – |
-| Notifications (read, mark read) | All | notifications | NEXT | – |
-| Customer: join queue at a salon | Customer | `QueueService.joinWalkIn` | NEXT | Uses the salon page context like `me.book` |
-| Customer: favorites, profile, invoices, review | Customer | favorites, auth profile, invoices, reviews | NEXT | – |
+| Customer: profile edit, write a review | Customer | auth profile, reviews | NEXT | Favorites and bills are done (#49–52) |
 | Guest (not signed in) actions | Guest | guest queue routes | BLOCKED | The assistant requires sign-in; guests keep the existing OTP and guest flows |
 | Field employee: leads, follow-ups, visits | Employee | employee module | NEXT (read first) | Employee-audience session; Android UI is Codex's 1.0.7 lane, by API contract only |
-| Platform admin, co-founder: analytics, shop status, verification queue | Admin | admin module | NEXT (read first) | Decisions such as verify or suspend need owner sign-off on confirmation strength |
-| Platform viewer | Viewer | admin read endpoints | NEXT (read only) | Never writes (tested) |
+| Platform admin: verification queue, shop activity, CRM, exports | Admin | admin module | NEXT (read) / BLOCKED (decisions) | Overview and shop status are done (#53, #54). Verify/suspend and exports need owner sign-off |
+| Platform viewer | Viewer | admin read endpoints | Partly done | Reads #53 and #54; never writes (tested) |
 | Inventory (stock, products, recipes, forecasts) | Owner | R7 #357 routes | BLOCKED | Not deployed; R7 waits on the fresh P1 backup. Returns UNAVAILABLE today |
 | Salon onboarding (applications, status) | Employee, admin | R8 #358 routes | BLOCKED | Not deployed; activation and publishing are off by default even after R8 |
 | Roles and permissions, payouts, payments, OTP/DLT, bulk delete | – | – | NEVER | High-impact; stays in the dedicated screens |
@@ -123,5 +146,10 @@ The full route list is in [ROUTE_INVENTORY.md](ROUTE_INVENTORY.md). Status meani
 | `customers` | Customer directory | `useAssistantRefresh("customers")` |
 | `queue` | Live Queue | Server realtime events (existing) |
 | `myBookings`, `myQueue` | Customer "My bookings" | `useAssistantRefresh("myBookings" / "myQueue")` |
+| `chairs` | Chairs page | `useAssistantRefresh("chairs")` |
+| `offers` | Offers workspace | `useAssistantRefresh("offers")` |
+| `reviews` | Reviews page | `useAssistantRefresh("reviews")` |
+| `favorites` | Favorites page and every heart icon | `useAssistantRefresh("favorites")` and `reloadFavoritesFor` |
+| `staffHours`, `notifications` | Staff page, notification bell | Read on next open (no live hook yet) |
 
-The assistant drawer is mounted on every owner and staff shop page (`OwnerShell`), on customer account pages, and on each salon's booking page, where its `salonId` lets the customer book there.
+The assistant drawer is mounted on every owner and staff shop page (`OwnerShell`), on customer account pages, on each salon's booking page (its `salonId` lets the customer book, join the queue or save a favorite there), and on the platform admin screens (`AdminShell`, platform reads only).
