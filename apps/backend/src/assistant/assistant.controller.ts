@@ -1,6 +1,19 @@
-import { Body, Controller, Get, Header, HttpCode, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Header,
+  HttpCode,
+  Post,
+  Query,
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 import { Throttle } from '@nestjs/throttler';
 import {
+  ASSISTANT_LIMITS,
   ASSISTANT_PATHS,
   assistantConfirmationSchema,
   assistantTurnSchema,
@@ -45,8 +58,32 @@ export class AssistantController {
   @Header('Cache-Control', 'private, no-store')
   confirm(
     @CurrentUser() user: AuthenticatedUser,
-    @Body(new ZodValidationPipe(assistantConfirmationSchema)) body: AssistantConfirmationInput,
+    @Body(new ZodValidationPipe(assistantConfirmationSchema))
+    body: AssistantConfirmationInput,
   ) {
     return this.assistant.confirm(user, body);
+  }
+
+  // Optional private speech-to-text (self-hosted Whisper). Refused with 503 unless configured.
+  // Audio stays in memory for this one request and is never stored or logged.
+  @Post(ASSISTANT_PATHS.transcriptions)
+  @HttpCode(200)
+  @Throttle(ASSISTANT_THROTTLE)
+  @Header('Cache-Control', 'private, no-store')
+  @UseInterceptors(
+    FileInterceptor('audio', {
+      storage: memoryStorage(),
+      limits: { fileSize: ASSISTANT_LIMITS.maxAudioBytes, files: 1 },
+    }),
+  )
+  transcribe(
+    @UploadedFile() file: Express.Multer.File | undefined,
+    @Query('lang') lang?: string,
+  ) {
+    return this.assistant.transcribe(
+      file?.buffer ?? Buffer.alloc(0),
+      file?.mimetype ?? '',
+      lang === 'en' ? 'en' : 'hi',
+    );
   }
 }

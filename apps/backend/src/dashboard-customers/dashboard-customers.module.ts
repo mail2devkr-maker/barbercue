@@ -16,5 +16,6 @@ import { CancellationCourtesyWaiverService } from './cancellation-courtesy-waive
     CustomerDirectoryQueryService,
     CancellationCourtesyWaiverService,
   ],
+  exports: [DashboardCustomersService],
 })
 export class DashboardCustomersModule {}

@@ -10,11 +10,15 @@ export const ASSISTANT_PATHS = {
   turns: "turns",
   confirmations: "confirmations",
   capabilities: "capabilities",
+  transcriptions: "transcriptions",
 } as const;
 
 export const ASSISTANT_LIMITS = {
   maxTextLength: 500,
   confirmationTtlSeconds: 120,
+  // Local speech-to-text upload (only when a private Whisper server is configured).
+  maxAudioBytes: 2_000_000,
+  maxAudioSeconds: 30,
 } as const;
 
 export const assistantTurnSchema = z.object({
@@ -23,6 +27,9 @@ export const assistantTurnSchema = z.object({
   salonId: z.string().trim().min(1).max(64).optional(),
   // How the text arrived, for the audit trail and the transcript bubble. Never changes what is allowed.
   inputMode: z.enum(["text", "voice"]).default("text"),
+  // Which screen the drawer is on. Only picks between same-worded intents ("cancel my
+  // appointment" vs a shop cancelling one); it never grants anything.
+  surface: z.enum(["shop", "customer"]).default("shop"),
 });
 export type AssistantTurnInput = z.infer<typeof assistantTurnSchema>;
 
@@ -44,6 +51,29 @@ export const AssistantActionId = {
   QUEUE_STATUS: "queue.status",
   TODAY_INSIGHTS: "insights.today",
   SALON_SEARCH: "salons.search",
+  // Phase 2 — shop
+  STAFF_RENAME: "staff.rename",
+  SERVICE_SET_DURATION: "services.setDuration",
+  SERVICE_RENAME: "services.rename",
+  HOURS_VIEW: "hours.view",
+  HOURS_SET: "hours.set",
+  QUEUE_CALL_NEXT: "queue.callNext",
+  QUEUE_MARK_ARRIVED: "queue.markArrived",
+  QUEUE_NO_SHOW: "queue.noShow",
+  QUEUE_CANCEL: "queue.cancel",
+  QUEUE_COMPLETE: "queue.complete",
+  QUEUE_ADD_WALK_IN: "queue.addWalkIn",
+  SCHEDULE_VIEW: "schedule.view",
+  BOOKING_CANCEL_BY_SHOP: "bookings.cancelByShop",
+  BOOKING_RESCHEDULE_BY_SHOP: "bookings.rescheduleByShop",
+  CUSTOMERS_FIND: "customers.find",
+  // Phase 2 — customer (self-service)
+  MY_BOOKINGS: "me.bookings",
+  MY_BOOKING_CANCEL: "me.cancelBooking",
+  MY_BOOKING_RESCHEDULE: "me.rescheduleBooking",
+  MY_QUEUE_STATUS: "me.queueStatus",
+  MY_QUEUE_LEAVE: "me.leaveQueue",
+  BOOK_APPOINTMENT: "me.book",
 } as const;
 export type AssistantActionId = (typeof AssistantActionId)[keyof typeof AssistantActionId];
 
@@ -83,9 +113,36 @@ export interface AssistantTurnDto {
   completedAt: string;
 }
 
-export type AssistantResource = "staff" | "services" | "queue" | "overview";
+export type AssistantResource =
+  | "staff"
+  | "services"
+  | "queue"
+  | "overview"
+  | "hours"
+  | "bookings"
+  | "customers"
+  | "myBookings"
+  | "myQueue";
 
 export type AssistantCapabilityState = "SUPPORTED" | "DENIED" | "UNAVAILABLE";
+
+export interface AssistantVoiceOptionsDto {
+  // Browser speech recognition (development/testing; in Chrome the audio is processed by Google).
+  browser: true;
+  // A private, self-hosted Whisper server is configured for audio that never leaves FastQue.
+  local: boolean;
+}
+
+export interface AssistantCapabilitiesDto {
+  interpreter: "rules" | "local";
+  voice: AssistantVoiceOptionsDto;
+  actions: AssistantCapabilityDto[];
+}
+
+export interface AssistantTranscriptionDto {
+  text: string;
+  language: string | null;
+}
 
 export interface AssistantCapabilityDto {
   id: AssistantActionId;
