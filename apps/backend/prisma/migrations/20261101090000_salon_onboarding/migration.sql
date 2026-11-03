@@ -364,7 +364,14 @@ ALTER TABLE "salon_onboarding_invitations" ADD CONSTRAINT "salon_onboarding_invi
 -- Hand-written integrity checks (Prisma's DSL has no CHECK support).
 ALTER TABLE "salon_onboarding_hours" ADD CONSTRAINT "salon_onboarding_hours_day_check" CHECK ("dayOfWeek" BETWEEN 0 AND 6);
 ALTER TABLE "salon_onboarding_hours" ADD CONSTRAINT "salon_onboarding_hours_times_check" CHECK ("isClosed" OR ("opensAt" IS NOT NULL AND "closesAt" IS NOT NULL));
-ALTER TABLE "salon_onboarding_applications" ADD CONSTRAINT "salon_onboarding_applications_coords_check" CHECK (("latitude" IS NULL) = ("longitude" IS NULL) AND ("latitude" IS NULL OR ("latitude" BETWEEN -90 AND 90 AND "longitude" BETWEEN -180 AND 180 AND "coordinatesSource" IN ('GPS', 'MAP_PIN', 'MANUAL'))));
+ALTER TABLE "salon_onboarding_applications" ADD CONSTRAINT "salon_onboarding_applications_coords_check" CHECK (
+    ("latitude" IS NULL) = ("longitude" IS NULL)
+    AND ("latitude" IS NULL OR "latitude" >= -90)
+    AND ("latitude" IS NULL OR "latitude" <= 90)
+    AND ("longitude" IS NULL OR "longitude" >= -180)
+    AND ("longitude" IS NULL OR "longitude" <= 180)
+    AND ("latitude" IS NULL OR "coordinatesSource" = 'GPS' OR "coordinatesSource" = 'MAP_PIN' OR "coordinatesSource" = 'MANUAL')
+  );
 ALTER TABLE "salon_onboarding_applications" ADD CONSTRAINT "salon_onboarding_applications_counts_check" CHECK (COALESCE("employeeCount", 0) >= 0 AND COALESCE("chairCount", 0) >= 0 AND COALESCE("activeChairCount", 0) >= 0 AND COALESCE("maleStaffCount", 0) >= 0 AND COALESCE("femaleStaffCount", 0) >= 0 AND COALESCE("branchCount", 1) >= 1);
 ALTER TABLE "salon_onboarding_services" ADD CONSTRAINT "salon_onboarding_services_values_check" CHECK (("basePrice" IS NULL OR "basePrice" >= 0) AND ("discountedPrice" IS NULL OR "discountedPrice" >= 0) AND ("durationMinutes" IS NULL OR "durationMinutes" BETWEEN 1 AND 600));
 ALTER TABLE "salon_onboarding_media" ADD CONSTRAINT "salon_onboarding_media_size_check" CHECK ("fileSize" > 0);
