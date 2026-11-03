@@ -68,10 +68,11 @@ describe('SiteHeader mobile navigation', () => {
     open(tree);
     const links = mobileNavOf(tree).findAllByType('a').map((a) => [label(a), a.props.href]);
     expect(links).toEqual([
-      ['Find a barber', '/search'],
+      ['Find Salons', '/search'],
+      ['How It Works', '/#book-or-queue'],
       ['Services', '/#services'],
-      ['How it works', '/#book-or-queue'],
-      ['For shops', '/#for-shops'],
+      ['Offers', '/offers'],
+      ['For Salon Owners', '/#for-shops'],
       ['About Us', '/about-us'],
       ['Employee Login', '/employee/login'],
       ['Contact Us', '/contact-us'],
@@ -83,7 +84,7 @@ describe('SiteHeader mobile navigation', () => {
 
   // REGRESSION: Employee Login, Contact Us and We're Hiring had no close handler, so tapping the
   // link for the page you were already on (no pathname change) left the menu open over the page.
-  it.each(['Find a barber', 'Services', 'About Us', 'Employee Login', 'Contact Us', "We're Hiring", 'Sign In', 'List your shop'])(
+  it.each(['Find Salons', 'Services', 'Offers', 'About Us', 'Employee Login', 'Contact Us', "We're Hiring", 'Sign In', 'List your shop'])(
     'REGRESSION: closes the menu when "%s" is tapped, even on the page it links to',
     (linkLabel) => {
       const tree = render('/contact-us');
