@@ -2804,6 +2804,8 @@ model InventoryAlert {
 
   @@index([salonId, resolvedAt, createdAt])
   @@map("inventory_alerts")
+}
+
 // ---------- Employee-to-admin salon onboarding ----------
 // A field employee's application to list a salon. Nothing here is public: the master Salon row is
 // created only on admin approval (status PENDING, so still invisible to discovery), and publication

@@ -70,7 +70,7 @@ export const ADMIN_NAV_ITEMS: ReadonlyArray<AdminNavItem> = [
 
   { id: "all-shops", label: "All Shops", group: "SHOPS", href: "/dashboard/admin", status: "live" },
   { id: "open-closed", label: "Open / Closed Shops", group: "SHOPS", href: STATUS, status: "live" },
-  planned("SHOPS", "shop-onboarding", "New Shop Onboarding", "Salon lifecycle events (registered → verified → configured → first booking)."),
+  { id: "shop-onboarding", label: "New Shop Onboarding", group: "SHOPS", href: "/dashboard/admin/onboarding", status: "live" },
   planned("SHOPS", "shop-rankings", "Shop Rankings", "A paginated shop-ranking API with geography filters."),
 
   { id: "booking-trends", label: "Booking Trends", group: "BOOKINGS", href: CHARTS, query: "preset=bookings", status: "live" },

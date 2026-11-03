@@ -27,7 +27,7 @@ import {
 /**
  * Salon onboarding, end to end over HTTP against a DISPOSABLE local database (never the dev or a
  * production database): run with DATABASE_URL pointing at a localhost database whose name ends in
- * "_e2e". Email and AI are replaced by in-memory fakes, so nothing leaves the machine; the sample
+ * "_e2e" (or CI's owner_ops_chain). Email and AI are replaced by in-memory fakes, so nothing leaves the machine; the sample
  * salon's details are used with a synthetic phone/email, never the real owner's contact.
  */
 const DATABASE_URL = process.env.DATABASE_URL ?? '';
@@ -41,7 +41,7 @@ const parsed = (() => {
 const DISPOSABLE =
   !!parsed &&
   ['localhost', '127.0.0.1'].includes(parsed.hostname) &&
-  parsed.pathname.endsWith('_e2e');
+  (parsed.pathname.endsWith('_e2e') || parsed.pathname === '/owner_ops_chain');
 const maybe = DISPOSABLE ? describe : describe.skip;
 
 type Json = Record<string, any>;

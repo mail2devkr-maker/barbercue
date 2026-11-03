@@ -39,6 +39,7 @@ import { OnboardingApprovalService } from './onboarding-approval.service';
 import { OnboardingPublishService } from './onboarding-publish.service';
 import { OnboardingAnalyticsService } from './onboarding-analytics.service';
 import { OnboardingMediaService } from './onboarding-media.service';
+import { assertOnboardingActivationEnabled } from './onboarding-activation';
 
 const BASE = `${ADMIN_PATHS.admin}/${ADMIN_PATHS.onboarding}`;
 const promoteSchema = z
@@ -208,6 +209,7 @@ export class AdminOnboardingController {
     @Body(new ZodValidationPipe(onboardingApproveSchema))
     body: OnboardingApproveInput,
   ) {
+    assertOnboardingActivationEnabled();
     return this.approval.approve(user, id, body);
   }
 
@@ -217,6 +219,7 @@ export class AdminOnboardingController {
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
+    assertOnboardingActivationEnabled();
     return this.approval.resendInvitation(user, id);
   }
 
@@ -228,6 +231,7 @@ export class AdminOnboardingController {
     @Body(new ZodValidationPipe(promoteSchema))
     body: z.infer<typeof promoteSchema>,
   ) {
+    assertOnboardingActivationEnabled();
     return this.publishing.promotePhotos(user, id, body.mediaIds);
   }
 
@@ -237,6 +241,7 @@ export class AdminOnboardingController {
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
+    assertOnboardingActivationEnabled();
     return this.publishing.publish(user, id);
   }
 
