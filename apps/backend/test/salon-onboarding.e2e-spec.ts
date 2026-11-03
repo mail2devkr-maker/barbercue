@@ -225,6 +225,7 @@ maybe('Salon onboarding workflow (e2e, disposable local database)', () => {
 
   beforeAll(async () => {
     process.env.PRIVATE_STORAGE_DIR = privateDir;
+    process.env.ONBOARDING_ACTIVATION_ENABLED = 'true';
     process.env.LOCAL_STORAGE_DIR = publicDir;
     process.env.LOCAL_STORAGE_PUBLIC_BASE_URL = 'https://uploads.example.test';
     delete process.env.STORAGE_DRIVER;
@@ -700,6 +701,37 @@ maybe('Salon onboarding workflow (e2e, disposable local database)', () => {
   });
 
   // 13 + 16 + 18 + 24: approval, invitation failure and retry, idempotency
+  it('refuses approval and publishing while activation is switched off', async () => {
+    const before = await prisma.salon.count();
+    delete process.env.ONBOARDING_ACTIVATION_ENABLED;
+    try {
+      const current = await api(
+        'get',
+        `admin/onboarding/${ids.main}`,
+        tok.admin,
+      ).expect(200);
+      for (const path of ['approve', 'publish', 'invitation/resend']) {
+        const res = await api(
+          'post',
+          `admin/onboarding/${ids.main}/${path}`,
+          tok.admin,
+        )
+          .send({ applicationVersion: current.body.version })
+          .expect(503);
+        expect(res.body.error.code).toBe('ONBOARDING_ACTIVATION_DISABLED');
+      }
+      expect(await prisma.salon.count()).toBe(before);
+      const after = await api(
+        'get',
+        `admin/onboarding/${ids.main}`,
+        tok.admin,
+      ).expect(200);
+      expect(after.body.status).toBe(current.body.status);
+    } finally {
+      process.env.ONBOARDING_ACTIVATION_ENABLED = 'true';
+    }
+  });
+
   it('approves once, keeps the salon hidden, and retries a failed invitation', async () => {
     const current = await api(
       'get',
