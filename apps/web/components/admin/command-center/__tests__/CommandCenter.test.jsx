@@ -10,6 +10,10 @@ jest.mock('../../../../lib/api', () => ({
   apiFetch: jest.fn(),
   ApiError: class ApiError extends Error {},
 }));
+let mockRoles = ['PLATFORM_ADMIN'];
+jest.mock('../../../../lib/auth-context', () => ({
+  useAuth: () => ({ user: { roles: mockRoles } }),
+}));
 jest.mock('next/link', () => ({
   __esModule: true,
   default: ({ children, href }) => <a href={href}>{children}</a>,
@@ -167,6 +171,17 @@ describe('CommandCenter', () => {
     expect(textOf(byLabel['FastQue platform revenue'].findByType('strong'))).toBe('Not tracked yet');
     expect(textOf(byLabel['Unique customers served (all time)'].findByType('strong'))).toBe('1,234');
     expect(textOf(byLabel['Unique customers served (all time)'])).toContain('plus 7 visits with no phone or account');
+  });
+
+  it('shows the read-only viewer the total but no customer download', async () => {
+    mockRoles = ['PLATFORM_VIEWER'];
+    try {
+      const tree = await render();
+      expect(tree.root.findAll((n) => n.type === 'button' && textOf(n) === 'Download CSV')).toHaveLength(0);
+      expect(JSON.stringify(tree.toJSON())).toContain('1,234');
+    } finally {
+      mockRoles = ['PLATFORM_ADMIN'];
+    }
   });
 
   it('downloads served customers from their own endpoint', async () => {

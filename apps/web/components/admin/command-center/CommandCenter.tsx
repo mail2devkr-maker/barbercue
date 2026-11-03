@@ -4,11 +4,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ADMIN_PATHS,
   ADMIN_ADOPTION_THRESHOLDS,
+  hasAdminPermission,
   type AdminExecutiveOverviewDto,
   type AdminKpiValue,
   type AdminServedCustomersDto,
 } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../../lib/api";
+import { useAuth } from "../../../lib/auth-context";
 import { Button } from "../../ui/Button";
 import { AreaChart } from "../../owner/charts";
 import { formatRangeLabel } from "../shop-activity-range";
@@ -30,7 +32,7 @@ import styles from "../../../app/(dashboard)/dashboard/admin/command-center/comm
 const formatChartValue = (value: number) => new Intl.NumberFormat("en-IN", { maximumFractionDigits: 1 }).format(value);
 
 const CUSTOMERS_SERVED_DEFINITION =
-  "Distinct people with at least one completed appointment or served walk-in, ever. A person is their FastQue account, else their phone number, so a guest who later signs up counts once. Visits with neither cannot be told apart and are shown separately. The download masks phone numbers.";
+  "Distinct people with at least one completed appointment or served walk-in, ever. A person is their FastQue account, else their phone number, so a guest who later signs up counts once. Visits with neither cannot be told apart and are shown separately. The download is limited to roles that may export the customer report, is recorded in the audit log and masks phone numbers.";
 
 interface KpiCard {
   label: string;
@@ -69,6 +71,8 @@ export function CommandCenter() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const { user } = useAuth();
+  const canDownloadCustomers = hasAdminPermission(user?.roles ?? [], "exportCustomerReport");
   const [customersDownload, setCustomersDownload] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
 
   const load = useCallback(async (from: string, to: string) => {
@@ -199,9 +203,11 @@ export function CommandCenter() {
                   {current.customersServed.unidentifiedVisits > 0 &&
                     ` · plus ${formatCount(current.customersServed.unidentifiedVisits)} visits with no phone or account`}
                 </p>
-                <button type="button" className={styles.kpiAction} onClick={() => void downloadServedCustomers()} disabled={customersDownload.busy}>
-                  {customersDownload.busy ? "Preparing…" : "Download CSV"}
-                </button>
+                {canDownloadCustomers && (
+                  <button type="button" className={styles.kpiAction} onClick={() => void downloadServedCustomers()} disabled={customersDownload.busy}>
+                    {customersDownload.busy ? "Preparing…" : "Download CSV"}
+                  </button>
+                )}
                 {customersDownload.error && <p className={styles.rangeError} role="alert">{customersDownload.error}</p>}
               </article>
             )}
