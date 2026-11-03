@@ -2,12 +2,14 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import OwnerShopScreen from '../screens/owner/OwnerShopScreen';
 import OwnerCustomersScreen from '../screens/owner/OwnerCustomersScreen';
 import OwnerCustomerDetailScreen from '../screens/owner/OwnerCustomerDetailScreen';
+import OwnerBusinessScreen from '../screens/owner/OwnerBusinessScreen';
 import { useLanguage } from '../lib/language-context';
 
 export type OwnerShopStackParamList = {
   OwnerShop: undefined;
   OwnerCustomers: undefined;
   OwnerCustomerDetail: { customerId: string };
+  OwnerBusiness: undefined;
 };
 
 const Stack = createNativeStackNavigator<OwnerShopStackParamList>();
@@ -21,6 +23,7 @@ export default function OwnerShopStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="OwnerShop" component={OwnerShopScreen} />
+      <Stack.Screen name="OwnerBusiness" component={OwnerBusinessScreen} options={{ headerShown: true, title: 'Business center' }} />
       <Stack.Screen name="OwnerCustomers" component={OwnerCustomersScreen} options={{ headerShown: true, title: t.customersLabel }} />
       <Stack.Screen
         name="OwnerCustomerDetail"

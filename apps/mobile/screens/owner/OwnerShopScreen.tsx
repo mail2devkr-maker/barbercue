@@ -109,6 +109,13 @@ export default function OwnerShopScreen() {
     <Screen contentStyle={styles.screenContent} refreshing={refreshing} onRefresh={() => void load(true)}>
       <SectionHeader eyebrow={t.ownerEyebrow} title={selectedSalon?.name ?? t.tabShop} subtitle={t.shopSubtitle} />
 
+      <Button
+        title="Business reports and tools"
+        variant="secondary"
+        onPress={() => navigation.navigate('OwnerBusiness')}
+        style={sectionStyles.addButton}
+      />
+
       <Text style={sectionStyles.sectionTitle}>{t.servicesLabel}</Text>
       <Card style={sectionStyles.card}>
         {services.length === 0 ? (
