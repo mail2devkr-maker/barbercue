@@ -145,6 +145,16 @@ jobs:
           export JWT_ACCESS_SECRET="$(node -e "process.stdout.write(require('crypto').randomBytes(32).toString('hex'))")"
           export TOTP_ENCRYPTION_KEY="$(node -e "process.stdout.write(require('crypto').randomBytes(32).toString('hex'))")"
           npx jest --config ./test/jest-e2e.json --runInBand --ci test/admin-customers-served.e2e-spec.ts
+      - name: Action Assistant E2E - exactly-once writes, confirmations, role and shop separation
+        working-directory: apps/backend
+        env:
+          DATABASE_URL: ${{ env.CHAIN_DATABASE_URL }}
+          NODE_ENV: test
+          AGENT_LLM_PROVIDER: none
+        run: |
+          export JWT_ACCESS_SECRET="$(node -e "process.stdout.write(require('crypto').randomBytes(32).toString('hex'))")"
+          export TOTP_ENCRYPTION_KEY="$(node -e "process.stdout.write(require('crypto').randomBytes(32).toString('hex'))")"
+          npx jest --config ./test/jest-e2e.json --runInBand --ci test/assistant-actions.e2e-spec.ts
       - name: Inventory E2E - salon isolation, immutable movements, valuation and concurrency (must ALL pass)
         working-directory: apps/backend
         env:

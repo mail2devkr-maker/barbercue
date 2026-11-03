@@ -4,6 +4,7 @@ import { use, useEffect, useState } from "react";
 import { createSalonStaffSchema, DASHBOARD_PATHS, Role, StaffMemberStatus } from "@barbercue/shared";
 import type { SalonStaffDto, StaffInviteResultDto } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../../../../../lib/api";
+import { useAssistantRefresh } from "../../../../../../lib/assistant-events";
 import { RequireRole } from "../../../../../../components/auth/RequireRole";
 import { Button } from "../../../../../../components/ui/Button";
 import { Banner as OwnerBanner, Btn as OwnerBtn, Dialog as OwnerDialog } from "../../../../../../components/owner/parts";
@@ -72,6 +73,11 @@ export default function DashboardStaffPage({
       cancelled = true;
     };
   }, [base]);
+
+  // A change confirmed through the Assistant reloads the list from the server.
+  useAssistantRefresh("staff", () => {
+    apiFetch<SalonStaffDto[]>(base).then(setStaff).catch(() => undefined);
+  });
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
