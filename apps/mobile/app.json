@@ -15,6 +15,10 @@
       "fallbackToCacheTimeout": 2000
     },
     "ios": {
+      "version": "1.0.6",
+      "runtimeVersion": {
+        "policy": "appVersion"
+      },
       "supportsTablet": true,
       "bundleIdentifier": "com.dcw.fastque",
       "infoPlist": {
@@ -22,6 +26,9 @@
       }
     },
     "android": {
+      "runtimeVersion": {
+        "policy": "appVersion"
+      },
       "package": "com.dcw.fastque",
       "versionCode": 17,
       "googleServicesFile": "./google-services.json",

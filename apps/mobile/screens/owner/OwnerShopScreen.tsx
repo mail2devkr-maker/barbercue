@@ -115,6 +115,12 @@ export default function OwnerShopScreen() {
         onPress={() => navigation.navigate('OwnerBusiness')}
         style={sectionStyles.addButton}
       />
+      <Button
+        title="Shop settings"
+        variant="outline"
+        onPress={() => navigation.navigate('OwnerSettings')}
+        style={sectionStyles.addButton}
+      />
 
       <Text style={sectionStyles.sectionTitle}>{t.servicesLabel}</Text>
       <Card style={sectionStyles.card}>

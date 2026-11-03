@@ -1,6 +1,19 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 const plugin = require('../../plugins/withAndroidLargeScreenOrientation');
 const appJson = require('../../app.json');
+const mobileRoot = require('node:path').dirname(require.resolve('../../app.json'));
+const resolvedExpoConfig = require('@expo/config').getConfig(mobileRoot, { skipSDKVersionRequirement: true }).exp;
+
+function effectiveAppVersion(platform: 'ios' | 'android'): string {
+  return resolvedExpoConfig[platform]?.version ?? resolvedExpoConfig.version;
+}
+
+function effectiveRuntimeVersion(platform: 'ios' | 'android'): string {
+  const runtime = resolvedExpoConfig[platform]?.runtimeVersion ?? resolvedExpoConfig.runtimeVersion;
+  if (typeof runtime === 'string') return runtime;
+  if (runtime?.policy === 'appVersion') return effectiveAppVersion(platform);
+  throw new Error(`Unexpected ${platform} runtimeVersion configuration`);
+}
 
 const TEMPLATE_MAIN_ACTIVITY = `package com.dcw.fastque
 
@@ -94,6 +107,18 @@ describe('app.json Android release configuration', () => {
     const rules = buildProperties?.[1].android?.extraProguardRules ?? '';
     expect(rules).toMatch(/^-keep interface expo\.modules\.kotlin\.records\.Record$/m);
     expect(rules).toMatch(/^-keep,allowshrinking,allowobfuscation class expo\.modules\.kotlin\.records\.\*\* \{ \*; \}$/m);
+  });
+
+  it('resolves Android 1.0.7 without changing the existing iOS 1.0.6 store version', () => {
+    expect(effectiveAppVersion('android')).toBe('1.0.7');
+    expect(effectiveAppVersion('ios')).toBe('1.0.6');
+    expect(resolvedExpoConfig.android?.package).toBe('com.dcw.fastque');
+    expect(resolvedExpoConfig.ios?.bundleIdentifier).toBe('com.dcw.fastque');
+  });
+
+  it('keeps OTA runtime versions aligned to each platform app version', () => {
+    expect(effectiveRuntimeVersion('android')).toBe('1.0.7');
+    expect(effectiveRuntimeVersion('ios')).toBe('1.0.6');
   });
 });
 

@@ -3,6 +3,7 @@ import OwnerShopScreen from '../screens/owner/OwnerShopScreen';
 import OwnerCustomersScreen from '../screens/owner/OwnerCustomersScreen';
 import OwnerCustomerDetailScreen from '../screens/owner/OwnerCustomerDetailScreen';
 import OwnerBusinessScreen from '../screens/owner/OwnerBusinessScreen';
+import OwnerSettingsScreen from '../screens/owner/OwnerSettingsScreen';
 import { useLanguage } from '../lib/language-context';
 
 export type OwnerShopStackParamList = {
@@ -10,6 +11,7 @@ export type OwnerShopStackParamList = {
   OwnerCustomers: undefined;
   OwnerCustomerDetail: { customerId: string };
   OwnerBusiness: undefined;
+  OwnerSettings: undefined;
 };
 
 const Stack = createNativeStackNavigator<OwnerShopStackParamList>();
@@ -24,6 +26,7 @@ export default function OwnerShopStack() {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="OwnerShop" component={OwnerShopScreen} />
       <Stack.Screen name="OwnerBusiness" component={OwnerBusinessScreen} options={{ headerShown: true, title: 'Business center' }} />
+      <Stack.Screen name="OwnerSettings" component={OwnerSettingsScreen} options={{ headerShown: true, title: 'Shop settings' }} />
       <Stack.Screen name="OwnerCustomers" component={OwnerCustomersScreen} options={{ headerShown: true, title: t.customersLabel }} />
       <Stack.Screen
         name="OwnerCustomerDetail"

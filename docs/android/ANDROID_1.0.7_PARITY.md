@@ -9,7 +9,7 @@ Statuses: **SOURCE** means a native path and current API usage exist; **PARTIAL*
 | # | Website section | Android candidate surface and API | Status / remaining evidence |
 |---|---|---|---|
 | 1 | Live Queue, arrivals, assign/start/complete, walk-in | `OwnerQueueScreen`; existing salon queue and service-session APIs | SOURCE; PHYSICAL_REQUIRED for queue race/arrival acceptance |
-| 2 | Settings | `OwnerShopScreen` settings sections, payment QR and shop data | PARTIAL; no single native shop-settings workflow for all web fields |
+| 2 | Settings | `OwnerSettingsScreen` edits salon name/contact/address/description and explicitly confirms the shop IANA time zone through the existing owner-scoped profile/timezone APIs; `OwnerShopScreen` retains hours, photos and payment QR | PARTIAL; native core profile/timezone flows are source-tested, but complete device acceptance and audit of every web preference remain |
 | 3 | Bookings | `OwnerBookingsScreen`, owner booking list/status actions | PARTIAL; web calendar/schedule workflows require separate audit |
 | 4 | In-shop appointments | `InShopAppointmentPanel` on Owner Bookings uses the shared in-shop booking schema, active salon services, shop timezone, qualified-staff and availability APIs, customer phone-contact consent, and an idempotency key | SOURCE; synthetic UI/API-contract tests added; authenticated real-shop and physical acceptance pending |
 | 5 | Schedule | Booking list plus opening-hours editor; no native calendar/per-staff schedule planner | PARTIAL |
@@ -31,7 +31,7 @@ Statuses: **SOURCE** means a native path and current API usage exist; **PARTIAL*
 |---|---|---|
 | Shop switcher | SOURCE | Owner salon context verifies workplaces and scopes selection; multi-shop device acceptance pending |
 | Owner onboarding | SOURCE | Existing native onboarding and registration routes; production acceptance pending |
-| Shop profile and notifications | PARTIAL | Account/profile and notification surfaces exist; compare every owner setting and preference before claiming parity |
+| Shop profile and notifications | PARTIAL | Native profile fields and explicit time-zone confirmation are now implemented; compare remaining owner preferences and verify on device |
 | Payment QR | SOURCE | Existing `PaymentQrSection` manages shop payment QR; it is not a printable public shop poster |
 | Public shop QR poster preview/download with long names | GAP | No equivalent poster design/print/download workflow found |
 | Inventory | BLOCKED / PARTIAL | Backend controller exists, but Claude's R7 inventory release is not production-certified; keep UI disabled until capability and production API availability are verified |
@@ -70,11 +70,13 @@ Therefore this matrix does **not** certify 100% website parity or a Play-ready p
 
 ## Candidate verification evidence
 
-- Mobile regression: **39 suites / 272 tests passed** after adding the cross-salon stale-data regression case.
+- Android release configuration resolves to version/runtime **1.0.7** while iOS is explicitly pinned to its existing **1.0.6** version/runtime; config assertions cover both platform values and identifiers.
+- Mobile regression: **40 suites / 278 tests passed**, including four owner-settings workflow tests and two Expo-resolved Android/iOS version/runtime checks.
 - Shared package: **26 suites / 500 tests passed**; TypeScript build passed.
 - Mobile TypeScript: passed.
 - Owner Business center focused tests: **5/5 passed**, including shop-local date filtering, fail-closed offers, review responses, and clearing prior-salon data after a failed shop switch.
-- Android JavaScript export: passed (1,208 modules; 3.3 MB Hermes bundle).
+- Owner settings tests: **4/4 passed**; validate selected-salon reads, shared-schema rejection, profile updates, explicit timezone confirmation and clearing stale data on salon switch.
+- Android JavaScript export: passed (1,209 modules; 3.3 MB Hermes bundle).
 - Expo Android prebuild: passed and generated the native project in this isolated worktree.
 - Android Gradle/AAB: not run. This runner has no Android SDK (`ANDROID_HOME` and `ANDROID_SDK_ROOT` are unset and the checked SDK paths are absent). EAS cloud version/build queries are also blocked by DNS (`api.expo.dev` resolves with `ENOTFOUND`). No cloud build was started.
 - ADB physical-device check: blocked because the local ADB daemon could not start (`could not read ok from ADB Server`). No device was installed, modified, or reset by this check.

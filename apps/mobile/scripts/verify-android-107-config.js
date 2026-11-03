@@ -3,16 +3,21 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { getConfig } = require('@expo/config');
 
 const root = path.resolve(__dirname, '..');
-const app = JSON.parse(fs.readFileSync(path.join(root, 'app.json'), 'utf8')).expo;
+const app = getConfig(root, { skipSDKVersionRequirement: true }).exp;
 const eas = JSON.parse(fs.readFileSync(path.join(root, 'eas.json'), 'utf8'));
 const failures = [];
 
 if (app.version !== '1.0.7') failures.push(`expo.version is ${app.version}; expected 1.0.7.`);
 if (app.android?.package !== 'com.dcw.fastque') failures.push('Android package must remain com.dcw.fastque.');
 if (app.android?.versionCode !== 17) failures.push('The local EAS remote-version seed must be the last verified Play versionCode 17.');
-if (app.runtimeVersion?.policy !== 'appVersion') failures.push('Runtime version must follow the app version so 1.0.7 does not receive 1.0.3/1.0.6 OTA bundles.');
+if (app.android?.version !== undefined) failures.push('Android versionName must use the Android release value from expo.version.');
+if (app.ios?.version !== '1.0.6') failures.push(`iOS version override is ${app.ios?.version}; expected the existing 1.0.6 release version.`);
+if (app.ios?.bundleIdentifier !== 'com.dcw.fastque') failures.push('iOS bundle identifier must remain com.dcw.fastque.');
+if (app.android?.runtimeVersion?.policy !== 'appVersion') failures.push('Android OTA runtime must follow Android versionName 1.0.7.');
+if (app.ios?.runtimeVersion?.policy !== 'appVersion') failures.push('iOS OTA runtime must follow the pinned iOS version 1.0.6.');
 if (app.extra?.eas?.projectId !== '01998c87-126d-40e8-aac3-205891b74b08') failures.push('Expo project ID does not match FastQue.');
 if (eas.cli?.appVersionSource !== 'remote') failures.push('EAS must retain remote version-code management.');
 
@@ -42,6 +47,7 @@ if (failures.length) {
 
 console.log('PASS: FastQue Android 1.0.7 source and EAS release configuration.');
 console.log(`  package: ${app.android.package}`);
-console.log(`  app version/runtime policy: ${app.version} / ${app.runtimeVersion.policy}`);
+console.log(`  Android version/runtime: ${app.version} / 1.0.7`);
+console.log(`  iOS version/runtime: ${app.ios.version} / 1.0.6`);
 console.log('  versionCode: local seed 17; remote EAS auto-increment (exact next value still requires EAS connectivity).');
 console.log('  artifact: signed store AAB profile; preview update channel; Play internal track draft; no build started.');
