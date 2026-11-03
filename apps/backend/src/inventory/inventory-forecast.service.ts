@@ -94,6 +94,9 @@ export class InventoryForecastService implements OnModuleInit {
   ) {}
 
   onModuleInit(): void {
+    // Off by default: a background sweep wakes the database and notifies owners, so it starts only
+    // when switched on explicitly. "Check now" works either way.
+    if (process.env.INVENTORY_ALERT_SCHEDULE_ENABLED !== 'true') return;
     this.scheduler?.register({
       name: 'inventory-alerts',
       domain: 'inventory',

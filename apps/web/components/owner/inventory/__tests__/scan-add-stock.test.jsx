@@ -99,10 +99,12 @@ describe('BarcodeScanner', () => {
   });
 
   it('says why when the browser has no camera access', async () => {
+    process.env.NEXT_PUBLIC_INVENTORY_CAMERA_SCAN = 'true';
     let tree;
     act(() => { tree = TestRenderer.create(<BarcodeScanner onDetected={jest.fn()} busy={false} />); });
     await act(async () => byText(tree, 'button', 'Scan with camera').props.onClick());
     expect(textOf(tree.root)).toContain("can't use the camera");
+    delete process.env.NEXT_PUBLIC_INVENTORY_CAMERA_SCAN;
   });
 });
 
@@ -278,5 +280,19 @@ describe('admin inventory pages', () => {
     expect(ids([Role.SALES_ADMIN])).toEqual([]);
     expect(canOpenAdminPath([Role.CO_FOUNDER], '/dashboard/admin/inventory/catalog')).toBe(true);
     expect(canOpenAdminPath([Role.HR_ADMIN], '/dashboard/admin/inventory')).toBe(false);
+  });
+});
+
+describe('camera scanning switch', () => {
+  it('offers typing, and no camera or photo controls, unless explicitly enabled', () => {
+    globalThis.window = { addEventListener: jest.fn(), removeEventListener: jest.fn() };
+    let tree;
+    act(() => { tree = TestRenderer.create(<BarcodeScanner onDetected={() => undefined} busy={false} />); });
+    delete globalThis.window;
+    const text = JSON.stringify(tree.toJSON());
+    expect(text).toContain('Look up');
+    expect(text).not.toContain('Scan with camera');
+    expect(text).not.toContain('Photo of a barcode');
+    expect(tree.root.findAllByType('video')).toHaveLength(0);
   });
 });

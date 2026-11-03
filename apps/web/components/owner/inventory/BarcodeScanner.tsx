@@ -9,6 +9,12 @@ import styles from "./scan.module.css";
 type Hint = "UPC_E" | undefined;
 type ZxingLibrary = typeof import("@zxing/library");
 
+/**
+ * Camera and barcode-photo scanning stay off until they have been verified on real devices. Typing the
+ * number and USB/Bluetooth scanners do not need a camera and always work.
+ */
+const cameraScanEnabled = () => process.env.NEXT_PUBLIC_INVENTORY_CAMERA_SCAN === "true";
+
 /** After this long live without a read, show tips for holding the product. */
 const SCAN_TIP_AFTER_MS = 6000;
 
@@ -194,6 +200,8 @@ export function BarcodeScanner({ onDetected, busy }: { onDetected: (code: string
 
   return (
     <div className={styles.scanner}>
+      {cameraScanEnabled() && (
+      <>
       <div className={`${styles.viewport} ${phase === "live" ? styles.viewportLive : ""}`}>
         <video ref={videoRef} className={styles.video} muted playsInline aria-label="Camera preview for scanning barcodes" />
         {phase === "live" && <div className={styles.guide} aria-hidden="true" />}
@@ -221,6 +229,8 @@ export function BarcodeScanner({ onDetected, busy }: { onDetected: (code: string
           <input type="file" accept="image/*" capture="environment" onChange={(e) => { void fromPhoto(e.target.files?.[0]); e.target.value = ""; }} />
         </label>
       </div>
+      </>
+      )}
 
       {error && <div className={ui.mt12}><Banner tone="warn">{error}</Banner></div>}
       {showTip && !error && (

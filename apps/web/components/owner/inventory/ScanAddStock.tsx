@@ -78,7 +78,7 @@ export function ScanAddStock({ salonId }: { salonId: string }) {
 
   return (
     <div className={ui.mt16}>
-      <Card title="Scan a product" sub="Scan the barcode on the pack to find it in the FastQue product catalog, then add the stock you received.">
+      <Card title="Scan a product" sub="Enter the barcode on the pack, or use a USB or Bluetooth scanner, to find it in the FastQue product catalog. Then add the stock you received.">
         <BarcodeScanner onDetected={(code, hint) => void find(code, hint)} busy={busy} />
       </Card>
 

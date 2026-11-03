@@ -473,4 +473,74 @@ maybe('Service consumption (authenticated disposable PostgreSQL)', () => {
       tok.owner,
     ).expect(403);
   });
+
+  it('deducts once when completion events race, and a failed deduction never blocks completion', async () => {
+    const blades = (
+      await api('get', `${inv()}/service-recipes`, tok.owner).expect(200)
+    ).body
+      .find((r: { serviceId: string }) => r.serviceId === ids.shave)
+      .lines.find((l: { categoryName: string }) => l.categoryName === 'Blades');
+    const setBladeQuantity = (quantity: number) =>
+      api('put', `${inv()}/service-recipes/${ids.shave}`, tok.owner)
+        .send({
+          lines: [
+            {
+              inventoryCategoryId: blades.inventoryCategoryId,
+              quantity,
+              unit: 'EACH',
+              defaultProductId: ids.blade,
+              autoDeduct: true,
+            },
+          ],
+        })
+        .expect(200);
+
+    await setBladeQuantity(1);
+    const before = Number(await stock(ids.blade));
+    const raced = await visitInService('barber', 81);
+    const service = app.get(ServiceUsageService);
+    await Promise.all([
+      api(
+        'post',
+        `dashboard/service-sessions/${raced.sessionId}/complete`,
+        tok.barber,
+      ).expect(201),
+      ...Array.from({ length: 6 }, () =>
+        service.autoRecord({
+          salonId: ids.salon,
+          queueEntryId: raced.entryId,
+          sessionId: raced.sessionId,
+          actorUserId: ids.barber,
+        }),
+      ),
+    ]);
+    await new Promise((r) => setTimeout(r, 500));
+    expect(
+      await prisma.serviceUsage.count({
+        where: { queueEntryId: raced.entryId, status: 'RECORDED' },
+      }),
+    ).toBe(1);
+    expect(Number(await stock(ids.blade))).toBeCloseTo(before - 1, 3);
+
+    // More than is on the shelf: the deduction fails, the service is still completed.
+    await setBladeQuantity(before + 1000);
+    const short = await visitInService('barber', 82);
+    await api(
+      'post',
+      `dashboard/service-sessions/${short.sessionId}/complete`,
+      tok.barber,
+    ).expect(201);
+    await new Promise((r) => setTimeout(r, 500));
+    expect(
+      await prisma.queueEntry.findUniqueOrThrow({
+        where: { id: short.entryId },
+      }),
+    ).toMatchObject({ status: 'COMPLETED' });
+    expect(
+      await prisma.serviceUsage.count({
+        where: { queueEntryId: short.entryId },
+      }),
+    ).toBe(0);
+    expect(Number(await stock(ids.blade))).toBeCloseTo(before - 1, 3);
+  });
 });
