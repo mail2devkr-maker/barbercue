@@ -54,7 +54,7 @@ CREATE UNIQUE INDEX "inventory_alerts_one_open_per_problem"
   ON "inventory_alerts" ("salonId", "dedupeKey") WHERE "resolvedAt" IS NULL;
 
 ALTER TABLE "inventory_settings" ADD CONSTRAINT "inventory_settings_ranges_check" CHECK (
-  "leadTimeDays" BETWEEN 0 AND 90 AND "safetyDays" BETWEEN 0 AND 60 AND "coverDays" BETWEEN 1 AND 120
+  "leadTimeDays" >= 0 AND "leadTimeDays" <= 90 AND "safetyDays" >= 0 AND "safetyDays" <= 60 AND "coverDays" >= 1 AND "coverDays" <= 120
 );
 ALTER TABLE "inventory_suppliers" ADD CONSTRAINT "inventory_suppliers_lead_time_check"
   CHECK ("leadTimeDays" IS NULL OR "leadTimeDays" BETWEEN 0 AND 90);
