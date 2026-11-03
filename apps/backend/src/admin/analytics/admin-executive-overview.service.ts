@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
@@ -11,6 +12,7 @@ import {
   type AdminAnalyticsRangeQuery,
   type AdminExecutiveOverviewDto,
   type AdminKpiValue,
+  type AdminServedCustomersDto,
 } from '@barbercue/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
@@ -21,6 +23,7 @@ import {
 import { localRange } from '../../owner-ops/local-time';
 import { scheduleStatusAt } from './shop-schedule';
 import { ADMIN_SHOP_ACTIVITY_TIME_ZONE } from '../admin-shop-activity.service';
+import { maskPhone } from '../admin-monitoring.service';
 import {
   ADOPTION_CATEGORIES,
   averagePaise,
@@ -32,6 +35,52 @@ import {
 
 const TZ = ADMIN_SHOP_ACTIVITY_TIME_ZONE;
 const SHOPS_LIMIT = 100;
+const SERVED_CUSTOMERS_LIMIT = 50_000;
+const SERVED_CUSTOMERS_FIELDS = [
+  'type',
+  'maskedPhone',
+  'firstServedOn',
+  'lastServedOn',
+  'completedVisits',
+  'appointmentsCompleted',
+  'walkInsServed',
+  'salonsVisited',
+  'lastSalon',
+];
+
+/**
+ * CTE `served`: one row per completed visit ever (completed appointments + served walk-ins),
+ * keyed to a customer — their account, else the account that owns the visit's phone, else the
+ * phone itself (last 10 digits). `key` is NULL when a visit has neither account nor phone.
+ */
+const SERVED_VISITS_CTE = Prisma.sql`
+  account_phones AS (
+    SELECT DISTINCT ON (p) p, "id"
+      FROM (SELECT right(regexp_replace("phone", '[^0-9]', '', 'g'), 10) AS p, "id", "createdAt"
+              FROM "users" WHERE "phone" IS NOT NULL AND "deletedAt" IS NULL) u
+     WHERE length(p) = 10
+     ORDER BY p, "createdAt", "id"
+  ),
+  visits AS (
+    SELECT b."salonId", b."slotStart" AS "servedAt", b."customerId", 'APPOINTMENT' AS kind,
+           regexp_replace(COALESCE(b."guestPhone", ''), '[^0-9]', '', 'g') AS digits
+      FROM "bookings" b
+     WHERE b."status" = 'COMPLETED'
+    UNION ALL
+    SELECT q."salonId", q."joinedAt", q."customerId", 'WALK_IN',
+           regexp_replace(COALESCE(q."contactPhone", ''), '[^0-9]', '', 'g')
+      FROM "queue_entries" q
+     WHERE q."source" = 'WALK_IN' AND q."status" = 'COMPLETED'
+  ),
+  served AS (
+    SELECT v."salonId", v."servedAt", v.kind,
+           CASE WHEN length(v.digits) >= 10 THEN right(v.digits, 10) END AS phone,
+           COALESCE(v."customerId", ap."id",
+                    CASE WHEN length(v.digits) >= 10 THEN 'phone:' || right(v.digits, 10) END) AS key
+      FROM visits v
+      LEFT JOIN account_phones ap
+        ON v."customerId" IS NULL AND length(v.digits) >= 10 AND ap.p = right(v.digits, 10)
+  )`;
 
 /** Scheduled open means physically scheduled to be open, not merchant connected. */
 export function countScheduledOpenSalons(
@@ -123,11 +172,12 @@ export class AdminExecutiveOverviewService {
     const current = window(query.from, query.to);
     const previous = window(prev.from, prev.to);
 
-    const [cur, old, trend, adoption, salons] = await Promise.all([
+    const [cur, old, trend, adoption, customersServed, salons] = await Promise.all([
       this.periodAggregates(current.start, current.end),
       this.periodAggregates(previous.start, previous.end),
       this.dailyTrend(current.start, current.end),
       this.adoption(current.end < now ? current.end : now),
+      this.customersServedTotals(),
       this.prisma.salon.findMany({
         select: {
           id: true,
@@ -249,6 +299,126 @@ export class AdminExecutiveOverviewService {
       shops: shopRows.slice(0, SHOPS_LIMIT),
       shopsTotal: shopRows.length,
       shopsLimit: SHOPS_LIMIT,
+      customersServed,
+    };
+  }
+
+  /**
+   * Every unique customer ever served, most recent first. Phones are masked. Recorded like the other
+   * admin exports — who asked, the field set and the row count, including a failed attempt.
+   */
+  async getServedCustomers(
+    actorUserId: string,
+    now: Date = new Date(),
+  ): Promise<AdminServedCustomersDto> {
+    const exportId = randomUUID();
+    try {
+      const report = await this.buildServedCustomers(now);
+      await this.auditServedCustomers(actorUserId, exportId, {
+        outcome: 'SUCCEEDED',
+        fields: SERVED_CUSTOMERS_FIELDS,
+        rows: report.customers.length,
+      });
+      return report;
+    } catch (error) {
+      await this.auditServedCustomers(actorUserId, exportId, {
+        outcome: 'FAILED',
+      });
+      throw error;
+    }
+  }
+
+  private async auditServedCustomers(
+    actorUserId: string,
+    exportId: string,
+    details: Record<string, unknown>,
+  ) {
+    await this.prisma.auditLog.create({
+      data: {
+        actorUserId,
+        action: 'ADMIN_DATA_EXPORT',
+        entityType: 'AdminExport',
+        entityId: exportId,
+        metadata: { category: 'CUSTOMERS_SERVED', ...details } as never,
+      },
+    });
+  }
+
+  private async buildServedCustomers(
+    now: Date,
+  ): Promise<AdminServedCustomersDto> {
+    const [rows, totals] = await Promise.all([
+      this.prisma.$queryRaw<
+        {
+          key: string;
+          accountPhone: string | null;
+          visitPhone: string | null;
+          firstServedAt: Date;
+          lastServedAt: Date;
+          visits: number;
+          appointments: number;
+          walkIns: number;
+          salons: number;
+          lastSalon: string;
+        }[]
+      >`
+        WITH ${SERVED_VISITS_CTE}
+        SELECT s.key,
+               u."phone" AS "accountPhone",
+               MAX(s.phone) AS "visitPhone",
+               MIN(s."servedAt") AS "firstServedAt",
+               MAX(s."servedAt") AS "lastServedAt",
+               COUNT(*)::int AS visits,
+               COUNT(*) FILTER (WHERE s.kind = 'APPOINTMENT')::int AS appointments,
+               COUNT(*) FILTER (WHERE s.kind = 'WALK_IN')::int AS "walkIns",
+               COUNT(DISTINCT s."salonId")::int AS salons,
+               (array_agg(sa."name" ORDER BY s."servedAt" DESC))[1] AS "lastSalon"
+          FROM served s
+          JOIN "salons" sa ON sa."id" = s."salonId"
+          LEFT JOIN "users" u ON u."id" = s.key
+         WHERE s.key IS NOT NULL
+         GROUP BY s.key, u."phone"
+         ORDER BY MAX(s."servedAt") DESC, s.key
+         LIMIT ${SERVED_CUSTOMERS_LIMIT}`,
+      this.customersServedTotals(),
+    ]);
+
+    return {
+      generatedAt: now.toISOString(),
+      timeZone: TZ,
+      total: totals.unique,
+      limit: SERVED_CUSTOMERS_LIMIT,
+      unidentifiedVisits: totals.unidentifiedVisits,
+      customers: rows.map((r) => {
+        const registered = !r.key.startsWith('phone:');
+        return {
+          type: registered ? 'REGISTERED' : 'GUEST',
+          maskedPhone: maskPhone(r.accountPhone ?? r.visitPhone),
+          firstServedOn: utcToZonedDateStr(r.firstServedAt, TZ),
+          lastServedOn: utcToZonedDateStr(r.lastServedAt, TZ),
+          completedVisits: r.visits,
+          appointmentsCompleted: r.appointments,
+          walkInsServed: r.walkIns,
+          salonsVisited: r.salons,
+          lastSalon: r.lastSalon,
+        };
+      }),
+    };
+  }
+
+  private async customersServedTotals(): Promise<
+    AdminExecutiveOverviewDto['customersServed']
+  > {
+    const rows = await this.prisma.$queryRaw<
+      { uniqueCustomers: number; unidentifiedVisits: number }[]
+    >`
+      WITH ${SERVED_VISITS_CTE}
+      SELECT COUNT(DISTINCT key)::int AS "uniqueCustomers",
+             COUNT(*) FILTER (WHERE key IS NULL)::int AS "unidentifiedVisits"
+        FROM served`;
+    return {
+      unique: rows[0]?.uniqueCustomers ?? 0,
+      unidentifiedVisits: rows[0]?.unidentifiedVisits ?? 0,
     };
   }
 

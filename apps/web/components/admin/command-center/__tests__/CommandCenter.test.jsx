@@ -2,13 +2,17 @@ import React, { act } from 'react';
 import TestRenderer from 'react-test-renderer';
 import { CommandCenter } from '../CommandCenter';
 import { AdminFiltersProvider } from '../../shell/admin-filters';
-import { csvCell, describeChange, formatKpi, shopsCsv } from '../format';
+import { csvCell, describeChange, formatKpi, servedCustomersCsv, shopsCsv } from '../format';
 import { presetRange } from '../../shop-activity-range';
 import { apiFetch } from '../../../../lib/api';
 
 jest.mock('../../../../lib/api', () => ({
   apiFetch: jest.fn(),
   ApiError: class ApiError extends Error {},
+}));
+let mockRoles = ['PLATFORM_ADMIN'];
+jest.mock('../../../../lib/auth-context', () => ({
+  useAuth: () => ({ user: { roles: mockRoles } }),
 }));
 jest.mock('next/link', () => ({
   __esModule: true,
@@ -61,6 +65,7 @@ function overview(from, to) {
     ],
     shopsTotal: 2,
     shopsLimit: 100,
+    customersServed: { unique: 1234, unidentifiedVisits: 7 },
   };
 }
 
@@ -104,6 +109,25 @@ describe('command center formatting', () => {
     expect(csv).toContain('"BC-1","Alpha Salon","Pune","ACTIVE","Highly active","30","20","10","2","1","10000.00"');
   });
 
+  it('exports served customers with masked phones and neutralised salon names', () => {
+    const csv = servedCustomersCsv({
+      generatedAt: NOW.toISOString(),
+      timeZone: 'Asia/Kolkata',
+      total: 2,
+      limit: 50000,
+      unidentifiedVisits: 3,
+      customers: [
+        { type: 'REGISTERED', maskedPhone: '+******10', firstServedOn: '2026-09-01', lastServedOn: '2026-10-20', completedVisits: 4, appointmentsCompleted: 3, walkInsServed: 1, salonsVisited: 2, lastSalon: 'Alpha Salon' },
+        { type: 'GUEST', maskedPhone: null, firstServedOn: '2026-10-02', lastServedOn: '2026-10-02', completedVisits: 1, appointmentsCompleted: 0, walkInsServed: 1, salonsVisited: 1, lastSalon: '=cmd' },
+      ],
+    });
+    const lines = csv.split('\r\n');
+    expect(lines).toHaveLength(4);
+    expect(lines[0]).toContain('2 customers; 3 visits without a phone or account not included');
+    expect(lines[2]).toBe(`"Registered","'+******10","2026-09-01","2026-10-20","4","3","1","2","Alpha Salon"`);
+    expect(lines[3]).toBe(`"Guest","","2026-10-02","2026-10-02","1","0","1","1","'=cmd"`);
+  });
+
   it('builds calendar-month quick picks in India time', () => {
     expect(presetRange('thisMonth', NOW)).toEqual({ from: '2026-10-01', to: '2026-10-27' });
     expect(presetRange('lastMonth', NOW)).toEqual({ from: '2026-09-01', to: '2026-09-30' });
@@ -145,6 +169,39 @@ describe('CommandCenter', () => {
     expect(textOf(byLabel['No-show rate'])).toContain('No comparison');
     expect(textOf(byLabel['Serving salons'])).toContain('9 open for customers right now');
     expect(textOf(byLabel['FastQue platform revenue'].findByType('strong'))).toBe('Not tracked yet');
+    expect(textOf(byLabel['Unique customers served (all time)'].findByType('strong'))).toBe('1,234');
+    expect(textOf(byLabel['Unique customers served (all time)'])).toContain('plus 7 visits with no phone or account');
+  });
+
+  it('shows the read-only viewer the total but no customer download', async () => {
+    mockRoles = ['PLATFORM_VIEWER'];
+    try {
+      const tree = await render();
+      expect(tree.root.findAll((n) => n.type === 'button' && textOf(n) === 'Download CSV')).toHaveLength(0);
+      expect(JSON.stringify(tree.toJSON())).toContain('1,234');
+    } finally {
+      mockRoles = ['PLATFORM_ADMIN'];
+    }
+  });
+
+  it('downloads served customers from their own endpoint', async () => {
+    const tree = await render();
+    const button = tree.root.find((n) => n.type === 'button' && textOf(n) === 'Download CSV');
+    apiFetch.mockResolvedValueOnce({ generatedAt: NOW.toISOString(), timeZone: 'Asia/Kolkata', total: 0, limit: 50000, unidentifiedVisits: 0, customers: [] });
+    const click = jest.fn();
+    globalThis.document = { createElement: () => ({ click }) };
+    const { createObjectURL, revokeObjectURL } = URL;
+    URL.createObjectURL = jest.fn(() => 'blob:x');
+    URL.revokeObjectURL = jest.fn();
+    try {
+      await act(async () => { button.props.onClick(); });
+      expect(apiFetch.mock.calls.at(-1)[0]).toBe('admin/analytics/customers-served');
+      expect(click).toHaveBeenCalledTimes(1);
+    } finally {
+      URL.createObjectURL = createObjectURL;
+      URL.revokeObjectURL = revokeObjectURL;
+      delete globalThis.document;
+    }
   });
 
   it('shows the adoption split with counts and shares, and one row per active salon', async () => {

@@ -1,8 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ADMIN_PATHS, ADMIN_ADOPTION_THRESHOLDS, type AdminExecutiveOverviewDto, type AdminKpiValue } from "@barbercue/shared";
+import {
+  ADMIN_PATHS,
+  ADMIN_ADOPTION_THRESHOLDS,
+  hasAdminPermission,
+  type AdminExecutiveOverviewDto,
+  type AdminKpiValue,
+  type AdminServedCustomersDto,
+} from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../../lib/api";
+import { useAuth } from "../../../lib/auth-context";
 import { Button } from "../../ui/Button";
 import { AreaChart } from "../../owner/charts";
 import { formatRangeLabel } from "../shop-activity-range";
@@ -14,6 +22,7 @@ import {
   formatCount,
   formatInr,
   formatKpi,
+  servedCustomersCsv,
   shopsCsv,
   type KpiKind,
 } from "./format";
@@ -21,6 +30,9 @@ import styles from "../../../app/(dashboard)/dashboard/admin/command-center/comm
 
 // The chart's average line is fractional (e.g. 0.2 visits a day); a whole-number format would read "Average 0".
 const formatChartValue = (value: number) => new Intl.NumberFormat("en-IN", { maximumFractionDigits: 1 }).format(value);
+
+const CUSTOMERS_SERVED_DEFINITION =
+  "Distinct people with at least one completed appointment or served walk-in, ever. A person is their FastQue account, else their phone number, so a guest who later signs up counts once. Visits with neither cannot be told apart and are shown separately. The download is limited to roles that may export the customer report, is recorded in the audit log and masks phone numbers.";
 
 interface KpiCard {
   label: string;
@@ -59,6 +71,9 @@ export function CommandCenter() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const { user } = useAuth();
+  const canDownloadCustomers = hasAdminPermission(user?.roles ?? [], "exportCustomerReport");
+  const [customersDownload, setCustomersDownload] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
 
   const load = useCallback(async (from: string, to: string) => {
     setLoading(true);
@@ -121,15 +136,31 @@ export function CommandCenter() {
   }));
   const trendHasData = trendPoints.some((p) => p.value > 0);
 
-  function downloadCsv() {
-    if (!current) return;
-    const blob = new Blob([`﻿${shopsCsv(current)}`], { type: "text/csv;charset=utf-8" });
+  function saveCsv(csv: string, filename: string) {
+    const blob = new Blob([`﻿${csv}`], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `fastque-salon-performance-${current.from}-to-${current.to}.csv`;
+    link.download = filename;
     link.click();
     URL.revokeObjectURL(url);
+  }
+
+  function downloadCsv() {
+    if (!current) return;
+    saveCsv(shopsCsv(current), `fastque-salon-performance-${current.from}-to-${current.to}.csv`);
+  }
+
+  async function downloadServedCustomers() {
+    setCustomersDownload({ busy: true, error: null });
+    try {
+      const report = await apiFetch<AdminServedCustomersDto>(`${ADMIN_PATHS.admin}/${ADMIN_PATHS.analytics}/${ADMIN_PATHS.customersServed}`);
+      const day = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date(report.generatedAt));
+      saveCsv(servedCustomersCsv(report), `fastque-customers-served-to-${day}.csv`);
+      setCustomersDownload({ busy: false, error: null });
+    } catch (requestError) {
+      setCustomersDownload({ busy: false, error: requestError instanceof ApiError ? requestError.message : "Could not download customers." });
+    }
   }
 
   return (
@@ -163,6 +194,23 @@ export function CommandCenter() {
         <>
           <section className={styles.kpiGrid} aria-label="Key figures">
             {cards.map((card) => <KpiTile key={card.label} card={card} previousLabel={previousLabel} />)}
+            {current.customersServed && (
+              <article className={styles.kpi} title={CUSTOMERS_SERVED_DEFINITION}>
+                <h3>Unique customers served (all time)</h3>
+                <strong>{formatCount(current.customersServed.unique)}</strong>
+                <p className={styles.kpiNote}>
+                  Cumulative to date, not limited to the selected period
+                  {current.customersServed.unidentifiedVisits > 0 &&
+                    ` · plus ${formatCount(current.customersServed.unidentifiedVisits)} visits with no phone or account`}
+                </p>
+                {canDownloadCustomers && (
+                  <button type="button" className={styles.kpiAction} onClick={() => void downloadServedCustomers()} disabled={customersDownload.busy}>
+                    {customersDownload.busy ? "Preparing…" : "Download CSV"}
+                  </button>
+                )}
+                {customersDownload.error && <p className={styles.rangeError} role="alert">{customersDownload.error}</p>}
+              </article>
+            )}
             <article className={`${styles.kpi} ${styles.kpiUnavailable}`} title="FastQue's own earnings (commissions, fees, subscriptions) are not recorded yet, so this is not shown as zero.">
               <h3>FastQue platform revenue</h3>
               <strong>Not tracked yet</strong>
@@ -271,6 +319,7 @@ export function CommandCenter() {
               {cards.map((card) => (
                 <div key={card.label}><dt>{card.label}</dt><dd>{card.definition}</dd></div>
               ))}
+              <div><dt>Unique customers served (all time)</dt><dd>{CUSTOMERS_SERVED_DEFINITION}</dd></div>
               <div><dt>Previous period</dt><dd>The same number of days immediately before the selected range ({previousLabel}).</dd></div>
               <div><dt>Not shown yet</dt><dd>FastQue platform revenue, merchant app engagement, chair utilisation and sales-territory views need data that is not recorded yet — see docs/admin-dashboard-2.0/PLAN.md.</dd></div>
             </dl>

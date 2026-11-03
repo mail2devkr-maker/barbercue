@@ -3,9 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { DASHBOARD_PATHS } from "@barbercue/shared";
-import type { PublicQueueQrDto } from "@barbercue/shared";
+import type { PublicQueueQrDto, SalonProfileDetailDto } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../lib/api";
 import { layoutQueueQrPrintTitle } from "../../lib/queue-qr-print-title";
+import { formatQueueQrPrintAddress, layoutQueueQrPrintAddress } from "../../lib/queue-qr-print-address";
 import { Button } from "../ui/Button";
 import styles from "./dashboard.module.css";
 
@@ -38,6 +39,8 @@ export function QueueQrSection({ salonId, salonName }: { salonId: string; salonN
   const [qr, setQr] = useState<PublicQueueQrDto | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [salonAddress, setSalonAddress] = useState<string | null>(null);
+  const [addressLoading, setAddressLoading] = useState(true);
   const svgWrapperRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -50,6 +53,23 @@ export function QueueQrSection({ salonId, salonName }: { salonId: string; salonN
       })
       .catch((err) => {
         if (!cancelled) setError(err instanceof ApiError ? err.message : "Could not load the queue QR.");
+      });
+    // Same authorized profile endpoint the edit-shop form uses. Older QR responses
+    // have no address field; loading profile separately keeps this change web-only
+    // and backward-compatible with the current production API.
+    setAddressLoading(true);
+    setSalonAddress(null);
+    apiFetch<SalonProfileDetailDto>(
+      `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.profile}`,
+    )
+      .then((profile) => {
+        if (!cancelled) setSalonAddress(formatQueueQrPrintAddress(profile.addressLine, profile.postalCode) || null);
+      })
+      .catch(() => {
+        if (!cancelled) setSalonAddress(null);
+      })
+      .finally(() => {
+        if (!cancelled) setAddressLoading(false);
       });
     return () => {
       cancelled = true;
@@ -82,7 +102,7 @@ export function QueueQrSection({ salonId, salonName }: { salonId: string; salonN
 
   async function handleDownload() {
     const svg = svgWrapperRef.current?.querySelector("svg");
-    if (!svg) return;
+    if (!svg || !salonAddress) return;
 
     // The on-screen HTML can wrap naturally; SVG <text> cannot.
     // Measure and explicitly emit <tspan> lines in the physical 4x6in export.
@@ -93,6 +113,17 @@ export function QueueQrSection({ salonId, salonName }: { salonId: string; salonN
       return canvasContext.measureText(value).width;
     };
     const titleLayout = layoutQueueQrPrintTitle(salonName, measureName);
+    const measureAddress = (value: string, size: number) => {
+      if (!canvasContext) return Array.from(value).length * size * 0.7;
+      canvasContext.font = `500 ${size}px Arial, sans-serif`;
+      return canvasContext.measureText(value).width;
+    };
+    const addressLayout = layoutQueueQrPrintAddress(salonAddress, measureAddress);
+    const printableAddressSvg = `<text x="200" y="${addressLayout.firstBaseline}" text-anchor="middle" font-family="Arial, sans-serif" font-size="${addressLayout.fontSize}" font-weight="500" fill="#C9C3C4">${addressLayout.lines.map((line, index) => {
+      const stretch = measureAddress(line, addressLayout.fontSize) > addressLayout.maxWidth
+        ? ` textLength="${addressLayout.maxWidth}" lengthAdjust="spacingAndGlyphs"` : "";
+      return `<tspan x="200" dy="${index === 0 ? 0 : addressLayout.lineHeight}"${stretch}>${escapeXml(line)}</tspan>`;
+    }).join("")}</text>`;
     const printableTitleSvg = `<text x="200" y="${titleLayout.firstBaseline}" text-anchor="middle" font-family="Arial, sans-serif" font-size="${titleLayout.fontSize}" font-weight="800" fill="url(#shopNameGradient)">${titleLayout.lines.map((line, index) => {
       const stretch = measureName(line, titleLayout.fontSize) > titleLayout.maxWidth
         ? ` textLength="${titleLayout.maxWidth}" lengthAdjust="spacingAndGlyphs"` : "";
@@ -136,10 +167,11 @@ export function QueueQrSection({ salonId, salonName }: { salonId: string; salonN
         <image href="${logoDataUri}" x="110" y="21" width="180" height="53" preserveAspectRatio="xMidYMid meet" />
         ${printableTitleSvg}
         <text x="200" y="${titleLayout.lines.length >= 3 ? 160 : titleLayout.lines.length === 2 ? 157 : 150}" text-anchor="middle" font-family="Arial, sans-serif" font-size="17" fill="#F7F5F4">Scan to join the live queue</text>
-        <rect x="24" y="178" width="352" height="350" rx="15" fill="#000000" stroke="#F20A83" stroke-width="4"/>
+        <rect x="24" y="178" width="352" height="345" rx="15" fill="#000000" stroke="#F20A83" stroke-width="4"/>
         <g transform="translate(48 199) scale(1.52)">${brandedQrSvg}</g>
-        <text x="200" y="561" text-anchor="middle" font-family="Arial, sans-serif" font-size="17" font-weight="800" fill="#F20A83">SCAN &#8226; JOIN &#8226; GET YOUR TURN</text>
-        <text x="200" y="585" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="#C9C3C4">Powered by FastQue</text>
+        <text x="200" y="540" text-anchor="middle" font-family="Arial, sans-serif" font-size="15" font-weight="800" fill="#F20A83">SCAN &#8226; JOIN &#8226; GET YOUR TURN</text>
+        <text x="200" y="553" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#C9C3C4">Powered by FastQue</text>
+        ${printableAddressSvg}
       </svg>`;
     const blob = new Blob([posterSvg], { type: "image/svg+xml" });
     const url = URL.createObjectURL(blob);
@@ -201,6 +233,11 @@ export function QueueQrSection({ salonId, salonName }: { salonId: string; salonN
             </div>
             <p style={{ margin: 0, fontSize: "clamp(12px, 2.5vw, 17px)", fontWeight: 800, color: QR_MAGENTA, textAlign: "center" }}>SCAN • JOIN • GET YOUR TURN</p>
             <p style={{ margin: 0, color: "#C9C3C4", fontSize: 12 }}>Powered by FastQue</p>
+            {salonAddress && (
+              <p style={{ margin: 0, maxWidth: "100%", color: "#C9C3C4", fontSize: 11, lineHeight: 1.35, textAlign: "center", overflowWrap: "anywhere" }}>
+                {salonAddress}
+              </p>
+            )}
           </div>
 
           <p className={styles.hint} style={{ marginBottom: 4 }}>Public queue URL</p>
@@ -208,14 +245,18 @@ export function QueueQrSection({ salonId, salonName }: { salonId: string; salonN
             {qr.publicQueueUrl}
           </p>
 
+          {!addressLoading && !salonAddress && (
+            <p className={styles.hint}>The shop address could not be loaded. Check the address in Profile and reload this page before downloading or printing.</p>
+          )}
+
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <Button type="button" variant="outline" onClick={() => void handleCopy()}>
               {copied ? "Copied!" : "Copy Link"}
             </Button>
-            <Button type="button" variant="outline" onClick={() => void handleDownload()}>
+            <Button type="button" variant="outline" disabled={addressLoading || !salonAddress} onClick={() => void handleDownload()}>
               Download QR
             </Button>
-            <Button type="button" variant="outline" onClick={() => window.print()}>
+            <Button type="button" variant="outline" disabled={addressLoading || !salonAddress} onClick={() => window.print()}>
               Print
             </Button>
           </div>
