@@ -14,6 +14,8 @@ import {
   type PhotoDto,
   type SalonChairDto,
   type SalonPaymentQrDto,
+  type SalonStaffDto,
+  updateSalonStaffSchema,
 } from '@barbercue/shared';
 import { apiFetch, apiUploadImage, ApiError, NativeUploadError } from '../../lib/api';
 import {
@@ -633,6 +635,59 @@ export function AddStaffForm({ salonId, onAdded }: { salonId: string; onAdded: (
       <View style={styles.actionRow}>
         <Button title={t.addAction} onPress={() => void submit()} loading={saving} disabled={!displayName.trim()} style={styles.actionButton} />
         <Button title={t.cancelAction} variant="outline" onPress={() => setOpen(false)} style={styles.actionButton} />
+      </View>
+    </View>
+  );
+}
+
+/** Owner-scoped edit form for the staff profile fields supported by the deployed API. */
+export function EditStaffProfile({ salonId, staff, onSaved }: { salonId: string; staff: SalonStaffDto; onSaved: () => void }) {
+  const { language } = useLanguage();
+  const [open, setOpen] = useState(false);
+  const [displayName, setDisplayName] = useState(staff.displayName);
+  const [bio, setBio] = useState(staff.bio ?? '');
+  const [yearsExperience, setYearsExperience] = useState(staff.yearsExperience == null ? '' : String(staff.yearsExperience));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const hi = language === 'HI';
+
+  async function save() {
+    setError(null);
+    const years = yearsExperience.trim() === '' ? undefined : Number(yearsExperience);
+    const parsed = updateSalonStaffSchema.safeParse({
+      displayName: displayName.trim(),
+      bio: bio.trim(),
+      ...(years === undefined ? {} : { yearsExperience: years }),
+    });
+    if (!parsed.success) {
+      setError(hi ? 'कर्मचारी की जानकारी जाँचें।' : 'Check the staff profile details.');
+      return;
+    }
+    setSaving(true);
+    try {
+      await apiFetch(`${scope(salonId, DASHBOARD_PATHS.staff)}/${staff.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(parsed.data),
+      });
+      setOpen(false);
+      onSaved();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : (hi ? 'कर्मचारी की जानकारी सहेजी नहीं जा सकी।' : 'Could not save the staff profile.'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!open) return <Button title={hi ? 'प्रोफ़ाइल संपादित करें' : 'Edit profile'} variant="outline" onPress={() => setOpen(true)} style={styles.addButton} />;
+  return (
+    <View style={styles.editPanel}>
+      {error && <InlineError message={error} />}
+      <TextInput accessibilityLabel={hi ? 'कर्मचारी का नाम' : 'Staff name'} style={styles.input} value={displayName} onChangeText={setDisplayName} placeholder={hi ? 'कर्मचारी का नाम' : 'Staff name'} maxLength={120} />
+      <TextInput accessibilityLabel={hi ? 'जीवनी' : 'Bio'} style={styles.input} value={bio} onChangeText={setBio} placeholder={hi ? 'जीवनी (वैकल्पिक)' : 'Bio (optional)'} multiline maxLength={500} />
+      <TextInput accessibilityLabel={hi ? 'अनुभव के वर्ष' : 'Years of experience'} style={styles.input} value={yearsExperience} onChangeText={setYearsExperience} placeholder={hi ? 'अनुभव के वर्ष (वैकल्पिक)' : 'Years of experience (optional)'} keyboardType="number-pad" />
+      <View style={styles.actionRow}>
+        <Button title={hi ? 'सहेजें' : 'Save profile'} onPress={() => void save()} loading={saving} disabled={!displayName.trim()} style={styles.actionButton} />
+        <Button title={hi ? 'रद्द करें' : 'Cancel'} variant="outline" onPress={() => setOpen(false)} style={styles.actionButton} />
       </View>
     </View>
   );

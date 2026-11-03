@@ -3,6 +3,7 @@ import { Text, TextInput, View, StyleSheet } from 'react-native';
 import { DASHBOARD_PATHS, updateSalonProfileSchema, updateSalonTimezoneSchema, type SalonProfileDetailDto, type SalonTimezoneResultDto } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../../lib/api';
 import { useSalon } from '../../lib/salon-context';
+import { useLanguage } from '../../lib/language-context';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 import { Button, Card, EmptyState, InlineError, Screen, SectionHeader, Skeleton } from '../../components/ui';
 
@@ -19,6 +20,24 @@ function message(error: unknown, fallback: string) {
 /** Native owner shop profile/timezone settings; both endpoints are owner-authorized and salon-scoped. */
 export default function OwnerSettingsScreen() {
   const { selectedSalonId, selectedSalon } = useSalon();
+  const { language } = useLanguage();
+  const copy = language === 'HI' ? {
+    eyebrow: 'दुकान', title: 'दुकान की सेटिंग', subtitle: 'व्यवसाय की जानकारी और स्थानीय समय क्षेत्र बदलें।',
+    selectShop: 'दुकान चुनें', chooseShop: 'सेटिंग बदलने से पहले दुकान चुनें।', retry: 'फिर कोशिश करें',
+    business: 'व्यवसाय की जानकारी', name: 'दुकान का नाम', phone: 'फ़ोन', email: 'ईमेल', address: 'पता', postal: 'पिन कोड', description: 'विवरण',
+    saveBusiness: 'व्यवसाय की जानकारी सहेजें', profileSaved: 'दुकान की जानकारी सहेजी गई।',
+    timezone: 'दुकान का समय क्षेत्र', timezoneHelp: 'बुकिंग और एनालिटिक्स की सही स्थानीय तारीख़ों के लिए यह ज़रूरी है। सुझाया गया समय क्षेत्र आपकी पुष्टि के बिना सहेजा नहीं जाएगा।',
+    suggested: 'सुझाव', confidence: 'विश्वसनीयता', useSuggested: 'सुझाया गया समय क्षेत्र चुनें', timezoneField: 'IANA समय क्षेत्र', timezonePlaceholder: 'जैसे Asia/Kolkata', saveTimezone: 'समय क्षेत्र सहेजें', timezoneSaved: 'दुकान का समय क्षेत्र सहेजा गया।',
+    loadError: 'दुकान की सेटिंग लोड नहीं हो सकीं।', profileError: 'दुकान की जानकारी सहेजी नहीं जा सकी।', timezoneError: 'समय क्षेत्र सहेजा नहीं जा सका।', invalidProfile: 'जानकारी जाँचें और फिर कोशिश करें।', invalidTimezone: 'मान्य IANA समय क्षेत्र दर्ज करें।',
+  } : {
+    eyebrow: 'SHOP', title: 'Shop settings', subtitle: 'Edit business details and local time.',
+    selectShop: 'Select a shop', chooseShop: 'Choose a shop before editing its settings.', retry: 'Retry',
+    business: 'Business details', name: 'Shop name', phone: 'Phone', email: 'Email', address: 'Address', postal: 'Postal code', description: 'Description',
+    saveBusiness: 'Save business details', profileSaved: 'Shop profile saved.',
+    timezone: 'Shop time zone', timezoneHelp: 'Accurate shop-local booking and analytics dates depend on this setting. A detected suggestion is never saved until you confirm it.',
+    suggested: 'Suggested', confidence: 'confidence', useSuggested: 'Use suggested time zone', timezoneField: 'IANA time zone', timezonePlaceholder: 'e.g. Asia/Kolkata', saveTimezone: 'Save time zone', timezoneSaved: 'Shop time zone saved.',
+    loadError: 'Could not load shop settings.', profileError: 'Could not save shop details.', timezoneError: 'Could not save the shop time zone.', invalidProfile: 'Check the shop details and try again.', invalidTimezone: 'Enter a valid IANA time zone.',
+  };
   const requestSeq = useRef(0);
   const [profile, setProfile] = useState<ProfileFields>(emptyProfile);
   const [timezone, setTimezone] = useState<SalonTimezoneResultDto | null>(null);
@@ -59,7 +78,7 @@ export default function OwnerSettingsScreen() {
       setTimezone(timezoneResult);
       setTimezoneDraft(timezoneResult.timezone ?? '');
     } catch (err) {
-      if (requestId === requestSeq.current) setError(message(err, 'Could not load shop settings.'));
+      if (requestId === requestSeq.current) setError(message(err, copy.loadError));
     } finally {
       if (requestId === requestSeq.current) setLoading(false);
     }
@@ -74,7 +93,7 @@ export default function OwnerSettingsScreen() {
     if (!selectedSalonId) return;
     const parsed = updateSalonProfileSchema.safeParse(profile);
     if (!parsed.success) {
-      setProfileError(parsed.error.issues[0]?.message ?? 'Check the shop details and try again.');
+      setProfileError(copy.invalidProfile);
       return;
     }
     const requestId = requestSeq.current;
@@ -87,9 +106,9 @@ export default function OwnerSettingsScreen() {
       });
       if (requestId !== requestSeq.current) return;
       setProfile({ name: result.name, phone: result.phone ?? '', email: result.email ?? '', addressLine: result.addressLine, postalCode: result.postalCode ?? '', description: result.description ?? '' });
-      setNotice('Shop profile saved.');
+      setNotice(copy.profileSaved);
     } catch (err) {
-      if (requestId === requestSeq.current) setProfileError(message(err, 'Could not save shop details.'));
+      if (requestId === requestSeq.current) setProfileError(message(err, copy.profileError));
     } finally {
       if (requestId === requestSeq.current) setSavingProfile(false);
     }
@@ -99,7 +118,7 @@ export default function OwnerSettingsScreen() {
     if (!selectedSalonId) return;
     const parsed = updateSalonTimezoneSchema.safeParse({ timezone: timezoneDraft });
     if (!parsed.success) {
-      setTimezoneError(parsed.error.issues[0]?.message ?? 'Enter a valid IANA time zone.');
+      setTimezoneError(copy.invalidTimezone);
       return;
     }
     const requestId = requestSeq.current;
@@ -113,45 +132,45 @@ export default function OwnerSettingsScreen() {
       if (requestId !== requestSeq.current) return;
       setTimezone(result);
       setTimezoneDraft(result.timezone ?? parsed.data.timezone);
-      setNotice('Shop time zone saved.');
+      setNotice(copy.timezoneSaved);
     } catch (err) {
-      if (requestId === requestSeq.current) setTimezoneError(message(err, 'Could not save the shop time zone.'));
+      if (requestId === requestSeq.current) setTimezoneError(message(err, copy.timezoneError));
     } finally {
       if (requestId === requestSeq.current) setSavingTimezone(false);
     }
   };
 
-  if (!selectedSalonId) return <Screen scroll={false}><EmptyState title="Select a shop" message="Choose a shop before editing its settings." /></Screen>;
+  if (!selectedSalonId) return <Screen scroll={false}><EmptyState title={copy.selectShop} message={copy.chooseShop} /></Screen>;
   if (loading) return <Screen><Skeleton style={styles.skeleton} /><Skeleton style={styles.skeleton} /></Screen>;
-  if (error) return <Screen scroll={false}><InlineError message={error} /><Button title="Retry" variant="outline" onPress={() => void load()} /></Screen>;
+  if (error) return <Screen scroll={false}><InlineError message={error} /><Button title={copy.retry} variant="outline" onPress={() => void load()} /></Screen>;
 
   return (
     <Screen>
-      <SectionHeader eyebrow="SHOP" title="Shop settings" subtitle={selectedSalon?.name ?? 'Edit business details and local time.'} />
+      <SectionHeader eyebrow={copy.eyebrow} title={copy.title} subtitle={selectedSalon?.name ?? copy.subtitle} />
       {notice ? <Text style={styles.notice}>{notice}</Text> : null}
       <Card style={styles.card}>
-        <Text style={styles.heading}>Business details</Text>
-        <Field label="Shop name" value={profile.name} onChangeText={(name) => setProfile((current) => ({ ...current, name }))} />
-        <Field label="Phone" value={profile.phone ?? ''} keyboardType="phone-pad" onChangeText={(phone) => setProfile((current) => ({ ...current, phone }))} />
-        <Field label="Email" value={profile.email ?? ''} keyboardType="email-address" autoCapitalize="none" onChangeText={(email) => setProfile((current) => ({ ...current, email }))} />
-        <Field label="Address" value={profile.addressLine} onChangeText={(addressLine) => setProfile((current) => ({ ...current, addressLine }))} />
-        <Field label="Postal code" value={profile.postalCode ?? ''} onChangeText={(postalCode) => setProfile((current) => ({ ...current, postalCode }))} />
-        <Field label="Description" value={profile.description ?? ''} multiline onChangeText={(description) => setProfile((current) => ({ ...current, description }))} />
+        <Text style={styles.heading}>{copy.business}</Text>
+        <Field label={copy.name} value={profile.name} onChangeText={(name) => setProfile((current) => ({ ...current, name }))} />
+        <Field label={copy.phone} value={profile.phone ?? ''} keyboardType="phone-pad" onChangeText={(phone) => setProfile((current) => ({ ...current, phone }))} />
+        <Field label={copy.email} value={profile.email ?? ''} keyboardType="email-address" autoCapitalize="none" onChangeText={(email) => setProfile((current) => ({ ...current, email }))} />
+        <Field label={copy.address} value={profile.addressLine} onChangeText={(addressLine) => setProfile((current) => ({ ...current, addressLine }))} />
+        <Field label={copy.postal} value={profile.postalCode ?? ''} onChangeText={(postalCode) => setProfile((current) => ({ ...current, postalCode }))} />
+        <Field label={copy.description} value={profile.description ?? ''} multiline onChangeText={(description) => setProfile((current) => ({ ...current, description }))} />
         {profileError ? <Text accessibilityRole="alert" style={styles.error}>{profileError}</Text> : null}
-        <Button title="Save business details" onPress={() => void saveProfile()} loading={savingProfile} />
+        <Button title={copy.saveBusiness} onPress={() => void saveProfile()} loading={savingProfile} />
       </Card>
       <Card style={styles.card}>
-        <Text style={styles.heading}>Shop time zone</Text>
-        <Text style={styles.help}>Accurate shop-local booking and analytics dates depend on this setting. A detected suggestion is never saved until you confirm it.</Text>
+        <Text style={styles.heading}>{copy.timezone}</Text>
+        <Text style={styles.help}>{copy.timezoneHelp}</Text>
         {timezone?.suggestion ? (
           <View style={styles.suggestion}>
-            <Text style={styles.help}>Suggested: {timezone.suggestion.timezone} ({timezone.suggestion.confidence.toLowerCase()} confidence)</Text>
-            <Button title="Use suggested time zone" variant="outline" onPress={() => { setTimezoneDraft(timezone.suggestion!.timezone); setTimezoneError(null); }} />
+            <Text style={styles.help}>{copy.suggested}: {timezone.suggestion.timezone} ({copy.confidence})</Text>
+            <Button title={copy.useSuggested} variant="outline" onPress={() => { setTimezoneDraft(timezone.suggestion!.timezone); setTimezoneError(null); }} />
           </View>
         ) : null}
-        <Field label="IANA time zone" value={timezoneDraft} autoCapitalize="none" placeholder="e.g. Asia/Kolkata" onChangeText={setTimezoneDraft} />
+        <Field label={copy.timezoneField} value={timezoneDraft} autoCapitalize="none" placeholder={copy.timezonePlaceholder} onChangeText={setTimezoneDraft} />
         {timezoneError ? <Text accessibilityRole="alert" style={styles.error}>{timezoneError}</Text> : null}
-        <Button title="Save time zone" onPress={() => void saveTimezone()} loading={savingTimezone} />
+        <Button title={copy.saveTimezone} onPress={() => void saveTimezone()} loading={savingTimezone} />
       </Card>
     </Screen>
   );

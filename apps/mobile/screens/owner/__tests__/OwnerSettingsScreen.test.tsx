@@ -8,9 +8,11 @@ jest.mock('../../../lib/api', () => ({
   ApiError: class ApiError extends Error {},
 }));
 let mockSelectedSalonId = 'salon-one';
+let mockLanguage: 'EN' | 'HI' = 'EN';
 jest.mock('../../../lib/salon-context', () => ({
   useSalon: () => ({ selectedSalonId: mockSelectedSalonId, selectedSalon: { id: mockSelectedSalonId, name: 'Synthetic Shop' } }),
 }));
+jest.mock('../../../lib/language-context', () => ({ useLanguage: () => ({ language: mockLanguage }) }));
 jest.mock('../../../components/ui', () => {
   const { Pressable, Text, View } = require('react-native');
   const { createElement } = require('react');
@@ -36,6 +38,7 @@ describe('OwnerSettingsScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockSelectedSalonId = 'salon-one';
+    mockLanguage = 'EN';
     fetchMock.mockImplementation((path: string, options?: { method?: string }) => {
       if (path.endsWith('/profile') && options?.method === 'PATCH') return Promise.resolve({ ...profile, name: 'Updated Shop' });
       if (path.endsWith('/timezone') && options?.method === 'PATCH') return Promise.resolve({ ...timezone, timezone: 'Europe/London', suggestion: null });
@@ -87,5 +90,13 @@ describe('OwnerSettingsScreen', () => {
     await view.rerender(<OwnerSettingsScreen />);
     await waitFor(() => expect(screen.getByDisplayValue('Second Synthetic Shop')).toBeTruthy());
     expect(screen.queryByDisplayValue('Synthetic Shop')).toBeNull();
+  });
+
+  it('shows Hindi owner-settings labels when Hindi is selected', async () => {
+    mockLanguage = 'HI';
+    await render(<OwnerSettingsScreen />);
+    await waitFor(() => expect(screen.getByText('व्यवसाय की जानकारी')).toBeTruthy());
+    expect(screen.getByText('दुकान की सेटिंग')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'व्यवसाय की जानकारी सहेजें' })).toBeTruthy();
   });
 });

@@ -1,6 +1,6 @@
 # FastQue Android 1.0.7 parity audit
 
-Audit baseline: production website source at master `f4f15e986efb98ac0cf716ccd9e4683097f0c755`; mobile source is the isolated candidate based on Employee Login PR #361 (`2824568331cf4ae6631d26f387b9971779da4db8`) plus the uncommitted candidate changes listed below. This is a source/API audit. It is not authenticated production browser acceptance or physical-device certification.
+Audit baseline: production website source at master `f4f15e986efb98ac0cf716ccd9e4683097f0c755`; mobile source is Draft PR #364 stacked on the certified Employee Login PR #361 (`2824568331cf4ae6631d26f387b9971779da4db8`). This is a source/API audit. It is not authenticated production browser acceptance or physical-device certification.
 
 Statuses: **SOURCE** means a native path and current API usage exist; **PARTIAL** means part of the web workflow is present but a material function remains; **GAP** means no equivalent native workflow was found; **PHYSICAL_REQUIRED** means source is present but real-device behavior is not yet verified; **WEB_ONLY** means privileged scope is intentionally excluded pending an explicit mobile authorization.
 
@@ -9,7 +9,7 @@ Statuses: **SOURCE** means a native path and current API usage exist; **PARTIAL*
 | # | Website section | Android candidate surface and API | Status / remaining evidence |
 |---|---|---|---|
 | 1 | Live Queue, arrivals, assign/start/complete, walk-in | `OwnerQueueScreen`; existing salon queue and service-session APIs | SOURCE; PHYSICAL_REQUIRED for queue race/arrival acceptance |
-| 2 | Settings | `OwnerSettingsScreen` edits salon name/contact/address/description and explicitly confirms the shop IANA time zone through the existing owner-scoped profile/timezone APIs; `OwnerShopScreen` retains hours, photos and payment QR | PARTIAL; native core profile/timezone flows are source-tested, but complete device acceptance and audit of every web preference remain |
+| 2 | Settings | English/Hindi `OwnerSettingsScreen` edits salon name/contact/address/description and explicitly confirms the shop IANA time zone through the existing owner-scoped profile/timezone APIs; `OwnerShopScreen` retains hours, photos and payment QR | PARTIAL; native core profile/timezone flows are source-tested, but complete device acceptance and audit of every web preference remain |
 | 3 | Bookings | `OwnerBookingsScreen`, owner booking list/status actions | PARTIAL; web calendar/schedule workflows require separate audit |
 | 4 | In-shop appointments | `InShopAppointmentPanel` on Owner Bookings uses the shared in-shop booking schema, active salon services, shop timezone, qualified-staff and availability APIs, customer phone-contact consent, and an idempotency key | SOURCE; synthetic UI/API-contract tests added; authenticated real-shop and physical acceptance pending |
 | 5 | Schedule | Booking list plus opening-hours editor; no native calendar/per-staff schedule planner | PARTIAL |
@@ -23,7 +23,7 @@ Statuses: **SOURCE** means a native path and current API usage exist; **PARTIAL*
 | 13 | Opening hours | Existing `HoursEditor` | SOURCE; PHYSICAL_REQUIRED |
 | 14 | Shop photos | Existing `PhotosSection` | SOURCE for current hosted-photo workflow; upload/edit behavior must be verified on device |
 | 15 | Chairs/SPA beds | Existing chair management | PARTIAL; verify chair types and occupancy conflict behaviors on device |
-| 16 | Staff management | Existing staff list/add flow | PARTIAL; staff editing, access controls and working schedules are not fully mirrored |
+| 16 | Staff management | Existing roster/add flow plus salon-scoped editing of display name, bio and years of experience using the deployed staff PATCH API | PARTIAL; phone/email linking, qualifications, working schedules and a complete access-management workflow are not fully mirrored |
 
 ### Other owner capabilities
 
@@ -71,11 +71,12 @@ Therefore this matrix does **not** certify 100% website parity or a Play-ready p
 ## Candidate verification evidence
 
 - Android release configuration resolves to version/runtime **1.0.7** while iOS is explicitly pinned to its existing **1.0.6** version/runtime; config assertions cover both platform values and identifiers.
-- Mobile regression: **40 suites / 278 tests passed**, including four owner-settings workflow tests and two Expo-resolved Android/iOS version/runtime checks.
+- Mobile local regression: **41 suites / 281 of 282 tests passed**. The unchanged `salon-search-discovery` test `sends the new filters and shows the compared service price and salon type` timed out locally at Jest's 5-second limit both in the full run and isolated run; its source/test files are unchanged from the candidate baseline. Exact-head GitHub CI is the certification gate for the pushed source.
 - Shared package: **26 suites / 500 tests passed**; TypeScript build passed.
 - Mobile TypeScript: passed.
 - Owner Business center focused tests: **5/5 passed**, including shop-local date filtering, fail-closed offers, review responses, and clearing prior-salon data after a failed shop switch.
-- Owner settings tests: **4/4 passed**; validate selected-salon reads, shared-schema rejection, profile updates, explicit timezone confirmation and clearing stale data on salon switch.
+- Owner settings tests: **5/5 passed**; validate selected-salon reads, shared-schema rejection, profile updates, explicit timezone confirmation, stale-data clearing on salon switch and Hindi labels.
+- Staff profile editing tests: **3/3 passed**; validate salon-scoped name/bio/experience updates, schema rejection, and Hindi labels. Staff access revocation and employment status are not changed by this editor.
 - Android JavaScript export: passed (1,209 modules; 3.3 MB Hermes bundle).
 - Expo Android prebuild: passed and generated the native project in this isolated worktree.
 - Android Gradle/AAB: not run. This runner has no Android SDK (`ANDROID_HOME` and `ANDROID_SDK_ROOT` are unset and the checked SDK paths are absent). EAS cloud version/build queries are also blocked by DNS (`api.expo.dev` resolves with `ENOTFOUND`). No cloud build was started.

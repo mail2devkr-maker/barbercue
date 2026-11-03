@@ -27,6 +27,7 @@ import {
   HoursEditor,
   PhotosSection,
   PaymentQrSection,
+  EditStaffProfile,
   styles as sectionStyles,
 } from '../../components/owner/ShopSetupSections';
 import type { OwnerShopStackParamList } from '../../navigation/OwnerShopStack';
@@ -37,7 +38,7 @@ import type { OwnerShopStackParamList } from '../../navigation/OwnerShopStack';
 export default function OwnerShopScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<OwnerShopStackParamList>>();
   const { selectedSalonId, selectedSalon } = useSalon();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [services, setServices] = useState<ServiceDto[]>([]);
   const [chairs, setChairs] = useState<SalonChairDto[]>([]);
   const [staff, setStaff] = useState<SalonStaffDto[]>([]);
@@ -116,7 +117,7 @@ export default function OwnerShopScreen() {
         style={sectionStyles.addButton}
       />
       <Button
-        title="Shop settings"
+        title={language === 'HI' ? 'दुकान की सेटिंग' : 'Shop settings'}
         variant="outline"
         onPress={() => navigation.navigate('OwnerSettings')}
         style={sectionStyles.addButton}
@@ -148,13 +149,17 @@ export default function OwnerShopScreen() {
           <Text style={sectionStyles.emptyText}>{t.noBarbersYet}</Text>
         ) : (
           staff.map((member) => (
-            <View key={member.id} style={sectionStyles.row}>
-              <View style={sectionStyles.rowBody}>
-                <Text style={sectionStyles.rowTitle}>{member.displayName}</Text>
-                <Text style={sectionStyles.rowMeta}>
-                  {member.status} {member.hasPassword ? '' : t.invitePendingSuffix}
-                </Text>
+            <View key={member.id}>
+              <View style={sectionStyles.row}>
+                <View style={sectionStyles.rowBody}>
+                  <Text style={sectionStyles.rowTitle}>{member.displayName}</Text>
+                  <Text style={sectionStyles.rowMeta}>
+                    {member.status} {member.hasPassword ? '' : t.invitePendingSuffix}
+                  </Text>
+                  {member.bio ? <Text style={sectionStyles.rowMeta}>{member.bio}</Text> : null}
+                </View>
               </View>
+              <EditStaffProfile salonId={selectedSalonId} staff={member} onSaved={() => void load()} />
             </View>
           ))
         )}
