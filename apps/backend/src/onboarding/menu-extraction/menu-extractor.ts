@@ -156,6 +156,9 @@ export class GeminiMenuExtractor implements MenuExtractor {
 }
 
 export function menuExtractorFromEnv(): MenuExtractor {
+  // A paid provider call, and this key may exist for other features, so it needs its own switch.
   const key = process.env.GEMINI_API_KEY?.trim();
-  return key ? new GeminiMenuExtractor(key) : new UnconfiguredMenuExtractor();
+  return key && process.env.ONBOARDING_MENU_EXTRACTION_ENABLED === 'true'
+    ? new GeminiMenuExtractor(key)
+    : new UnconfiguredMenuExtractor();
 }

@@ -13,6 +13,12 @@ describe('menu extraction adapter', () => {
     else process.env.GEMINI_API_KEY = original;
   });
 
+  it('stays unconfigured when a Gemini key exists but the feature switch is off', () => {
+    process.env.GEMINI_API_KEY = 'synthetic-not-a-key';
+    delete process.env.ONBOARDING_MENU_EXTRACTION_ENABLED;
+    expect(menuExtractorFromEnv()).toBeInstanceOf(UnconfiguredMenuExtractor);
+  });
+
   it('is unconfigured without GEMINI_API_KEY and never fabricates rows', async () => {
     delete process.env.GEMINI_API_KEY;
     const extractor = menuExtractorFromEnv();
