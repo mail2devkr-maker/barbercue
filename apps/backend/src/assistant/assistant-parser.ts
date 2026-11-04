@@ -3,6 +3,7 @@ import { parsePhase2, type Phase2Intent } from './assistant-parser-phase2';
 import { parsePhase3, type Phase3Intent } from './assistant-parser-phase3';
 import { parsePhase4, type Phase4Intent } from './assistant-parser-phase4';
 import { parsePhase5, type Phase5Intent } from './assistant-parser-phase5';
+import { parsePhase7, type Phase7Intent } from './assistant-parser-phase7';
 import {
   parseAdminReads,
   parsePhase6,
@@ -60,7 +61,8 @@ export type ParsedIntent =
   | Phase4Intent
   | Phase5Intent
   | Phase6Intent
-  | AdminReadIntent;
+  | AdminReadIntent
+  | Phase7Intent;
 
 export function normalizeText(text: string): string {
   return (
@@ -178,6 +180,8 @@ export function parseAssistantText(
   if (phase5) return phase5;
   // A field employee's screens only offer their own CRM; shop and customer phrases do not apply.
   if (surface === 'employee') return parsePhase6(text, raw, year);
+  const phase7 = parsePhase7(text, surface);
+  if (phase7) return phase7;
   if (surface === 'admin') {
     const adminRead = parseAdminReads(text);
     if (adminRead) return adminRead;

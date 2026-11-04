@@ -75,6 +75,10 @@ import { BATCH7_HANDLERS } from './actions/batch7.actions';
 import { BATCH8_HANDLERS } from './actions/batch8.actions';
 import { BATCH9_HANDLERS } from './actions/batch9.actions';
 import { BATCH11_HANDLERS } from './actions/batch11.actions';
+import { BATCH12_HANDLERS } from './actions/batch12.actions';
+import { StaffWorkService } from '../owner-ops/staff-work.service';
+import { CancellationAnalyticsService } from '../owner-ops/cancellation-analytics.service';
+import { CustomerCreditsService } from '../credits/customer-credits.service';
 import { AdminCustomerAnalyticsService } from '../admin/analytics/admin-customer-analytics.service';
 import { AdminStaffAnalyticsService } from '../admin/analytics/admin-staff-analytics.service';
 import { AdminShopActivityService } from '../admin/admin-shop-activity.service';
@@ -101,6 +105,7 @@ export const ASSISTANT_HANDLERS: HandlerMap = {
   ...BATCH8_HANDLERS,
   ...BATCH9_HANDLERS,
   ...BATCH11_HANDLERS,
+  ...BATCH12_HANDLERS,
 };
 
 const UNRELEASED: Record<'inventory' | 'onboarding', string> = {
@@ -155,6 +160,9 @@ export class AssistantService {
     shopActivity: AdminShopActivityService,
     customerAnalytics: AdminCustomerAnalyticsService,
     staffAnalytics: AdminStaffAnalyticsService,
+    staffWork: StaffWorkService,
+    cancellations: CancellationAnalyticsService,
+    credits: CustomerCreditsService,
     @Inject(ASSISTANT_INTERPRETER)
     private readonly interpreter: IntentInterpreter,
     @Inject(ASSISTANT_TRANSCRIBER) private readonly transcriber: Transcriber,
@@ -192,6 +200,9 @@ export class AssistantService {
       shopActivity,
       customerAnalytics,
       staffAnalytics,
+      staffWork,
+      cancellations,
+      credits,
     };
   }
 

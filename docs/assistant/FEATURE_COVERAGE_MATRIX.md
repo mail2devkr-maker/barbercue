@@ -14,8 +14,10 @@ Branch `claude/fastque-action-assistant-362`, Draft PR #363. **Nothing here is d
   - `B8` = `test/assistant-batch8.e2e-spec.ts`
   - `B9` = `test/assistant-batch9.e2e-spec.ts`
   - `B11` = `test/assistant-batch11.e2e-spec.ts` (batch 10 was UI only)
+  - `B12` = `test/assistant-batch12.e2e-spec.ts`
+  - Every suite also passes twice in a row in one shared database, as CI's full-suite step runs it.
   - `unit` = parser, interpreter and transcriber specs
-- **CI** is the GitHub *Owner Operations Certification* workflow, which runs P1, P2, B3–B9 and B11.
+- **CI** is the GitHub *Owner Operations Certification* workflow, which runs P1, P2, B3–B9, B11 and B12.
 - **Live** and **Physical** are "no" for every row, because the assistant has never been deployed and has never had a real-microphone or real-device test.
 
 All 32 actions share these rules:
@@ -25,7 +27,7 @@ All 32 actions share these rules:
 - Every step writes an audit row with no transcript text.
 - The screen updates only after the server reports success (`refresh` → the page re-fetches from the API).
 
-## 1. Actions the assistant runs (77)
+## 1. Actions the assistant runs (80)
 
 **Access levels**
 - `owner/admin` = `assertOwnerOrAdminAccess` (the shop owner or a delegated platform admin).
@@ -114,6 +116,9 @@ All 32 actions share these rules:
 | 75 | `admin.shopActivity` | Platform admin, co-founder, HR, sales, viewer | `AdminShopActivityService.getActivity` (today or last 7 days; counts only) | platform (same roles as the route) | – | "Aaj kaunsi shops busy hain" | B9 (non-admin session and customer denied) |
 | 76 | `admin.customerAnalytics` | Platform admin, co-founder, viewer (`ADMIN_PERMISSION_ROLES.viewCustomerAnalytics`) | `AdminCustomerAnalyticsService.getOverview` — **KPI figures only**; per-customer rows are never read out | platform | – | "Is mahine kitne naye customers aaye" | B11 (HR and sales denied; no name/email/phone in replies) |
 | 77 | `admin.staffAnalytics` | Platform admin, co-founder, HR, viewer (`viewStaffAnalytics`) | `AdminStaffAnalyticsService.getOverview` — KPI figures only | platform | – | "Is hafte staff analytics" | B11 (sales and shop owner denied) |
+| 78 | `staff.myWork` | Owner, staff, admin | `StaffWorkService.getMyWork` — the barber's own day: serving now, appointments left, queue they can take; customer phone numbers never read out | team/admin | – | "Mera aaj ka kaam dikhao" | B12 (other shop denied) |
+| 79 | `analytics.cancellations` | Owner, admin | `CancellationAnalyticsService.getAnalytics` (7/30/90 days; by who, service, reason; live-queue drops separate) | owner/admin | – | "Is hafte ki cancellations" | B12 (barber and other shop denied) |
+| 80 | `me.credits` | Customer | `CustomerCreditsService.getBalance` (own account) | self | – | "Mere credits kitne hain" | B12 (staff denied) |
 
 **Cross-cutting negative tests**
 - Another shop's owner is denied, even when the request names the victim shop.

@@ -38,6 +38,9 @@ import type { AdminCrmService } from '../../admin/admin-crm.service';
 import type { AdminShopActivityService } from '../../admin/admin-shop-activity.service';
 import type { AdminCustomerAnalyticsService } from '../../admin/analytics/admin-customer-analytics.service';
 import type { AdminStaffAnalyticsService } from '../../admin/analytics/admin-staff-analytics.service';
+import type { StaffWorkService } from '../../owner-ops/staff-work.service';
+import type { CancellationAnalyticsService } from '../../owner-ops/cancellation-analytics.service';
+import type { CustomerCreditsService } from '../../credits/customer-credits.service';
 import type { SealedWrite } from '../assistant-confirmation';
 import { matchByName } from '../assistant-parser';
 
@@ -108,6 +111,9 @@ export interface Deps {
   shopActivity: AdminShopActivityService;
   customerAnalytics: AdminCustomerAnalyticsService;
   staffAnalytics: AdminStaffAnalyticsService;
+  staffWork: StaffWorkService;
+  cancellations: CancellationAnalyticsService;
+  credits: CustomerCreditsService;
 }
 
 export interface PlanCtx {

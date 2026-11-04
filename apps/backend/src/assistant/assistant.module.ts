@@ -13,6 +13,7 @@ import { AdminModule } from '../admin/admin.module';
 import { ReviewsModule } from '../reviews/reviews.module';
 import { AuthModule } from '../auth/auth.module';
 import { EmployeeModule } from '../employee/employee.module';
+import { CustomerCreditsModule } from '../credits/customer-credits.module';
 import { AssistantController } from './assistant.controller';
 import { AssistantService } from './assistant.service';
 import { interpreterFromEnv } from './assistant-interpreter';
@@ -39,6 +40,7 @@ import {
     ReviewsModule,
     AuthModule,
     EmployeeModule,
+    CustomerCreditsModule,
   ],
   controllers: [AssistantController],
   providers: [

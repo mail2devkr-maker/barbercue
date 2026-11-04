@@ -73,6 +73,8 @@ import { OwnerAssistantService } from './owner-assistant.service';
     OwnerAssistantService,
     ShopBookingActionsService,
     RevenueReportService,
+    StaffWorkService,
+    CancellationAnalyticsService,
   ],
 })
 export class OwnerOpsModule {}

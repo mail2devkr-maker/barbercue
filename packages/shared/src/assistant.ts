@@ -133,6 +133,10 @@ export const AssistantActionId = {
   // batch 11: platform analytics KPIs only (no per-person rows)
   ADMIN_CUSTOMER_ANALYTICS: "admin.customerAnalytics",
   ADMIN_STAFF_ANALYTICS: "admin.staffAnalytics",
+  // batch 12: a barber's own day, cancellation figures, customer credits (reads)
+  STAFF_MY_WORK: "staff.myWork",
+  CANCELLATION_ANALYTICS: "analytics.cancellations",
+  MY_CREDITS: "me.credits",
 } as const;
 export type AssistantActionId = (typeof AssistantActionId)[keyof typeof AssistantActionId];
 

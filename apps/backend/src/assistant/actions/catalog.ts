@@ -529,4 +529,23 @@ export const ASSISTANT_ACTIONS: Record<AssistantActionId, ActionDef> = {
     'PLATFORM',
     ['Aaj kitna staff kaam kar raha hai'],
   ),
+  // ---- batch 12: a barber's own day, cancellation figures, customer credits (reads)
+  [AssistantActionId.STAFF_MY_WORK]: read(
+    'My work today',
+    SHOP_TEAM,
+    'STAFF_OR_ADMIN',
+    ['Mera aaj ka kaam dikhao'],
+  ),
+  [AssistantActionId.CANCELLATION_ANALYTICS]: read(
+    'Cancellation figures',
+    SHOP_MANAGERS,
+    'OWNER_OR_ADMIN',
+    ['Is mahine kitne cancel hue', 'Is hafte ki cancellations'],
+  ),
+  [AssistantActionId.MY_CREDITS]: read(
+    'My FastQue credits',
+    CUSTOMERS,
+    'SELF',
+    ['Mere credits kitne hain'],
+  ),
 };
