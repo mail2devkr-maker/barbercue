@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import {
   ImageBackground,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -177,6 +178,7 @@ export default function RoleSelectScreen({ navigation }: Props) {
         style={styles.scroll}
         contentContainerStyle={{ paddingBottom: 88 + insets.bottom }}
         keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
       >
         <ImageBackground
           source={{ uri: EDITORIAL_ASSET_URL.heroBand }}

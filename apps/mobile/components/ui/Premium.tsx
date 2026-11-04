@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
   Platform,
   Pressable,
   RefreshControl,
@@ -32,7 +33,12 @@ export function PremiumScreen({
 }) {
   const insets = useSafeAreaInsets();
   const padding = { paddingTop: insets.top + space[3], paddingBottom: insets.bottom + space[7] };
-  if (!scroll) return <View style={[styles.screen, padding, contentStyle]}>{children}</View>;
+  if (!scroll) {
+    const content = <View style={[styles.screen, padding, contentStyle]}>{children}</View>;
+    return Platform.OS === 'ios' ? (
+      <KeyboardAvoidingView style={styles.screen} behavior="padding">{content}</KeyboardAvoidingView>
+    ) : content;
+  }
   return (
     <ScrollView
       style={styles.screen}

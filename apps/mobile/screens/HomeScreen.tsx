@@ -6,6 +6,7 @@ import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import {
   Alert,
   ImageBackground,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -297,6 +298,7 @@ export default function HomeScreen({ navigation }: Props) {
         contentContainerStyle={{ paddingBottom: insets.bottom + space[6], backgroundColor: fastQue.background }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} tintColor={color.accent} colors={[color.accent]} />}
         keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
       >
         <ImageBackground source={{ uri: EDITORIAL_ASSET_URL.heroBand }} style={styles.hero} imageStyle={styles.heroImage}>
           <View style={[StyleSheet.absoluteFill, styles.heroBaseScrim]} />
