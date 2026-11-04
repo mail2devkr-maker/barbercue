@@ -575,3 +575,59 @@
   min-width: 18px;
   min-height: 18px;
 }
+
+/* ---- issue #371: voice settings, speaker test, voice accuracy check ---- */
+.voiceSettings,
+.voiceCheck {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--bc-border);
+  border-radius: 12px;
+  background: #fff;
+}
+.voiceRow {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--bc-border);
+}
+.voiceLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.voiceLabel select {
+  max-width: 100%;
+  min-height: 36px;
+  padding: 4px 6px;
+  border: 1px solid var(--bc-border);
+  border-radius: 8px;
+  background: #fff;
+}
+.voiceStatus {
+  margin: 0;
+  color: var(--bc-muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.checkPhrase {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+}
+.checkSummary {
+  margin: 0;
+  white-space: pre-wrap;
+  font-size: 12px;
+}
+.understoodAs {
+  margin: 0 0 4px;
+  color: var(--bc-muted);
+  font-size: 12px;
+  font-style: italic;
+}

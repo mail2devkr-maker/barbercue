@@ -13,13 +13,16 @@ import {
 } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../lib/api";
 import { announceAssistantChange } from "../../lib/assistant-events";
-import { speak, useSpeechInput, type SpeechLang } from "../../lib/use-speech";
+import { useSpeechInput, type SpeechLang } from "../../lib/use-speech";
+import { browserSpeechOutput, SPEAK_FAILURE_TEXT, type SpeechOutput } from "../../lib/speech-output";
+import { VoiceSettings } from "./VoiceSettings";
+import { VoiceCheck } from "./VoiceCheck";
 import { VOICE_NOTICE, readVoiceConsent, saveVoiceConsent, useLocalVoice, type VoiceProvider } from "../../lib/use-local-voice";
 import {
   VoiceConversation,
-  browserSpeaker,
   recognizerCtor,
   voiceSupport,
+  type Heard,
   type TurnOutcome,
   type VoiceSnapshot,
   type VoiceSupport,
@@ -135,25 +138,25 @@ export function ActionAssistant(props: { salonId?: string; surface?: AssistantSu
   return enabled ? <AssistantDrawer key={`${props.salonId ?? ""}:${props.surface ?? "shop"}`} {...props} onRevoked={revoke} /> : null;
 }
 
-type RunTurn = (said: string, viaVoice: boolean) => Promise<AssistantTurnDto | null>;
+type RunTurn = (said: string, viaVoice: boolean, heard?: Heard) => Promise<AssistantTurnDto | null>;
 
-/** What the conversation sends for each heard phrase, given the drawer's turn runner. */
+/** What the conversation sends for each heard phrase (with the recognizer's alternatives). */
 function sendVia(runTurn: RunTurn) {
-  return async (heard: string): Promise<TurnOutcome> => {
-    const turn = await runTurn(heard, true);
+  return async (heard: Heard): Promise<TurnOutcome> => {
+    const turn = await runTurn(heard.text, true, heard);
     if (!turn) return { say: "", end: true };
     return { say: spokenReply(turn), hold: turn.status === "NEEDS_CONFIRMATION" };
   };
 }
 
 /** The hands-free conversation, wired to the browser's speech APIs. The turn runner is set later. */
-function createConversation(): VoiceConversation {
+function createConversation(out: SpeechOutput): VoiceConversation {
   return new VoiceConversation({
     createRecognizer: () => {
       const C = recognizerCtor();
       return C ? new C() : null;
     },
-    speaker: browserSpeaker,
+    speaker: { speak: (text, lang) => out.speak(text, lang), cancel: () => out.cancel() },
     send: async () => ({ say: "", end: true }),
     setTimer: (fn, ms) => setTimeout(fn, ms),
     clearTimer: (h) => clearTimeout(h as ReturnType<typeof setTimeout>),
@@ -171,7 +174,10 @@ function AssistantDrawer({ salonId, surface = "shop", onRevoked }: { salonId?: s
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [lang, setLang] = useState<SpeechLang>("hi-IN");
-  const [readAloud, setReadAloud] = useState(false);
+  // Replies to spoken questions are spoken by default (#371); typed questions stay silent.
+  const [speakReplies, setSpeakReplies] = useState(true);
+  const [pushSpeechError, setPushSpeechError] = useState<string | null>(null);
+  const [panel, setPanel] = useState<"none" | "settings" | "check">("none");
   const [log, setLog] = useState<Entry[]>([]);
   const [voice, setVoice] = useState<AssistantCapabilitiesDto["voice"] | null>(null);
   const [consentFor, setConsentFor] = useState<ConsentFor | null>(null);
@@ -203,7 +209,8 @@ function AssistantDrawer({ salonId, surface = "shop", onRevoked }: { salonId?: s
   }, [mode, voice]);
 
   // ---- hands-free conversation (browser speech recognition + speech output)
-  const [conversation] = useState(createConversation);
+  const [out] = useState(browserSpeechOutput);
+  const [conversation] = useState(() => createConversation(out));
   const voiceState = useSyncExternalStore(
     (fn) => conversation.subscribe(fn),
     () => conversation.snapshot,
@@ -251,7 +258,7 @@ function AssistantDrawer({ salonId, surface = "shop", onRevoked }: { salonId?: s
 
   /** One turn to the server. Shared by typing, push-to-talk and the voice conversation. */
   const runTurn = useCallback(
-    async (said: string, viaVoice: boolean): Promise<AssistantTurnDto | null> => {
+    async (said: string, viaVoice: boolean, heard?: Heard): Promise<AssistantTurnDto | null> => {
       const value = said.trim();
       if (!value || busyRef.current) return null;
       busyRef.current = true;
@@ -263,7 +270,14 @@ function AssistantDrawer({ salonId, surface = "shop", onRevoked }: { salonId?: s
       try {
         turn = await apiFetch<AssistantTurnDto>(`${ASSISTANT_PATHS.assistant}/${ASSISTANT_PATHS.turns}`, {
           method: "POST",
-          body: JSON.stringify({ text: value, inputMode: viaVoice ? "voice" : "text", surface, ...(salonId ? { salonId } : {}) }),
+          body: JSON.stringify({
+            text: value,
+            inputMode: viaVoice ? "voice" : "text",
+            surface,
+            ...(salonId ? { salonId } : {}),
+            ...(heard?.alternatives.length ? { alternatives: heard.alternatives } : {}),
+            ...(heard?.confidence != null ? { confidence: heard.confidence } : {}),
+          }),
         });
         turn = applyToScreen(turn);
       } catch (err) {
@@ -303,9 +317,13 @@ function AssistantDrawer({ salonId, surface = "shop", onRevoked }: { salonId?: s
     async (said: string, viaVoice = false) => {
       setText("");
       const turn = await runTurn(said, viaVoice);
-      if (turn && readAloud && !inConversation) speak(turn.message, lang);
+      // A spoken question gets a spoken answer; a failure to play is shown, never silent.
+      if (turn && viaVoice && speakReplies && !inConversation) {
+        const r = await out.speak(spokenReply(turn), lang);
+        setPushSpeechError(r.ok || r.reason === "interrupted" ? null : SPEAK_FAILURE_TEXT[r.reason ?? "engine-error"]);
+      }
     },
-    [runTurn, readAloud, lang, inConversation],
+    [runTurn, speakReplies, lang, inConversation, out],
   );
 
   async function decide(entryId: string, token: string, decision: "confirm" | "cancel", acknowledged = false) {
@@ -395,6 +413,16 @@ function AssistantDrawer({ salonId, surface = "shop", onRevoked }: { salonId?: s
 
   const lastTurn = [...log].reverse().find((e): e is Extract<Entry, { kind: "turn" }> => e.kind === "turn");
 
+  // A reply that could not be played is said plainly, with a way to test the speaker.
+  const speechProblem = (msg: string) => (
+    <p className={styles.voiceError} role="alert">
+      {msg}{" "}
+      <button type="button" className={styles.editHeard} onClick={() => setPanel("settings")}>
+        Test speaker
+      </button>
+    </p>
+  );
+
   const conversationControls = (compact: boolean) => (
     <div className={compact ? styles.miniControls : styles.convControls}>
       {voiceState.state === "replying" && (
@@ -476,10 +504,11 @@ function AssistantDrawer({ salonId, surface = "shop", onRevoked }: { salonId?: s
               <>
                 <p className={styles.convState} role="status" aria-live="polite">
                   <span className={`${styles.dot} ${styles[`dot_${voiceState.state}`] ?? ""}`} aria-hidden="true" />
-                  {VOICE_LABEL[voiceState.state]}
+                  {voiceState.state === "listening" ? (voiceState.ready ? "Listening… speak now" : "Starting microphone… wait") : VOICE_LABEL[voiceState.state]}
                   {voiceState.interim && <span className={styles.caption}> “{voiceState.interim}”</span>}
                 </p>
                 {voiceState.note && <p className={styles.convNote}>{voiceState.note}</p>}
+                {voiceState.speechError && speechProblem(voiceState.speechError)}
                 {conversationControls(false)}
               </>
             ) : handsFree ? (
@@ -488,6 +517,7 @@ function AssistantDrawer({ salonId, surface = "shop", onRevoked }: { salonId?: s
                   <MicIcon /> Start voice conversation
                 </button>
                 {voiceState.note && <p className={styles.convNote}>{voiceState.note}</p>}
+                {(voiceState.speechError ?? pushSpeechError) && speechProblem((voiceState.speechError ?? pushSpeechError) as string)}
               </>
             ) : (
               <p className={styles.convNote}>
@@ -496,6 +526,18 @@ function AssistantDrawer({ salonId, surface = "shop", onRevoked }: { salonId?: s
                   : "This browser has no speech recognition, so voice conversation is not available here. Type your question."}
               </p>
             )}
+            <div className={styles.miniControls}>
+              <button type="button" className={styles.ctl} aria-expanded={panel === "settings"} onClick={() => setPanel(panel === "settings" ? "none" : "settings")}>
+                Voice settings &amp; speaker test
+              </button>
+              {handsFree && !inConversation && surface === "shop" && (
+                <button type="button" className={styles.ctl} aria-expanded={panel === "check"} onClick={() => setPanel(panel === "check" ? "none" : "check")}>
+                  Check voice accuracy
+                </button>
+              )}
+            </div>
+            {panel === "settings" && <VoiceSettings out={out} lang={lang} onLang={setLang} />}
+            {panel === "check" && !inConversation && surface === "shop" && <VoiceCheck lang={lang} onClose={() => setPanel("none")} />}
           </div>
 
           <div className={styles.log} aria-live="polite">
@@ -549,7 +591,7 @@ function AssistantDrawer({ salonId, surface = "shop", onRevoked }: { salonId?: s
               </label>
               {!inConversation && (
                 <label className={styles.toggle}>
-                  <input type="checkbox" checked={readAloud} onChange={(ev) => setReadAloud(ev.target.checked)} /> Read replies aloud
+                  <input type="checkbox" checked={speakReplies} onChange={(ev) => setSpeakReplies(ev.target.checked)} /> Speak replies to voice questions
                 </label>
               )}
             </div>
@@ -653,6 +695,7 @@ function TurnCard({
           <li key={s.label} className={styles[`stage_${s.state}`]}>{s.label}</li>
         ))}
       </ol>
+      {turn.understoodAs && <p className={styles.understoodAs}>Understood as: “{turn.understoodAs}”</p>}
       {turn.preview?.question ? (
         <>
           <p className={styles.question}>{turn.preview.question}</p>

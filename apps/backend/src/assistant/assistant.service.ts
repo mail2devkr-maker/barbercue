@@ -12,6 +12,8 @@ import {
   SessionAudience,
   type AssistantCapabilitiesDto,
   type AssistantConfirmationInput,
+  type AssistantInterpretationDto,
+  type AssistantInterpretationInput,
   type AssistantPreviewRow,
   type AssistantResource,
   type AssistantTurnDto,
@@ -99,6 +101,7 @@ import {
   isHighRisk,
   readOnly,
 } from './assistant-write-policy';
+import { chooseReading } from './assistant-hearing';
 import { ASSISTANT_ROLLOUT, AssistantRollout } from './assistant-rollout';
 import { AdminCustomerAnalyticsService } from '../admin/analytics/admin-customer-analytics.service';
 import { AdminStaffAnalyticsService } from '../admin/analytics/admin-staff-analytics.service';
@@ -287,6 +290,72 @@ export class AssistantService {
     user: AuthenticatedUser,
     input: AssistantTurnInput,
   ): Promise<AssistantTurnDto> {
+    const reading = await this.read(
+      input.text,
+      input.alternatives,
+      input.surface,
+    );
+    const out = await this.turnFor(
+      user,
+      reading.usedAlternative ? { ...input, text: reading.text } : input,
+      reading.parsed,
+    );
+    if (reading.usedAlternative) return { ...out, understoodAs: reading.text };
+    // A change heard only in an alternative is never run: it is offered as a choice to tap.
+    if (out.status === 'UNSUPPORTED' && reading.writeSuggestions.length)
+      return {
+        ...out,
+        options: [
+          ...reading.writeSuggestions.map((t) => ({
+            label: `Did you mean: ${t}`,
+            text: t,
+          })),
+          ...(out.options ?? []),
+        ].slice(0, 6),
+      };
+    return out;
+  }
+
+  /**
+   * Issue #371: which reading of a spoken sentence to act on. The top transcript wins whenever it
+   * is understood (including a change, which still needs its preview and on-screen confirmation).
+   * Otherwise the first ALTERNATIVE that maps to a READ or navigation is used. An alternative that
+   * maps to a change is never used; it is only returned as a suggestion the user must tap.
+   */
+  private read(
+    text: string,
+    alternatives: string[] | undefined,
+    surface: AssistantTurnInput['surface'],
+  ) {
+    return chooseReading(
+      (t) => this.interpreter.interpret(t, surface),
+      text,
+      alternatives,
+    );
+  }
+
+  /** Dry run for the voice accuracy check: what a sentence maps to. Reads no data, runs nothing. */
+  async interpretOnly(
+    input: AssistantInterpretationInput,
+  ): Promise<AssistantInterpretationDto> {
+    const r = await this.read(input.text, input.alternatives, input.surface);
+    const id = (p: typeof r.parsed) =>
+      p && p.action !== 'unreleased' ? (p.action as AssistantActionId) : null;
+    const action = id(r.parsed);
+    return {
+      action,
+      kind: action ? ASSISTANT_ACTIONS[action].kind : null,
+      usedText: action ? r.text : null,
+      usedAlternative: r.usedAlternative,
+      topAction: id(r.top),
+    };
+  }
+
+  private async turnFor(
+    user: AuthenticatedUser,
+    input: AssistantTurnInput,
+    parsed: Awaited<ReturnType<IntentInterpreter['interpret']>>,
+  ): Promise<AssistantTurnDto> {
     const requestId = randomUUID();
     // Issue #372: "haan / yes / ok" is never a confirmation of anything.
     if (isBareYes(input.text))
@@ -294,7 +363,6 @@ export class AssistantService {
         status: 'UNSUPPORTED',
         message: VOICE_YES_MESSAGE,
       });
-    const parsed = await this.interpreter.interpret(input.text, input.surface);
     if (!parsed) {
       return this.finish(
         requestId,
