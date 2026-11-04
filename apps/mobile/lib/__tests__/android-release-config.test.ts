@@ -1,7 +1,10 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 const plugin = require('../../plugins/withAndroidLargeScreenOrientation');
 const appJson = require('../../app.json');
-const mobileRoot = require('node:path').resolve(__dirname, '../..');
+const path = require('node:path');
+const fs = require('node:fs');
+const cwd = process.cwd();
+const mobileRoot = fs.existsSync(path.join(cwd, 'app.json')) ? cwd : path.resolve(cwd, 'apps/mobile');
 const resolvedExpoConfig = require('@expo/config').getConfig(mobileRoot, { skipSDKVersionRequirement: true }).exp;
 const { resolveRuntimeVersionAsync } = require('expo-updates/utils/build/resolveRuntimeVersionAsync');
 
