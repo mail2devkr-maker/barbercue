@@ -1,27 +1,37 @@
 /**
- * Hands-free voice conversation for the FastQue Assistant (issue #368).
+ * Hands-free voice conversation for the FastQue Assistant (issues #368, #371).
  *
- *   off ──start()──▶ listening ──final words──▶ understanding ──reply──▶ replying ──spoken──▶ listening …
- *                      │  ▲                          │                       │
- *                      │  └──── muted / no TTS ──────┘ (skips replying)      │ interrupt(): stop speaking, listen now
+ *   off ──start()──▶ listening ──phrase complete──▶ understanding ──reply──▶ replying ──played──▶ listening …
+ *                      │  ▲                              │                      │
+ *                      │  └──── muted / no speaker ──────┘ (skips replying)     │ interrupt(): stop speaking, listen now
  *                      ├── silence / idle limit ──▶ paused ──resume()──▶ listening
  *                      ├── tab hidden ────────────▶ paused (mic released)
  *                      ├── mic denied / no mic ───▶ error (mic released, conversation over)
  *                      └── end() from ANY state ──▶ off (mic, request and speech all cancelled)
  *
- * Rules that keep it safe:
- *  - The microphone is only ever opened after the user pressed Start (consent is checked by the UI).
- *  - The microphone is CLOSED while a reply is spoken, so the reply cannot be heard as a new question
- *    (no echo loop). Barge-in by voice is therefore not offered; interrupt() is a button.
- *  - One request at a time. Every async callback carries a generation number; anything from an older
- *    generation (a late recognizer result, a reply that arrives after Stop) is ignored.
- *  - A final phrase is sent once: duplicates within a short window are dropped.
- *  - Writes are never confirmed by voice: a reply that needs confirmation pauses the conversation
- *    so the user decides on screen.
- *  - Browser recognizers stop on their own (Chrome ends a session after silence or ~60 s); the loop
- *    restarts them, but gives up into `paused` after repeated silence, an idle limit, or a restart
- *    storm, so a microphone is never left running unseen.
+ * Rules that keep it safe (unchanged from #368):
+ *  - The microphone is only opened after the user pressed Start (consent is checked by the UI).
+ *  - The microphone is CLOSED while a reply is spoken, so the reply cannot be heard as a question.
+ *  - One request at a time; every async callback carries a generation number and stale ones are dropped.
+ *  - A final phrase is sent once. Writes are never confirmed by voice.
+ *  - Browser recognizers stop on their own; the loop restarts them but pauses after repeated silence,
+ *    an idle limit, or a restart storm, so a microphone is never left running unseen.
+ *
+ * First-attempt accuracy (#371):
+ *  - The recognizer runs in continuous mode and THIS class decides when a phrase is complete
+ *    (a short silence after the last words), so a pause mid-sentence ("bookings ... kholo") no longer
+ *    sends half a sentence. The mic is still closed before anything is sent or spoken.
+ *  - Up to 5 recognition alternatives are passed to the server, which may use one ONLY for a safe
+ *    read or navigation (never a change).
+ *  - `ready` turns true only when the browser reports that audio capture started, so the UI says
+ *    "Speak now" at the right moment instead of clipping the first words.
+ *
+ * Spoken replies (#371): the speaker resolves with ok only when audio actually started; a failure
+ * is shown (`speechError`) instead of silently moving on, and the mic reopens only after the reply.
  */
+
+import type { SpeakResult } from "./speech-output";
+import { SPEAK_FAILURE_TEXT } from "./speech-output";
 
 export type VoiceState = "off" | "listening" | "understanding" | "replying" | "paused" | "error";
 
@@ -31,8 +41,15 @@ export interface VoiceSnapshot {
   /** Why the conversation is paused or stopped, in plain words. */
   note: string | null;
   muted: boolean;
+  /** The browser reported that the microphone is capturing audio (say "Speak now"). */
+  ready: boolean;
+  /** The last reply could not be played, and why. Cleared when a reply plays. */
+  speechError: string | null;
+  /** Milliseconds from start() to audio capture for the last session (diagnostics only). */
+  micStartMs: number | null;
 }
 
+type Alternative = { transcript: string; confidence?: number };
 export interface RecognizerLike {
   lang: string;
   interimResults: boolean;
@@ -41,15 +58,24 @@ export interface RecognizerLike {
   start(): void;
   stop(): void;
   abort(): void;
-  onresult: ((event: { resultIndex?: number; results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal: boolean }> }) => void) | null;
+  onresult: ((event: { resultIndex?: number; results: ArrayLike<ArrayLike<Alternative> & { isFinal: boolean }> }) => void) | null;
   onerror: ((event: { error: string }) => void) | null;
   onend: (() => void) | null;
+  onaudiostart?: (() => void) | null;
 }
 
 export interface SpeakerLike {
-  /** Speak; call onDone exactly once when finished, failed or cancelled. Return false if it cannot speak. */
-  speak(text: string, lang: string, onDone: () => void): boolean;
+  /** Resolves once: ok only if audio actually started playing. */
+  speak(text: string, lang: string): Promise<SpeakResult>;
   cancel(): void;
+}
+
+export interface Heard {
+  text: string;
+  /** Other hypotheses from the recognizer, best first, without the top one. */
+  alternatives: string[];
+  /** The recognizer's confidence in `text` (0..1) when it reports one. */
+  confidence: number | null;
 }
 
 export interface TurnOutcome {
@@ -64,9 +90,7 @@ export interface TurnOutcome {
 export interface VoiceDeps {
   createRecognizer: () => RecognizerLike | null;
   speaker: SpeakerLike | null;
-  send: (text: string) => Promise<TurnOutcome>;
-  /** Called with each final phrase before it is sent (the UI shows it as a transcript). */
-  onHeard?: (text: string) => void;
+  send: (heard: Heard) => Promise<TurnOutcome>;
   setTimer: (fn: () => void, ms: number) => unknown;
   clearTimer: (handle: unknown) => void;
   now: () => number;
@@ -80,17 +104,47 @@ export const VOICE_LIMITS = {
   restartDelayMs: 250,
   afterSpeechDelayMs: 450, // let the speaker go quiet before the mic opens again
   duplicateWindowMs: 2_000,
+  endOfPhraseMs: 900, // silence after the last final words that completes a phrase
+  maxAlternatives: 5,
 } as const;
 
 const FATAL: Record<string, string> = {
   "not-allowed": "Microphone permission is off for this site. Allow it in the browser to talk, or type instead.",
   "service-not-allowed": "This browser does not allow speech recognition here. Type instead.",
-  "audio-capture": "No microphone was found. You can type instead.",
+  "audio-capture": "No microphone was found, or it was disconnected. You can type instead.",
   "language-not-supported": "This browser cannot recognize the chosen language. Switch language or type.",
 };
 
+/** The phrase and its alternatives from a (continuous) result list. */
+export function readResults(results: ArrayLike<ArrayLike<Alternative> & { isFinal: boolean }>): {
+  final: Heard | null;
+  interim: string;
+} {
+  const finals: Array<ArrayLike<Alternative>> = [];
+  let interim = "";
+  for (let i = 0; i < results.length; i += 1) {
+    if (results[i].isFinal) finals.push(results[i]);
+    else interim += results[i][0]?.transcript ?? "";
+  }
+  if (!finals.length) return { final: null, interim: interim.trim() };
+  const tops = finals.map((r) => (r[0]?.transcript ?? "").trim());
+  const text = tops.join(" ").replace(/\s+/g, " ").trim();
+  const last = finals[finals.length - 1];
+  const prefix = tops.slice(0, -1).join(" ");
+  const alternatives: string[] = [];
+  for (let k = 1; k < last.length; k += 1) {
+    const alt = `${prefix} ${(last[k]?.transcript ?? "").trim()}`.replace(/\s+/g, " ").trim();
+    if (alt && alt !== text && !alternatives.includes(alt)) alternatives.push(alt);
+  }
+  const c = last[0]?.confidence;
+  return {
+    final: text ? { text, alternatives: alternatives.slice(0, 4), confidence: typeof c === "number" && c > 0 ? c : null } : null,
+    interim: interim.trim(),
+  };
+}
+
 export class VoiceConversation {
-  private snap: VoiceSnapshot = { state: "off", interim: "", note: null, muted: false };
+  private snap: VoiceSnapshot = { state: "off", interim: "", note: null, muted: false, ready: false, speechError: null, micStartMs: null };
   private listeners = new Set<(s: VoiceSnapshot) => void>();
   private gen = 0;
   private rec: RecognizerLike | null = null;
@@ -100,6 +154,8 @@ export class VoiceConversation {
   private restarts: number[] = [];
   private lastFinal = { text: "", at: 0 };
   private timer: unknown = null;
+  private phraseTimer: unknown = null;
+  private pending: Heard | null = null;
   private lang = "hi-IN";
   private sendFn: VoiceDeps["send"];
 
@@ -121,8 +177,11 @@ export class VoiceConversation {
     return () => this.listeners.delete(fn);
   }
 
+  /** Change the recognition language; a listening session restarts in the new language. */
   setLang(lang: string) {
+    if (lang === this.lang) return;
     this.lang = lang;
+    if (this.snap.state === "listening") this.listen();
   }
 
   /** User pressed Start (after consent). */
@@ -155,13 +214,13 @@ export class VoiceConversation {
   pause(note: string) {
     if (this.snap.state === "off" || this.snap.state === "error") return;
     this.release();
-    this.set({ state: "paused", interim: "", note });
+    this.set({ state: "paused", interim: "", note, ready: false });
   }
 
   /** End the conversation from any state. Safe to call repeatedly, and on unmount. */
   end(note: string | null = null) {
     this.release();
-    this.set({ state: "off", interim: "", note });
+    this.set({ state: "off", interim: "", note, ready: false });
   }
 
   // ---------------------------------------------------------------- internals
@@ -174,12 +233,14 @@ export class VoiceConversation {
   /** Invalidate every pending callback and free the microphone and the speaker. */
   private release() {
     this.gen += 1;
-    if (this.timer !== null) this.deps.clearTimer(this.timer);
-    this.timer = null;
+    for (const t of [this.timer, this.phraseTimer]) if (t !== null) this.deps.clearTimer(t);
+    this.timer = this.phraseTimer = null;
+    this.pending = null;
     const r = this.rec;
     this.rec = null;
     if (r) {
       r.onresult = r.onerror = r.onend = null;
+      r.onaudiostart = null;
       try {
         r.abort();
       } catch {
@@ -203,67 +264,84 @@ export class VoiceConversation {
     const g = this.gen;
     const r = this.deps.createRecognizer();
     if (!r) {
-      this.set({ state: "error", interim: "", note: "Voice input is not available in this browser. You can type instead." });
+      this.set({ state: "error", interim: "", ready: false, note: "Voice input is not available in this browser. You can type instead." });
       return;
     }
     r.lang = this.lang;
     r.interimResults = true;
-    r.continuous = false; // one phrase per session: the reply is spoken with the mic closed
-    r.maxAlternatives = 1;
+    // Continuous: the browser keeps listening through short pauses; this class decides when the
+    // phrase is complete. The session is aborted before anything is sent or spoken.
+    r.continuous = true;
+    r.maxAlternatives = VOICE_LIMITS.maxAlternatives;
     this.heardThisSession = false;
+    const startedAt = this.deps.now();
+    r.onaudiostart = () => {
+      if (g === this.gen) this.set({ ready: true, micStartMs: this.deps.now() - startedAt });
+    };
     r.onresult = (event) => {
       if (g !== this.gen) return;
-      let text = "";
-      let final = false;
-      for (let i = 0; i < event.results.length; i += 1) {
-        text += event.results[i][0].transcript;
-        final = final || event.results[i].isFinal;
-      }
-      if (!final) {
-        this.set({ interim: text });
-        return;
-      }
-      this.phrase(text.trim());
+      const { final, interim } = readResults(event.results);
+      this.heardThisSession = this.heardThisSession || !!final || !!interim;
+      this.set({ interim: [final?.text, interim].filter(Boolean).join(" ") });
+      if (this.phraseTimer !== null) this.deps.clearTimer(this.phraseTimer);
+      this.phraseTimer = null;
+      // Words still being recognized after the final part belong to the same phrase.
+      this.pending = final && interim ? { ...final, text: `${final.text} ${interim}`, alternatives: [] } : final;
+      if (!final) return;
+      // More words may follow; the phrase is complete after a short silence (longer while words are
+      // still arriving).
+      this.phraseTimer = this.deps.setTimer(
+        () => {
+          this.phraseTimer = null;
+          if (g === this.gen && this.pending) this.phrase(this.pending);
+        },
+        interim ? VOICE_LIMITS.endOfPhraseMs * 2 : VOICE_LIMITS.endOfPhraseMs,
+      );
     };
     r.onerror = (event) => {
       if (g !== this.gen) return;
       const fatal = FATAL[event.error];
       if (fatal) {
         this.release();
-        this.set({ state: "error", interim: "", note: fatal });
+        this.set({ state: "error", interim: "", ready: false, note: fatal });
       } else if (event.error === "network") {
         this.release();
-        this.set({ state: "paused", interim: "", note: "Voice needs an internet connection in this browser. Press Resume to try again, or type." });
+        this.set({ state: "paused", interim: "", ready: false, note: "Voice needs an internet connection in this browser. Press Resume to try again, or type." });
       }
       // "no-speech" and "aborted" end the session; onend decides what happens next.
     };
     r.onend = () => {
       if (g !== this.gen || this.snap.state !== "listening") return;
       this.rec = null;
+      if (this.pending) {
+        this.phrase(this.pending); // the browser ended the session right after the last words
+        return;
+      }
       if (!this.heardThisSession) this.silentSessions += 1;
       const now = this.deps.now();
       this.restarts = [...this.restarts.filter((t) => now - t < VOICE_LIMITS.restartWindowMs), now];
       if (this.silentSessions >= VOICE_LIMITS.silentRestarts || now - this.lastPhraseAt >= VOICE_LIMITS.idleMs) {
-        this.set({ state: "paused", interim: "", note: "Paused because it was quiet. Press Resume to continue." });
+        this.set({ state: "paused", interim: "", ready: false, note: "Paused because it was quiet. Press Resume to continue." });
         return;
       }
       if (this.restarts.length > VOICE_LIMITS.restartBurst) {
-        this.set({ state: "paused", interim: "", note: "Voice kept stopping in this browser. Press Resume, or type instead." });
+        this.set({ state: "paused", interim: "", ready: false, note: "Voice kept stopping in this browser. Press Resume, or type instead." });
         return;
       }
       this.later(() => this.listen(), VOICE_LIMITS.restartDelayMs);
     };
     this.rec = r;
-    this.set({ state: "listening", interim: "", note: null });
+    this.set({ state: "listening", interim: "", note: null, ready: false });
     try {
       r.start();
     } catch {
       this.release();
-      this.set({ state: "error", note: "The microphone could not start. Press Resume or type instead." });
+      this.set({ state: "error", ready: false, note: "The microphone could not start. Press Resume or type instead." });
     }
   }
 
-  private phrase(text: string) {
+  private phrase(heard: Heard) {
+    const text = heard.text.trim();
     if (!text) return;
     const now = this.deps.now();
     if (text === this.lastFinal.text && now - this.lastFinal.at < VOICE_LIMITS.duplicateWindowMs) return;
@@ -274,10 +352,8 @@ export class VoiceConversation {
     // Close the mic before anything is sent or spoken.
     this.release();
     const turn = this.gen;
-    this.set({ state: "understanding", interim: "", note: null });
-    this.deps.onHeard?.(text);
-    this
-      .sendFn(text)
+    this.set({ state: "understanding", interim: "", note: null, ready: false });
+    this.sendFn({ ...heard, text })
       .catch(() => ({ say: "Could not reach FastQue. Nothing was changed." }) as TurnOutcome)
       .then((out) => {
         if (turn !== this.gen) return; // stopped, paused or restarted meanwhile
@@ -285,11 +361,11 @@ export class VoiceConversation {
           this.end("The assistant is not available for this account.");
           return;
         }
-        this.reply(out);
+        void this.reply(out);
       });
   }
 
-  private reply(out: TurnOutcome) {
+  private async reply(out: TurnOutcome) {
     const next = () =>
       out.hold
         ? this.pause("Waiting for your decision on screen. Press Resume to keep talking.")
@@ -300,16 +376,16 @@ export class VoiceConversation {
     }
     const g = this.gen;
     this.set({ state: "replying" });
-    let done = false;
-    const finished = () => {
-      if (done || g !== this.gen) return;
-      done = true;
-      next();
-    };
-    // Some browsers never fire `end` (autoplay rules, a missing voice): a watchdog moves on.
-    this.later(finished, Math.min(30_000, 4_000 + out.say.length * 90));
-    const ok = this.deps.speaker.speak(out.say, this.lang, finished);
-    if (!ok) finished();
+    let result: SpeakResult;
+    try {
+      result = await this.deps.speaker.speak(out.say, this.lang);
+    } catch {
+      result = { ok: false, reason: "engine-error" };
+    }
+    if (g !== this.gen) return; // interrupted, ended or paused while speaking
+    if (result.ok) this.set({ speechError: null });
+    else if (result.reason !== "interrupted") this.set({ speechError: SPEAK_FAILURE_TEXT[result.reason ?? "engine-error"] });
+    next();
   }
 }
 
@@ -339,23 +415,3 @@ export function voiceSupport(): VoiceSupport {
   if (ios) return "push-to-talk";
   return "speechSynthesis" in window ? "hands-free" : "no-speech";
 }
-
-export const browserSpeaker: SpeakerLike = {
-  speak(text, lang, onDone) {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) return false;
-    try {
-      window.speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(text);
-      u.lang = lang;
-      u.onend = () => onDone();
-      u.onerror = () => onDone();
-      window.speechSynthesis.speak(u);
-      return true;
-    } catch {
-      return false;
-    }
-  },
-  cancel() {
-    if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
-  },
-};
