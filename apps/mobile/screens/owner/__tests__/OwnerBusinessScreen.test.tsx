@@ -2,11 +2,13 @@ import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import OwnerBusinessScreen from '../OwnerBusinessScreen';
 import { apiFetch } from '../../../lib/api';
+import type { OfferDto } from '@barbercue/shared';
 
 jest.mock('../../../lib/api', () => ({
   apiFetch: jest.fn(),
   ApiError: class ApiError extends Error {},
 }));
+jest.mock('expo-crypto', () => ({ randomUUID: () => '00000000-0000-4000-8000-000000000000' }));
 let mockSelectedSalonId = 'salon-owned-by-session';
 jest.mock('../../../lib/salon-context', () => ({
   useSalon: () => ({ selectedSalonId: mockSelectedSalonId, selectedSalon: { id: mockSelectedSalonId, name: 'Synthetic Salon' } }),
@@ -30,6 +32,8 @@ jest.mock('../../../components/ui', () => {
 });
 
 const fetchMock = apiFetch as jest.Mock;
+let mockOfferItems: OfferDto[] = [];
+const savedOffer: OfferDto = { id: '00000000-0000-4000-8000-000000000001', salonId: 'salon-owned-by-session', kind: 'OFFER', status: 'PAUSED', title: 'Existing deal', description: null, discountType: 'PERCENT', discountValue: 10, currency: 'INR', audience: 'ALL', inactiveDays: null, validFrom: '2026-11-05T03:30:00.000Z', validTo: '2026-12-05T03:30:00.000Z', maxRedemptions: null, perCustomerLimit: 1, serviceIds: [], redemptionCount: 0, createdAt: '2026-11-01T00:00:00.000Z', updatedAt: '2026-11-01T00:00:00.000Z' };
 
 const analytics = { currency: 'INR', appointmentsBooked: 4, completedCount: 2, estimatedServiceValue: 900, serviceValue: [], barberValue: [] };
 const revenue = {
@@ -46,7 +50,10 @@ function defaultApiResponse(path: string, options?: { method?: string; body?: st
   if (path.endsWith('/timezone')) return Promise.resolve({ id: 'salon-owned-by-session', timezone: 'Asia/Kolkata', countryCode: 'IN', timezoneAutoDetected: true, timezoneManuallyOverridden: false, suggestion: null });
   if (path.includes('/payments?')) return Promise.resolve({ from: '2026-01-01', to: '2026-01-01', currency: 'INR', items: [], nextCursor: null, totals: { received: 0, refunded: 0, net: 0, count: 0 }, byMethod: [] });
   if (path.includes('/capabilities')) return Promise.resolve({ features: { offers: { status: 'ENABLED' } } });
-  if (path.includes('/offers?')) return Promise.resolve({ items: [] });
+  if (path.endsWith('/timezone')) return Promise.resolve({ id: 'salon-owned-by-session', timezone: 'Asia/Kolkata', countryCode: 'IN', timezoneAutoDetected: true, timezoneManuallyOverridden: false, suggestion: null });
+  if (path.endsWith('/services')) return Promise.resolve([{ id: '00000000-0000-4000-8000-000000000002', name: 'Haircut', isActive: true }]);
+  if (path.endsWith('/offers/preview')) return Promise.resolve({ offerId: null, currency: 'INR', eligibleByRule: null, eligibilityRule: 'ALL', lines: [{ serviceId: '00000000-0000-4000-8000-000000000002', serviceName: 'Haircut', basePrice: 300, discount: 45, finalPrice: 255, currency: 'INR' }], subtotal: 300, discount: 45, finalTotal: 255 });
+  if (path.includes('/offers?')) return Promise.resolve({ items: mockOfferItems, nextCursor: null });
   if (path.includes('/reviews?')) return Promise.resolve({ items: [{ id: 'review-1', rating: 5, serviceName: 'Haircut', createdAt: '2026-10-01T00:00:00.000Z', customerPhone: null, customerEmail: null, comment: 'Synthetic review', ownerResponse: null }] });
   if (options?.method === 'PUT' && path.includes('/response')) return Promise.resolve({});
   return Promise.resolve({ items: [] });
@@ -56,6 +63,7 @@ describe('OwnerBusinessScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockSelectedSalonId = 'salon-owned-by-session';
+    mockOfferItems = [];
     fetchMock.mockImplementation(defaultApiResponse);
   });
 
@@ -136,4 +144,44 @@ describe('OwnerBusinessScreen', () => {
     await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy());
     expect(screen.queryByText(/₹900\.00/)).toBeNull();
   }, 15000);
+
+  it('creates a server-validated draft and checks prices through the owner API', async () => {
+    await render(<OwnerBusinessScreen />);
+    await waitFor(() => expect(screen.getAllByText('Recorded collections').length).toBeGreaterThan(0));
+    await act(async () => { fireEvent.press(screen.getByRole('button', { name: 'Offers' })); });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Create an offer' })).toBeTruthy());
+    await act(async () => { fireEvent.press(screen.getByRole('button', { name: 'Create an offer' })); });
+    await act(async () => { fireEvent.changeText(screen.getByLabelText('Offer name'), 'Autumn deal'); });
+    await act(async () => { fireEvent.changeText(screen.getByLabelText('Discount value'), '15'); });
+    await act(async () => { fireEvent.press(screen.getByRole('button', { name: 'Check prices' })); });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      'dashboard/salons/salon-owned-by-session/offers/preview',
+      expect.objectContaining({ method: 'POST', body: expect.stringContaining('"title":"Autumn deal"') }),
+    ));
+    expect(screen.getAllByText(/255/).length).toBeGreaterThan(0);
+    await act(async () => { fireEvent.press(screen.getByRole('button', { name: 'Save as draft' })); });
+    await waitFor(() => {
+      const call = fetchMock.mock.calls.find(([path, options]) => path === 'dashboard/salons/salon-owned-by-session/offers' && options?.method === 'POST');
+      expect(call).toBeTruthy();
+      expect(JSON.parse(call[1].body)).toMatchObject({ title: 'Autumn deal', discountValue: 15, audience: 'ALL' });
+      expect(call[1].headers['Idempotency-Key']).toMatch(/^[0-9a-f-]{36}$/i);
+    });
+  }, 15000);
+
+  it('edits a paused offer with a minimal patch and does not expose editing for active offers', async () => {
+    mockOfferItems = [savedOffer];
+    await render(<OwnerBusinessScreen />);
+    await waitFor(() => expect(screen.getAllByText('Recorded collections').length).toBeGreaterThan(0));
+    await act(async () => { fireEvent.press(screen.getByRole('button', { name: 'Offers' })); });
+    await waitFor(() => expect(screen.getByText('Existing deal')).toBeTruthy());
+    await act(async () => { fireEvent.press(screen.getByRole('button', { name: 'Edit' })); });
+    await act(async () => { fireEvent.changeText(screen.getByLabelText('Offer name'), 'Revised deal'); });
+    await act(async () => { fireEvent.press(screen.getByRole('button', { name: 'Save changes' })); });
+    await waitFor(() => {
+      const call = fetchMock.mock.calls.find(([path, options]) => path === 'dashboard/salons/salon-owned-by-session/offers/' + savedOffer.id && options?.method === 'PATCH');
+      expect(call).toBeTruthy();
+      expect(JSON.parse(call[1].body)).toEqual({ title: 'Revised deal' });
+    });
+  }, 15000);
+
 });
