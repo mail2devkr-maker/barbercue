@@ -37,9 +37,9 @@ describe('owner service taxonomy controls', () => {
     const view = await render(<AddServiceForm salonId="salon-owned-by-session" categories={categories} onAdded={onAdded} />);
     await fireEvent.press(view.getByRole('button', { name: 'Add service' }));
     await waitFor(() => expect(view.getByPlaceholderText('Service name')).toBeTruthy());
-    fireEvent.changeText(view.getByPlaceholderText('Service name'), 'Fade');
-    fireEvent.changeText(view.getByPlaceholderText('Price'), '250');
-    fireEvent.changeText(view.getByPlaceholderText('Minutes'), '30');
+    await fireEvent.changeText(view.getByPlaceholderText('Service name'), 'Fade');
+    await fireEvent.changeText(view.getByPlaceholderText('Price'), '250');
+    await fireEvent.changeText(view.getByPlaceholderText('Minutes'), '30');
     await fireEvent.press(view.getByRole('button', { name: 'Hair' }));
     await waitFor(() => expect(view.getByRole('button', { name: 'Cut' })).toBeTruthy());
     await fireEvent.press(view.getByRole('button', { name: 'Add' }));
