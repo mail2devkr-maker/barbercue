@@ -1,9 +1,9 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 const plugin = require('../../plugins/withAndroidLargeScreenOrientation');
 const appJson = require('../../app.json');
-// npm workspace test/typecheck commands run with apps/mobile as the current directory.
-const mobileRoot = require('node:path').resolve('.');
+const mobileRoot = require('node:path').dirname(require.resolve('../../app.json'));
 const resolvedExpoConfig = require('@expo/config').getConfig(mobileRoot, { skipSDKVersionRequirement: true }).exp;
+const { resolveRuntimeVersionAsync } = require('expo-updates/utils/build/resolveRuntimeVersionAsync');
 
 function effectiveAppVersion(platform: 'ios' | 'android'): string {
   return resolvedExpoConfig[platform]?.version ?? resolvedExpoConfig.version;
@@ -121,6 +121,18 @@ describe('app.json Android release configuration', () => {
     expect(effectiveRuntimeVersion('android')).toBe('1.0.7');
     expect(effectiveRuntimeVersion('ios')).toBe('1.0.6');
   });
+
+  it('matches the Expo Updates resolver for each platform runtime', async () => {
+    const options = { workflowOverride: 'managed' as const };
+    const fingerprintOptions = { silent: true };
+    const [android, ios] = await Promise.all([
+      resolveRuntimeVersionAsync(mobileRoot, 'android', fingerprintOptions, options),
+      resolveRuntimeVersionAsync(mobileRoot, 'ios', fingerprintOptions, options),
+    ]);
+
+    expect(android.runtimeVersion).toBe('1.0.7');
+    expect(ios.runtimeVersion).toBe('1.0.6');
+  });
 });
 
 describe('Android R8 optimization plugin', () => {
@@ -141,3 +153,4 @@ describe('Android R8 optimization plugin', () => {
     expect(() => optimization.useOptimizingProguardFile('proguardFiles "proguard-rules.pro"')).toThrow(/could not find/);
   });
 });
+
