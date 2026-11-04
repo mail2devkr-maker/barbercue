@@ -55,7 +55,7 @@ const CUSTOMER_FEATURES = [
 const OWNER_FEATURES = [
   {
     title: "Fast self-service onboarding",
-    body: "Register a shop, start with service packs, prefilled opening hours and ten default chairs, then add only the staff and details you actually need.",
+    body: "Register a shop, add your own services with your own prices, start with prefilled opening hours and ten default chairs, then add only the staff and details you actually need.",
   },
   {
     title: "Services & availability",
