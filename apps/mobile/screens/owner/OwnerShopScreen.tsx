@@ -9,6 +9,7 @@ import {
   type PhotoDto,
   type SalonChairDto,
   type SalonPaymentQrDto,
+  type SalonServiceCategoryDto,
   type SalonStaffDto,
   type ServiceDto,
 } from '@barbercue/shared';
@@ -40,6 +41,7 @@ export default function OwnerShopScreen() {
   const { selectedSalonId, selectedSalon } = useSalon();
   const { t, language } = useLanguage();
   const [services, setServices] = useState<ServiceDto[]>([]);
+  const [serviceCategories, setServiceCategories] = useState<SalonServiceCategoryDto[]>([]);
   const [chairs, setChairs] = useState<SalonChairDto[]>([]);
   const [staff, setStaff] = useState<SalonStaffDto[]>([]);
   const [hours, setHours] = useState<OperatingHoursDto[]>([]);
@@ -61,9 +63,11 @@ export default function OwnerShopScreen() {
       apiFetch<OperatingHoursDto[]>(scope(selectedSalonId, DASHBOARD_PATHS.operatingHours)),
       apiFetch<PhotoDto[]>(scope(selectedSalonId, DASHBOARD_PATHS.photos)),
       apiFetch<SalonPaymentQrDto>(scope(selectedSalonId, DASHBOARD_PATHS.paymentQr)),
+      apiFetch<SalonServiceCategoryDto[]>(scope(selectedSalonId, 'service-categories')).catch((): SalonServiceCategoryDto[] => []),
     ])
-      .then(([s, c, st, h, p, qr]) => {
+      .then(([s, c, st, h, p, qr, taxonomy]) => {
         setServices(s);
+        setServiceCategories(Array.isArray(taxonomy) ? taxonomy : []);
         setChairs(c);
         setStaff(st);
         setHours(h);
@@ -128,10 +132,10 @@ export default function OwnerShopScreen() {
         {services.length === 0 ? (
           <Text style={sectionStyles.emptyText}>{t.noServicesYet}</Text>
         ) : (
-          services.map((s) => <ServiceRow key={s.id} salonId={selectedSalonId} service={s} onChanged={() => void load()} />)
+          services.map((s) => <ServiceRow key={s.id} salonId={selectedSalonId} service={s} categories={serviceCategories} onChanged={() => void load()} />)
         )}
       </Card>
-      <AddServiceForm salonId={selectedSalonId} onAdded={() => void load()} />
+      <AddServiceForm salonId={selectedSalonId} categories={serviceCategories} onAdded={() => void load()} />
 
       <Text style={sectionStyles.sectionTitle}>{t.chairsLabel}</Text>
       <Card style={sectionStyles.card}>
@@ -186,3 +190,4 @@ const styles = StyleSheet.create({
   screenContent: { padding: space[5] },
   skeleton: { height: 100, borderRadius: radius.lg, marginBottom: space[3] },
 });
+
