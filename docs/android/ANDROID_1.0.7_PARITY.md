@@ -1,6 +1,6 @@
 # FastQue Android 1.0.7 parity audit
 
-Audit baseline: production website source at master `f4f15e986efb98ac0cf716ccd9e4683097f0c755`; mobile source is Draft PR #364 stacked on the certified Employee Login PR #361 (`2824568331cf4ae6631d26f387b9971779da4db8`). This is a source/API audit. It is not authenticated production browser acceptance or physical-device certification.
+Audit baseline: production web/backend source at master `94ef6c1cfb26da9f1535d44a94284d67e3234548` (R7 Inventory release); Android integration PR #367 is at `5906880217258515bed430e5ee58455a62d92e85` and carries Draft PR #364 plus Employee Login PR #361. This is a source/API audit. It is not authenticated production browser acceptance or physical-device certification.
 
 Statuses: **SOURCE** means a native path and current API usage exist; **PARTIAL** means part of the web workflow is present but a material function remains; **GAP** means no equivalent native workflow was found; **PHYSICAL_REQUIRED** means source is present but real-device behavior is not yet verified; **WEB_ONLY** means privileged scope is intentionally excluded pending an explicit mobile authorization.
 
@@ -34,7 +34,7 @@ Statuses: **SOURCE** means a native path and current API usage exist; **PARTIAL*
 | Shop profile and notifications | PARTIAL | Native profile fields and explicit time-zone confirmation are now implemented; compare remaining owner preferences and verify on device |
 | Payment QR | SOURCE | Existing `PaymentQrSection` manages shop payment QR; it is not a printable public shop poster |
 | Public shop QR poster preview/download with long names | GAP | No equivalent poster design/print/download workflow found |
-| Inventory | BLOCKED / PARTIAL | Backend controller exists, but Claude's R7 inventory release is not production-certified; keep UI disabled until capability and production API availability are verified |
+| Inventory | GAP / PARTIAL | R7 backend/schema is on current production master `94ef6c1c` and Railway backend/web report SUCCESS; this Android candidate still has no native inventory management screen. No native inventory workflow is claimed; any UI must be added and authenticated against the released R7 API before parity can advance |
 | Offers/promotions | PARTIAL | Capability-gated center supports existing offer publish/pause, creating Draft offers, backend price preview and editing Draft/Paused offers; writes use idempotency keys |
 
 ## Customer
@@ -84,3 +84,13 @@ Therefore this matrix does **not** certify 100% website parity or a Play-ready p
 - ADB physical-device check: blocked because the local ADB daemon could not start (`could not read ok from ADB Server`). No device was installed, modified, or reset by this check.
 - EAS remote versionCode, production signing and Play account access remain unverified; the config uses the last verified local seed `17` with EAS remote auto-increment, but the next value is not claimed here.
 
+
+
+## Current-master integration certification — PR #367
+
+- Exact source: PR #367 head `5906880217258515bed430e5ee58455a62d92e85`, parented on production master `94ef6c1cfb26da9f1535d44a94284d67e3234548`.
+- Owner Operations Certification [run 41807653128](https://github.com/mail2devkr-maker/barbercue/actions/runs/41807653128), Nitesh Admin + Discovery [run 41807653124](https://github.com/mail2devkr-maker/barbercue/actions/runs/41807653124), and Salon Location Verification [run 41807653170](https://github.com/mail2devkr-maker/barbercue/actions/runs/41807653170) all succeeded on this exact head.
+- Android typecheck, 45 Jest suites / 301 tests, effective Android/iOS release config checks, and clean-runner Expo Android JS export passed. Native Gradle/AAB and device behavior are not covered by this export.
+- Backend baseline comparator: unit 1,754/1,757 passed, 3 known failures and 0 new; E2E 193/212 passed, 18 known failures and 0 new, with 2 suites not run. The comparator references the stored baseline recorded on master `f2f2b2c6f9d979898f2d85e27ab412928c3ef03c`.
+- Railway read-only status reports web and backend deployments SUCCESS on master `94ef6c1c`. This does not prove authenticated owner inventory operations from Android.
+- Local EAS host lookup currently returns `ENOTFOUND` for `api.expo.dev`; no cloud build, AAB, Play upload, physical-device test, or rollout is claimed.
