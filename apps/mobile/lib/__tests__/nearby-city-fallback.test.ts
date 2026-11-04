@@ -1,11 +1,17 @@
 /// <reference types="jest" />
-jest.mock('expo-location', () => ({ reverseGeocodeAsync: jest.fn() }));
+jest.mock('expo-location', () => ({
+  reverseGeocodeAsync: jest.fn(),
+  requestForegroundPermissionsAsync: jest.fn(),
+  getCurrentPositionAsync: jest.fn(),
+  getLastKnownPositionAsync: jest.fn(),
+  Accuracy: { Balanced: 3 },
+}));
 jest.mock('../api', () => ({ apiFetch: jest.fn() }));
 
 import * as Location from 'expo-location';
 import { apiFetch } from '../api';
 import {
-  findCityForDeviceLocation, buildCityFallbackQuery,
+  findCityForDeviceLocation, buildCityFallbackQuery, getSearchGpsCoordinates,
   appendCityMatchesToNearby, __resetCityFallbackCacheForTests,
 } from '../nearby-city-fallback';
 import type { CityDto, SalonListItemDto } from '@barbercue/shared';
@@ -69,3 +75,26 @@ test('appends unique city shops after GPS matches with real or unknown distance'
   expect(result[2].distanceKm).toBeGreaterThan(0);
   expect(result[0]).toBe(located[0]);
 });
+
+test('a fresh GPS fix is used for strict radius instead of any stale cached position', async () => {
+  (Location.requestForegroundPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'granted' });
+  (Location.getCurrentPositionAsync as jest.Mock).mockResolvedValue({ coords: { latitude: 25.69, longitude: 85.22 } });
+  await expect(getSearchGpsCoordinates(false)).resolves.toEqual({ kind: 'ok', coords: { lat: 25.69, lng: 85.22 } });
+  expect(Location.getLastKnownPositionAsync).not.toHaveBeenCalled();
+});
+
+test('no hard radius may use a recent/accurate cached fix if GPS provider fails', async () => {
+  (Location.requestForegroundPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'granted' });
+  (Location.getCurrentPositionAsync as jest.Mock).mockRejectedValue(new Error('GPS provider unavailable'));
+  (Location.getLastKnownPositionAsync as jest.Mock).mockResolvedValue({ coords: { latitude: 25.69, longitude: 85.22 } });
+  await expect(getSearchGpsCoordinates(true)).resolves.toEqual({ kind: 'ok', coords: { lat: 25.69, lng: 85.22 } });
+  expect(Location.getLastKnownPositionAsync).toHaveBeenCalledWith({ maxAge: 120000, requiredAccuracy: 1000 });
+  await expect(getSearchGpsCoordinates(false)).resolves.toEqual({ kind: 'unavailable' });
+});
+
+test('GPS permission denial never touches the location provider', async () => {
+  (Location.requestForegroundPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'denied' });
+  await expect(getSearchGpsCoordinates(true)).resolves.toEqual({ kind: 'denied' });
+  expect(Location.getCurrentPositionAsync).not.toHaveBeenCalled();
+});
+
