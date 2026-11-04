@@ -4,6 +4,7 @@ import type { NavigatorScreenParams } from '@react-navigation/native';
 import RoleSelectScreen from '../screens/RoleSelectScreen';
 import PhoneOtpLoginScreen from '../screens/PhoneOtpLoginScreen';
 import OwnerStaffLoginScreen from '../screens/OwnerStaffLoginScreen';
+import EmployeeLoginScreen from '../screens/EmployeeLoginScreen';
 import OwnerRegisterScreen from '../screens/OwnerRegisterScreen';
 import OwnerStaffPasswordRecoveryScreen from '../screens/OwnerStaffPasswordRecoveryScreen';
 import GuestSearchStack from './GuestSearchStack';
@@ -18,6 +19,7 @@ export type AuthStackParamList = {
   RoleSelect: undefined;
   CustomerLogin: undefined;
   OwnerStaffLogin: { role: 'OWNER' | 'STAFF' };
+  EmployeeLogin: undefined;
   OwnerRegister: undefined;
   PasswordRecovery: { audience: 'owner' | 'staff' };
   // Issue 2 (mobile launch mission) — browse-first, auth-last. See GuestSearchStack's own comment.
@@ -56,6 +58,7 @@ export default function AuthStack() {
       <Stack.Screen name="RoleSelect" component={RoleSelectScreen} options={{ headerShown: false }} />
       <Stack.Screen name="CustomerLogin" component={PhoneOtpLoginScreen} options={{ headerShown: false }} />
       <Stack.Screen name="OwnerStaffLogin" component={OwnerStaffLoginScreen} options={{ title: t.signInTitle }} />
+      <Stack.Screen name="EmployeeLogin" component={EmployeeLoginScreen} options={{ title: t.employeeLoginTitle }} />
       <Stack.Screen name="OwnerRegister" component={OwnerRegisterScreen} options={{ title: "Create your account" }} />
       <Stack.Screen name="PasswordRecovery" component={OwnerStaffPasswordRecoveryScreen} options={{ title: t.passwordRecoveryTitle }} />
       <Stack.Screen name="GuestBrowse" component={GuestSearchStack} options={{ headerShown: false }} />
