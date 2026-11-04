@@ -21,6 +21,9 @@ export const ASSISTANT_LIMITS = {
   maxAudioSeconds: 30,
 } as const;
 
+/** Which screen family the assistant is opened from; it limits which phrases apply. */
+export type AssistantSurface = "shop" | "customer" | "admin" | "employee";
+
 export const assistantTurnSchema = z.object({
   text: z.string().trim().min(1).max(ASSISTANT_LIMITS.maxTextLength),
   // The screen the user is on. Only a hint: access is re-checked against the session for every action.
@@ -29,7 +32,7 @@ export const assistantTurnSchema = z.object({
   inputMode: z.enum(["text", "voice"]).default("text"),
   // Which screen the drawer is on. Only picks between same-worded intents ("cancel my
   // appointment" vs a shop cancelling one); it never grants anything.
-  surface: z.enum(["shop", "customer", "admin"]).default("shop"),
+  surface: z.enum(["shop", "customer", "admin", "employee"]).default("shop"),
 });
 export type AssistantTurnInput = z.infer<typeof assistantTurnSchema>;
 
@@ -112,6 +115,11 @@ export const AssistantActionId = {
   SALON_PROFILE_SET: "salon.setProfile",
   REVIEW_WRITE: "me.writeReview",
   LANGUAGE_SET: "me.language",
+  // batch 6: a field employee's own CRM, read-only (EMPLOYEE-audience session)
+  EMPLOYEE_DASHBOARD: "employee.dashboard",
+  EMPLOYEE_LEADS: "employee.leads",
+  EMPLOYEE_FOLLOW_UPS: "employee.followUps",
+  EMPLOYEE_VISITS: "employee.visits",
 } as const;
 export type AssistantActionId = (typeof AssistantActionId)[keyof typeof AssistantActionId];
 

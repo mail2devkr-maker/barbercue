@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ASSISTANT_PATHS, type AssistantCapabilitiesDto, type AssistantTurnDto } from "@barbercue/shared";
+import { ASSISTANT_PATHS, type AssistantCapabilitiesDto, type AssistantSurface, type AssistantTurnDto } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../lib/api";
 import { announceAssistantChange } from "../../lib/assistant-events";
 import { speak, useSpeechInput, type SpeechLang } from "../../lib/use-speech";
@@ -57,13 +57,14 @@ function MicIcon() {
 let seq = 0;
 const nextId = () => `a${(seq += 1)}`;
 
-const EXAMPLES: Record<"shop" | "customer" | "admin", string[]> = {
+const EXAMPLES: Record<AssistantSurface, string[]> = {
   shop: ["Aaj ki queue dikhao", "Haircut ₹200 se ₹150 karo", "Sunday band rakho", "Aaj ke appointments dikhao"],
   customer: ["Meri bookings dikhao", "Kal shaam 5 baje haircut book karo", "Meri queue ka status batao", "Haircut salon dhoondo"],
   admin: ["Platform overview dikhao", "Kitni shops open hain", "Notifications dikhao"],
+  employee: ["Mera kaam kitna hua", "Overdue follow ups dikhao", "Interested leads dikhao", "Meri visits dikhao"],
 };
 
-export function ActionAssistant({ salonId, surface = "shop" }: { salonId?: string; surface?: "shop" | "customer" | "admin" }) {
+export function ActionAssistant({ salonId, surface = "shop" }: { salonId?: string; surface?: AssistantSurface }) {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);

@@ -32,6 +32,7 @@ import type { AdminShopStatusService } from '../../admin/analytics/admin-shop-st
 import type { SalonProfileService } from '../../salon-setup/salon-profile.service';
 import type { ReviewsService } from '../../reviews/reviews.service';
 import type { AuthService } from '../../auth/auth.service';
+import type { EmployeeService } from '../../employee/employee.service';
 import type { SealedWrite } from '../assistant-confirmation';
 import { matchByName } from '../assistant-parser';
 
@@ -46,7 +47,8 @@ import { matchByName } from '../assistant-parser';
 /**
  * OWNER_OR_ADMIN / STAFF_OR_ADMIN: shop-level checks; OWNER_ONLY: the shop's actual owner (offers);
  * SELF: the signed-in customer's own records; PLATFORM: a platform role from an ADMIN-audience
- * (TOTP) session, exactly like RolesGuard; ANY_SIGNED_IN: anyone with a session.
+ * (TOTP) session, exactly like RolesGuard; EMPLOYEE: a field executive from an EMPLOYEE-audience
+ * session, exactly like RolesGuard; ANY_SIGNED_IN: anyone with a session.
  */
 export type Access =
   | 'OWNER_OR_ADMIN'
@@ -54,6 +56,7 @@ export type Access =
   | 'OWNER_ONLY'
   | 'SELF'
   | 'PLATFORM'
+  | 'EMPLOYEE'
   | 'ANY_SIGNED_IN';
 
 export interface ActionDef {
@@ -94,6 +97,7 @@ export interface Deps {
   salonProfile: SalonProfileService;
   customerReviews: ReviewsService;
   auth: AuthService;
+  employee: EmployeeService;
 }
 
 export interface PlanCtx {

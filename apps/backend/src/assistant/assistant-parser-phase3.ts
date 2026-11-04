@@ -151,7 +151,7 @@ function replyText(raw: string): string | null {
 export function parsePhase3(
   text: string,
   raw: string,
-  surface: 'shop' | 'customer' | 'admin',
+  surface: 'shop' | 'customer' | 'admin' | 'employee',
   year: number,
 ): Phase3Intent | null {
   if (NOTIFICATION.test(text)) {

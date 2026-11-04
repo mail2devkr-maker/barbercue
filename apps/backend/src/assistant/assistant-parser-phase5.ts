@@ -107,7 +107,7 @@ function afterColon(raw: string): string | null {
 export function parsePhase5(
   text: string,
   raw: string,
-  surface: 'shop' | 'customer' | 'admin',
+  surface: 'shop' | 'customer' | 'admin' | 'employee',
   year: number,
 ): Phase5Intent | null {
   if (LANGUAGE.test(text)) {

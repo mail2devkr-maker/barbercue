@@ -15,6 +15,7 @@ const PLATFORM_READERS: Role[] = [
   Role.PLATFORM_VIEWER,
 ];
 const EVERYONE: Role[] = Object.values(Role);
+const EMPLOYEES: Role[] = [Role.FIELD_EXECUTIVE];
 
 const read = (
   title: string,
@@ -436,5 +437,28 @@ export const ASSISTANT_ACTIONS: Record<AssistantActionId, ActionDef> = {
     EVERYONE,
     'ANY_SIGNED_IN',
     ['Meri language Hindi karo'],
+  ),
+  // ---- batch 6: a field employee's own CRM, read-only
+  [AssistantActionId.EMPLOYEE_DASHBOARD]: read(
+    'My field work summary',
+    EMPLOYEES,
+    'EMPLOYEE',
+    ['Mera kaam kitna hua', 'Mera dashboard dikhao'],
+  ),
+  [AssistantActionId.EMPLOYEE_LEADS]: read('My leads', EMPLOYEES, 'EMPLOYEE', [
+    'Mere leads dikhao',
+    'Interested leads dikhao',
+  ]),
+  [AssistantActionId.EMPLOYEE_FOLLOW_UPS]: read(
+    'My follow-ups',
+    EMPLOYEES,
+    'EMPLOYEE',
+    ['Aaj ke follow up dikhao', 'Overdue follow ups'],
+  ),
+  [AssistantActionId.EMPLOYEE_VISITS]: read(
+    'My visits',
+    EMPLOYEES,
+    'EMPLOYEE',
+    ['Meri visits dikhao'],
   ),
 };

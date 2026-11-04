@@ -70,6 +70,8 @@ import { CUSTOMER_HANDLERS } from './actions/customer.actions';
 import { BATCH3_HANDLERS } from './actions/batch3.actions';
 import { BATCH4_HANDLERS } from './actions/batch4.actions';
 import { BATCH5_HANDLERS } from './actions/batch5.actions';
+import { BATCH6_HANDLERS } from './actions/batch6.actions';
+import { EmployeeService } from '../employee/employee.service';
 import { SalonProfileService } from '../salon-setup/salon-profile.service';
 import { ReviewsService } from '../reviews/reviews.service';
 import { AuthService } from '../auth/auth.service';
@@ -85,6 +87,7 @@ export const ASSISTANT_HANDLERS: HandlerMap = {
   ...BATCH3_HANDLERS,
   ...BATCH4_HANDLERS,
   ...BATCH5_HANDLERS,
+  ...BATCH6_HANDLERS,
 };
 
 const UNRELEASED: Record<'inventory' | 'onboarding', string> = {
@@ -133,6 +136,7 @@ export class AssistantService {
     salonProfile: SalonProfileService,
     customerReviews: ReviewsService,
     auth: AuthService,
+    employee: EmployeeService,
     @Inject(ASSISTANT_INTERPRETER)
     private readonly interpreter: IntentInterpreter,
     @Inject(ASSISTANT_TRANSCRIBER) private readonly transcriber: Transcriber,
@@ -164,6 +168,7 @@ export class AssistantService {
       salonProfile,
       customerReviews,
       auth,
+      employee,
     };
   }
 
@@ -435,6 +440,12 @@ export class AssistantService {
     // ADMIN-audience (TOTP) session, exactly as RolesGuard requires for the admin routes.
     if (def.access === 'PLATFORM') {
       if (user.audience !== SessionAudience.ADMIN)
+        throw new ForbiddenException('audience');
+      return;
+    }
+    // A field employee's own CRM: the role must come from an EMPLOYEE-audience session.
+    if (def.access === 'EMPLOYEE') {
+      if (user.audience !== SessionAudience.EMPLOYEE)
         throw new ForbiddenException('audience');
       return;
     }

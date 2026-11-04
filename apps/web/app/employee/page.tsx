@@ -20,6 +20,7 @@ import { ApiError, apiFetch } from "../../lib/api";
 import { useAuth } from "../../lib/auth-context";
 import styles from "./employee.module.css";
 import { EmployeeShopDetails } from "./EmployeeShopDetails";
+import { ActionAssistant } from "../../components/assistant/ActionAssistant";
 
 type Tab = "dashboard" | "leads" | "visits" | "followups";
 
@@ -565,6 +566,8 @@ export default function EmployeeDashboardPage() {
           </>
         )}
       </div>
+      {/* Read-only questions about my own leads, follow-ups and visits (issue #362). */}
+      <ActionAssistant surface="employee" />
     </main>
   );
 }
