@@ -1,9 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ASSISTANT_PATHS,
+  AssistantActionId,
   type AssistantAccessDto,
   type AssistantCapabilitiesDto,
   type AssistantSurface,
@@ -13,12 +15,21 @@ import { apiFetch, ApiError } from "../../lib/api";
 import { announceAssistantChange } from "../../lib/assistant-events";
 import { speak, useSpeechInput, type SpeechLang } from "../../lib/use-speech";
 import { VOICE_NOTICE, readVoiceConsent, saveVoiceConsent, useLocalVoice, type VoiceProvider } from "../../lib/use-local-voice";
+import {
+  VoiceConversation,
+  browserSpeaker,
+  recognizerCtor,
+  voiceSupport,
+  type TurnOutcome,
+  type VoiceSnapshot,
+  type VoiceSupport,
+} from "../../lib/voice-conversation";
 import styles from "./action-assistant.module.css";
 
 type Entry =
   | { kind: "user"; id: string; text: string; voice: boolean }
   | { kind: "pending"; id: string; stage: string }
-  | { kind: "turn"; id: string; turn: AssistantTurnDto; settled: boolean };
+  | { kind: "turn"; id: string; turn: AssistantTurnDto; settled: boolean; voice: boolean };
 
 const STATUS_LABEL: Record<AssistantTurnDto["status"], string> = {
   DONE: "Done",
@@ -31,15 +42,25 @@ const STATUS_LABEL: Record<AssistantTurnDto["status"], string> = {
   FAILED: "Not applied",
 };
 
-// The visible pipeline for one request. Only the server's status moves it forward.
-function stagesFor(turn: AssistantTurnDto): Array<{ label: string; state: "done" | "current" | "todo" | "stopped" }> {
+const VOICE_LABEL: Record<VoiceSnapshot["state"], string> = {
+  off: "Voice off",
+  listening: "Listening…",
+  understanding: "Understanding…",
+  replying: "Speaking…",
+  paused: "Paused",
+  error: "Voice stopped",
+};
+
+// The visible pipeline for one request. Only the server's status moves it forward. The first step
+// says "Speech → text" for voice, so a recognition mistake is not shown as a FastQue misunderstanding.
+function stagesFor(turn: AssistantTurnDto, voice: boolean): Array<{ label: string; state: "done" | "current" | "todo" | "stopped" }> {
   const write = turn.action?.kind === "WRITE";
   const s = turn.status;
   const understood = turn.action !== null;
   const applied = s === "DONE" && write && !!turn.result?.changed?.length;
   const stopped = ["DENIED", "FAILED", "CANCELLED", "UNSUPPORTED", "UNAVAILABLE"].includes(s);
   const list: Array<{ label: string; state: "done" | "current" | "todo" | "stopped" }> = [
-    { label: "Heard", state: "done" },
+    { label: voice ? "Speech → text" : "Received", state: "done" },
     { label: "Understood", state: understood ? "done" : stopped ? "stopped" : "current" },
   ];
   if (write) {
@@ -64,11 +85,30 @@ let seq = 0;
 const nextId = () => `a${(seq += 1)}`;
 
 const EXAMPLES: Record<AssistantSurface, string[]> = {
-  shop: ["Aaj ki queue dikhao", "Haircut ₹200 se ₹150 karo", "Sunday band rakho", "Aaj ke appointments dikhao"],
-  customer: ["Meri bookings dikhao", "Kal shaam 5 baje haircut book karo", "Meri queue ka status batao", "Haircut salon dhoondo"],
-  admin: ["Platform overview dikhao", "Kitni shops open hain", "Notifications dikhao"],
-  employee: ["Mera kaam kitna hua", "Overdue follow ups dikhao", "Interested leads dikhao", "Meri visits dikhao"],
+  shop: ["What can you do?", "Kitni chairs free hain?", "Aaj queue mein kitne log hain?", "Bookings kholo", "Aaj ki kamai batao"],
+  customer: ["What can you do?", "Meri bookings dikhao", "Meri queue ka status batao", "Haircut salon dhoondo"],
+  admin: ["What can you do?", "Platform overview dikhao", "Kitni shops open hain"],
+  employee: ["What can you do?", "Mera kaam kitna hua", "Overdue follow ups dikhao", "Meri visits dikhao"],
 };
+
+/**
+ * Only routes the assistant may open on the main screen: a page of THIS shop (the server builds
+ * these from a fixed list for the authorized shop), or a known signed-in area for other surfaces.
+ * Anything else (another shop, an absolute URL, "//host") is never followed.
+ */
+export function safeRoute(path: string | undefined, salonId?: string): string | null {
+  if (!path || !path.startsWith("/") || path.startsWith("//") || /[\s\\]/.test(path)) return null;
+  const shop = path.match(/^\/dashboard\/salons\/([^/?#]+)(\/[a-z-]+)?$/);
+  if (shop) return salonId && shop[1] === salonId ? path : null;
+  if (/^\/(account|employee|search)(\/[a-z-]+)?$/.test(path) || /^\/dashboard\/admin(\/[a-z-]+){0,2}$/.test(path)) return path;
+  return null;
+}
+
+/** What the voice conversation says back for a turn. Short: the full answer stays on screen. */
+export function spokenReply(turn: AssistantTurnDto): string {
+  const m = turn.message.replace(/\s+/g, " ").trim();
+  return m.length > 320 ? `${m.slice(0, 300)}… The rest is on screen.` : m;
+}
 
 /**
  * Release gate (issue #362): the drawer is not rendered at all unless the server says the assistant is
@@ -89,57 +129,87 @@ export function ActionAssistant(props: { salonId?: string; surface?: AssistantSu
       live = false;
     };
   }, []);
-  return enabled ? <AssistantDrawer {...props} /> : null;
+  const revoke = useCallback(() => setEnabled(false), []);
+  // A new shop, screen or account remounts the drawer: it never inherits a conversation, an open
+  // confirmation or a navigation trail from the previous one (unmount ends the conversation).
+  return enabled ? <AssistantDrawer key={`${props.salonId ?? ""}:${props.surface ?? "shop"}`} {...props} onRevoked={revoke} /> : null;
 }
 
-function AssistantDrawer({ salonId, surface = "shop" }: { salonId?: string; surface?: AssistantSurface }) {
-  const [open, setOpen] = useState(false);
+type RunTurn = (said: string, viaVoice: boolean) => Promise<AssistantTurnDto | null>;
+
+/** What the conversation sends for each heard phrase, given the drawer's turn runner. */
+function sendVia(runTurn: RunTurn) {
+  return async (heard: string): Promise<TurnOutcome> => {
+    const turn = await runTurn(heard, true);
+    if (!turn) return { say: "", end: true };
+    return { say: spokenReply(turn), hold: turn.status === "NEEDS_CONFIRMATION" };
+  };
+}
+
+/** The hands-free conversation, wired to the browser's speech APIs. The turn runner is set later. */
+function createConversation(): VoiceConversation {
+  return new VoiceConversation({
+    createRecognizer: () => {
+      const C = recognizerCtor();
+      return C ? new C() : null;
+    },
+    speaker: browserSpeaker,
+    send: async () => ({ say: "", end: true }),
+    setTimer: (fn, ms) => setTimeout(fn, ms),
+    clearTimer: (h) => clearTimeout(h as ReturnType<typeof setTimeout>),
+    now: () => Date.now(),
+  });
+}
+
+type Mode = "closed" | "open" | "docked";
+type ConsentFor = { provider: VoiceProvider; then: "push" | "conversation" };
+
+function AssistantDrawer({ salonId, surface = "shop", onRevoked }: { salonId?: string; surface?: AssistantSurface; onRevoked: () => void }) {
+  const router = useRouter();
+  const [mode, setMode] = useState<Mode>("closed");
+  const open = mode === "open";
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [lang, setLang] = useState<SpeechLang>("hi-IN");
   const [readAloud, setReadAloud] = useState(false);
   const [log, setLog] = useState<Entry[]>([]);
-  // What this server offers for voice; the private (local) recognizer is preferred when available.
   const [voice, setVoice] = useState<AssistantCapabilitiesDto["voice"] | null>(null);
-  // A voice provider is used only after this person has read and accepted its privacy notice.
-  const [consentFor, setConsentFor] = useState<VoiceProvider | null>(null);
+  const [consentFor, setConsentFor] = useState<ConsentFor | null>(null);
+  // The drawer renders only on the client (after the access check), so the browser can be asked directly.
+  const [support] = useState<VoiceSupport>(() => voiceSupport());
   const endRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const fabRef = useRef<HTMLButtonElement>(null);
   const wasOpen = useRef(false);
+  const busyRef = useRef(false);
+  // Pages the assistant opened in this conversation: "go back" only returns along this trail.
+  const trail = useRef<string[]>([]);
 
-  // Keyboard and screen-reader users: focus goes into the message box when the drawer opens and
-  // back to the Assistant button when it closes, so nobody is left on a removed element.
   useEffect(() => {
     if (open) inputRef.current?.focus();
-    else if (wasOpen.current) fabRef.current?.focus();
+    else if (wasOpen.current && mode === "closed") fabRef.current?.focus();
     wasOpen.current = open;
-  }, [open]);
+  }, [open, mode]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView?.({ block: "end" });
   }, [log]);
 
-  // A new shop, screen or account never inherits an open confirmation from the previous one.
   useEffect(() => {
-    setLog([]);
-  }, [salonId, surface]);
-
-  useEffect(() => {
-    if (!open || voice) return;
+    if (mode === "closed" || voice) return;
     apiFetch<AssistantCapabilitiesDto>(`${ASSISTANT_PATHS.assistant}/${ASSISTANT_PATHS.capabilities}`)
       .then((caps) => setVoice(caps.voice))
       .catch(() => setVoice({ browser: true, local: false }));
-  }, [open, voice]);
+  }, [mode, voice]);
 
-  const settle = useCallback(
-    (pendingId: string, turn: AssistantTurnDto) => {
-      setLog((l) => l.map((e) => (e.id === pendingId ? { kind: "turn", id: pendingId, turn, settled: false } : e)));
-      if (turn.refresh?.length) announceAssistantChange(turn.refresh);
-      if (readAloud) speak(turn.message, lang);
-    },
-    [lang, readAloud],
+  // ---- hands-free conversation (browser speech recognition + speech output)
+  const [conversation] = useState(createConversation);
+  const voiceState = useSyncExternalStore(
+    (fn) => conversation.subscribe(fn),
+    () => conversation.snapshot,
+    () => conversation.snapshot,
   );
+  const inConversation = voiceState.state !== "off";
 
   const failTurn = (err: unknown): AssistantTurnDto => ({
     requestId: "local",
@@ -154,46 +224,110 @@ function AssistantDrawer({ salonId, surface = "shop" }: { salonId?: string; surf
     completedAt: new Date().toISOString(),
   });
 
-  const send = useCallback(
-    async (said: string, voice = false) => {
-      const value = said.trim();
-      if (!value || busy) return;
-      const pendingId = nextId();
-      setLog((l) => [...l, { kind: "user", id: nextId(), text: value, voice }, { kind: "pending", id: pendingId, stage: "Understanding…" }]);
-      setText("");
-      setBusy(true);
-      try {
-        const turn = await apiFetch<AssistantTurnDto>(`${ASSISTANT_PATHS.assistant}/${ASSISTANT_PATHS.turns}`, {
-          method: "POST",
-          body: JSON.stringify({ text: value, inputMode: voice ? "voice" : "text", surface, ...(salonId ? { salonId } : {}) }),
-        });
-        settle(pendingId, turn);
-      } catch (err) {
-        settle(pendingId, failTurn(err));
-      } finally {
-        setBusy(false);
+  /** Apply what a turn asks of the MAIN screen (navigation), and return the turn to show. */
+  const applyToScreen = useCallback(
+    (turn: AssistantTurnDto): AssistantTurnDto => {
+      if (turn.status !== "DONE") return turn;
+      if (turn.action?.id === AssistantActionId.NAVIGATE_BACK) {
+        if (trail.current.length === 0)
+          return { ...turn, message: "I haven't opened another page in this conversation, so there is nowhere to go back to." };
+        trail.current.pop();
+        router.back();
+        setMode((m) => (m === "open" ? "docked" : m));
+        return turn;
       }
+      if (turn.action?.id === AssistantActionId.NAVIGATE) {
+        const to = safeRoute(turn.navigateTo, salonId);
+        if (!to) return { ...turn, message: "I can't open that page from here.", navigateTo: undefined };
+        trail.current.push(to);
+        router.push(to);
+        // The page opens on the MAIN screen; the assistant shrinks to a small bar beside it.
+        setMode((m) => (m === "open" ? "docked" : m));
+      }
+      return turn;
     },
-    [busy, salonId, settle, surface],
+    [router, salonId],
+  );
+
+  /** One turn to the server. Shared by typing, push-to-talk and the voice conversation. */
+  const runTurn = useCallback(
+    async (said: string, viaVoice: boolean): Promise<AssistantTurnDto | null> => {
+      const value = said.trim();
+      if (!value || busyRef.current) return null;
+      busyRef.current = true;
+      const pendingId = nextId();
+      setLog((l) => [...l, { kind: "user", id: nextId(), text: value, voice: viaVoice }, { kind: "pending", id: pendingId, stage: "Understanding…" }]);
+      setBusy(true);
+      let turn: AssistantTurnDto;
+      let revoked = false;
+      try {
+        turn = await apiFetch<AssistantTurnDto>(`${ASSISTANT_PATHS.assistant}/${ASSISTANT_PATHS.turns}`, {
+          method: "POST",
+          body: JSON.stringify({ text: value, inputMode: viaVoice ? "voice" : "text", surface, ...(salonId ? { salonId } : {}) }),
+        });
+        turn = applyToScreen(turn);
+      } catch (err) {
+        // 404: the assistant was switched off for this account (cohort removed); 401: signed out.
+        revoked = err instanceof ApiError && (err.status === 404 || err.status === 401);
+        turn = failTurn(err);
+      }
+      setLog((l) => l.map((e) => (e.id === pendingId ? { kind: "turn", id: pendingId, turn, settled: false, voice: viaVoice } : e)));
+      if (turn.refresh?.length) announceAssistantChange(turn.refresh);
+      busyRef.current = false;
+      setBusy(false);
+      if (revoked) {
+        conversation.end("The assistant is not available for this account.");
+        onRevoked();
+        return null;
+      }
+      return turn;
+    },
+    [applyToScreen, conversation, onRevoked, salonId, surface],
+  );
+  useEffect(() => conversation.setSend(sendVia(runTurn)), [conversation, runTurn]);
+
+  useEffect(() => conversation.setLang(lang), [conversation, lang]);
+  // Never leave a microphone running: unmount (sign-out, leaving the shop) releases it.
+  useEffect(() => () => conversation.end(), [conversation]);
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const onVis = () => {
+      if (document.visibilityState === "hidden") conversation.pause("Paused while FastQue was in the background. Press Resume to continue.");
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, [conversation]);
+
+  // ---- push-to-talk (one phrase per tap) and typing: the fallbacks
+  const send = useCallback(
+    async (said: string, viaVoice = false) => {
+      setText("");
+      const turn = await runTurn(said, viaVoice);
+      if (turn && readAloud && !inConversation) speak(turn.message, lang);
+    },
+    [runTurn, readAloud, lang, inConversation],
   );
 
   async function decide(entryId: string, token: string, decision: "confirm" | "cancel") {
-    if (busy) return;
+    if (busyRef.current) return;
+    busyRef.current = true;
     setLog((l) => l.map((e) => (e.id === entryId && e.kind === "turn" ? { ...e, settled: true } : e)));
     const pendingId = nextId();
     setLog((l) => [...l, { kind: "pending", id: pendingId, stage: decision === "confirm" ? "Saving in FastQue…" : "Cancelling…" }]);
     setBusy(true);
+    let turn: AssistantTurnDto;
     try {
-      const turn = await apiFetch<AssistantTurnDto>(`${ASSISTANT_PATHS.assistant}/${ASSISTANT_PATHS.confirmations}`, {
+      turn = await apiFetch<AssistantTurnDto>(`${ASSISTANT_PATHS.assistant}/${ASSISTANT_PATHS.confirmations}`, {
         method: "POST",
         body: JSON.stringify({ token, decision }),
       });
-      settle(pendingId, turn);
     } catch (err) {
-      settle(pendingId, failTurn(err));
-    } finally {
-      setBusy(false);
+      turn = failTurn(err);
     }
+    setLog((l) => l.map((e) => (e.id === pendingId ? { kind: "turn", id: pendingId, turn, settled: false, voice: false } : e)));
+    if (turn.refresh?.length) announceAssistantChange(turn.refresh);
+    busyRef.current = false;
+    setBusy(false);
   }
 
   const speech = useSpeechInput(lang, (heard) => void send(heard, true));
@@ -201,50 +335,118 @@ function AssistantDrawer({ salonId, surface = "shop" }: { salonId?: string; surf
   const provider: VoiceProvider | null = voice?.local ? "local" : speech.supported ? "browser" : null;
   const listening = provider === "local" ? local.recording : speech.listening;
   const voiceError = provider === "local" ? local.error : speech.error;
+  const handsFree = support === "hands-free" || support === "no-speech";
 
-  function startVoice(chosen: VoiceProvider) {
+  function startConversation() {
+    if (!handsFree) return;
+    if (!readVoiceConsent().includes("browser")) {
+      setConsentFor({ provider: "browser", then: "conversation" });
+      return;
+    }
+    speech.stop();
+    conversation.start(lang);
+  }
+
+  function startPush(chosen: VoiceProvider) {
     if (chosen === "local") void local.start();
     else speech.start();
   }
 
   function toggleVoice() {
-    if (!provider) return;
+    if (!provider || inConversation) return;
     if (listening) {
       if (provider === "local") local.stop();
       else speech.stop();
       return;
     }
-    // Ask once per provider, before the microphone is ever opened.
     if (!readVoiceConsent().includes(provider)) {
-      setConsentFor(provider);
+      setConsentFor({ provider, then: "push" });
       return;
     }
-    startVoice(provider);
+    startPush(provider);
   }
 
-  function closeDrawer() {
+  /** Correct a badly recognised phrase: it goes into the box to edit; nothing is sent until Send. */
+  function editHeard(said: string) {
+    if (inConversation) conversation.pause("Paused while you edit. Press Resume to keep talking.");
+    setText(said);
+    setMode("open");
+    setTimeout(() => inputRef.current?.focus(), 0);
+  }
+
+  function closeAll() {
+    conversation.end();
     speech.stop();
     local.stop();
     setConsentFor(null);
-    setOpen(false);
+    setMode("closed");
   }
+
+  const lastTurn = [...log].reverse().find((e): e is Extract<Entry, { kind: "turn" }> => e.kind === "turn");
+
+  const conversationControls = (compact: boolean) => (
+    <div className={compact ? styles.miniControls : styles.convControls}>
+      {voiceState.state === "replying" && (
+        <button type="button" className={styles.ctl} onClick={() => conversation.interrupt()}>
+          Interrupt
+        </button>
+      )}
+      {(voiceState.state === "paused" || voiceState.state === "error") && (
+        <button type="button" className={styles.ctl} onClick={() => conversation.resume()}>
+          Resume
+        </button>
+      )}
+      {(voiceState.state === "listening" || voiceState.state === "understanding") && (
+        <button type="button" className={styles.ctl} onClick={() => conversation.pause("Paused. Press Resume to keep talking.")}>
+          Pause
+        </button>
+      )}
+      <button type="button" className={styles.ctl} aria-pressed={voiceState.muted} onClick={() => conversation.setMuted(!voiceState.muted)}>
+        {voiceState.muted ? "Unmute" : "Mute"}
+      </button>
+      <button type="button" className={`${styles.ctl} ${styles.ctlEnd}`} onClick={() => conversation.end()}>
+        End conversation
+      </button>
+    </div>
+  );
 
   return (
     <>
-      <button ref={fabRef} type="button" className={styles.fab} onClick={() => setOpen(true)} aria-label="Open FastQue Assistant" aria-expanded={open} hidden={open}>
-        <span aria-hidden="true">✦</span> Assistant
-      </button>
+      {mode === "closed" && (
+        <button ref={fabRef} type="button" className={styles.fab} onClick={() => setMode("open")} aria-label="Open FastQue Assistant" aria-expanded={false}>
+          <span aria-hidden="true">✦</span> Assistant
+        </button>
+      )}
+
+      {mode === "docked" && (
+        <section className={styles.mini} aria-label="FastQue Assistant (minimized)">
+          <div className={styles.miniHead}>
+            <span className={`${styles.dot} ${styles[`dot_${voiceState.state}`] ?? ""}`} aria-hidden="true" />
+            <strong role="status" aria-live="polite">{inConversation ? VOICE_LABEL[voiceState.state] : "Assistant"}</strong>
+            <button type="button" className={styles.ctl} onClick={() => setMode("open")} aria-label="Expand assistant">
+              Expand
+            </button>
+            {!inConversation && (
+              <button type="button" className={styles.close} onClick={closeAll} aria-label="Close assistant">×</button>
+            )}
+          </div>
+          <p className={styles.miniText}>
+            {voiceState.interim ? `“${voiceState.interim}”` : (voiceState.note ?? lastTurn?.turn.message ?? "Ask me anything about your shop.")}
+          </p>
+          {inConversation && conversationControls(true)}
+        </section>
+      )}
+
       {open && (
         <aside
           className={styles.drawer}
           aria-labelledby="fastque-assistant-title"
           role="complementary"
           onKeyDown={(ev) => {
-            // Escape closes the microphone notice first, then the drawer.
             if (ev.key !== "Escape") return;
             ev.stopPropagation();
             if (consentFor) setConsentFor(null);
-            else closeDrawer();
+            else setMode(inConversation ? "docked" : "closed");
           }}
         >
           <header className={styles.header}>
@@ -252,8 +454,38 @@ function AssistantDrawer({ salonId, surface = "shop" }: { salonId?: string; surf
               <strong id="fastque-assistant-title">FastQue Assistant</strong>
               <p className={styles.sub}>Bol kar ya likh kar batayein · Speak or type</p>
             </div>
-            <button type="button" className={styles.close} onClick={closeDrawer} aria-label="Close assistant">×</button>
+            <div className={styles.headBtns}>
+              <button type="button" className={styles.close} onClick={() => setMode("docked")} aria-label="Minimize assistant" title="Minimize">–</button>
+              <button type="button" className={styles.close} onClick={closeAll} aria-label="Close assistant" title="Close">×</button>
+            </div>
           </header>
+
+          <div className={styles.convBar}>
+            {inConversation ? (
+              <>
+                <p className={styles.convState} role="status" aria-live="polite">
+                  <span className={`${styles.dot} ${styles[`dot_${voiceState.state}`] ?? ""}`} aria-hidden="true" />
+                  {VOICE_LABEL[voiceState.state]}
+                  {voiceState.interim && <span className={styles.caption}> “{voiceState.interim}”</span>}
+                </p>
+                {voiceState.note && <p className={styles.convNote}>{voiceState.note}</p>}
+                {conversationControls(false)}
+              </>
+            ) : handsFree ? (
+              <>
+                <button type="button" className={styles.convStart} onClick={startConversation} disabled={busy}>
+                  <MicIcon /> Start voice conversation
+                </button>
+                {voiceState.note && <p className={styles.convNote}>{voiceState.note}</p>}
+              </>
+            ) : (
+              <p className={styles.convNote}>
+                {support === "push-to-talk"
+                  ? "Hands-free conversation is not available in this browser (iPhone and iPad need a tap for each question). Use the microphone button for each question, or type."
+                  : "This browser has no speech recognition, so voice conversation is not available here. Type your question."}
+              </p>
+            )}
+          </div>
 
           <div className={styles.log} aria-live="polite">
             {log.length === 0 && (
@@ -267,13 +499,29 @@ function AssistantDrawer({ salonId, surface = "shop" }: { salonId?: string; surf
             {log.map((e) =>
               e.kind === "user" ? (
                 <div key={e.id} className={styles.user}>
-                  {e.voice && <span className={styles.voiceTag} role="img" aria-label="spoken"><MicIcon /></span>}
-                  {e.text}
+                  {e.voice && <span className={styles.voiceTag} role="img" aria-label="spoken, as recognised by the browser"><MicIcon /></span>}
+                  <span>{e.text}</span>
+                  {e.voice && (
+                    <button type="button" className={styles.editHeard} onClick={() => editHeard(e.text)} aria-label={`Not what you said? Edit “${e.text}”`}>
+                      Edit
+                    </button>
+                  )}
                 </div>
               ) : e.kind === "pending" ? (
                 <div key={e.id} className={styles.pending} role="status">{e.stage}</div>
               ) : (
-                <TurnCard key={e.id} entry={e} busy={busy} onDecide={decide} onOption={(t) => void send(t)} />
+                <TurnCard
+                  key={e.id}
+                  entry={e}
+                  busy={busy}
+                  salonId={salonId}
+                  onDecide={decide}
+                  onOption={(t) => void send(t)}
+                  onOpen={(to) => {
+                    trail.current.push(to);
+                    setMode("docked");
+                  }}
+                />
               ),
             )}
             <div ref={endRef} />
@@ -282,29 +530,37 @@ function AssistantDrawer({ salonId, surface = "shop" }: { salonId?: string; surf
           <form className={styles.composer} onSubmit={(ev) => { ev.preventDefault(); void send(text); }}>
             <div className={styles.tools}>
               <label className={styles.lang}>
-                <span className={styles.srOnly}>Voice language</span>
+                <span className={styles.toolLabel}>Voice language</span>
                 <select value={lang} onChange={(ev) => setLang(ev.target.value as SpeechLang)}>
                   <option value="hi-IN">हिंदी / Hinglish</option>
                   <option value="en-IN">English</option>
                 </select>
               </label>
-              <label className={styles.toggle}>
-                <input type="checkbox" checked={readAloud} onChange={(ev) => setReadAloud(ev.target.checked)} /> Read replies aloud
-              </label>
+              {!inConversation && (
+                <label className={styles.toggle}>
+                  <input type="checkbox" checked={readAloud} onChange={(ev) => setReadAloud(ev.target.checked)} /> Read replies aloud
+                </label>
+              )}
             </div>
             {consentFor && (
               <div className={styles.consent} role="dialog" aria-labelledby="assistant-voice-consent">
                 <p id="assistant-voice-consent"><strong>Before you use the microphone</strong></p>
-                <p>{VOICE_NOTICE[consentFor]}</p>
+                <p>{VOICE_NOTICE[consentFor.provider]}</p>
+                {consentFor.then === "conversation" && (
+                  <p>In a voice conversation the microphone opens again after each reply until you press End conversation. FastQue does not record or keep your voice.</p>
+                )}
                 <div className={styles.decide}>
                   <button
                     type="button"
                     className={styles.confirm}
                     onClick={() => {
-                      const chosen = consentFor;
-                      saveVoiceConsent(chosen);
+                      const c = consentFor;
+                      saveVoiceConsent(c.provider);
                       setConsentFor(null);
-                      startVoice(chosen);
+                      if (c.then === "conversation") {
+                        speech.stop();
+                        conversation.start(lang);
+                      } else startPush(c.provider);
                     }}
                   >
                     Allow microphone
@@ -313,30 +569,30 @@ function AssistantDrawer({ salonId, surface = "shop" }: { salonId?: string; surf
                 </div>
               </div>
             )}
-            {(listening || local.working) && (
+            {!inConversation && (listening || local.working) && (
               <p className={styles.listening} role="status">
                 {local.working ? "Turning your voice into text…" : "Listening… tap the microphone again to stop."}
               </p>
             )}
-            {voiceError && <p className={styles.voiceError} role="alert">{voiceError}</p>}
+            {!inConversation && voiceError && <p className={styles.voiceError} role="alert">{voiceError}</p>}
             <div className={styles.inputRow}>
               <input
                 ref={inputRef}
                 className={styles.input}
                 value={speech.listening ? speech.interim || "Listening…" : text}
                 onChange={(ev) => setText(ev.target.value)}
-                placeholder="e.g. Massage price 10% badha do"
+                placeholder="e.g. Kitni chairs free hain?"
                 aria-label="Message to the assistant"
                 maxLength={500}
                 disabled={listening || local.working}
               />
-              {provider && (
+              {provider && !inConversation && (
                 <button
                   type="button"
                   className={`${styles.mic} ${listening ? styles.micOn : ""}`}
                   onClick={toggleVoice}
                   aria-pressed={listening}
-                  aria-label={listening ? "Stop listening" : "Speak"}
+                  aria-label={listening ? "Stop listening" : "Speak one question"}
                   title={provider === "local" ? "Private voice (FastQue server)" : "Browser voice"}
                   disabled={busy || local.working}
                 >
@@ -355,17 +611,23 @@ function AssistantDrawer({ salonId, surface = "shop" }: { salonId?: string; surf
 function TurnCard({
   entry,
   busy,
+  salonId,
   onDecide,
   onOption,
+  onOpen,
 }: {
   entry: Extract<Entry, { kind: "turn" }>;
   busy: boolean;
+  salonId?: string;
   onDecide: (id: string, token: string, decision: "confirm" | "cancel") => void;
   onOption: (text: string) => void;
+  onOpen: (to: string) => void;
 }) {
   const { turn } = entry;
   const tone =
     turn.status === "DONE" ? styles.ok : turn.status === "NEEDS_CONFIRMATION" || turn.status === "NEEDS_INPUT" ? styles.ask : styles.stop;
+  // A navigation turn already opened its page; other answers offer to open theirs.
+  const openTo = turn.action?.id === AssistantActionId.NAVIGATE ? null : safeRoute(turn.navigateTo, salonId);
   return (
     <article className={`${styles.card} ${tone}`} data-status={turn.status}>
       <div className={styles.cardHead}>
@@ -373,7 +635,7 @@ function TurnCard({
         {turn.action && <span className={styles.actionTitle}>{turn.action.title}</span>}
       </div>
       <ol className={styles.stages} aria-label="Progress">
-        {stagesFor(turn).map((s) => (
+        {stagesFor(turn, entry.voice).map((s) => (
           <li key={s.label} className={styles[`stage_${s.state}`]}>{s.label}</li>
         ))}
       </ol>
@@ -421,7 +683,11 @@ function TurnCard({
       )}
       <footer className={styles.cardFoot}>
         <time dateTime={turn.completedAt}>{new Date(turn.completedAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</time>
-        {turn.navigateTo && <Link href={turn.navigateTo} className={styles.open}>Open</Link>}
+        {openTo && (
+          <Link href={openTo} className={styles.open} onClick={() => onOpen(openTo)}>
+            Open page
+          </Link>
+        )}
       </footer>
     </article>
   );

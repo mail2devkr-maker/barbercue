@@ -45,15 +45,59 @@ export const BATCH3_HANDLERS: HandlerMap = {
   [AssistantActionId.CHAIRS_LIST]: {
     async plan(c) {
       const rows = await c.deps.chairs.list(c.user.id, c.salonId);
+      // Issue #368: "kitni chairs free hain" asks what is free RIGHT NOW. A working chair is busy
+      // while a service runs in it or while it is marked occupied by hand (the Live Queue's rule).
+      const working = rows
+        .filter((r) => r.status === 'ACTIVE')
+        .map((r) => r.id);
+      const [sessions, manual] = working.length
+        ? await Promise.all([
+            c.deps.prisma.serviceSession.findMany({
+              where: {
+                chairId: { in: working },
+                status: 'ACTIVE',
+                chair: { salonId: c.salonId },
+              },
+              select: { chairId: true },
+            }),
+            c.deps.prisma.manualChairOccupancy.findMany({
+              where: {
+                chairId: { in: working },
+                salonId: c.salonId,
+                endedAt: null,
+              },
+              select: { chairId: true },
+            }),
+          ])
+        : [[], []];
+      const inService = new Set(sessions.map((x) => x.chairId));
+      const marked = new Set(manual.map((x) => x.chairId));
+      const busy = new Set([...inService, ...marked]);
+      const free = working.filter((id) => !busy.has(id)).length;
+      const off = rows.length - working.length;
+      const detail = (r: { id: string; status: string }) =>
+        r.status !== 'ACTIVE'
+          ? CHAIR_STATUS_LABEL[r.status]
+          : inService.has(r.id)
+            ? 'Busy: service in progress'
+            : marked.has(r.id)
+              ? 'Busy: marked occupied'
+              : 'Free now';
       return {
         status: 'DONE',
-        message: `${rows.filter((r) => r.status === 'ACTIVE').length} of ${rows.length} chairs in use.`,
+        message: rows.length
+          ? `${free} of ${working.length} working chair${working.length === 1 ? ' is' : 's are'} free right now` +
+            (busy.size ? `, ${busy.size} busy` : '') +
+            (off
+              ? `. ${off} chair${off === 1 ? ' is' : 's are'} switched off or under repair.`
+              : '.')
+          : 'No chairs are set up for this shop yet.',
         result: {
           summary: 'Chairs',
           items: rows.map((r) => ({
             id: r.id,
             title: r.label,
-            detail: CHAIR_STATUS_LABEL[r.status],
+            detail: detail(r),
           })),
         },
         navigateTo: `/dashboard/salons/${c.salonId}/chairs`,

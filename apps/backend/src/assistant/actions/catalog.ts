@@ -586,4 +586,20 @@ export const ASSISTANT_ACTIONS: Record<AssistantActionId, ActionDef> = {
     'OWNER_OR_ADMIN',
     ['Tracking links dikhao'],
   ),
+  // ---- issue #368: conversation basics. None of these changes data.
+  [AssistantActionId.HELP]: read('What I can do', EVERYONE, 'ANY_SIGNED_IN', [
+    'What can you do?',
+  ]),
+  [AssistantActionId.NAVIGATE]: read(
+    'Open a page',
+    SHOP_MANAGERS,
+    'OWNER_OR_ADMIN',
+    ['Bookings kholo', 'Services page kholo', 'Live queue kholo'],
+  ),
+  [AssistantActionId.NAVIGATE_BACK]: read(
+    'Go back',
+    SHOP_MANAGERS,
+    'OWNER_OR_ADMIN',
+    ['Wapas jao'],
+  ),
 };

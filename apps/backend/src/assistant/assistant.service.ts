@@ -84,6 +84,8 @@ import { BookingAttributionService } from '../owner-ops/booking-attribution.serv
 import { QueueAutoAssignService } from '../owner-ops/queue-auto-assign.service';
 import { SalonShareLinksService } from '../owner-ops/salon-share-links.service';
 import { BATCH14_HANDLERS } from './actions/batch14.actions';
+import { BATCH15_HANDLERS } from './actions/batch15.actions';
+import { helpTurn, notUnderstoodTurn } from './assistant-help';
 import { ASSISTANT_ROLLOUT, AssistantRollout } from './assistant-rollout';
 import { AdminCustomerAnalyticsService } from '../admin/analytics/admin-customer-analytics.service';
 import { AdminStaffAnalyticsService } from '../admin/analytics/admin-staff-analytics.service';
@@ -114,6 +116,7 @@ export const ASSISTANT_HANDLERS: HandlerMap = {
   ...BATCH12_HANDLERS,
   ...BATCH13_HANDLERS,
   ...BATCH14_HANDLERS,
+  ...BATCH15_HANDLERS,
 };
 
 const UNRELEASED: Record<'inventory' | 'onboarding', string> = {
@@ -257,15 +260,39 @@ export class AssistantService {
     const requestId = randomUUID();
     const parsed = await this.interpreter.interpret(input.text, input.surface);
     if (!parsed) {
-      return this.finish(requestId, null, {
-        status: 'UNSUPPORTED',
-        message:
-          "I didn't understand that as a FastQue action. Try one of these.",
-        options: this.capabilities(user)
-          .actions.filter((c) => c.state === 'SUPPORTED')
-          .slice(0, 6)
-          .map((c) => ({ label: c.examples[0], text: c.examples[0] })),
-      });
+      return this.finish(
+        requestId,
+        null,
+        notUnderstoodTurn(
+          this.capabilities(user).actions,
+          input.surface,
+          input.text,
+        ),
+      );
+    }
+    // "What can you do?": answered from what THIS user may do on THIS screen right now.
+    if (parsed.action === AssistantActionId.HELP) {
+      const turn = helpTurn(
+        this.capabilities(user).actions,
+        input.surface,
+        this.rollout.writesFor(user),
+        parsed.greeting,
+      );
+      await this.audit(
+        user.id,
+        // No shop is authorized for a help answer, so none is recorded.
+        null,
+        requestId,
+        parsed.action,
+        'READ',
+        'DONE',
+        {
+          inputMode: input.inputMode,
+          surface: input.surface,
+          interpreter: this.interpreter.name,
+        },
+      );
+      return this.finish(requestId, parsed.action, turn);
     }
     if (parsed.action === 'unreleased') {
       return this.finish(requestId, null, {
