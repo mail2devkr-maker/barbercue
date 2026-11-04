@@ -16,6 +16,7 @@ Branch `claude/fastque-action-assistant-362`, Draft PR #363. **Nothing here is d
   - `B11` = `test/assistant-batch11.e2e-spec.ts` (batch 10 was UI only)
   - `B12` = `test/assistant-batch12.e2e-spec.ts`
   - `B13` = `test/assistant-batch13.e2e-spec.ts`
+  - `B14` = `test/assistant-batch14.e2e-spec.ts`
   - Every suite also passes twice in a row in one shared database, as CI's full-suite step runs it.
   - `unit` = parser, interpreter and transcriber specs
 - **CI** is the GitHub *Owner Operations Certification* workflow, which runs P1, P2, B3–B9, B11 and B12.
@@ -28,7 +29,7 @@ All 32 actions share these rules:
 - Every step writes an audit row with no transcript text.
 - The screen updates only after the server reports success (`refresh` → the page re-fetches from the API).
 
-## 1. Actions the assistant runs (83)
+## 1. Actions the assistant runs (86)
 
 **Access levels**
 - `owner/admin` = `assertOwnerOrAdminAccess` (the shop owner or a delegated platform admin).
@@ -123,6 +124,9 @@ All 32 actions share these rules:
 | 81 | `analytics.bookingSources` | Owner, admin | `BookingAttributionService.summarize` (today / 7 / 30 days in the shop's timezone; counts by source and tracked link, no customer rows) | owner/admin | – | "Is mahine bookings kahan se aayi" | B13 (barber and other shop denied) |
 | 82 | `queue.autoAssignView` | Owner, staff, admin | `QueueAutoAssignService.getAutomaticAssignment` | team/admin | – | "Auto assign on hai kya" | B13 |
 | 83 | `queue.autoAssignSet` | Owner, admin | `QueueAutoAssignService.setAutomaticAssignment` (reversible; existing audit row; no customer message). A question is always the read; only an explicit on/off command previews the write | owner/admin | yes | "Auto assign band karo" | B13 (barber, other shop and stolen token denied; replay and stale preview refused) |
+| 84 | `queue.takeNext` | Staff (own on-duty profile), owner who is a barber | `QueueAutoAssignService.takeNext` — the Live Queue "Take next" path: next arrived customer this barber can serve, free chair, service starts. Preview from the barber's own work view; refused while serving or holding a customer | team/admin | yes | "Mujhe agla customer do" | B14 (other shop denied; stolen token; replay; stale preview; no phone read out) |
+| 85 | `shop.shareLinks` | Owner, admin | `SalonShareLinksService.getForSalon` (public booking link or why it is not ready) | owner/admin | – | "Meri shop ka link do" | B14 (barber and other shop denied) |
+| 86 | `analytics.trackedLinks` | Owner, admin | `BookingAttributionService.listCampaigns` (label, source, bookings, switched off); the link token is never shown | owner/admin | – | "Tracking links dikhao" | B14 (token absent; barber denied) |
 
 **Cross-cutting negative tests**
 - Another shop's owner is denied, even when the request names the victim shop.

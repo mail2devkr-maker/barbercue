@@ -82,6 +82,8 @@ import { CustomerCreditsService } from '../credits/customer-credits.service';
 import { BATCH13_HANDLERS } from './actions/batch13.actions';
 import { BookingAttributionService } from '../owner-ops/booking-attribution.service';
 import { QueueAutoAssignService } from '../owner-ops/queue-auto-assign.service';
+import { SalonShareLinksService } from '../owner-ops/salon-share-links.service';
+import { BATCH14_HANDLERS } from './actions/batch14.actions';
 import { AdminCustomerAnalyticsService } from '../admin/analytics/admin-customer-analytics.service';
 import { AdminStaffAnalyticsService } from '../admin/analytics/admin-staff-analytics.service';
 import { AdminShopActivityService } from '../admin/admin-shop-activity.service';
@@ -110,6 +112,7 @@ export const ASSISTANT_HANDLERS: HandlerMap = {
   ...BATCH11_HANDLERS,
   ...BATCH12_HANDLERS,
   ...BATCH13_HANDLERS,
+  ...BATCH14_HANDLERS,
 };
 
 const UNRELEASED: Record<'inventory' | 'onboarding', string> = {
@@ -169,6 +172,7 @@ export class AssistantService {
     credits: CustomerCreditsService,
     attribution: BookingAttributionService,
     autoAssign: QueueAutoAssignService,
+    shareLinks: SalonShareLinksService,
     @Inject(ASSISTANT_INTERPRETER)
     private readonly interpreter: IntentInterpreter,
     @Inject(ASSISTANT_TRANSCRIBER) private readonly transcriber: Transcriber,
@@ -211,6 +215,7 @@ export class AssistantService {
       credits,
       attribution,
       autoAssign,
+      shareLinks,
     };
   }
 

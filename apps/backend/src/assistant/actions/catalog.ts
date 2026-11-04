@@ -567,4 +567,23 @@ export const ASSISTANT_ACTIONS: Record<AssistantActionId, ActionDef> = {
     'OWNER_OR_ADMIN',
     ['Auto assign band karo', 'Auto assign chalu karo'],
   ),
+  // ---- batch 14: a barber takes the next customer; share link and tracked links (reads)
+  [AssistantActionId.STAFF_TAKE_NEXT]: write(
+    'Take the next arrived customer',
+    SHOP_TEAM,
+    'STAFF_OR_ADMIN',
+    ['Mujhe agla customer do', 'Take next customer'],
+  ),
+  [AssistantActionId.SHARE_LINKS]: read(
+    "My shop's booking link",
+    SHOP_MANAGERS,
+    'OWNER_OR_ADMIN',
+    ['Meri shop ka link do'],
+  ),
+  [AssistantActionId.TRACKED_LINKS]: read(
+    'Tracked booking links',
+    SHOP_MANAGERS,
+    'OWNER_OR_ADMIN',
+    ['Tracking links dikhao'],
+  ),
 };

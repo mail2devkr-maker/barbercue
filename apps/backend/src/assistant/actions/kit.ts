@@ -43,6 +43,7 @@ import type { CancellationAnalyticsService } from '../../owner-ops/cancellation-
 import type { CustomerCreditsService } from '../../credits/customer-credits.service';
 import type { BookingAttributionService } from '../../owner-ops/booking-attribution.service';
 import type { QueueAutoAssignService } from '../../owner-ops/queue-auto-assign.service';
+import type { SalonShareLinksService } from '../../owner-ops/salon-share-links.service';
 import type { SealedWrite } from '../assistant-confirmation';
 import { matchByName } from '../assistant-parser';
 
@@ -118,6 +119,7 @@ export interface Deps {
   credits: CustomerCreditsService;
   attribution: BookingAttributionService;
   autoAssign: QueueAutoAssignService;
+  shareLinks: SalonShareLinksService;
 }
 
 export interface PlanCtx {

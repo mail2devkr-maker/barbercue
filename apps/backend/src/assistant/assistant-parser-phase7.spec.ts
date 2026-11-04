@@ -103,3 +103,38 @@ describe('assistant batch 13 intents', () => {
     });
   });
 });
+
+describe('assistant batch 14 intents', () => {
+  it('a barber takes the next customer; calling next is unchanged', () => {
+    expect(shop('mujhe agla customer do')).toEqual({
+      action: AssistantActionId.STAFF_TAKE_NEXT,
+    });
+    expect(shop('main agla customer leta hoon')).toEqual({
+      action: AssistantActionId.STAFF_TAKE_NEXT,
+    });
+    expect(shop('take next customer for me')).toEqual({
+      action: AssistantActionId.STAFF_TAKE_NEXT,
+    });
+    expect(shop('agla customer bulao')).toEqual({
+      action: AssistantActionId.QUEUE_CALL_NEXT,
+    });
+    expect(customer('mujhe agla customer do')?.action).not.toBe(
+      AssistantActionId.STAFF_TAKE_NEXT,
+    );
+  });
+
+  it('share link and tracked links', () => {
+    expect(shop('meri shop ka link do')).toEqual({
+      action: AssistantActionId.SHARE_LINKS,
+    });
+    expect(shop('booking page link share karna hai')).toEqual({
+      action: AssistantActionId.SHARE_LINKS,
+    });
+    expect(shop('tracking links dikhao')).toEqual({
+      action: AssistantActionId.TRACKED_LINKS,
+    });
+    expect(shop('instagram campaign link kitni bookings laya')).toEqual({
+      action: AssistantActionId.TRACKED_LINKS,
+    });
+  });
+});

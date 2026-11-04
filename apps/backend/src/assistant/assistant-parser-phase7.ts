@@ -8,6 +8,9 @@ import { AssistantActionId } from '@barbercue/shared';
  * Batch 13: booking sources (where bookings came from) and the automatic staff assignment switch.
  * A question ("auto assign on hai kya") is always the read; only an explicit on/off command is the
  * write, and the write still needs on-screen confirmation.
+ *
+ * Batch 14: a barber taking the next arrived customer for themselves, the shop's public booking link,
+ * and the list of tracked booking links (labels and counts, never the link tokens).
  */
 export type Phase7Intent =
   | { action: typeof AssistantActionId.STAFF_MY_WORK }
@@ -21,7 +24,10 @@ export type Phase7Intent =
       range: 'today' | '7d' | '30d';
     }
   | { action: typeof AssistantActionId.AUTO_ASSIGN_VIEW }
-  | { action: typeof AssistantActionId.AUTO_ASSIGN_SET; enabled: boolean };
+  | { action: typeof AssistantActionId.AUTO_ASSIGN_SET; enabled: boolean }
+  | { action: typeof AssistantActionId.STAFF_TAKE_NEXT }
+  | { action: typeof AssistantActionId.SHARE_LINKS }
+  | { action: typeof AssistantActionId.TRACKED_LINKS };
 
 const W = (words: string) => new RegExp(`(?:^|\\s)(?:${words})(?=\\s|$)`, 'u');
 
@@ -49,6 +55,20 @@ const TURN_ON = W(
 const TURN_OFF = W(
   'off karo|off kar do|off kardo|band karo|band kar do|bandh karo|disable|turn off|switch off|rok do|बंद करो',
 );
+// Batch 14. "Take next" is the barber starting the next arrived customer for THEMSELVES; calling the
+// next customer ("agla customer bulao") stays the existing call-next action.
+const NEXT = W('next|agla|agle|अगला|अगले');
+const FOR_ME = W('main|mai|mein|mujhe|muje|mere liye|i|me|i ll|मैं|मुझे');
+const TAKE = W(
+  'lo|le|leta|leti|lunga|loonga|lungi|le raha|le rahi|take|do|de do|dedo|start|लेता|दो',
+);
+const CALL_WORD = W('bulao|bula|call|बुलाओ');
+const LINK = W('link|links|url|लिंक');
+const TRACKED = W('tracking|tracked|campaign|campaigns|track|ट्रैकिंग');
+const SHOP_LINK = W(
+  'shop|salon|dukan|booking|booking page|page|meri|mera|my|दुकान',
+);
+const SHARE = W('share|bhejo|bhejna|do|dikhao|batao|kya hai|send|show');
 const CREDITS = W('credit|credits|wallet|balance|क्रेडिट|वॉलेट');
 
 export function parsePhase7(
@@ -58,6 +78,17 @@ export function parsePhase7(
   if (surface === 'customer')
     return CREDITS.test(text) ? { action: AssistantActionId.MY_CREDITS } : null;
   if (surface !== 'shop') return null;
+  if (
+    NEXT.test(text) &&
+    FOR_ME.test(text) &&
+    TAKE.test(text) &&
+    !CALL_WORD.test(text)
+  )
+    return { action: AssistantActionId.STAFF_TAKE_NEXT };
+  if (LINK.test(text) && TRACKED.test(text))
+    return { action: AssistantActionId.TRACKED_LINKS };
+  if (LINK.test(text) && SHOP_LINK.test(text) && SHARE.test(text))
+    return { action: AssistantActionId.SHARE_LINKS };
   if (AUTO_ASSIGN.test(text)) {
     // A question about the switch is only a read, even when it contains "on"/"band".
     if (TURN_OFF.test(text) && !W('band hai|off hai').test(text))

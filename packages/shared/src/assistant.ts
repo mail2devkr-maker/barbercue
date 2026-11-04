@@ -141,6 +141,10 @@ export const AssistantActionId = {
   BOOKING_SOURCES: "analytics.bookingSources",
   AUTO_ASSIGN_VIEW: "queue.autoAssignView",
   AUTO_ASSIGN_SET: "queue.autoAssignSet",
+  // batch 14: a barber takes the next arrived customer; the shop's share link and tracked links
+  STAFF_TAKE_NEXT: "queue.takeNext",
+  SHARE_LINKS: "shop.shareLinks",
+  TRACKED_LINKS: "analytics.trackedLinks",
 } as const;
 export type AssistantActionId = (typeof AssistantActionId)[keyof typeof AssistantActionId];
 

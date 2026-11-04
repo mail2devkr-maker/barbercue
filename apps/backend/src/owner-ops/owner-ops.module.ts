@@ -76,6 +76,7 @@ import { OwnerAssistantService } from './owner-assistant.service';
     StaffWorkService,
     CancellationAnalyticsService,
     BookingAttributionService,
+    SalonShareLinksService,
   ],
 })
 export class OwnerOpsModule {}
