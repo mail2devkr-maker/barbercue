@@ -240,7 +240,7 @@ export default function AdminDashboardPage() {
                       <span className={styles.readOnlyBadge}>No shop actions</span>
                     ) : (
                       <>
-                        <LinkButton href={`/dashboard/salons/${shop.id}/settings`} variant="secondary">Manage</LinkButton>
+                        <LinkButton href={`/dashboard/salons/${shop.id}`} variant="secondary">Manage</LinkButton>
                         {getNextShopStatus(shop.status) && (
                           <Button type="button" variant={shop.status === SalonStatus.ACTIVE ? "outline" : "primary"} disabled={statusShopId === shop.id} onClick={() => void handleStatusChange(shop.id, shop.name, shop.status)}>
                             {statusShopId === shop.id ? "Saving…" : getNextShopStatus(shop.status)?.label}

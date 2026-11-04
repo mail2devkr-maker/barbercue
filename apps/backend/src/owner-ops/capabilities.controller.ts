@@ -9,7 +9,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { SalonCapabilitiesService } from './capabilities.service';
 
 @Controller('dashboard/salons/:salonId/capabilities')
-@Roles(Role.SALON_OWNER)
+@Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN, Role.CO_FOUNDER)
 export class CapabilitiesController {
   constructor(private readonly capabilities: SalonCapabilitiesService) {}
 

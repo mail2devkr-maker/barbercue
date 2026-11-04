@@ -8,11 +8,11 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { AppException } from '../exceptions/app.exception';
 
-export type SalonAccessActor = 'OWNER' | 'PLATFORM_ADMIN';
+export type SalonAccessActor = 'OWNER' | 'PLATFORM_ADMIN' | 'CO_FOUNDER';
 
 /** How a caller relates to ONE salon — used for attribution (who cancelled/created/etc.), never
  * for authorization: every operation still passes through one of the assert* methods below. */
-export type SalonActorKind = 'OWNER' | 'STAFF' | 'PLATFORM_ADMIN';
+export type SalonActorKind = 'OWNER' | 'STAFF' | 'PLATFORM_ADMIN' | 'CO_FOUNDER';
 
 /**
  * "May this authenticated user operate the dashboard for salonId X" — checked against `UserRole`,
@@ -65,7 +65,12 @@ export class SalonAccessService {
       where: { userId, salonId, role: Role.SALON_OWNER },
     });
     if (ownerMembership) return 'OWNER';
-    return this.assertGlobalAdminAccess(userId, salonId);
+    try {
+      return await this.assertGlobalAdminAccess(userId, salonId);
+    } catch (err) {
+      if (!(err instanceof AppException) || err.code !== QueueErrorCode.SALON_ACCESS_DENIED) throw err;
+      return this.assertGlobalCoFounderAccess(userId, salonId);
+    }
   }
 
   /**
@@ -88,7 +93,12 @@ export class SalonAccessService {
       },
     });
     if (membership) return 'STAFF_OR_OWNER';
-    return this.assertGlobalAdminOperationalAccess(userId, salonId);
+    try {
+      return await this.assertGlobalAdminOperationalAccess(userId, salonId);
+    } catch (err) {
+      if (!(err instanceof AppException) || err.code !== QueueErrorCode.SALON_ACCESS_DENIED) throw err;
+      return this.assertGlobalCoFounderAccess(userId, salonId, true);
+    }
   }
 
   /**
@@ -111,7 +121,58 @@ export class SalonAccessService {
     const admin = await this.prisma.userRole.findFirst({
       where: { userId, role: Role.PLATFORM_ADMIN, salonId: null },
     });
-    return admin ? 'PLATFORM_ADMIN' : null;
+    if (admin) return 'PLATFORM_ADMIN';
+    const coFounder = await this.prisma.userRole.findFirst({
+      where: { userId, role: Role.CO_FOUNDER, salonId: null },
+    });
+    return coFounder ? 'CO_FOUNDER' : null;
+  }
+
+  /**
+   * Explicit Co-Founder delegated shop access. This is NOT Super Admin access:
+   * never reuse for TOTP approval, shop deletion or account security mutations.
+   * A real ADMIN-audience session is required by the calling RolesGuard.
+   */
+  private async assertGlobalCoFounderAccess(
+    userId: string,
+    salonId: string,
+    operational = false,
+  ): Promise<'CO_FOUNDER'> {
+    const [membership, caller, salon] = await Promise.all([
+      this.prisma.userRole.findFirst({
+        where: { userId, role: Role.CO_FOUNDER, salonId: null },
+      }),
+      this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { status: true },
+      }),
+      this.prisma.salon.findUnique({
+        where: { id: salonId },
+        select: { status: true },
+      }),
+    ]);
+    if (!membership || caller?.status !== 'ACTIVE') {
+      throw new AppException(
+        QueueErrorCode.SALON_ACCESS_DENIED,
+        'You do not have access to this salon.',
+        HttpStatus.FORBIDDEN,
+      );
+    }
+    if (!salon) {
+      throw new AppException(
+        BookingErrorCode.SALON_NOT_FOUND,
+        'Shop not found.',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    if (operational && salon.status !== SalonStatus.ACTIVE) {
+      throw new AppException(
+        QueueErrorCode.SALON_ACCESS_DENIED,
+        'This shop is not currently operating.',
+        HttpStatus.FORBIDDEN,
+      );
+    }
+    return 'CO_FOUNDER';
   }
 
   /** Explicit platform-admin gate for lifecycle operations. */
