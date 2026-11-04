@@ -11,6 +11,8 @@ export const ASSISTANT_PATHS = {
   confirmations: "confirmations",
   capabilities: "capabilities",
   transcriptions: "transcriptions",
+  // Always answers for a signed-in user: whether the assistant (and its writes) is on for them.
+  access: "access",
 } as const;
 
 export const ASSISTANT_LIMITS = {
@@ -210,6 +212,12 @@ export interface AssistantVoiceOptionsDto {
   browser: true;
   // A private, self-hosted Whisper server is configured for audio that never leaves FastQue.
   local: boolean;
+}
+
+/** GET assistant/access. Clients render nothing unless `enabled` is true (fail closed on errors). */
+export interface AssistantAccessDto {
+  enabled: boolean;
+  writes: boolean;
 }
 
 export interface AssistantCapabilitiesDto {

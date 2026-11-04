@@ -90,6 +90,9 @@ maybe('Action Assistant batch 3 (e2e, disposable local database)', () => {
   }
 
   beforeAll(async () => {
+    // These suites exercise the assistant itself, so the release gate is opened for everyone here.
+    process.env.ASSISTANT_MODE = 'all';
+    process.env.ASSISTANT_WRITES = 'all';
     const moduleFixture: TestingModule = await Test.createTestingModule({ imports: [AppModule] })
       // Not a throttler test: one address sends more than the real 30/min here.
       .overrideProvider(ThrottlerStorage)

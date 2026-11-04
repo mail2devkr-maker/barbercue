@@ -92,6 +92,9 @@ maybe('Action Assistant Phase 2 (e2e, disposable local database)', () => {
   }
 
   beforeAll(async () => {
+    // These suites exercise the assistant itself, so the release gate is opened for everyone here.
+    process.env.ASSISTANT_MODE = 'all';
+    process.env.ASSISTANT_WRITES = 'all';
     const moduleFixture: TestingModule = await Test.createTestingModule({ imports: [AppModule] })
       // The assistant's 30/min limit is real; this suite sends more than that from one address and
       // is not testing the throttler (covered elsewhere), so its counter store is stubbed here only.

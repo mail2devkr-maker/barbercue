@@ -1,3 +1,4 @@
+import { ASSISTANT_ROLLOUT, rolloutFromEnv } from './assistant-rollout';
 import { Module } from '@nestjs/common';
 import { SalonSetupModule } from '../salon-setup/salon-setup.module';
 import { QueueModule } from '../queue/queue.module';
@@ -45,6 +46,7 @@ import {
   controllers: [AssistantController],
   providers: [
     AssistantService,
+    { provide: ASSISTANT_ROLLOUT, useFactory: rolloutFromEnv },
     { provide: ASSISTANT_INTERPRETER, useFactory: interpreterFromEnv },
     { provide: ASSISTANT_TRANSCRIBER, useFactory: transcriberFromEnv },
   ],

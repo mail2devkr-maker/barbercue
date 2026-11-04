@@ -58,6 +58,9 @@ maybe('Action Assistant batch 11 (e2e, disposable local database)', () => {
   }
 
   beforeAll(async () => {
+    // These suites exercise the assistant itself, so the release gate is opened for everyone here.
+    process.env.ASSISTANT_MODE = 'all';
+    process.env.ASSISTANT_WRITES = 'all';
     const moduleFixture: TestingModule = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(ThrottlerStorage)
       .useValue({ increment: () => Promise.resolve({ totalHits: 1, timeToExpire: 60, isBlocked: false, timeToBlockExpire: 0 }) })

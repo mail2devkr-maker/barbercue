@@ -42,12 +42,33 @@ const applied = {
 function route(replies, voice = { browser: true, local: false }) {
   const queue = [...replies];
   apiFetch.mockImplementation((path) => {
+    if (path === 'assistant/access') return Promise.resolve({ enabled: true, writes: true });
     if (path === 'assistant/capabilities') return Promise.resolve({ interpreter: 'rules', voice, actions: [] });
     const next = queue.shift();
     return next instanceof Error ? Promise.reject(next) : Promise.resolve(next);
   });
 }
 const callsTo = (path) => apiFetch.mock.calls.filter(([p]) => p === path);
+
+describe('ActionAssistant release gate', () => {
+  beforeEach(() => {
+    apiFetch.mockReset();
+    globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  });
+  for (const [why, answer] of [
+    ['the server says off', () => Promise.resolve({ enabled: false, writes: false })],
+    ['the access check fails', () => Promise.reject(new Error('404'))],
+    ['the answer is malformed', () => Promise.resolve({ enabled: 'true' })],
+  ]) {
+    it(`renders nothing when ${why}`, async () => {
+      apiFetch.mockImplementation(answer);
+      let tree;
+      await act(async () => { tree = TestRenderer.create(<ActionAssistant salonId="s1" />); });
+      expect(tree.toJSON()).toBeNull();
+      expect(apiFetch.mock.calls.map(([p]) => p)).toEqual(['assistant/access']);
+    });
+  }
+});
 
 describe('ActionAssistant drawer', () => {
   let events;

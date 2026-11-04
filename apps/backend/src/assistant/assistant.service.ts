@@ -84,6 +84,7 @@ import { BookingAttributionService } from '../owner-ops/booking-attribution.serv
 import { QueueAutoAssignService } from '../owner-ops/queue-auto-assign.service';
 import { SalonShareLinksService } from '../owner-ops/salon-share-links.service';
 import { BATCH14_HANDLERS } from './actions/batch14.actions';
+import { ASSISTANT_ROLLOUT, AssistantRollout } from './assistant-rollout';
 import { AdminCustomerAnalyticsService } from '../admin/analytics/admin-customer-analytics.service';
 import { AdminStaffAnalyticsService } from '../admin/analytics/admin-staff-analytics.service';
 import { AdminShopActivityService } from '../admin/admin-shop-activity.service';
@@ -127,6 +128,9 @@ const UNRELEASED: Record<'inventory' | 'onboarding', string> = {
  * previewed and sealed) and, on confirmation: verify seal → re-authorize → handler.execute → audit.
  * Handlers (actions/*.ts) only call existing FastQue services as the session user.
  */
+const WRITES_OFF =
+  'Changes through the assistant are switched off for now. Nothing was changed. You can still do this on the page itself.';
+
 @Injectable()
 export class AssistantService {
   private readonly logger = new Logger(AssistantService.name);
@@ -176,6 +180,7 @@ export class AssistantService {
     @Inject(ASSISTANT_INTERPRETER)
     private readonly interpreter: IntentInterpreter,
     @Inject(ASSISTANT_TRANSCRIBER) private readonly transcriber: Transcriber,
+    @Inject(ASSISTANT_ROLLOUT) private readonly rollout: AssistantRollout,
   ) {
     this.deps = {
       prisma,
@@ -231,11 +236,13 @@ export class AssistantService {
             title: def.title,
             kind: def.kind,
             confirmation: def.confirm,
-            state: !ASSISTANT_HANDLERS[id]
-              ? 'UNAVAILABLE'
-              : def.roles.some((r) => user.roles.includes(r))
-                ? 'SUPPORTED'
-                : 'DENIED',
+            state:
+              !ASSISTANT_HANDLERS[id] ||
+              (def.kind === 'WRITE' && !this.rollout.writesFor(user))
+                ? 'UNAVAILABLE'
+                : def.roles.some((r) => user.roles.includes(r))
+                  ? 'SUPPORTED'
+                  : 'DENIED',
             examples: def.examples,
           };
         },
@@ -276,6 +283,12 @@ export class AssistantService {
           status: 'UNAVAILABLE',
           message:
             'That action is not available in the assistant yet. Nothing was changed.',
+        });
+      // Release gate: no write preview while writes are off for this user (before any lookup).
+      if (def.kind === 'WRITE' && !this.rollout.writesFor(user))
+        throw new Reply({
+          status: 'UNAVAILABLE',
+          message: WRITES_OFF,
         });
       await this.authorize(user, actionId, salonId);
       const turn = await handler.plan(
@@ -351,6 +364,22 @@ export class AssistantService {
       return this.finish(requestId, actionId, {
         status: 'CANCELLED',
         message: 'Cancelled. Nothing was changed.',
+      });
+    }
+    if (!this.rollout.writesFor(user)) {
+      // Writes were switched off after the preview: refuse, change nothing.
+      await this.audit(
+        user.id,
+        salonId,
+        requestId,
+        actionId,
+        'CONFIRM',
+        'REFUSED_WRITES_OFF',
+        {},
+      );
+      return this.finish(requestId, actionId, {
+        status: 'UNAVAILABLE',
+        message: WRITES_OFF,
       });
     }
     try {

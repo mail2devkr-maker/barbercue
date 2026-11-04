@@ -2,7 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ASSISTANT_PATHS, type AssistantCapabilitiesDto, type AssistantSurface, type AssistantTurnDto } from "@barbercue/shared";
+import {
+  ASSISTANT_PATHS,
+  type AssistantAccessDto,
+  type AssistantCapabilitiesDto,
+  type AssistantSurface,
+  type AssistantTurnDto,
+} from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../lib/api";
 import { announceAssistantChange } from "../../lib/assistant-events";
 import { speak, useSpeechInput, type SpeechLang } from "../../lib/use-speech";
@@ -64,7 +70,29 @@ const EXAMPLES: Record<AssistantSurface, string[]> = {
   employee: ["Mera kaam kitna hua", "Overdue follow ups dikhao", "Interested leads dikhao", "Meri visits dikhao"],
 };
 
-export function ActionAssistant({ salonId, surface = "shop" }: { salonId?: string; surface?: AssistantSurface }) {
+/**
+ * Release gate (issue #362): the drawer is not rendered at all unless the server says the assistant is
+ * switched on for this signed-in user. Any error, a slow answer or a missing field means hidden.
+ */
+export function ActionAssistant(props: { salonId?: string; surface?: AssistantSurface }) {
+  const [enabled, setEnabled] = useState(false);
+  useEffect(() => {
+    let live = true;
+    apiFetch<AssistantAccessDto>(`${ASSISTANT_PATHS.assistant}/${ASSISTANT_PATHS.access}`)
+      .then((a) => {
+        if (live) setEnabled(a?.enabled === true);
+      })
+      .catch(() => {
+        if (live) setEnabled(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, []);
+  return enabled ? <AssistantDrawer {...props} /> : null;
+}
+
+function AssistantDrawer({ salonId, surface = "shop" }: { salonId?: string; surface?: AssistantSurface }) {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);

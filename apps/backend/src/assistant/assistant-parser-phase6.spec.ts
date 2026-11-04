@@ -7,76 +7,186 @@ const customer = (t: string) => parseAssistantText(t, 'customer', 2026);
 
 describe('assistant batch 6 intents (field employee, read-only)', () => {
   it('summary, leads with an optional status, follow-ups and visits', () => {
-    expect(employee('mera kaam kitna hua')).toEqual({ action: AssistantActionId.EMPLOYEE_DASHBOARD });
-    expect(employee('mera dashboard dikhao')).toEqual({ action: AssistantActionId.EMPLOYEE_DASHBOARD });
-    expect(employee('mere leads dikhao')).toEqual({ action: AssistantActionId.EMPLOYEE_LEADS, status: null });
-    expect(employee('interested leads dikhao')).toEqual({ action: AssistantActionId.EMPLOYEE_LEADS, status: 'INTERESTED' });
-    expect(employee('naye leads')).toEqual({ action: AssistantActionId.EMPLOYEE_LEADS, status: 'NEW' });
-    expect(employee('aaj ke follow up dikhao')).toEqual({ action: AssistantActionId.EMPLOYEE_FOLLOW_UPS, overdueOnly: false });
-    expect(employee('overdue follow ups')).toEqual({ action: AssistantActionId.EMPLOYEE_FOLLOW_UPS, overdueOnly: true });
-    expect(employee('lead ke baaki followup batao')).toEqual({ action: AssistantActionId.EMPLOYEE_FOLLOW_UPS, overdueOnly: true });
-    expect(employee('meri visits dikhao')).toEqual({ action: AssistantActionId.EMPLOYEE_VISITS });
+    expect(employee('mera kaam kitna hua')).toEqual({
+      action: AssistantActionId.EMPLOYEE_DASHBOARD,
+    });
+    expect(employee('mera dashboard dikhao')).toEqual({
+      action: AssistantActionId.EMPLOYEE_DASHBOARD,
+    });
+    expect(employee('mere leads dikhao')).toEqual({
+      action: AssistantActionId.EMPLOYEE_LEADS,
+      status: null,
+    });
+    expect(employee('interested leads dikhao')).toEqual({
+      action: AssistantActionId.EMPLOYEE_LEADS,
+      status: 'INTERESTED',
+    });
+    expect(employee('naye leads')).toEqual({
+      action: AssistantActionId.EMPLOYEE_LEADS,
+      status: 'NEW',
+    });
+    expect(employee('aaj ke follow up dikhao')).toEqual({
+      action: AssistantActionId.EMPLOYEE_FOLLOW_UPS,
+      overdueOnly: false,
+    });
+    expect(employee('overdue follow ups')).toEqual({
+      action: AssistantActionId.EMPLOYEE_FOLLOW_UPS,
+      overdueOnly: true,
+    });
+    expect(employee('lead ke baaki followup batao')).toEqual({
+      action: AssistantActionId.EMPLOYEE_FOLLOW_UPS,
+      overdueOnly: true,
+    });
+    expect(employee('meri visits dikhao')).toEqual({
+      action: AssistantActionId.EMPLOYEE_VISITS,
+    });
   });
 
   it('employee writes: log a visit with an outcome, close a follow-up with what happened', () => {
-    expect(employee('Sharma Salon visit kiya, interested')).toEqual({ action: AssistantActionId.EMPLOYEE_LOG_VISIT, outcome: 'INTERESTED', notes: null });
-    expect(employee('Sharma Salon visit kiya, not interested')).toMatchObject({ outcome: 'NOT_INTERESTED' });
-    expect(employee('Sharma Salon visit kiya: owner kal milega')).toEqual({ action: AssistantActionId.EMPLOYEE_LOG_VISIT, outcome: null, notes: 'owner kal milega' });
-    expect(employee('Sharma Salon visit kiya, follow up chahiye')).toMatchObject({ action: AssistantActionId.EMPLOYEE_LOG_VISIT, outcome: 'FOLLOW_UP_REQUIRED' });
-    expect(employee('Sharma Salon ka follow up ho gaya: demo kal')).toEqual({ action: AssistantActionId.EMPLOYEE_CLOSE_FOLLOW_UP, outcome: 'demo kal' });
+    expect(employee('Sharma Salon visit kiya, interested')).toEqual({
+      action: AssistantActionId.EMPLOYEE_LOG_VISIT,
+      outcome: 'INTERESTED',
+      notes: null,
+    });
+    expect(employee('Sharma Salon visit kiya, not interested')).toMatchObject({
+      outcome: 'NOT_INTERESTED',
+    });
+    expect(employee('Sharma Salon visit kiya: owner kal milega')).toEqual({
+      action: AssistantActionId.EMPLOYEE_LOG_VISIT,
+      outcome: null,
+      notes: 'owner kal milega',
+    });
+    expect(
+      employee('Sharma Salon visit kiya, follow up chahiye'),
+    ).toMatchObject({
+      action: AssistantActionId.EMPLOYEE_LOG_VISIT,
+      outcome: 'FOLLOW_UP_REQUIRED',
+    });
+    expect(employee('Sharma Salon ka follow up ho gaya: demo kal')).toEqual({
+      action: AssistantActionId.EMPLOYEE_CLOSE_FOLLOW_UP,
+      outcome: 'demo kal',
+    });
     // Asking to see them is still a read.
-    expect(employee('meri visits dikhao')).toEqual({ action: AssistantActionId.EMPLOYEE_VISITS });
-    expect(employee('complete follow ups dikhao')).toMatchObject({ action: AssistantActionId.EMPLOYEE_FOLLOW_UPS });
+    expect(employee('meri visits dikhao')).toEqual({
+      action: AssistantActionId.EMPLOYEE_VISITS,
+    });
+    expect(employee('complete follow ups dikhao')).toMatchObject({
+      action: AssistantActionId.EMPLOYEE_FOLLOW_UPS,
+    });
   });
 
   it('batch 9: schedule a follow-up, edit my review, admin shop activity', () => {
     expect(employee('Sharma Salon ka follow up kal 4 baje lagao')).toEqual({
-      action: AssistantActionId.EMPLOYEE_SCHEDULE_FOLLOW_UP, day: { kind: 'offset', days: 1 }, time: '16:00', channel: 'CALL', notes: null,
+      action: AssistantActionId.EMPLOYEE_SCHEDULE_FOLLOW_UP,
+      day: { kind: 'offset', days: 1 },
+      time: '16:00',
+      channel: 'CALL',
+      notes: null,
     });
-    expect(employee('Sharma Salon ka whatsapp follow up somvar ko rakho: menu bhejna')).toMatchObject({
-      channel: 'WHATSAPP', day: { kind: 'weekday', dow: 1 }, notes: 'menu bhejna',
+    expect(
+      employee(
+        'Sharma Salon ka whatsapp follow up somvar ko rakho: menu bhejna',
+      ),
+    ).toMatchObject({
+      channel: 'WHATSAPP',
+      day: { kind: 'weekday', dow: 1 },
+      notes: 'menu bhejna',
     });
-    expect(employee('Sharma Salon ka follow up ho gaya')).toMatchObject({ action: AssistantActionId.EMPLOYEE_CLOSE_FOLLOW_UP });
-    expect(customer('Haircut ka review badlo 4 star')).toEqual({ action: AssistantActionId.REVIEW_EDIT, rating: 4, comment: null });
-    expect(customer('Haircut ko 5 star review do')).toMatchObject({ action: AssistantActionId.REVIEW_WRITE });
+    expect(employee('Sharma Salon ka follow up ho gaya')).toMatchObject({
+      action: AssistantActionId.EMPLOYEE_CLOSE_FOLLOW_UP,
+    });
+    expect(customer('Haircut ka review badlo 4 star')).toEqual({
+      action: AssistantActionId.REVIEW_EDIT,
+      rating: 4,
+      comment: null,
+    });
+    expect(customer('Haircut ko 5 star review do')).toMatchObject({
+      action: AssistantActionId.REVIEW_WRITE,
+    });
     const admin = (t: string) => parseAssistantText(t, 'admin', 2026);
-    expect(admin('aaj kaunsi shops busy hain')).toEqual({ action: AssistantActionId.ADMIN_SHOP_ACTIVITY, days: 1 });
-    expect(admin('is hafte ki shop activity')).toEqual({ action: AssistantActionId.ADMIN_SHOP_ACTIVITY, days: 7 });
+    expect(admin('aaj kaunsi shops busy hain')).toEqual({
+      action: AssistantActionId.ADMIN_SHOP_ACTIVITY,
+      days: 1,
+    });
+    expect(admin('is hafte ki shop activity')).toEqual({
+      action: AssistantActionId.ADMIN_SHOP_ACTIVITY,
+      days: 7,
+    });
   });
 
   it('batch 11: admin customer and staff analytics with a time range', () => {
     const admin = (t: string) => parseAssistantText(t, 'admin', 2026);
-    expect(admin('is mahine kitne naye customers aaye')).toEqual({ action: AssistantActionId.ADMIN_CUSTOMER_ANALYTICS, days: 30 });
-    expect(admin('aaj kitne customers aaye')).toEqual({ action: AssistantActionId.ADMIN_CUSTOMER_ANALYTICS, days: 1 });
-    expect(admin('is hafte staff analytics')).toEqual({ action: AssistantActionId.ADMIN_STAFF_ANALYTICS, days: 7 });
+    expect(admin('is mahine kitne naye customers aaye')).toEqual({
+      action: AssistantActionId.ADMIN_CUSTOMER_ANALYTICS,
+      days: 30,
+    });
+    expect(admin('aaj kitne customers aaye')).toEqual({
+      action: AssistantActionId.ADMIN_CUSTOMER_ANALYTICS,
+      days: 1,
+    });
+    expect(admin('is hafte staff analytics')).toEqual({
+      action: AssistantActionId.ADMIN_STAFF_ANALYTICS,
+      days: 7,
+    });
     // Earlier admin meanings keep priority.
-    expect(admin('sales team ka kaam dikhao')).toEqual({ action: AssistantActionId.ADMIN_CRM_OVERVIEW });
-    expect(admin('aaj kaunsi shops busy hain')).toMatchObject({ action: AssistantActionId.ADMIN_SHOP_ACTIVITY });
+    expect(admin('sales team ka kaam dikhao')).toEqual({
+      action: AssistantActionId.ADMIN_CRM_OVERVIEW,
+    });
+    expect(admin('aaj kaunsi shops busy hain')).toMatchObject({
+      action: AssistantActionId.ADMIN_SHOP_ACTIVITY,
+    });
     // A shop owner's "customers" stays a shop phrase.
-    expect(shop('mere customers dikhao')?.action).not.toBe(AssistantActionId.ADMIN_CUSTOMER_ANALYTICS);
+    expect(shop('mere customers dikhao')?.action).not.toBe(
+      AssistantActionId.ADMIN_CUSTOMER_ANALYTICS,
+    );
   });
 
   it('language still works for an employee; shop phrases do not', () => {
-    expect(employee('meri language hindi karo')).toEqual({ action: AssistantActionId.LANGUAGE_SET, language: 'HI' });
+    expect(employee('meri language hindi karo')).toEqual({
+      action: AssistantActionId.LANGUAGE_SET,
+      language: 'HI',
+    });
     expect(employee('aaj ki queue dikhao')).toBeNull();
     expect(employee('Haircut 200 se 150 karo')).toBeNull();
   });
 
   it('admin reads: verification queue with a status, CRM team overview; revenue words stay with the overview', () => {
     const admin = (t: string) => parseAssistantText(t, 'admin', 2026);
-    expect(admin('pending verification dikhao')).toEqual({ action: AssistantActionId.ADMIN_VERIFICATION_QUEUE, status: null });
-    expect(admin('rejected verifications dikhao')).toEqual({ action: AssistantActionId.ADMIN_VERIFICATION_QUEUE, status: 'REJECTED' });
-    expect(admin('sales team ka kaam dikhao')).toEqual({ action: AssistantActionId.ADMIN_CRM_OVERVIEW });
-    expect(admin('CRM overview')).toEqual({ action: AssistantActionId.ADMIN_CRM_OVERVIEW });
-    expect(admin('is mahine ki sales kitni hui')).toMatchObject({ action: AssistantActionId.ADMIN_OVERVIEW });
-    expect(admin('kitni shops open hain')).toEqual({ action: AssistantActionId.ADMIN_SHOP_STATUS });
+    expect(admin('pending verification dikhao')).toEqual({
+      action: AssistantActionId.ADMIN_VERIFICATION_QUEUE,
+      status: null,
+    });
+    expect(admin('rejected verifications dikhao')).toEqual({
+      action: AssistantActionId.ADMIN_VERIFICATION_QUEUE,
+      status: 'REJECTED',
+    });
+    expect(admin('sales team ka kaam dikhao')).toEqual({
+      action: AssistantActionId.ADMIN_CRM_OVERVIEW,
+    });
+    expect(admin('CRM overview')).toEqual({
+      action: AssistantActionId.ADMIN_CRM_OVERVIEW,
+    });
+    expect(admin('is mahine ki sales kitni hui')).toMatchObject({
+      action: AssistantActionId.ADMIN_OVERVIEW,
+    });
+    expect(admin('kitni shops open hain')).toEqual({
+      action: AssistantActionId.ADMIN_SHOP_STATUS,
+    });
     // Never from shop or employee screens.
-    expect(shop('pending verification dikhao')?.action).not.toBe(AssistantActionId.ADMIN_VERIFICATION_QUEUE);
-    expect(employee('CRM overview')?.action).not.toBe(AssistantActionId.ADMIN_CRM_OVERVIEW);
+    expect(shop('pending verification dikhao')?.action).not.toBe(
+      AssistantActionId.ADMIN_VERIFICATION_QUEUE,
+    );
+    expect(employee('CRM overview')?.action).not.toBe(
+      AssistantActionId.ADMIN_CRM_OVERVIEW,
+    );
   });
 
   it('employee phrases are not reachable from shop or customer screens', () => {
-    for (const t of ['mere leads dikhao', 'overdue follow ups', 'meri visits dikhao']) {
+    for (const t of [
+      'mere leads dikhao',
+      'overdue follow ups',
+      'meri visits dikhao',
+    ]) {
       for (const r of [shop(t), customer(t)]) {
         expect(String(r?.action ?? '')).not.toMatch(/^employee\./);
       }
