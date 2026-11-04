@@ -23,9 +23,28 @@
       "env": {
         "EXPO_PUBLIC_FASTQUE_CREDITS_ENABLED": "false"
       }
+    },
+    "android-internal-1-0-7": {
+      "extends": "production",
+      "distribution": "store",
+      "environment": "production",
+      "channel": "preview",
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_FASTQUE_CREDITS_ENABLED": "false"
+      },
+      "android": {
+        "buildType": "app-bundle"
+      }
     }
   },
   "submit": {
-    "production": {}
+    "production": {},
+    "android-internal-1-0-7": {
+      "android": {
+        "track": "internal",
+        "releaseStatus": "draft"
+      }
+    }
   }
 }
