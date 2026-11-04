@@ -15,6 +15,7 @@ Branch `claude/fastque-action-assistant-362`, Draft PR #363. **Nothing here is d
   - `B9` = `test/assistant-batch9.e2e-spec.ts`
   - `B11` = `test/assistant-batch11.e2e-spec.ts` (batch 10 was UI only)
   - `B12` = `test/assistant-batch12.e2e-spec.ts`
+  - `B13` = `test/assistant-batch13.e2e-spec.ts`
   - Every suite also passes twice in a row in one shared database, as CI's full-suite step runs it.
   - `unit` = parser, interpreter and transcriber specs
 - **CI** is the GitHub *Owner Operations Certification* workflow, which runs P1, P2, B3–B9, B11 and B12.
@@ -27,7 +28,7 @@ All 32 actions share these rules:
 - Every step writes an audit row with no transcript text.
 - The screen updates only after the server reports success (`refresh` → the page re-fetches from the API).
 
-## 1. Actions the assistant runs (80)
+## 1. Actions the assistant runs (83)
 
 **Access levels**
 - `owner/admin` = `assertOwnerOrAdminAccess` (the shop owner or a delegated platform admin).
@@ -119,6 +120,9 @@ All 32 actions share these rules:
 | 78 | `staff.myWork` | Owner, staff, admin | `StaffWorkService.getMyWork` — the barber's own day: serving now, appointments left, queue they can take; customer phone numbers never read out | team/admin | – | "Mera aaj ka kaam dikhao" | B12 (other shop denied) |
 | 79 | `analytics.cancellations` | Owner, admin | `CancellationAnalyticsService.getAnalytics` (7/30/90 days; by who, service, reason; live-queue drops separate) | owner/admin | – | "Is hafte ki cancellations" | B12 (barber and other shop denied) |
 | 80 | `me.credits` | Customer | `CustomerCreditsService.getBalance` (own account) | self | – | "Mere credits kitne hain" | B12 (staff denied) |
+| 81 | `analytics.bookingSources` | Owner, admin | `BookingAttributionService.summarize` (today / 7 / 30 days in the shop's timezone; counts by source and tracked link, no customer rows) | owner/admin | – | "Is mahine bookings kahan se aayi" | B13 (barber and other shop denied) |
+| 82 | `queue.autoAssignView` | Owner, staff, admin | `QueueAutoAssignService.getAutomaticAssignment` | team/admin | – | "Auto assign on hai kya" | B13 |
+| 83 | `queue.autoAssignSet` | Owner, admin | `QueueAutoAssignService.setAutomaticAssignment` (reversible; existing audit row; no customer message). A question is always the read; only an explicit on/off command previews the write | owner/admin | yes | "Auto assign band karo" | B13 (barber, other shop and stolen token denied; replay and stale preview refused) |
 
 **Cross-cutting negative tests**
 - Another shop's owner is denied, even when the request names the victim shop.
@@ -190,7 +194,7 @@ The full route list is in [ROUTE_INVENTORY.md](ROUTE_INVENTORY.md). Status meani
 | `hours` | Opening hours page | `useAssistantRefresh("hours")` |
 | `bookings` | Bookings list and day schedule | `useAssistantRefresh("bookings")` |
 | `customers` | Customer directory | `useAssistantRefresh("customers")` |
-| `queue` | Live Queue | Server realtime events (existing) |
+| `queue` | Live Queue; automatic-assignment switch in Shop Settings | Server realtime events (existing); `useAssistantRefresh("queue")` in `AutoAssignSetting` |
 | `myBookings`, `myQueue` | Customer "My bookings" | `useAssistantRefresh("myBookings" / "myQueue")` |
 | `chairs` | Chairs page | `useAssistantRefresh("chairs")` |
 | `offers` | Offers workspace | `useAssistantRefresh("offers")` |

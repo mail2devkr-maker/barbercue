@@ -137,6 +137,10 @@ export const AssistantActionId = {
   STAFF_MY_WORK: "staff.myWork",
   CANCELLATION_ANALYTICS: "analytics.cancellations",
   MY_CREDITS: "me.credits",
+  // batch 13: where bookings come from (owner/admin read), automatic staff assignment (view + switch)
+  BOOKING_SOURCES: "analytics.bookingSources",
+  AUTO_ASSIGN_VIEW: "queue.autoAssignView",
+  AUTO_ASSIGN_SET: "queue.autoAssignSet",
 } as const;
 export type AssistantActionId = (typeof AssistantActionId)[keyof typeof AssistantActionId];
 

@@ -548,4 +548,23 @@ export const ASSISTANT_ACTIONS: Record<AssistantActionId, ActionDef> = {
     'SELF',
     ['Mere credits kitne hain'],
   ),
+  // ---- batch 13: booking sources (read), automatic staff assignment (view + reversible switch)
+  [AssistantActionId.BOOKING_SOURCES]: read(
+    'Where bookings come from',
+    SHOP_MANAGERS,
+    'OWNER_OR_ADMIN',
+    ['Is mahine bookings kahan se aayi', 'Booking sources dikhao'],
+  ),
+  [AssistantActionId.AUTO_ASSIGN_VIEW]: read(
+    'Automatic staff assignment status',
+    SHOP_TEAM,
+    'STAFF_OR_ADMIN',
+    ['Auto assign on hai kya'],
+  ),
+  [AssistantActionId.AUTO_ASSIGN_SET]: write(
+    'Switch automatic staff assignment on or off',
+    SHOP_MANAGERS,
+    'OWNER_OR_ADMIN',
+    ['Auto assign band karo', 'Auto assign chalu karo'],
+  ),
 };

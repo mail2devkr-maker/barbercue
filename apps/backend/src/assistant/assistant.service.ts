@@ -79,6 +79,9 @@ import { BATCH12_HANDLERS } from './actions/batch12.actions';
 import { StaffWorkService } from '../owner-ops/staff-work.service';
 import { CancellationAnalyticsService } from '../owner-ops/cancellation-analytics.service';
 import { CustomerCreditsService } from '../credits/customer-credits.service';
+import { BATCH13_HANDLERS } from './actions/batch13.actions';
+import { BookingAttributionService } from '../owner-ops/booking-attribution.service';
+import { QueueAutoAssignService } from '../owner-ops/queue-auto-assign.service';
 import { AdminCustomerAnalyticsService } from '../admin/analytics/admin-customer-analytics.service';
 import { AdminStaffAnalyticsService } from '../admin/analytics/admin-staff-analytics.service';
 import { AdminShopActivityService } from '../admin/admin-shop-activity.service';
@@ -106,6 +109,7 @@ export const ASSISTANT_HANDLERS: HandlerMap = {
   ...BATCH9_HANDLERS,
   ...BATCH11_HANDLERS,
   ...BATCH12_HANDLERS,
+  ...BATCH13_HANDLERS,
 };
 
 const UNRELEASED: Record<'inventory' | 'onboarding', string> = {
@@ -163,6 +167,8 @@ export class AssistantService {
     staffWork: StaffWorkService,
     cancellations: CancellationAnalyticsService,
     credits: CustomerCreditsService,
+    attribution: BookingAttributionService,
+    autoAssign: QueueAutoAssignService,
     @Inject(ASSISTANT_INTERPRETER)
     private readonly interpreter: IntentInterpreter,
     @Inject(ASSISTANT_TRANSCRIBER) private readonly transcriber: Transcriber,
@@ -203,6 +209,8 @@ export class AssistantService {
       staffWork,
       cancellations,
       credits,
+      attribution,
+      autoAssign,
     };
   }
 

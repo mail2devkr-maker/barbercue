@@ -41,6 +41,8 @@ import type { AdminStaffAnalyticsService } from '../../admin/analytics/admin-sta
 import type { StaffWorkService } from '../../owner-ops/staff-work.service';
 import type { CancellationAnalyticsService } from '../../owner-ops/cancellation-analytics.service';
 import type { CustomerCreditsService } from '../../credits/customer-credits.service';
+import type { BookingAttributionService } from '../../owner-ops/booking-attribution.service';
+import type { QueueAutoAssignService } from '../../owner-ops/queue-auto-assign.service';
 import type { SealedWrite } from '../assistant-confirmation';
 import { matchByName } from '../assistant-parser';
 
@@ -114,6 +116,8 @@ export interface Deps {
   staffWork: StaffWorkService;
   cancellations: CancellationAnalyticsService;
   credits: CustomerCreditsService;
+  attribution: BookingAttributionService;
+  autoAssign: QueueAutoAssignService;
 }
 
 export interface PlanCtx {
