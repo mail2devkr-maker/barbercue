@@ -29,7 +29,13 @@ test('resolves Hajipur against canonical active city records, not a guessed slug
   expect(citySearch).toHaveBeenCalledTimes(1);
 });
 
-test('rejects an ambiguous district, wrong country or duplicate city', async () => {
+test('accepts a geocoder subregion only when it exactly matches a canonical city', async () => {
+  geo.mockResolvedValue([{ city: null, subregion: 'Hajipur', isoCountryCode: 'IN' }]);
+  citySearch.mockResolvedValue([hajipur]);
+  await expect(findCityForDeviceLocation({ lat: 25.69, lng: 85.22 })).resolves.toEqual(hajipur);
+});
+
+test('rejects an unresolved state, wrong country or duplicate city', async () => {
   geo.mockResolvedValue([{ city: null, region: 'Bihar' }]);
   citySearch.mockResolvedValue([hajipur]);
   await expect(findCityForDeviceLocation({ lat: 25.69, lng: 85.22 })).resolves.toBeNull();
