@@ -40,8 +40,6 @@ export default function AdminDashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [shopStatus, setShopStatus] = useState<"ALL" | SalonStatus>("ALL");
-  const [deletingShopId, setDeletingShopId] = useState<string | null>(null);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [statusShopId, setStatusShopId] = useState<string | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
   const [statusSuccess, setStatusSuccess] = useState<string | null>(null);
@@ -68,22 +66,6 @@ export default function AdminDashboardPage() {
       setStatusError(requestError instanceof ApiError ? `${requestError.message}${details ? ` (${details})` : ""}` : "Could not update this shop status.");
     } finally {
       setStatusShopId(null);
-    }
-  }
-
-  async function handleDeleteShop(shopId: string, shopName: string) {
-    if (!window.confirm(`Delete "${shopName}"? This cannot be undone. Only a shop with no staff, bookings, queue, review, or ledger activity can be deleted.`)) {
-      return;
-    }
-    setDeleteError(null);
-    setDeletingShopId(shopId);
-    try {
-      await apiFetch(`${ADMIN_PATHS.admin}/${ADMIN_PATHS.shops}/${shopId}`, { method: "DELETE" });
-      setData((current) => current ? { ...current, shops: current.shops.filter((shop) => shop.id !== shopId), counts: { ...current.counts, shops: current.counts.shops - 1 } } : current);
-    } catch (requestError) {
-      setDeleteError(requestError instanceof ApiError ? requestError.message : "Could not delete this shop.");
-    } finally {
-      setDeletingShopId(null);
     }
   }
 
@@ -224,7 +206,6 @@ export default function AdminDashboardPage() {
 
           <section className={styles.section}>
             <div className={styles.sectionHeader}><h2>Shops</h2><span>{shops.length} shown · latest 100</span></div>
-            {deleteError && <p className={styles.error} role="alert">{deleteError}</p>}
             {statusError && <p className={styles.error} role="alert">{statusError}</p>}
             {statusSuccess && <p className={styles.success} role="status">{statusSuccess}</p>}
             <div className={styles.tableWrap}>
@@ -246,9 +227,9 @@ export default function AdminDashboardPage() {
                             {statusShopId === shop.id ? "Saving…" : getNextShopStatus(shop.status)?.label}
                           </Button>
                         )}
-                        <Button type="button" variant="outline" disabled={deletingShopId === shop.id} onClick={() => void handleDeleteShop(shop.id, shop.name)}>
-                          {deletingShopId === shop.id ? "Deleting…" : "Delete"}
-                        </Button>
+                        <span className={styles.readOnlyBadge} title="Shop deletion needs a Co-Founder request, a different Super Admin's fresh TOTP approval, and a 30-day recovery period.">
+                          Deletion approval required
+                        </span>
                       </>
                     )}
                   </td>
