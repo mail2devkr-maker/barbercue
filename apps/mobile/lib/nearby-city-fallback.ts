@@ -38,8 +38,9 @@ export async function findCityForDeviceLocation(coords: Coords): Promise<CityDto
     [] as Location.LocationGeocodedAddress[],
   );
   const address = addresses[0];
-  if (!address?.city) return null; // A district/state is not proof of an exact city.
-  const name = normalized(address.city);
+  const cityLabel = address?.city || address?.subregion;
+  if (!cityLabel) return null; // Never substitute a state or a country.
+  const name = normalized(cityLabel);
   if (!name) return null;
   const cities = await bounded(apiFetch<CityDto[]>(DISCOVERY_PATHS.cities), [] as CityDto[]);
   const matches = cities.filter((candidate) =>
