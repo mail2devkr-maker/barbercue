@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as Location from 'expo-location';
 import {
   DISCOVERY_PATHS,
+  Language,
   FAVORITES_PATHS,
   MIN_RATING_OPTIONS,
   POPULAR_SERVICES,
@@ -39,6 +40,7 @@ import {
 import { useLanguage } from '../lib/language-context';
 import { useAuth } from '../lib/auth-context';
 import { DEFAULT_DISCOVERY_FILTERS, buildDiscoveryQuery, type DiscoveryFilters } from '../lib/discovery-search';
+import { findCityForDeviceLocation, buildCityFallbackQuery, appendUnpinnedCitySalons } from '../lib/nearby-city-fallback';
 import type { SearchStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<SearchStackParamList, 'SalonSearch'>;
@@ -275,7 +277,7 @@ function PriceFilterDropdown({
 
 // Public discovery endpoint — no auth required, mirrors apps/web's search page.
 export default function SalonSearchScreen({ navigation, route }: Props) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { width: windowWidth } = useWindowDimensions();
   const stackSearchRow = windowWidth < NARROW_SEARCH_ROW_WIDTH;
   const selectedStyleName = route.params?.selectedStyleName;
@@ -288,6 +290,7 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searched, setSearched] = useState(false);
+  const searchSequence = useRef(0);
   const [nearMe, setNearMe] = useState<{ lat: number; lng: number } | null>(
     initialLat !== undefined && initialLng !== undefined ? { lat: initialLat, lng: initialLng } : null,
   );
@@ -356,6 +359,7 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
   ) {
     const filters: DiscoveryFilters = { radiusKm, priceMin, priceMax, service, ...discovery, ...overrides };
     const built = buildDiscoveryQuery({ text: queryOverride ?? q, coords, filters, favoriteIds: isCustomer ? favoriteIds : null });
+    const requestId = ++searchSequence.current;
     setSearched(true);
     setError(null);
     setNotice(null);
@@ -369,9 +373,37 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
       const result = await apiFetch<PaginatedResult<SalonListItemDto>>(
         `${DISCOVERY_PATHS.salons}?${built.query}`,
       );
+      if (requestId !== searchSequence.current) return;
       setResults(result.items);
+
+      // Most older salon records have no verified shop pin and are excluded
+      // from GPS distance ranking. Without a hard radius, show *only* unpinned
+      // shops in the canonical current city after real distance-ranked shops.
+      if (coords && filters.radiusKm === null) {
+        const city = await findCityForDeviceLocation(coords);
+        if (requestId !== searchSequence.current) return;
+        if (city) {
+          try {
+            const byCity = await apiFetch<PaginatedResult<SalonListItemDto>>(
+              `${DISCOVERY_PATHS.salons}?${buildCityFallbackQuery(built.query, city)}`,
+            );
+            if (requestId !== searchSequence.current) return;
+            const combined = appendUnpinnedCitySalons(result.items, byCity.items);
+            if (combined.length > result.items.length) {
+              setResults(combined);
+              setNotice(language === Language.HI
+                ? `${city.name} के कुछ सैलून के मैप पिन उपलब्ध नहीं हैं। उनकी दूरी नहीं बताई जा सकती।`
+                : `Some ${city.name} shops have no confirmed map pin; their distance is unavailable.`);
+            }
+          } catch {
+            // Keep actual GPS results if the optional city lookup fails.
+          }
+        }
+      }
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t.couldNotSearchSalons);
+      if (requestId === searchSequence.current) {
+        setError(err instanceof ApiError ? err.message : t.couldNotSearchSalons);
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
