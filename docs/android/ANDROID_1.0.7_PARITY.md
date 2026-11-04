@@ -71,10 +71,11 @@ Therefore this matrix does **not** certify 100% website parity or a Play-ready p
 ## Candidate verification evidence
 
 - Android release configuration resolves to version/runtime **1.0.7** while iOS is explicitly pinned to its existing **1.0.6** version/runtime; config assertions cover both platform values and identifiers.
-- Mobile local regression: **43 suites / 296 tests passed** before the additional taxonomy picker UI test was added. The unchanged `salon-search-discovery` test `sends the new filters and shows the compared service price and salon type` previously timed out locally at Jest's 5-second limit; the exact-head GitHub CI run for current source is pending.
+- Mobile local full regression: **44 suites / 298 tests passed**, including the taxonomy picker UI and Expo Updates platform-runtime resolver assertions. An earlier local discovery-test timeout did not recur in this complete run.
 - Shared package: **26 suites / 500 tests passed**; TypeScript build passed.
 - Mobile TypeScript: passed.
 - Owner Business center and taxonomy focused tests: **14/14 passed** locally, covering recorded-versus-estimated revenue, shop-local date filtering, fail-closed offers, Draft create/preview/edit, review responses, salon-switch clearing, stable service category selection, and taxonomy payload helpers.
+- Expo platform runtime resolver suite: **13/13 passed**; the SDK 57 resolver reports Android `1.0.7` and iOS `1.0.6`.
 - Owner settings tests: **5/5 passed**; validate selected-salon reads, shared-schema rejection, profile updates, explicit timezone confirmation, stale-data clearing on salon switch and Hindi labels.
 - Staff profile editing tests: **3/3 passed**; validate salon-scoped name/bio/experience updates, schema rejection, and Hindi labels. Staff access revocation and employment status are not changed by this editor.
 - Android JavaScript export: passed after the parity increment (1,212 modules; approximately 3.4 MB Hermes bundle).
