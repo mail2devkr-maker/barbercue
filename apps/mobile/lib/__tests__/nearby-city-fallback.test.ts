@@ -6,7 +6,7 @@ import * as Location from 'expo-location';
 import { apiFetch } from '../api';
 import {
   findCityForDeviceLocation, buildCityFallbackQuery,
-  appendUnpinnedCitySalons, __resetCityFallbackCacheForTests,
+  appendCityMatchesToNearby, __resetCityFallbackCacheForTests,
 } from '../nearby-city-fallback';
 import type { CityDto, SalonListItemDto } from '@barbercue/shared';
 
@@ -54,8 +54,12 @@ test('city query removes GPS and distance sort, retains filtering', () => {
   expect(params.get('countryCode')).toBe('IN');
 });
 
-test('appends only unique unpinned city salons after real-distance results', () => {
+test('appends unique city shops after GPS matches with real or unknown distance', () => {
   const located = [salon('nearby', 25.68, 85.21)];
-  const city = [salon('nearby', 25.68, 85.21), salon('unknown', null, null), salon('far', 25.5, 85.1), salon('unknown', null, null)];
-  expect(appendUnpinnedCitySalons(located, city).map((s) => s.id)).toEqual(['nearby', 'unknown']);
+  const city = [salon('nearby', 25.68, 85.21), salon('unknown', null, null), salon('pinned', 25.5, 85.1), salon('unknown', null, null)];
+  const result = appendCityMatchesToNearby(located, city, { lat: 25.69, lng: 85.22 });
+  expect(result.map((s) => s.id)).toEqual(['nearby', 'unknown', 'pinned']);
+  expect(result[1].distanceKm).toBeNull();
+  expect(result[2].distanceKm).toBeGreaterThan(0);
+  expect(result[0]).toBe(located[0]);
 });
