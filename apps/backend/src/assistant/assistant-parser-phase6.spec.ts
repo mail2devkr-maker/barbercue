@@ -24,6 +24,19 @@ describe('assistant batch 6 intents (field employee, read-only)', () => {
     expect(employee('Haircut 200 se 150 karo')).toBeNull();
   });
 
+  it('admin reads: verification queue with a status, CRM team overview; revenue words stay with the overview', () => {
+    const admin = (t: string) => parseAssistantText(t, 'admin', 2026);
+    expect(admin('pending verification dikhao')).toEqual({ action: AssistantActionId.ADMIN_VERIFICATION_QUEUE, status: null });
+    expect(admin('rejected verifications dikhao')).toEqual({ action: AssistantActionId.ADMIN_VERIFICATION_QUEUE, status: 'REJECTED' });
+    expect(admin('sales team ka kaam dikhao')).toEqual({ action: AssistantActionId.ADMIN_CRM_OVERVIEW });
+    expect(admin('CRM overview')).toEqual({ action: AssistantActionId.ADMIN_CRM_OVERVIEW });
+    expect(admin('is mahine ki sales kitni hui')).toMatchObject({ action: AssistantActionId.ADMIN_OVERVIEW });
+    expect(admin('kitni shops open hain')).toEqual({ action: AssistantActionId.ADMIN_SHOP_STATUS });
+    // Never from shop or employee screens.
+    expect(shop('pending verification dikhao')?.action).not.toBe(AssistantActionId.ADMIN_VERIFICATION_QUEUE);
+    expect(employee('CRM overview')?.action).not.toBe(AssistantActionId.ADMIN_CRM_OVERVIEW);
+  });
+
   it('employee phrases are not reachable from shop or customer screens', () => {
     for (const t of ['mere leads dikhao', 'overdue follow ups', 'meri visits dikhao']) {
       for (const r of [shop(t), customer(t)]) {

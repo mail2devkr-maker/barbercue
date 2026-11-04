@@ -71,6 +71,9 @@ import { BATCH3_HANDLERS } from './actions/batch3.actions';
 import { BATCH4_HANDLERS } from './actions/batch4.actions';
 import { BATCH5_HANDLERS } from './actions/batch5.actions';
 import { BATCH6_HANDLERS } from './actions/batch6.actions';
+import { BATCH7_HANDLERS } from './actions/batch7.actions';
+import { AdminVerificationService } from '../admin/admin-verification.service';
+import { AdminCrmService } from '../admin/admin-crm.service';
 import { EmployeeService } from '../employee/employee.service';
 import { SalonProfileService } from '../salon-setup/salon-profile.service';
 import { ReviewsService } from '../reviews/reviews.service';
@@ -88,6 +91,7 @@ export const ASSISTANT_HANDLERS: HandlerMap = {
   ...BATCH4_HANDLERS,
   ...BATCH5_HANDLERS,
   ...BATCH6_HANDLERS,
+  ...BATCH7_HANDLERS,
 };
 
 const UNRELEASED: Record<'inventory' | 'onboarding', string> = {
@@ -137,6 +141,8 @@ export class AssistantService {
     customerReviews: ReviewsService,
     auth: AuthService,
     employee: EmployeeService,
+    verification: AdminVerificationService,
+    crm: AdminCrmService,
     @Inject(ASSISTANT_INTERPRETER)
     private readonly interpreter: IntentInterpreter,
     @Inject(ASSISTANT_TRANSCRIBER) private readonly transcriber: Transcriber,
@@ -169,6 +175,8 @@ export class AssistantService {
       customerReviews,
       auth,
       employee,
+      verification,
+      crm,
     };
   }
 

@@ -10,8 +10,9 @@ Branch `claude/fastque-action-assistant-362`, Draft PR #363. **Nothing here is d
   - `B4` = `test/assistant-batch4.e2e-spec.ts`
   - `B5` = `test/assistant-batch5.e2e-spec.ts`
   - `B6` = `test/assistant-batch6.e2e-spec.ts`
+  - `B7` = `test/assistant-batch7.e2e-spec.ts`
   - `unit` = parser, interpreter and transcriber specs
-- **CI** is the GitHub *Owner Operations Certification* workflow, which runs P1, P2, B3, B4, B5 and B6.
+- **CI** is the GitHub *Owner Operations Certification* workflow, which runs P1, P2, B3, B4, B5, B6 and B7.
 - **Live** and **Physical** are "no" for every row, because the assistant has never been deployed and has never had a real-microphone or real-device test.
 
 All 32 actions share these rules:
@@ -21,7 +22,7 @@ All 32 actions share these rules:
 - Every step writes an audit row with no transcript text.
 - The screen updates only after the server reports success (`refresh` → the page re-fetches from the API).
 
-## 1. Actions the assistant runs (68)
+## 1. Actions the assistant runs (70)
 
 **Access levels**
 - `owner/admin` = `assertOwnerOrAdminAccess` (the shop owner or a delegated platform admin).
@@ -101,6 +102,8 @@ All 32 actions share these rules:
 | 66 | `employee.leads` | Field employee | `EmployeeService.listLeads` with an optional status (new, contacted, interested, demo, onboarded, lost); phone numbers and notes are not read out | employee session | – | "Interested leads dikhao" | B6 (another employee's leads never shown) |
 | 67 | `employee.followUps` | Field employee | `EmployeeService.listFollowUps` (open; "overdue" filters to past due) | employee session | – | "Overdue follow ups" | B6 |
 | 68 | `employee.visits` | Field employee | `EmployeeService.listVisits` | employee session | – | "Meri visits dikhao" | B6 (wrong session audience and customer denied) |
+| 69 | `admin.verificationQueue` | Platform admin, co-founder | `AdminVerificationService.list` (oldest first; optional status) — read only; approve/reject stays in the admin screen; submitter phone/email never shown | platform (same roles as the route) | – | "Pending verification dikhao" | B7 (HR, sales, viewer and non-admin session denied; nothing decided) |
+| 70 | `admin.crmOverview` | Platform admin, co-founder, HR, sales | `AdminCrmService.getOverview` (team counts, top employees) | platform (same roles as the route) | – | "Sales team ka kaam dikhao" | B7 (viewer denied) |
 
 **Cross-cutting negative tests**
 - Another shop's owner is denied, even when the request names the victim shop.
@@ -131,7 +134,7 @@ The full route list is in [ROUTE_INVENTORY.md](ROUTE_INVENTORY.md). Status meani
 | Customer: profile name/email edit, edit or delete a review | Customer | auth profile, reviews | NEXT | Write a review and language are done (#63, #64) |
 | Guest (not signed in) actions | Guest | guest queue routes | BLOCKED | The assistant requires sign-in; guests keep the existing OTP and guest flows |
 | Field employee: create or update a lead, log a visit, close a follow-up, onboard a shop | Employee | employee module | NEXT | Reads are done (#65–68) on the web employee page. Onboarding a shop creates a salon and stays in the guided screen. Android UI is Codex's lane, by API contract only |
-| Platform admin: verification queue, shop activity, CRM, exports | Admin | admin module | NEXT (read) / BLOCKED (decisions) | Overview and shop status are done (#53, #54). Verify/suspend and exports need owner sign-off |
+| Platform admin: shop activity, customer/staff analytics; verify/suspend decisions; exports | Admin | admin module | NEXT (read) / BLOCKED (decisions) | Overview, shop status, verification queue and CRM overview are done (#53, #54, #69, #70). Verify/suspend, roles and exports need owner sign-off |
 | Platform viewer | Viewer | admin read endpoints | Partly done | Reads #53 and #54; never writes (tested) |
 | Inventory (stock, products, recipes, forecasts) | Owner | R7 #357 routes | BLOCKED | Not deployed; R7 waits on the fresh P1 backup. Returns UNAVAILABLE today |
 | Salon onboarding (applications, status) | Employee, admin | R8 #358 routes | BLOCKED | Not deployed; activation and publishing are off by default even after R8 |

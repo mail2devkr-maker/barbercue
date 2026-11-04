@@ -120,6 +120,9 @@ export const AssistantActionId = {
   EMPLOYEE_LEADS: "employee.leads",
   EMPLOYEE_FOLLOW_UPS: "employee.followUps",
   EMPLOYEE_VISITS: "employee.visits",
+  // batch 7: platform reads with the admin routes' own audiences (ADMIN session)
+  ADMIN_VERIFICATION_QUEUE: "admin.verificationQueue",
+  ADMIN_CRM_OVERVIEW: "admin.crmOverview",
 } as const;
 export type AssistantActionId = (typeof AssistantActionId)[keyof typeof AssistantActionId];
 

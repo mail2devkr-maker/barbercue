@@ -461,4 +461,17 @@ export const ASSISTANT_ACTIONS: Record<AssistantActionId, ActionDef> = {
     'EMPLOYEE',
     ['Meri visits dikhao'],
   ),
+  // ---- batch 7: platform reads, same audiences as the admin routes (ADMIN session)
+  [AssistantActionId.ADMIN_VERIFICATION_QUEUE]: read(
+    'Verification queue (read only)',
+    [Role.PLATFORM_ADMIN, Role.CO_FOUNDER],
+    'PLATFORM',
+    ['Pending verification dikhao'],
+  ),
+  [AssistantActionId.ADMIN_CRM_OVERVIEW]: read(
+    'Field sales team overview',
+    [Role.PLATFORM_ADMIN, Role.CO_FOUNDER, Role.HR_ADMIN, Role.SALES_ADMIN],
+    'PLATFORM',
+    ['Sales team ka kaam dikhao', 'CRM overview'],
+  ),
 };

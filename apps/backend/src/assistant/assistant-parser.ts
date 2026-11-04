@@ -3,7 +3,12 @@ import { parsePhase2, type Phase2Intent } from './assistant-parser-phase2';
 import { parsePhase3, type Phase3Intent } from './assistant-parser-phase3';
 import { parsePhase4, type Phase4Intent } from './assistant-parser-phase4';
 import { parsePhase5, type Phase5Intent } from './assistant-parser-phase5';
-import { parsePhase6, type Phase6Intent } from './assistant-parser-phase6';
+import {
+  parseAdminReads,
+  parsePhase6,
+  type AdminReadIntent,
+  type Phase6Intent,
+} from './assistant-parser-phase6';
 
 /**
  * Deterministic English / Hindi / Hinglish interpreter for the Action Assistant (issue #362).
@@ -54,7 +59,8 @@ export type ParsedIntent =
   | Phase3Intent
   | Phase4Intent
   | Phase5Intent
-  | Phase6Intent;
+  | Phase6Intent
+  | AdminReadIntent;
 
 export function normalizeText(text: string): string {
   return (
@@ -172,6 +178,10 @@ export function parseAssistantText(
   if (phase5) return phase5;
   // A field employee's screens only offer their own CRM; shop and customer phrases do not apply.
   if (surface === 'employee') return parsePhase6(text);
+  if (surface === 'admin') {
+    const adminRead = parseAdminReads(text);
+    if (adminRead) return adminRead;
+  }
   if (surface === 'shop') {
     const phase4 = parsePhase4(text, raw, year);
     if (phase4) return phase4;

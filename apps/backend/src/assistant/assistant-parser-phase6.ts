@@ -1,4 +1,8 @@
-import { AssistantActionId, CrmLeadStatus } from '@barbercue/shared';
+import {
+  AssistantActionId,
+  CrmLeadStatus,
+  VerificationStatus,
+} from '@barbercue/shared';
 
 /**
  * Batch 6 intents (issue #362): a field employee's own CRM, read-only. Leads, follow-ups, visits
@@ -16,6 +20,13 @@ export type Phase6Intent =
       overdueOnly: boolean;
     }
   | { action: typeof AssistantActionId.EMPLOYEE_VISITS };
+
+export type AdminReadIntent =
+  | {
+      action: typeof AssistantActionId.ADMIN_VERIFICATION_QUEUE;
+      status: VerificationStatus | null;
+    }
+  | { action: typeof AssistantActionId.ADMIN_CRM_OVERVIEW };
 
 const W = (words: string) => new RegExp(`(?:^|\\s)(?:${words})(?=\\s|$)`, 'u');
 
@@ -49,5 +60,29 @@ export function parsePhase6(text: string): Phase6Intent | null {
   }
   if (SUMMARY.test(text))
     return { action: AssistantActionId.EMPLOYEE_DASHBOARD };
+  return null;
+}
+
+const VERIFICATION = W(
+  'verification|verify|verifications|kyc|सत्यापन|वेरिफिकेशन',
+);
+const CRM = W(
+  // Bare "sales" is revenue (admin overview); only team words mean the field-sales CRM.
+  'crm|sales team|field team|field employees|employees|leads|onboarding team|सेल्स टीम',
+);
+const VERIFICATION_STATUS: [RegExp, VerificationStatus][] = [
+  [W('under review|review mein|reviewing'), VerificationStatus.UNDER_REVIEW],
+  [W('approved|manjoor|मंजूर'), VerificationStatus.APPROVED],
+  [W('rejected|reject|namanjoor|नामंजूर'), VerificationStatus.REJECTED],
+];
+
+/** Platform reads on the admin screens (batch 7). Decisions are never parsed here. */
+export function parseAdminReads(text: string): AdminReadIntent | null {
+  if (VERIFICATION.test(text)) {
+    const status =
+      VERIFICATION_STATUS.find(([re]) => re.test(text))?.[1] ?? null;
+    return { action: AssistantActionId.ADMIN_VERIFICATION_QUEUE, status };
+  }
+  if (CRM.test(text)) return { action: AssistantActionId.ADMIN_CRM_OVERVIEW };
   return null;
 }

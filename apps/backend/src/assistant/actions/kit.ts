@@ -33,6 +33,8 @@ import type { SalonProfileService } from '../../salon-setup/salon-profile.servic
 import type { ReviewsService } from '../../reviews/reviews.service';
 import type { AuthService } from '../../auth/auth.service';
 import type { EmployeeService } from '../../employee/employee.service';
+import type { AdminVerificationService } from '../../admin/admin-verification.service';
+import type { AdminCrmService } from '../../admin/admin-crm.service';
 import type { SealedWrite } from '../assistant-confirmation';
 import { matchByName } from '../assistant-parser';
 
@@ -98,6 +100,8 @@ export interface Deps {
   customerReviews: ReviewsService;
   auth: AuthService;
   employee: EmployeeService;
+  verification: AdminVerificationService;
+  crm: AdminCrmService;
 }
 
 export interface PlanCtx {
