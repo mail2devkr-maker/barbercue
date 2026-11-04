@@ -70,7 +70,7 @@ Statuses: **SOURCE** means a native path and current API usage exist; **PARTIAL*
 
 Therefore this matrix does **not** certify 100% website parity or a Play-ready public release.
 
-## Candidate verification evidence
+## Historical local verification evidence (PR #367; not the current-master candidate)
 
 - Android release configuration resolves to version/runtime **1.0.7** while iOS is explicitly pinned to its existing **1.0.6** version/runtime; config assertions cover both platform values and identifiers.
 - Mobile local full regression: **44 suites / 298 tests passed**, including the taxonomy picker UI and Expo Updates platform-runtime resolver assertions. An earlier local discovery-test timeout did not recur in this complete run.
@@ -94,4 +94,24 @@ PR #367's exact head `41dc54d4efcdfb4013312c23e00666d3e1141f09` was certified ag
 
 ## Current Android 1.0.7 integration candidate
 
-The replacement candidate is based on current master `f0aa6acb3028ad24352b7225180c7ae88f67b3d7`. It carries the mobile delta from PR #367 without replacing the newly merged Assistant backend/web files, and adds the native inventory screen plus focused tests. Exact-head CI, local regression, AAB signing, EAS connectivity and physical acceptance are pending. No production action is authorized or claimed.
+Branch: `codex/android-107-ai-integration-20261104`  
+PR: #369 (OPEN / DRAFT)  
+Exact head: `d3f63e4447004028b014e8bb3e462bdc6fcc1dd2`  
+Base master: `f0aa6acb3028ad24352b7225180c7ae88f67b3d7`
+
+The candidate preserves the merged Assistant backend/web source and R7 inventory APIs from current master, carries the reviewed mobile changes from PRs #361/#364/#367, and adds native Inventory Management. PRs #361/#364/#367 remain separate Drafts. This is not 100% parity: the table above marks remaining sections PARTIAL/GAP.
+
+Exact-head GitHub certification passed:
+- Owner Operations Certification [run 41822455390](https://github.com/mail2devkr-maker/barbercue/actions/runs/41822455390): Android config validation, TypeScript, **47 Jest suites / 306 tests passed**, Android JavaScript export (1,219 modules); web TypeScript and production build passed; disposable PostgreSQL migrations and E2E passed. Baseline comparison reported 3 known backend unit failures, 18 known backend E2E failures, and 14 known web test failures, with **zero new failures**. The run also reported 85 table/sequence fingerprints matching and schema, indexes, constraints, triggers and financial guards verified on its disposable database.
+- Nitesh Admin + Discovery [run 41822455418](https://github.com/mail2devkr-maker/barbercue/actions/runs/41822455418): backend, web and mobile jobs passed; focused mobile discovery tests **7/7** and Android JS export passed.
+- Salon Location Verification [run 41822455413](https://github.com/mail2devkr-maker/barbercue/actions/runs/41822455413): full migration chain/checksums/schema drift checks passed; authenticated disposable-PostgreSQL location review **5/5** passed.
+
+The configuration check resolves Android version/runtime to **1.0.7**, iOS version/runtime to **1.0.6**, package to `com.dcw.fastque`, local versionCode seed **17**, and remote EAS auto-increment. The Android internal profile is configured for a store AAB, uses the isolated preview update channel, and targets Play internal track as a draft. This verifies repository configuration only; EAS's remote next versionCode, account authentication, signing readiness and build allowance are not verified by GitHub CI.
+
+Release gates still open:
+- No native signed AAB was built; remote EAS/build/signing verification is unavailable from this session.
+- No Google Play upload, OTA publication, master merge, production deployment, or database change occurred.
+- Physical Galaxy S20 FE acceptance is not certified; ADB/UI host access was unavailable in this session.
+- Owner/customer/employee authenticated runtime acceptance and parity rows marked PARTIAL/GAP remain open.
+
+No production action is authorized or claimed.
