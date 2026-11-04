@@ -9,6 +9,7 @@ import { AppModule } from '../src/app.module';
 import { AllExceptionsFilter } from '../src/common/filters/all-exceptions.filter';
 import { TokenService } from '../src/auth/services/token.service';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { AdminShopActivityService } from '../src/admin/admin-shop-activity.service';
 
 /**
  * Action Assistant batch 9 (issue #362) on a DISPOSABLE local database: an employee schedules a
@@ -133,7 +134,13 @@ maybe('Action Assistant batch 9 (e2e, disposable local database)', () => {
   it('shop activity: counts for the viewer, refused without an admin session', async () => {
     const r = await say('viewer', 'aaj kaunsi shops busy hain', 'admin');
     expect(r.status).toBe('DONE');
-    expect(r.result?.items?.map((i) => i.title)).toContain(`Asst9 Busy Shop ${run}`);
+    // A shared CI database has many busy shops and only the busiest 8 are listed, so compare the
+    // spoken totals with the service's own figures for today instead of looking for this shop.
+    const istToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
+    const truth = await app.get(AdminShopActivityService).getActivity({ from: istToday, to: istToday });
+    expect(truth.bookings.total).toBeGreaterThanOrEqual(2);
+    expect(r.message).toContain(`${truth.bookings.total} bookings (${truth.bookings.completed} completed)`);
+    expect(r.result?.items?.map((i) => i.title)).toEqual(truth.shops.slice(0, 8).map((s) => s.name));
     expect((await say('viewerWrongAudience', 'aaj kaunsi shops busy hain', 'admin')).status).toBe('DENIED');
     expect((await say('custA', 'aaj kaunsi shops busy hain', 'admin')).status).toBe('DENIED');
   });
