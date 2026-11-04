@@ -13,6 +13,8 @@ export const ASSISTANT_PATHS = {
   transcriptions: "transcriptions",
   // Always answers for a signed-in user: whether the assistant (and its writes) is on for them.
   access: "access",
+  // Dry run: which action a sentence (and its speech alternatives) would map to. Nothing runs.
+  interpretations: "interpretations",
 } as const;
 
 export const ASSISTANT_LIMITS = {
@@ -35,6 +37,11 @@ export const assistantTurnSchema = z.object({
   // Which screen the drawer is on. Only picks between same-worded intents ("cancel my
   // appointment" vs a shop cancelling one); it never grants anything.
   surface: z.enum(["shop", "customer", "admin", "employee"]).default("shop"),
+  // Issue #371: other hypotheses from the browser's speech recognizer, best first. The server may
+  // use one ONLY for a read or navigation, never for a change.
+  alternatives: z.array(z.string().trim().min(1).max(ASSISTANT_LIMITS.maxTextLength)).max(4).optional(),
+  // The recognizer's confidence in `text` (0..1), when the browser reports one.
+  confidence: z.number().min(0).max(1).nullable().optional(),
 });
 export type AssistantTurnInput = z.infer<typeof assistantTurnSchema>;
 
@@ -187,7 +194,28 @@ export interface AssistantTurnDto {
   // Screens whose data the server just changed; the client reloads them from the API.
   refresh?: AssistantResource[];
   navigateTo?: string;
+  // Issue #371: set when a speech ALTERNATIVE (not the top transcript) was used, so the screen can
+  // show "Understood as: ...".
+  understoodAs?: string;
   completedAt: string;
+}
+
+export const assistantInterpretationSchema = z.object({
+  text: z.string().trim().min(1).max(ASSISTANT_LIMITS.maxTextLength),
+  alternatives: z.array(z.string().trim().min(1).max(ASSISTANT_LIMITS.maxTextLength)).max(4).optional(),
+  surface: z.enum(["shop", "customer", "admin", "employee"]).default("shop"),
+});
+export type AssistantInterpretationInput = z.infer<typeof assistantInterpretationSchema>;
+
+/** What a sentence would map to; used by the voice accuracy check. Nothing is executed. */
+export interface AssistantInterpretationDto {
+  action: AssistantActionId | null;
+  kind: "READ" | "WRITE" | null;
+  /** The text that was understood (the top transcript, or the alternative that was used). */
+  usedText: string | null;
+  usedAlternative: boolean;
+  /** What the top transcript alone would have mapped to (before alternatives were considered). */
+  topAction: AssistantActionId | null;
 }
 
 export type AssistantResource =

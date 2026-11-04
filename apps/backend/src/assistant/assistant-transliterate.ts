@@ -168,10 +168,83 @@ add('saari', 'सारी');
 add('saare', 'सारे');
 
 /** The same sentence with every known Devanagari token written in Latin. Unknown tokens are kept. */
+/**
+ * Issue #371: Latin spellings that speech recognition produces for FastQue words (en-IN on
+ * Hinglish, accents, fast speech). Exact whole-word mappings only, to READ/navigation vocabulary;
+ * nothing maps INTO a change word (add, delete, cancel, price...), so a mishearing can never turn
+ * a question into an edit. Used only in the second reading, like the Devanagari map.
+ */
+const LATIN: Record<string, string> = {};
+function fix(latin: string, ...heard: string[]) {
+  for (const h of heard) LATIN[h] = latin;
+}
+fix(
+  'chairs',
+  'chears',
+  'cheyars',
+  'cheyers',
+  'chiars',
+  'chers',
+  'chares',
+  'chairz',
+  'chayars',
+  'chear',
+);
+fix('chair', 'cheyar', 'cheyer', 'chiar', 'chayar');
+fix('queue', 'kyu', 'kyoo', 'kew', 'cue', 'que', 'qeue', 'quew');
+fix(
+  'bookings',
+  'bukings',
+  'bookins',
+  'bookingz',
+  'buckings',
+  'bokings',
+  'bookingss',
+);
+fix('booking', 'buking', 'bukking', 'boking');
+fix(
+  'services',
+  'servises',
+  'servicez',
+  'sarvices',
+  'sarvises',
+  'servisez',
+  'survices',
+);
+fix('service', 'servis', 'servise', 'sarvis', 'sarvice', 'survice');
+fix('staff', 'stuff', 'staf', 'staaf', 'stafe');
+fix(
+  'available',
+  'availble',
+  'avelable',
+  'avalable',
+  'avilable',
+  'availabe',
+  'evailable',
+);
+fix('free', 'fri', 'phree');
+fix('kholo', 'khol', 'kholdo', 'khulo', 'kholiye', 'kolo', 'kohlo');
+fix(
+  'dikhao',
+  'dikha',
+  'dikhado',
+  'dikhaao',
+  'dekhao',
+  'dikhaiye',
+  'dikhaye',
+  'dikao',
+);
+fix('batao', 'batado', 'bataao', 'bataiye', 'batayein', 'btao');
+fix('kitni', 'kitani', 'kitny');
+fix('kitne', 'kitane', 'kitnay');
+fix('dashboard', 'dash', 'deshboard', 'dashbord');
+fix('revenue', 'revenu', 'revnue', 'revinue');
+fix('help', 'halp', 'hellp');
+
+/** The same sentence with every known Devanagari token written in Latin and known mishearings fixed. */
 export function romanize(normalized: string): string {
-  if (!/[ऀ-ॿ]/u.test(normalized)) return normalized;
   return normalized
     .split(' ')
-    .map((t) => WORDS[t] ?? t)
+    .map((t) => WORDS[t] ?? LATIN[t] ?? t)
     .join(' ');
 }

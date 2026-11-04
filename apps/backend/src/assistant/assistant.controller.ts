@@ -18,7 +18,9 @@ import {
   ASSISTANT_LIMITS,
   ASSISTANT_PATHS,
   assistantConfirmationSchema,
+  assistantInterpretationSchema,
   assistantTurnSchema,
+  type AssistantInterpretationInput,
   type AssistantAccessDto,
   type AssistantConfirmationInput,
   type AssistantTurnInput,
@@ -75,6 +77,20 @@ export class AssistantController {
   ) {
     this.gate(user);
     return this.assistant.turn(user, body);
+  }
+
+  // Dry run for the voice accuracy check (#371): parses only. No data is read, nothing runs or is logged.
+  @Post(ASSISTANT_PATHS.interpretations)
+  @HttpCode(200)
+  @Throttle(ASSISTANT_THROTTLE)
+  @Header('Cache-Control', 'private, no-store')
+  interpret(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body(new ZodValidationPipe(assistantInterpretationSchema))
+    body: AssistantInterpretationInput,
+  ) {
+    this.gate(user);
+    return this.assistant.interpretOnly(body);
   }
 
   @Post(ASSISTANT_PATHS.confirmations)
