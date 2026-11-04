@@ -66,7 +66,19 @@ function browser({ recognition = true, synthesis = true, ua = 'Mozilla/5.0 (Wind
     navigator: { userAgent: ua, maxTouchPoints: 0 },
     localStorage: { getItem: (k) => storage[k] ?? null, setItem: (k, v) => { storage[k] = v; } },
     ...(recognition ? { webkitSpeechRecognition: FakeRecognition } : {}),
-    ...(synthesis ? { speechSynthesis: { speak: (u) => spoken.push(u), cancel: jest.fn() } } : {}),
+    ...(synthesis
+      ? {
+          speechSynthesis: {
+            speaking: false,
+            pending: false,
+            getVoices: () => [{ name: 'Google हिन्दी', lang: 'hi-IN', localService: false }, { name: 'Microsoft Heera', lang: 'en-IN', localService: true }],
+            addEventListener: () => {},
+            speak: (u) => spoken.push(u),
+            cancel: jest.fn(),
+            resume: jest.fn(),
+          },
+        }
+      : {}),
   };
   globalThis.SpeechSynthesisUtterance = class { constructor(text) { this.text = text; } };
   globalThis.CustomEvent = class { constructor(type, init) { this.type = type; this.detail = init?.detail; } };
@@ -84,12 +96,15 @@ async function type(tree, text) {
   await act(async () => tree.root.findByType('form').props.onSubmit({ preventDefault() {} }));
 }
 const lastRec = () => recs[recs.length - 1];
-async function hear(text) {
-  await act(async () => lastRec().onresult({ results: [Object.assign([{ transcript: text }], { isFinal: true })] }));
-  await act(async () => { await Promise.resolve(); });
+async function hear(text, alternatives = []) {
+  await act(async () => lastRec().onresult({ results: [Object.assign([{ transcript: text }, ...alternatives.map((a) => ({ transcript: a }))], { isFinal: true })] }));
+  // the phrase is complete after a short silence
+  await act(async () => { jest.advanceTimersByTime(1000); });
+  for (let i = 0; i < 5; i += 1) await act(async () => { await Promise.resolve(); });
 }
 async function finishSpeaking() {
-  await act(async () => spoken[spoken.length - 1].onend());
+  const u = spoken[spoken.length - 1];
+  await act(async () => { u.onstart?.(); u.onend(); });
   await act(async () => { jest.advanceTimersByTime(1000); });
 }
 
@@ -185,10 +200,12 @@ describe('hands-free voice conversation', () => {
     const tree = await open();
     await startConversation(tree);
     expect(recs).toHaveLength(1);
-    expect(lastRec().continuous).toBe(false);
-    expect(textOf(tree.root)).toContain('Listening…');
-    await hear('चेक करो कितनी चेयर्स अवेलेबल हैं');
-    expect(sent[0].body).toMatchObject({ text: 'चेक करो कितनी चेयर्स अवेलेबल हैं', inputMode: 'voice', salonId: 's1' });
+    expect(lastRec()).toMatchObject({ continuous: true, maxAlternatives: 5 });
+    expect(textOf(tree.root)).toContain('Starting microphone… wait'); // not yet capturing: do not speak yet
+    await act(async () => lastRec().onaudiostart());
+    expect(textOf(tree.root)).toContain('Listening… speak now');
+    await hear('चेक करो कितनी चेयर्स अवेलेबल हैं', ['check karo kitni chairs available hain']);
+    expect(sent[0].body).toMatchObject({ text: 'चेक करो कितनी चेयर्स अवेलेबल हैं', inputMode: 'voice', salonId: 's1', alternatives: ['check karo kitni chairs available hain'] });
     expect(spoken[0].text).toBe('2 of 3 working chairs are free right now, 1 busy.');
     expect(recs).toHaveLength(1); // the mic is not open while the reply is spoken
     expect(textOf(tree.root)).toContain('Speech → text');
@@ -304,5 +321,92 @@ describe('hands-free voice conversation', () => {
 
   it('spokenReply keeps long answers short', () => {
     expect(spokenReply(turn({ message: 'a'.repeat(400) }))).toMatch(/The rest is on screen\.$/);
+  });
+});
+
+describe('spoken replies and voice tools (#371)', () => {
+  it('Test speaker plays a sample with the Hindi voice and says which voice played', async () => {
+    route([]);
+    const tree = await open();
+    await act(async () => button(tree, 'Voice settings').props.onClick());
+    expect(textOf(tree.root)).toContain('Using: Google हिन्दी (hi-IN)');
+    await act(async () => button(tree, 'Test speaker (Hindi)').props.onClick());
+    for (let i = 0; i < 5; i += 1) await act(async () => { await Promise.resolve(); });
+    expect(spoken[0].text).toMatch(/Namaste/);
+    await act(async () => { spoken[0].onstart(); spoken[0].onend(); });
+    for (let i = 0; i < 5; i += 1) await act(async () => { await Promise.resolve(); });
+    expect(textOf(tree.root)).toContain('Played with Google हिन्दी (hi-IN)');
+  });
+
+  it('no Hindi voice installed: the settings say so instead of pretending', async () => {
+    route([]);
+    globalThis.window.speechSynthesis.getVoices = () => [{ name: 'Microsoft David', lang: 'en-US', localService: true }];
+    const tree = await open();
+    await act(async () => button(tree, 'Voice settings').props.onClick());
+    expect(textOf(tree.root)).toContain('No Hindi voice is installed in this browser');
+  });
+
+  it('push-to-talk: a spoken question gets a spoken answer by default; a typed one does not', async () => {
+    jest.useFakeTimers();
+    route([turn({ message: 'You have 4 services.' }), turn({ message: 'Typed answer.' })]);
+    storage['fastque.assistant.voiceConsent.v1'] = JSON.stringify(['browser']);
+    const tree = await open();
+    await act(async () => tree.root.findByProps({ 'aria-label': 'Speak one question' }).props.onClick());
+    await act(async () => lastRec().onresult({ results: [Object.assign([{ transcript: 'services kitni hain' }], { isFinal: true })] }));
+    for (let i = 0; i < 8; i += 1) await act(async () => { await Promise.resolve(); });
+    expect(spoken.map((u) => u.text)).toEqual(['You have 4 services.']);
+    await type(tree, 'staff dikhao');
+    expect(spoken).toHaveLength(1);
+  });
+
+  it('a reply that did not play is shown with a Test speaker link (no silent failure)', async () => {
+    jest.useFakeTimers();
+    route([turn({ message: 'Queue mein 2 log hain.' })]);
+    const tree = await open();
+    await act(async () => button(tree, 'Start voice conversation').props.onClick());
+    await act(async () => button(tree, 'Allow microphone').props.onClick());
+    await hear('queue status');
+    for (let i = 0; i < 5; i += 1) await act(async () => { await Promise.resolve(); });
+    await act(async () => { spoken[0].onend(); }); // "end" with no "start": nothing was heard
+    await act(async () => { jest.advanceTimersByTime(1000); });
+    expect(textOf(tree.root)).toContain('did not start playing');
+    expect(findText(tree, 'button', 'Test speaker').length).toBeGreaterThan(0);
+    expect(recs).toHaveLength(2); // still listening for the next question
+  });
+
+  it('when the server used a speech alternative, the card says what was understood', async () => {
+    route([turn({ message: 'Opening Bookings.', understoodAs: 'bookings kholo' })]);
+    const tree = await open();
+    await type(tree, 'book in school');
+    expect(textOf(tree.root)).toContain('Understood as: “bookings kholo”');
+  });
+
+  it('voice accuracy check: says each phrase once, uses only the dry-run endpoint, shows a first-try score', async () => {
+    route([
+      { action: 'app.help', kind: 'READ', usedText: 'What can you do?', usedAlternative: false, topAction: 'app.help' },
+      { action: 'app.help', kind: 'READ', usedText: 'how can you help me', usedAlternative: true, topAction: null },
+    ]);
+    const tree = await open();
+    await act(async () => button(tree, 'Check voice accuracy').props.onClick());
+    expect(textOf(tree.root)).toContain('“What can you do?”');
+    await act(async () => button(tree, 'Speak').props.onClick());
+    expect(lastRec()).toMatchObject({ continuous: false, maxAlternatives: 5 });
+    await act(async () => lastRec().onresult({ results: [Object.assign([{ transcript: 'what can you do' }], { isFinal: true })] }));
+    for (let i = 0; i < 5; i += 1) await act(async () => { await Promise.resolve(); });
+    await act(async () => button(tree, 'Speak').props.onClick());
+    await act(async () => lastRec().onresult({ results: [Object.assign([{ transcript: 'how can you yelp me' }, { transcript: 'how can you help me' }], { isFinal: true })] }));
+    for (let i = 0; i < 5; i += 1) await act(async () => { await Promise.resolve(); });
+    expect(sent.map((s) => s.path)).toEqual(['assistant/interpretations', 'assistant/interpretations']);
+    expect(sent[1].body).toEqual({ text: 'how can you yelp me', alternatives: ['how can you help me'], surface: 'shop' });
+    expect(textOf(tree.root)).toContain('heard: how can you yelp me (alternative used)');
+  });
+});
+
+describe('surface scoping (#371 review)', () => {
+  it('customers keep voice settings but do not see the shop-owner accuracy check', async () => {
+    route([]);
+    const tree = await open({ surface: 'customer' });
+    expect(findText(tree, 'button', 'Voice settings').length).toBe(1);
+    expect(findText(tree, 'button', 'Check voice accuracy')).toHaveLength(0);
   });
 });
