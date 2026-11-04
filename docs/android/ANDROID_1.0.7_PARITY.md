@@ -117,13 +117,21 @@ Release gates still open:
 
 No production action was authorized or claimed for PR #369.
 
-## Combined Android GPS/keyboard integration candidate
+## Current combined Android GPS/keyboard integration candidate — PR #383
 
 Branch: `codex/fastque-mobile-overnight-20261104`  
+PR: #383 (OPEN / DRAFT)
+Exact head: `565334f2a3ed151ada72e0d6ab71f7fb9b69492f`
 Base production master: `90651cb3c32251739d8ab4b559f98e8347dab0c6`  
-Source: reviewed PR #369 HEAD `431f011c5d0c24dab6554f0d9544c650c05c89d1` plus reviewed PR #379 HEAD `8cc9f53af977d92907dfe6e441c28afa2cff64cc`  
-Integration state: both merges are local and conflict-free; exact combined CI is not yet run.
+Source: reviewed PR #369 HEAD `431f011c5d0c24dab6554f0d9544c650c05c89d1` plus reviewed PR #379 HEAD `8cc9f53af977d92907dfe6e441c28afa2cff64cc`. Both were integrated conflict-free; source PRs #369 and #379 remain unchanged and Draft.
 
-The source keeps package `com.dcw.fastque`, resolves Android to app/runtime `1.0.7`, and keeps iOS pinned to app/runtime `1.0.6`. The integration adds the Android location fallback, strict-radius behavior, unknown-distance handling, keyboard avoidance and regression tests to the Android 1.0.7 employee/owner/inventory candidate. It does not change iOS PR #375 or the existing OTA assignment.
+The source keeps package `com.dcw.fastque`, resolves Android app/runtime to `1.0.7`, and keeps iOS app/runtime pinned to `1.0.6`. The integration includes Android location fallback, strict-radius behavior, unknown-distance handling, keyboard avoidance and regression tests. It does not change PR #375 or publish an OTA.
 
-Local dependency install could not complete because `registry.npmjs.org` and `api.expo.dev` DNS lookups both fail in this execution environment; the interrupted install was stopped and no source/lockfile changes resulted. The physical handset was not visible through ADB (0 ready, unauthorized, or offline devices). EAS read-only build/update queries are likewise network-blocked here. No build, OTA publication, Play upload, production change, or physical acceptance is claimed.
+Exact-head GitHub CI — all three workflows **SUCCESS**:
+- Owner Operations Certification [run 41935875053](https://github.com/mail2devkr-maker/barbercue/actions/runs/41935875053): effective Android/iOS release config passed; mobile TypeScript passed; **49 suites / 317 mobile tests passed**; Android JS export passed (1,222 modules); web typecheck/tests/production build passed; disposable PostgreSQL migration/schema/integration checks passed. Backend baseline comparison recorded 1,989/1,992 unit tests (3 known baseline failures, 0 new) and 301/320 E2E tests (18 known baseline failures, 0 new; 2 baseline suites did not run).
+- Nitesh Admin + Discovery [run 41935874882](https://github.com/mail2devkr-maker/barbercue/actions/runs/41935874882): backend, web and mobile jobs passed.
+- Salon Location Verification [run 41935874917](https://github.com/mail2devkr-maker/barbercue/actions/runs/41935874917): full disposable migration chain/schema guards and authenticated owner/admin PostgreSQL E2E passed.
+
+The parity matrix above remains honest: several owner flows are PARTIAL, printable public QR poster and native Assistant are GAP, and owner/customer/employee production-authenticated runtime acceptance is pending. The last cited read-only map-pin aggregate was 6/107 active salons pinned; the other 101 distances remain unavailable until owners provide real coordinates.
+
+Current environment gates: EAS [0m`api.expo.dev`[0m and npm registry DNS resolution failed from this host; EAS account/version/build allowance/signing reads and native AAB build were not available. ADB detected 0 ready, unauthorized or offline devices, so Galaxy S20 FE installation and physical acceptance remain NOT VERIFIED. No Play upload, OTA publication, production deployment/database change, master merge, or public rollout occurred.
