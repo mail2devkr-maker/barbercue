@@ -14,14 +14,50 @@ type Coords = { lat: number; lng: number };
 let lastCity: { key: string; city: CityDto } | null = null;
 const LOOKUP_TIMEOUT_MS = 6_000;
 
-function bounded<T>(promise: Promise<T>, fallback: T): Promise<T> {
+function bounded<T>(promise: Promise<T>, fallback: T, timeoutMs = LOOKUP_TIMEOUT_MS): Promise<T> {
   return new Promise<T>((resolve) => {
-    const timer = setTimeout(() => resolve(fallback), LOOKUP_TIMEOUT_MS);
+    const timer = setTimeout(() => resolve(fallback), timeoutMs);
     promise.then(
       (value) => { clearTimeout(timer); resolve(value); },
       () => { clearTimeout(timer); resolve(fallback); },
     );
   });
+}
+
+export type SearchGpsResult =
+  | { kind: 'ok'; coords: Coords }
+  | { kind: 'denied' }
+  | { kind: 'unavailable' };
+
+/** Always settle: an indefinite indoor GPS request must not freeze Near Me.
+ * The optional cached fix must be recent and reasonably accurate. Hard-radius
+ * searches require a current fix instead of a stale last-known position. */
+export async function getSearchGpsCoordinates(allowRecentCached: boolean): Promise<SearchGpsResult> {
+  try {
+    const permission = await Location.requestForegroundPermissionsAsync();
+    if (permission.status !== 'granted') return { kind: 'denied' };
+    const fresh = await bounded(
+      Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+      null as Location.LocationObject | null,
+      10_000,
+    );
+    const position = fresh || (allowRecentCached
+      ? await bounded(
+          Location.getLastKnownPositionAsync({ maxAge: 120_000, requiredAccuracy: 1_000 }),
+          null as Location.LocationObject | null,
+          3_000,
+        )
+      : null);
+    if (!position) return { kind: 'unavailable' };
+    const lat = position.coords.latitude;
+    const lng = position.coords.longitude;
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+      return { kind: 'unavailable' };
+    }
+    return { kind: 'ok', coords: { lat, lng } };
+  } catch {
+    return { kind: 'unavailable' };
+  }
 }
 
 function normalized(value: string): string {
