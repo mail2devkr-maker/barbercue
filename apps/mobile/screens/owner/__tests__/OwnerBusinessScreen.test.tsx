@@ -168,7 +168,7 @@ describe('OwnerBusinessScreen', () => {
     });
   }, 15000);
 
-  it('edits a paused offer with a minimal patch and does not expose editing for active offers', async () => {
+  it('edits a paused offer with a minimal patch', async () => {
     mockOfferItems = [savedOffer];
     await render(<OwnerBusinessScreen />);
     await waitFor(() => expect(screen.getAllByText('Recorded collections').length).toBeGreaterThan(0));
@@ -182,6 +182,17 @@ describe('OwnerBusinessScreen', () => {
       expect(call).toBeTruthy();
       expect(JSON.parse(call[1].body)).toEqual({ title: 'Revised deal' });
     });
+  }, 15000);
+
+  it('requires an active offer to be paused before editing', async () => {
+    mockOfferItems = [{ ...savedOffer, status: 'ACTIVE' }];
+    await render(<OwnerBusinessScreen />);
+    await waitFor(() => expect(screen.getAllByText('Recorded collections').length).toBeGreaterThan(0));
+    await act(async () => { fireEvent.press(screen.getByRole('button', { name: 'Offers' })); });
+    await waitFor(() => expect(screen.getByText('Existing deal')).toBeTruthy());
+    expect(screen.getByText('Pause this offer before editing it.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Pause' })).toBeTruthy();
   }, 15000);
 
 });
