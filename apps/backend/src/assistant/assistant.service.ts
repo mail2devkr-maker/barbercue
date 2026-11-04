@@ -74,6 +74,9 @@ import { BATCH6_HANDLERS } from './actions/batch6.actions';
 import { BATCH7_HANDLERS } from './actions/batch7.actions';
 import { BATCH8_HANDLERS } from './actions/batch8.actions';
 import { BATCH9_HANDLERS } from './actions/batch9.actions';
+import { BATCH11_HANDLERS } from './actions/batch11.actions';
+import { AdminCustomerAnalyticsService } from '../admin/analytics/admin-customer-analytics.service';
+import { AdminStaffAnalyticsService } from '../admin/analytics/admin-staff-analytics.service';
 import { AdminShopActivityService } from '../admin/admin-shop-activity.service';
 import { AdminVerificationService } from '../admin/admin-verification.service';
 import { AdminCrmService } from '../admin/admin-crm.service';
@@ -97,6 +100,7 @@ export const ASSISTANT_HANDLERS: HandlerMap = {
   ...BATCH7_HANDLERS,
   ...BATCH8_HANDLERS,
   ...BATCH9_HANDLERS,
+  ...BATCH11_HANDLERS,
 };
 
 const UNRELEASED: Record<'inventory' | 'onboarding', string> = {
@@ -149,6 +153,8 @@ export class AssistantService {
     verification: AdminVerificationService,
     crm: AdminCrmService,
     shopActivity: AdminShopActivityService,
+    customerAnalytics: AdminCustomerAnalyticsService,
+    staffAnalytics: AdminStaffAnalyticsService,
     @Inject(ASSISTANT_INTERPRETER)
     private readonly interpreter: IntentInterpreter,
     @Inject(ASSISTANT_TRANSCRIBER) private readonly transcriber: Transcriber,
@@ -184,6 +190,8 @@ export class AssistantService {
       verification,
       crm,
       shopActivity,
+      customerAnalytics,
+      staffAnalytics,
     };
   }
 

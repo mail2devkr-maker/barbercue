@@ -44,6 +44,18 @@ describe('assistant batch 6 intents (field employee, read-only)', () => {
     expect(admin('is hafte ki shop activity')).toEqual({ action: AssistantActionId.ADMIN_SHOP_ACTIVITY, days: 7 });
   });
 
+  it('batch 11: admin customer and staff analytics with a time range', () => {
+    const admin = (t: string) => parseAssistantText(t, 'admin', 2026);
+    expect(admin('is mahine kitne naye customers aaye')).toEqual({ action: AssistantActionId.ADMIN_CUSTOMER_ANALYTICS, days: 30 });
+    expect(admin('aaj kitne customers aaye')).toEqual({ action: AssistantActionId.ADMIN_CUSTOMER_ANALYTICS, days: 1 });
+    expect(admin('is hafte staff analytics')).toEqual({ action: AssistantActionId.ADMIN_STAFF_ANALYTICS, days: 7 });
+    // Earlier admin meanings keep priority.
+    expect(admin('sales team ka kaam dikhao')).toEqual({ action: AssistantActionId.ADMIN_CRM_OVERVIEW });
+    expect(admin('aaj kaunsi shops busy hain')).toMatchObject({ action: AssistantActionId.ADMIN_SHOP_ACTIVITY });
+    // A shop owner's "customers" stays a shop phrase.
+    expect(shop('mere customers dikhao')?.action).not.toBe(AssistantActionId.ADMIN_CUSTOMER_ANALYTICS);
+  });
+
   it('language still works for an employee; shop phrases do not', () => {
     expect(employee('meri language hindi karo')).toEqual({ action: AssistantActionId.LANGUAGE_SET, language: 'HI' });
     expect(employee('aaj ki queue dikhao')).toBeNull();

@@ -45,7 +45,9 @@ export type AdminReadIntent =
       status: VerificationStatus | null;
     }
   | { action: typeof AssistantActionId.ADMIN_CRM_OVERVIEW }
-  | { action: typeof AssistantActionId.ADMIN_SHOP_ACTIVITY; days: number };
+  | { action: typeof AssistantActionId.ADMIN_SHOP_ACTIVITY; days: number }
+  | { action: typeof AssistantActionId.ADMIN_CUSTOMER_ANALYTICS; days: number }
+  | { action: typeof AssistantActionId.ADMIN_STAFF_ANALYTICS; days: number };
 
 const W = (words: string) => new RegExp(`(?:^|\\s)(?:${words})(?=\\s|$)`, 'u');
 
@@ -185,5 +187,15 @@ export function parseAdminReads(text: string): AdminReadIntent | null {
     return { action: AssistantActionId.ADMIN_VERIFICATION_QUEUE, status };
   }
   if (CRM.test(text)) return { action: AssistantActionId.ADMIN_CRM_OVERVIEW };
+  // Platform analytics: figures only. "aaj" = today, "hafte" = 7 days, otherwise the last 30 days.
+  const days = W('aaj|today|आज').test(text)
+    ? 1
+    : W('hafte|hafta|week|7 din|हफ्ते').test(text)
+      ? 7
+      : 30;
+  if (W('customer|customers|grahak|ग्राहक').test(text))
+    return { action: AssistantActionId.ADMIN_CUSTOMER_ANALYTICS, days };
+  if (W('staff|barber|barbers|karigar|stylist|stylists|स्टाफ').test(text))
+    return { action: AssistantActionId.ADMIN_STAFF_ANALYTICS, days };
   return null;
 }

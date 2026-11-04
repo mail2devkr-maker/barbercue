@@ -1,4 +1,8 @@
-import { AssistantActionId, Role } from '@barbercue/shared';
+import {
+  ADMIN_PERMISSION_ROLES,
+  AssistantActionId,
+  Role,
+} from '@barbercue/shared';
 import type { ActionDef } from './kit';
 
 const SHOP_MANAGERS: Role[] = [Role.SALON_OWNER, Role.PLATFORM_ADMIN];
@@ -511,5 +515,18 @@ export const ASSISTANT_ACTIONS: Record<AssistantActionId, ActionDef> = {
     ],
     'PLATFORM',
     ['Aaj kaunsi shops busy hain', 'Is hafte ki shop activity'],
+  ),
+  // ---- batch 11: platform analytics, figures only; roles are the admin routes' own constants
+  [AssistantActionId.ADMIN_CUSTOMER_ANALYTICS]: read(
+    'Customer analytics (figures only)',
+    [...ADMIN_PERMISSION_ROLES.viewCustomerAnalytics],
+    'PLATFORM',
+    ['Is mahine kitne naye customers aaye'],
+  ),
+  [AssistantActionId.ADMIN_STAFF_ANALYTICS]: read(
+    'Staff analytics (figures only)',
+    [...ADMIN_PERMISSION_ROLES.viewStaffAnalytics],
+    'PLATFORM',
+    ['Aaj kitna staff kaam kar raha hai'],
   ),
 };

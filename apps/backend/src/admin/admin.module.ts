@@ -26,6 +26,8 @@ import { AdminDataExportService } from './analytics/admin-data-export.service';
     AdminVerificationService,
     AdminCrmService,
     AdminShopActivityService,
+    AdminCustomerAnalyticsService,
+    AdminStaffAnalyticsService,
   ],
   providers: [
     AdminMonitoringService,

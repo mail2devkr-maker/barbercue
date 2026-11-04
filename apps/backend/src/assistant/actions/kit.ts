@@ -36,6 +36,8 @@ import type { EmployeeService } from '../../employee/employee.service';
 import type { AdminVerificationService } from '../../admin/admin-verification.service';
 import type { AdminCrmService } from '../../admin/admin-crm.service';
 import type { AdminShopActivityService } from '../../admin/admin-shop-activity.service';
+import type { AdminCustomerAnalyticsService } from '../../admin/analytics/admin-customer-analytics.service';
+import type { AdminStaffAnalyticsService } from '../../admin/analytics/admin-staff-analytics.service';
 import type { SealedWrite } from '../assistant-confirmation';
 import { matchByName } from '../assistant-parser';
 
@@ -104,6 +106,8 @@ export interface Deps {
   verification: AdminVerificationService;
   crm: AdminCrmService;
   shopActivity: AdminShopActivityService;
+  customerAnalytics: AdminCustomerAnalyticsService;
+  staffAnalytics: AdminStaffAnalyticsService;
 }
 
 export interface PlanCtx {

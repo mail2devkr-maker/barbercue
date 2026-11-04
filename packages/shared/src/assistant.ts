@@ -130,6 +130,9 @@ export const AssistantActionId = {
   EMPLOYEE_SCHEDULE_FOLLOW_UP: "employee.scheduleFollowUp",
   REVIEW_EDIT: "me.editReview",
   ADMIN_SHOP_ACTIVITY: "admin.shopActivity",
+  // batch 11: platform analytics KPIs only (no per-person rows)
+  ADMIN_CUSTOMER_ANALYTICS: "admin.customerAnalytics",
+  ADMIN_STAFF_ANALYTICS: "admin.staffAnalytics",
 } as const;
 export type AssistantActionId = (typeof AssistantActionId)[keyof typeof AssistantActionId];
 
