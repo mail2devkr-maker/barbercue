@@ -35,6 +35,7 @@ import type { AuthService } from '../../auth/auth.service';
 import type { EmployeeService } from '../../employee/employee.service';
 import type { AdminVerificationService } from '../../admin/admin-verification.service';
 import type { AdminCrmService } from '../../admin/admin-crm.service';
+import type { AdminShopActivityService } from '../../admin/admin-shop-activity.service';
 import type { SealedWrite } from '../assistant-confirmation';
 import { matchByName } from '../assistant-parser';
 
@@ -102,6 +103,7 @@ export interface Deps {
   employee: EmployeeService;
   verification: AdminVerificationService;
   crm: AdminCrmService;
+  shopActivity: AdminShopActivityService;
 }
 
 export interface PlanCtx {

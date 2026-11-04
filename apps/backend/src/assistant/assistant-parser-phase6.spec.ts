@@ -29,6 +29,21 @@ describe('assistant batch 6 intents (field employee, read-only)', () => {
     expect(employee('complete follow ups dikhao')).toMatchObject({ action: AssistantActionId.EMPLOYEE_FOLLOW_UPS });
   });
 
+  it('batch 9: schedule a follow-up, edit my review, admin shop activity', () => {
+    expect(employee('Sharma Salon ka follow up kal 4 baje lagao')).toEqual({
+      action: AssistantActionId.EMPLOYEE_SCHEDULE_FOLLOW_UP, day: { kind: 'offset', days: 1 }, time: '16:00', channel: 'CALL', notes: null,
+    });
+    expect(employee('Sharma Salon ka whatsapp follow up somvar ko rakho: menu bhejna')).toMatchObject({
+      channel: 'WHATSAPP', day: { kind: 'weekday', dow: 1 }, notes: 'menu bhejna',
+    });
+    expect(employee('Sharma Salon ka follow up ho gaya')).toMatchObject({ action: AssistantActionId.EMPLOYEE_CLOSE_FOLLOW_UP });
+    expect(customer('Haircut ka review badlo 4 star')).toEqual({ action: AssistantActionId.REVIEW_EDIT, rating: 4, comment: null });
+    expect(customer('Haircut ko 5 star review do')).toMatchObject({ action: AssistantActionId.REVIEW_WRITE });
+    const admin = (t: string) => parseAssistantText(t, 'admin', 2026);
+    expect(admin('aaj kaunsi shops busy hain')).toEqual({ action: AssistantActionId.ADMIN_SHOP_ACTIVITY, days: 1 });
+    expect(admin('is hafte ki shop activity')).toEqual({ action: AssistantActionId.ADMIN_SHOP_ACTIVITY, days: 7 });
+  });
+
   it('language still works for an employee; shop phrases do not', () => {
     expect(employee('meri language hindi karo')).toEqual({ action: AssistantActionId.LANGUAGE_SET, language: 'HI' });
     expect(employee('aaj ki queue dikhao')).toBeNull();

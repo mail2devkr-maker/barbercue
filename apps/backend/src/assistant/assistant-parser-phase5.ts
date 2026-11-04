@@ -29,7 +29,9 @@ export type Phase5Intent =
       value: string | null;
     }
   | {
-      action: typeof AssistantActionId.REVIEW_WRITE;
+      action:
+        | typeof AssistantActionId.REVIEW_WRITE
+        | typeof AssistantActionId.REVIEW_EDIT;
       rating: number | null;
       comment: string | null;
     }
@@ -122,8 +124,14 @@ export function parsePhase5(
       const stars =
         text.match(/(?:^|\s)([1-5])\s*(?:star|stars|स्टार)(?=\s|$)/u) ??
         text.match(/(?:rating|review)\s+([1-5])(?=\s|$)/u);
+      // "Haircut ka review badlo 4 star" edits my own existing review.
+      const edit = W('badlo|badal do|change|edit|update|sudharo|बदलो').test(
+        text,
+      );
       return {
-        action: AssistantActionId.REVIEW_WRITE,
+        action: edit
+          ? AssistantActionId.REVIEW_EDIT
+          : AssistantActionId.REVIEW_WRITE,
         rating: stars ? Number(stars[1]) : null,
         comment: afterColon(raw),
       };

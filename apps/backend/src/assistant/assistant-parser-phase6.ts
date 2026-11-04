@@ -4,6 +4,7 @@ import {
   CrmVisitOutcome,
   VerificationStatus,
 } from '@barbercue/shared';
+import { daySpecIn, timesIn, type DaySpec } from './assistant-when';
 
 /**
  * Batch 6 intents (issue #362): a field employee's own CRM, read-only. Leads, follow-ups, visits
@@ -29,6 +30,13 @@ export type Phase6Intent =
   | {
       action: typeof AssistantActionId.EMPLOYEE_CLOSE_FOLLOW_UP;
       outcome: string | null;
+    }
+  | {
+      action: typeof AssistantActionId.EMPLOYEE_SCHEDULE_FOLLOW_UP;
+      day: DaySpec | null;
+      time: string | null;
+      channel: 'CALL' | 'WHATSAPP' | 'VISIT' | 'EMAIL';
+      notes: string | null;
     };
 
 export type AdminReadIntent =
@@ -36,7 +44,8 @@ export type AdminReadIntent =
       action: typeof AssistantActionId.ADMIN_VERIFICATION_QUEUE;
       status: VerificationStatus | null;
     }
-  | { action: typeof AssistantActionId.ADMIN_CRM_OVERVIEW };
+  | { action: typeof AssistantActionId.ADMIN_CRM_OVERVIEW }
+  | { action: typeof AssistantActionId.ADMIN_SHOP_ACTIVITY; days: number };
 
 const W = (words: string) => new RegExp(`(?:^|\\s)(?:${words})(?=\\s|$)`, 'u');
 
@@ -83,7 +92,32 @@ function afterColon(raw: string): string | null {
   return v || null;
 }
 
-export function parsePhase6(text: string, raw = text): Phase6Intent | null {
+const SCHEDULE = W(
+  'lagao|laga do|rakho|rakh do|set karo|schedule|banao|bana do|karna hai|yaad dilana|लगाओ|रखो',
+);
+function channelIn(text: string): 'CALL' | 'WHATSAPP' | 'VISIT' | 'EMAIL' {
+  if (W('whatsapp|व्हाट्सएप').test(text)) return 'WHATSAPP';
+  if (W('email|mail|ईमेल').test(text)) return 'EMAIL';
+  if (W('visit|milne|milna|jaana|jana|विज़िट').test(text)) return 'VISIT';
+  return 'CALL';
+}
+
+export function parsePhase6(
+  text: string,
+  raw = text,
+  year = new Date().getUTCFullYear(),
+): Phase6Intent | null {
+  // "Sharma Salon ka follow up kal 4 baje lagao" - scheduled on one of my own leads.
+  if (FOLLOW_UP.test(text) && SCHEDULE.test(text) && !DONE.test(text)) {
+    const [time] = timesIn(text);
+    return {
+      action: AssistantActionId.EMPLOYEE_SCHEDULE_FOLLOW_UP,
+      day: daySpecIn(text, year),
+      time: time ?? null,
+      channel: channelIn(text),
+      notes: afterColon(raw),
+    };
+  }
   // Writes first: "X ka follow up ho gaya: ...", "X visit kiya, interested".
   if (
     FOLLOW_UP.test(text) &&
@@ -138,6 +172,13 @@ const VERIFICATION_STATUS: [RegExp, VerificationStatus][] = [
 
 /** Platform reads on the admin screens (batch 7). Decisions are never parsed here. */
 export function parseAdminReads(text: string): AdminReadIntent | null {
+  if (W('activity|busy|busiest|sabse busy|chal rahi').test(text)) {
+    const week = W('hafte|hafta|week|7 din|saat din|हफ्ते').test(text);
+    return {
+      action: AssistantActionId.ADMIN_SHOP_ACTIVITY,
+      days: week ? 7 : 1,
+    };
+  }
   if (VERIFICATION.test(text)) {
     const status =
       VERIFICATION_STATUS.find(([re]) => re.test(text))?.[1] ?? null;

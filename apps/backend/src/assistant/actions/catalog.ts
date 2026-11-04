@@ -487,4 +487,29 @@ export const ASSISTANT_ACTIONS: Record<AssistantActionId, ActionDef> = {
     'EMPLOYEE',
     ['Sharma Salon ka follow up ho gaya: demo kal'],
   ),
+  // ---- batch 9
+  [AssistantActionId.EMPLOYEE_SCHEDULE_FOLLOW_UP]: write(
+    'Schedule a follow-up on my lead',
+    EMPLOYEES,
+    'EMPLOYEE',
+    ['Sharma Salon ka follow up kal 4 baje lagao'],
+  ),
+  [AssistantActionId.REVIEW_EDIT]: write(
+    'Change my review',
+    CUSTOMERS,
+    'SELF',
+    ['Haircut ka review badlo 4 star'],
+  ),
+  [AssistantActionId.ADMIN_SHOP_ACTIVITY]: read(
+    'Shop activity (counts only)',
+    [
+      Role.PLATFORM_ADMIN,
+      Role.CO_FOUNDER,
+      Role.HR_ADMIN,
+      Role.SALES_ADMIN,
+      Role.PLATFORM_VIEWER,
+    ],
+    'PLATFORM',
+    ['Aaj kaunsi shops busy hain', 'Is hafte ki shop activity'],
+  ),
 };

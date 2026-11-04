@@ -126,6 +126,10 @@ export const AssistantActionId = {
   // batch 8: a field employee records their own work (confirmed writes, own leads only)
   EMPLOYEE_LOG_VISIT: "employee.logVisit",
   EMPLOYEE_CLOSE_FOLLOW_UP: "employee.closeFollowUp",
+  // batch 9
+  EMPLOYEE_SCHEDULE_FOLLOW_UP: "employee.scheduleFollowUp",
+  REVIEW_EDIT: "me.editReview",
+  ADMIN_SHOP_ACTIVITY: "admin.shopActivity",
 } as const;
 export type AssistantActionId = (typeof AssistantActionId)[keyof typeof AssistantActionId];
 
