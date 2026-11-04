@@ -2,12 +2,11 @@
 
 import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { DASHBOARD_PATHS, Role, SalonType, formatMoney } from "@barbercue/shared";
-import type { SalonServiceDto, SalonTypeResultDto } from "@barbercue/shared";
+import { DASHBOARD_PATHS, Role, formatMoney } from "@barbercue/shared";
+import type { SalonServiceDto } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../../../../../lib/api";
 import { useAssistantRefresh } from "../../../../../../lib/assistant-events";
 import { RequireRole } from "../../../../../../components/auth/RequireRole";
-import { ServiceCatalogPicker } from "../../../../../../components/dashboard/ServiceCatalogPicker";
 import { CatalogImportPanel } from "../../../../../../components/dashboard/CatalogImportPanel";
 import { RemoveAllServicesControl } from "../../../../../../components/dashboard/RemoveAllServicesControl";
 import { SetupNavigation } from "../../../../../../components/dashboard/SetupNavigation";
@@ -32,24 +31,6 @@ import filterStyles from "../../../../../../components/dashboard/service-filter.
 const MAX_PRICE = 1_000_000;
 const MIN_MINUTES = 5;
 const MAX_MINUTES = 480;
-
-const SALON_TYPE_OPTIONS = [
-  {
-    value: SalonType.GENTS,
-    label: "Gents Parlor",
-    help: "Shows gents + genuinely unisex services only.",
-  },
-  {
-    value: SalonType.LADIES,
-    label: "Ladies Parlor",
-    help: "Shows ladies + genuinely unisex services only.",
-  },
-  {
-    value: SalonType.UNISEX,
-    label: "Unisex Salon",
-    help: "Combines eligible gents, ladies and unisex services.",
-  },
-] as const;
 
 interface Draft {
   name: string;
@@ -99,10 +80,6 @@ export default function DashboardServicesPage({
   const { salonId } = use(params);
   const base = `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.services}`;
   const [services, setServices] = useState<SalonServiceDto[] | null>(null);
-  const [salonType, setSalonType] = useState<SalonType | null>(null);
-  const [savingSalonType, setSavingSalonType] = useState(false);
-  // False while the type is only the UNISEX default (shops created before customers could filter by it).
-  const [salonTypeConfirmed, setSalonTypeConfirmed] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -142,15 +119,9 @@ export default function DashboardServicesPage({
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([
-      apiFetch<SalonServiceDto[]>(base),
-      apiFetch<SalonTypeResultDto>(`${base}/${DASHBOARD_PATHS.salonType}`),
-    ])
-      .then(([list, typeResult]) => {
-        if (cancelled) return;
-        setServices(list);
-        setSalonType(typeResult.salonType);
-        setSalonTypeConfirmed(typeResult.salonTypeConfirmed !== false);
+    apiFetch<SalonServiceDto[]>(base)
+      .then((list) => {
+        if (!cancelled) setServices(list);
       })
       .catch((fetchError) => {
         if (!cancelled) setError(fetchError instanceof ApiError ? fetchError.message : "Could not load services.");
@@ -162,27 +133,6 @@ export default function DashboardServicesPage({
   useAssistantRefresh("services", () => {
     apiFetch<SalonServiceDto[]>(base).then(setServices).catch(() => undefined);
   });
-
-  async function saveSalonType(nextType: SalonType) {
-    // Re-choosing the current type is allowed while it is unconfirmed: that click IS the confirmation.
-    if ((nextType === salonType && salonTypeConfirmed) || savingSalonType) return;
-    setSavingSalonType(true);
-    setError(null);
-    setNotice(null);
-    try {
-      const result = await apiFetch<SalonTypeResultDto>(
-        `${base}/${DASHBOARD_PATHS.salonType}`,
-        { method: "PATCH", body: JSON.stringify({ salonType: nextType }) },
-      );
-      setSalonType(result.salonType);
-      setSalonTypeConfirmed(result.salonTypeConfirmed !== false);
-      setNotice(`${SALON_TYPE_OPTIONS.find((option) => option.value === result.salonType)?.label ?? "Salon type"} saved. Service packs updated.`);
-    } catch (saveError) {
-      setError(saveError instanceof ApiError ? saveError.message : "Could not save salon type.");
-    } finally {
-      setSavingSalonType(false);
-    }
-  }
 
   function replaceService(updated: SalonServiceDto) {
     setServices((current) => (current ?? []).map((service) =>
@@ -277,88 +227,18 @@ export default function DashboardServicesPage({
         <Link href={`/dashboard/salons/${salonId}/services/categories`}>Manage categories and subcategories</Link>
       </p>
       <p className={styles.pageSubtitle}>
-        Choose common services or add your own. Turning one off keeps every past booking and visit
-        intact while removing it from future booking and queue choices.
+        Add the services your shop offers, with your own names, prices, durations and categories.
+        Turning one off keeps every past booking and visit intact while removing it from future booking
+        and queue choices.
       </p>
       <SetupNavigation salonId={salonId} currentStep="services" section="steps" />
 
-      <section aria-labelledby="salon-type-heading" style={{ margin: "18px 0 22px" }}>
-        <p className={styles.eyebrow}>Step 1</p>
-        <h2 id="salon-type-heading" className={styles.sectionHeading}>Select salon type</h2>
-        <p className={styles.hint} style={{ marginBottom: 12 }}>
-          This controls which services appear inside Basic, Standard and Advance packs, and how customers find you
-          (Male / Female / Unisex filter). You can change it later.
-        </p>
-        {salonType && !salonTypeConfirmed && (
-          <p className={`${styles.banner} ${styles.bannerWarning}`} role="status" style={{ marginBottom: 12 }}>
-            Your salon type hasn’t been confirmed yet, so customers see “Type not set”. Choose Gents, Ladies or Unisex below
-            {" — "}tap the highlighted option to keep it.
-          </p>
-        )}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 10 }}>
-          {SALON_TYPE_OPTIONS.map((option) => {
-            const active = salonType === option.value;
-            return (
-              <button
-                key={option.value}
-                type="button"
-                disabled={savingSalonType}
-                aria-pressed={active}
-                onClick={() => void saveSalonType(option.value)}
-                style={{
-                  textAlign: "left",
-                  padding: 14,
-                  borderRadius: 14,
-                  border: active ? "2px solid var(--bc-accent)" : "1px solid var(--bc-border)",
-                  background: active ? "var(--bc-accent-soft)" : "var(--bc-surface)",
-                  color: "var(--bc-ink)",
-                  cursor: savingSalonType ? "wait" : "pointer",
-                }}
-              >
-                <strong style={{ display: "block", marginBottom: 4 }}>{option.label}</strong>
-                <span style={{ display: "block", fontSize: 12, color: "var(--bc-muted)", lineHeight: 1.45 }}>
-                  {option.help}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </section>
-
       {error && <p className={`${styles.banner} ${styles.bannerError}`} role="alert">{error}</p>}
       {notice && <p className={`${styles.banner} ${styles.bannerNotice}`} role="status">{notice}</p>}
-      {(services === null || salonType === null) && !error && <p className={styles.loadingText}>Loading services…</p>}
-
-      {services && (
-        <CatalogImportPanel
-          basePath={base}
-          existingServices={services}
-          onImported={async () => { setServices(await apiFetch<SalonServiceDto[]>(base)); }}
-        />
-      )}
-
-      {services && salonType && (
-        <ServiceCatalogPicker
-          key={salonType}
-          basePath={base}
-          services={services}
-          currencyLabel={currencyLabel}
-          salonType={salonType}
-          onCreated={(created) => {
-            setServices((current) => [...(current ?? []), ...created]);
-            setNotice(`${created.length} service${created.length === 1 ? "" : "s"} added.`);
-          }}
-          onReactivated={(updated) => {
-            replaceService(updated);
-            setNotice(`${updated.name} reactivated.`);
-          }}
-          onError={setError}
-        />
-      )}
+      {services === null && !error && <p className={styles.loadingText}>Loading services…</p>}
 
       <section aria-labelledby="custom-service-heading">
-        <p className={styles.eyebrow}>Anything else</p>
-        <h2 id="custom-service-heading" className={styles.sectionHeading}>Add custom service</h2>
+        <h2 id="custom-service-heading" className={styles.sectionHeading}>Add a service</h2>
         <form onSubmit={handleCreate} className={styles.form}>
           <div className={styles.fieldWrap} style={{ flex: "2 1 210px" }}>
             <label className={styles.fieldLabel} htmlFor="svc-name">Service name</label>
@@ -383,6 +263,14 @@ export default function DashboardServicesPage({
         </form>
       </section>
 
+      {services && (
+        <CatalogImportPanel
+          basePath={base}
+          existingServices={services}
+          onImported={async () => { setServices(await apiFetch<SalonServiceDto[]>(base)); }}
+        />
+      )}
+
       <section aria-labelledby="existing-services-heading">
         <h2 id="existing-services-heading" className={styles.sectionHeading}>Your services</h2>
         {services && (
@@ -402,7 +290,7 @@ export default function DashboardServicesPage({
           />
         )}
         {activeCount === 0 && services && <p className={styles.emptyState}>
-          No active services. Choose presets or add a custom service above.
+          No active services yet. Add your first service above.
         </p>}
         {inactiveCount > 0 && (
           <Button type="button" variant="outline"
