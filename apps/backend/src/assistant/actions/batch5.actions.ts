@@ -194,7 +194,7 @@ export const BATCH5_HANDLERS: HandlerMap = {
             target.discountType,
             Number(target.discountValue),
           ),
-          after: discountText(String(p.discountType), Number(p.discountValue)),
+          after: discountText(text(p.discountType), Number(p.discountValue)),
         });
       }
       const end = await validUntil(
