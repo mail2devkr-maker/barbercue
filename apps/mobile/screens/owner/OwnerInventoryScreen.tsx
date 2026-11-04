@@ -131,14 +131,6 @@ export default function OwnerInventoryScreen() {
     setFormError(null);
   }, [selectedSalonId]);
 
-  useEffect(() => {
-    setHistory([]);
-    setHistoryFor(null);
-    setHistoryError(null);
-    setMovementProductId(null);
-    setFormError(null);
-  }, [selectedSalonId]);
-
   useFocusEffect(
     useCallback(() => {
       void load();

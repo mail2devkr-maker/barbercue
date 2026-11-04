@@ -1,12 +1,11 @@
 import React from 'react';
-import { useEffect } from 'react';
 import { Alert } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { InventoryUnit } from '@barbercue/shared';
 import OwnerInventoryScreen from '../OwnerInventoryScreen';
 
 jest.mock('@react-navigation/native', () => ({
-  useFocusEffect: (callback: () => void | (() => void)) => useEffect(callback, [callback]),
+  useFocusEffect: (callback: () => void | (() => void)) => jest.requireActual('react').useEffect(callback, [callback]),
 }));
 jest.mock('../../../lib/salon-context', () => ({
   useSalon: () => ({ selectedSalonId: 'salon-1' }),
