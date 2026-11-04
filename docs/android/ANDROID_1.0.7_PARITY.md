@@ -19,7 +19,7 @@ Statuses: **SOURCE** means a native path and current API usage exist; **PARTIAL*
 | 9 | Invoices/download/billing | New center lists invoices, opens details, and lists recorded payments | PARTIAL; PDF download, billing-profile editing, invoice creation and payment/refund recording not implemented here |
 | 10 | Reviews | New center lists owner reviews and sends server-validated owner responses | SOURCE for FastQue reviews; physical and authenticated owner acceptance pending |
 | 11 | Verification | New center reads/submits owner evidence notes and HTTPS links | PARTIAL; administrative review decision is web-only and no native evidence upload is claimed |
-| 12 | Services/categories | Existing `OwnerShopScreen` service management | PARTIAL; category-tree parity and all-service variants/qualification behavior require a dedicated audit |
+| 12 | Services/categories | `OwnerShopScreen` service management now loads the existing salon-scoped category tree and lets owners choose stable category/subcategory IDs when creating or editing services; legacy free-text categories remain available when the tree endpoint is unavailable | PARTIAL; category-tree assignment is covered, but category-tree CRUD, all-service variants/qualification behavior and physical validation remain |
 | 13 | Opening hours | Existing `HoursEditor` | SOURCE; PHYSICAL_REQUIRED |
 | 14 | Shop photos | Existing `PhotosSection` | SOURCE for current hosted-photo workflow; upload/edit behavior must be verified on device |
 | 15 | Chairs/SPA beds | Existing chair management | PARTIAL; verify chair types and occupancy conflict behaviors on device |
@@ -35,7 +35,7 @@ Statuses: **SOURCE** means a native path and current API usage exist; **PARTIAL*
 | Payment QR | SOURCE | Existing `PaymentQrSection` manages shop payment QR; it is not a printable public shop poster |
 | Public shop QR poster preview/download with long names | GAP | No equivalent poster design/print/download workflow found |
 | Inventory | BLOCKED / PARTIAL | Backend controller exists, but Claude's R7 inventory release is not production-certified; keep UI disabled until capability and production API availability are verified |
-| Offers/promotions | PARTIAL | New center reads capability before listing offers and supports publish/pause; creation/preview/edit flows are not implemented in this increment |
+| Offers/promotions | PARTIAL | Capability-gated center supports existing offer publish/pause, creating Draft offers, backend price preview and editing Draft/Paused offers; writes use idempotency keys |
 
 ## Customer
 
@@ -71,13 +71,13 @@ Therefore this matrix does **not** certify 100% website parity or a Play-ready p
 ## Candidate verification evidence
 
 - Android release configuration resolves to version/runtime **1.0.7** while iOS is explicitly pinned to its existing **1.0.6** version/runtime; config assertions cover both platform values and identifiers.
-- Mobile local regression: **41 suites / 281 of 282 tests passed**. The unchanged `salon-search-discovery` test `sends the new filters and shows the compared service price and salon type` timed out locally at Jest's 5-second limit both in the full run and isolated run; its source/test files are unchanged from the candidate baseline. Exact-head GitHub CI is the certification gate for the pushed source.
+- Mobile local regression: **43 suites / 296 tests passed** before the additional taxonomy picker UI test was added. The unchanged `salon-search-discovery` test `sends the new filters and shows the compared service price and salon type` previously timed out locally at Jest's 5-second limit; the exact-head GitHub CI run for current source is pending.
 - Shared package: **26 suites / 500 tests passed**; TypeScript build passed.
 - Mobile TypeScript: passed.
-- Owner Business center focused tests: **5/5 passed**, including shop-local date filtering, fail-closed offers, review responses, and clearing prior-salon data after a failed shop switch.
+- Owner Business center and taxonomy focused tests: **14/14 passed** locally, covering recorded-versus-estimated revenue, shop-local date filtering, fail-closed offers, Draft create/preview/edit, review responses, salon-switch clearing, stable service category selection, and taxonomy payload helpers.
 - Owner settings tests: **5/5 passed**; validate selected-salon reads, shared-schema rejection, profile updates, explicit timezone confirmation, stale-data clearing on salon switch and Hindi labels.
 - Staff profile editing tests: **3/3 passed**; validate salon-scoped name/bio/experience updates, schema rejection, and Hindi labels. Staff access revocation and employment status are not changed by this editor.
-- Android JavaScript export: passed (1,209 modules; 3.3 MB Hermes bundle).
+- Android JavaScript export: passed after the parity increment (1,212 modules; approximately 3.4 MB Hermes bundle).
 - Expo Android prebuild: passed and generated the native project in this isolated worktree.
 - Android Gradle/AAB: not run. This runner has no Android SDK (`ANDROID_HOME` and `ANDROID_SDK_ROOT` are unset and the checked SDK paths are absent). EAS cloud version/build queries are also blocked by DNS (`api.expo.dev` resolves with `ENOTFOUND`). No cloud build was started.
 - ADB physical-device check: blocked because the local ADB daemon could not start (`could not read ok from ADB Server`). No device was installed, modified, or reset by this check.
