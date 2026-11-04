@@ -3,6 +3,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Alert, StyleSheet, Text, TextInput, View } from 'react-native';
 import {
   InventoryUnit,
+  Language,
   type CreateInventoryProductInput,
   type InventoryMovementDto,
   type InventoryPageDto,
@@ -68,7 +69,7 @@ function errorMessage(error: unknown, fallback: string): string {
 export default function OwnerInventoryScreen() {
   const { selectedSalonId } = useSalon();
   const { language } = useLanguage();
-  const copy = COPY[language === 'hi' ? 'hi' : 'en'];
+  const copy = COPY[language === Language.HI ? 'hi' : 'en'];
   const requestSequence = useRef(0);
   const [report, setReport] = useState<InventoryReportDto | null>(null);
   const [products, setProducts] = useState<InventoryProductDto[]>([]);

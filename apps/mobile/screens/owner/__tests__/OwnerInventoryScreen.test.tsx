@@ -1,7 +1,7 @@
 import React from 'react';
 import { useEffect } from 'react';
 import { Alert } from 'react-native';
-import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { InventoryUnit } from '@barbercue/shared';
 import OwnerInventoryScreen from '../OwnerInventoryScreen';
 
@@ -12,7 +12,7 @@ jest.mock('../../../lib/salon-context', () => ({
   useSalon: () => ({ selectedSalonId: 'salon-1' }),
 }));
 jest.mock('../../../lib/language-context', () => ({
-  useLanguage: () => ({ language: 'en' }),
+  useLanguage: () => ({ language: 'EN' }),
 }));
 jest.mock('../../../lib/api', () => ({
   apiFetch: jest.fn(),
@@ -40,10 +40,10 @@ describe('OwnerInventoryScreen', () => {
   afterEach(() => jest.restoreAllMocks());
 
   it('loads shop-scoped inventory and creates a zero-stock product through the API', async () => {
-    const { getByTestId, getByText } = render(<OwnerInventoryScreen />);
+    const { getByTestId, getByText } = await render(<OwnerInventoryScreen />);
     await waitFor(() => expect(apiFetch).toHaveBeenCalledWith('dashboard/salons/salon-1/inventory/report'));
-    fireEvent.changeText(getByTestId('inventory-create-name'), 'Synthetic shampoo');
-    fireEvent.press(getByText('Save product'));
+    await fireEvent.changeText(getByTestId('inventory-create-name'), 'Synthetic shampoo');
+    await fireEvent.press(getByText('Save product'));
     await waitFor(() => expect(apiFetch).toHaveBeenCalledWith(
       'dashboard/salons/salon-1/inventory/products',
       expect.objectContaining({ method: 'POST', body: JSON.stringify({ name: 'Synthetic shampoo', unit: InventoryUnit.EACH, reorderThreshold: 0 }) }),
@@ -66,12 +66,12 @@ describe('OwnerInventoryScreen', () => {
       if (path.endsWith('/movements?limit=20&productId=product-1')) return Promise.resolve({ items: [], hasMore: false, nextCursor: null });
       return Promise.resolve({});
     });
-    const { getByText, getByTestId } = render(<OwnerInventoryScreen />);
+    const { getByText, getByTestId } = await render(<OwnerInventoryScreen />);
     await waitFor(() => expect(getByText('Synthetic shampoo')).toBeTruthy());
-    fireEvent.press(getByText('Purchase'));
-    fireEvent.changeText(getByTestId('inventory-movement-quantity'), '2');
-    fireEvent.changeText(getByTestId('inventory-movement-cost'), '3');
-    await act(async () => { fireEvent.press(getByText('Record stock movement')); });
+    await fireEvent.press(getByText('Purchase'));
+    await fireEvent.changeText(getByTestId('inventory-movement-quantity'), '2');
+    await fireEvent.changeText(getByTestId('inventory-movement-cost'), '3');
+    await fireEvent.press(getByText('Record stock movement'));
     await waitFor(() => expect(apiFetch).toHaveBeenCalledWith(
       'dashboard/salons/salon-1/inventory/products/product-1/movements',
       expect.objectContaining({ method: 'POST', headers: { 'Idempotency-Key': 'stable-test-key-123' }, body: JSON.stringify({ kind: 'PURCHASE', quantity: 2, unitCost: 3 }) }),

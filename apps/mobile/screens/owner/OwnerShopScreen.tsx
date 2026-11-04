@@ -5,6 +5,7 @@ import { Text, View } from 'react-native';
 import { StyleSheet } from 'react-native';
 import {
   DASHBOARD_PATHS,
+  Language,
   type OperatingHoursDto,
   type PhotoDto,
   type SalonChairDto,
@@ -128,7 +129,7 @@ export default function OwnerShopScreen() {
         style={sectionStyles.addButton}
       />
 
-      <Text style={sectionStyles.sectionTitle}>{language === 'hi' ? 'इन्वेंटरी' : 'Inventory'}</Text>
+      <Text style={sectionStyles.sectionTitle}>{language === Language.HI ? 'इन्वेंटरी' : 'Inventory'}</Text>
       <Text style={sectionStyles.hint}>{language === 'hi' ? 'इस दुकान का स्टॉक और कम-स्टॉक उत्पाद प्रबंधित करें।' : 'Track stock, low-stock products, purchases and adjustments for this shop.'}</Text>
       <Button title={language === 'hi' ? 'इन्वेंटरी प्रबंधित करें' : 'Manage inventory'} variant="outline" onPress={() => navigation.navigate('OwnerInventory')} style={sectionStyles.addButton} />
 
