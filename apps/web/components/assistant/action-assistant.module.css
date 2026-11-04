@@ -360,3 +360,198 @@
     min-height: 44px;
   }
 }
+
+/* ---- issue #368: voice conversation bar, minimized bar, narrow screens ---- */
+.headBtns {
+  display: flex;
+  gap: 4px;
+}
+.toolLabel {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+.toggle {
+  white-space: nowrap;
+}
+.convBar {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--bc-border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.convStart {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--bc-brand-gradient);
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+.convStart:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.convState {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-weight: 700;
+}
+.caption {
+  font-weight: 400;
+  color: var(--bc-muted);
+  overflow-wrap: anywhere;
+}
+.convNote {
+  margin: 0;
+  color: var(--bc-muted);
+  font-size: 13px;
+}
+.convControls,
+.miniControls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ctl {
+  min-height: 36px;
+  padding: 6px 12px;
+  border: 1px solid var(--bc-border);
+  border-radius: 999px;
+  background: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ctl[aria-pressed="true"] {
+  background: var(--bc-gold-soft);
+}
+.ctlEnd {
+  border-color: var(--bc-accent);
+  color: var(--bc-accent);
+}
+.ctl:focus-visible,
+.mini button:focus-visible {
+  outline: 3px solid var(--bc-brand-navy);
+  outline-offset: 2px;
+}
+.dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--bc-muted);
+  flex: none;
+}
+.dot_listening {
+  background: #16a34a;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+.dot_understanding,
+.dot_replying {
+  background: var(--bc-brand-navy);
+}
+.dot_paused {
+  background: var(--bc-gold);
+}
+.dot_error {
+  background: var(--bc-accent);
+}
+.editHeard {
+  margin-left: 8px;
+  padding: 0 6px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-decoration: underline;
+  font-size: 12px;
+  cursor: pointer;
+}
+/* Minimized: a small bar so the page on the main screen stays visible and usable. */
+.mini {
+  position: fixed;
+  right: 16px;
+  bottom: 88px;
+  z-index: 70;
+  width: min(360px, calc(100vw - 32px));
+  padding: 10px 12px;
+  border: 1px solid var(--bc-border);
+  border-radius: 14px;
+  background: var(--bc-surface);
+  box-shadow: 0 10px 28px rgba(26, 21, 51, 0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.miniHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.miniHead strong {
+  flex: 1;
+  font-size: 14px;
+}
+.miniText {
+  margin: 0;
+  font-size: 13px;
+  color: var(--bc-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dot_listening {
+    animation: none;
+  }
+}
+@media (max-width: 600px) {
+  .mini {
+    bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+  }
+  .ctl {
+    min-height: 44px;
+  }
+}
+/* ~420px phones: one tool per line, nothing clipped, the send row keeps its buttons. */
+@media (max-width: 480px) {
+  .drawer {
+    width: 100vw;
+  }
+  .header,
+  .convBar,
+  .log,
+  .composer {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+  .tools {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+  .inputRow {
+    gap: 6px;
+  }
+  .send {
+    padding: 9px 12px;
+    flex: none;
+  }
+  .mic {
+    flex: none;
+  }
+}

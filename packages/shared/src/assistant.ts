@@ -147,6 +147,10 @@ export const AssistantActionId = {
   STAFF_TAKE_NEXT: "queue.takeNext",
   SHARE_LINKS: "shop.shareLinks",
   TRACKED_LINKS: "analytics.trackedLinks",
+  // issue #368: what the assistant can do for this user, and opening a page on the MAIN screen
+  HELP: "app.help",
+  NAVIGATE: "app.navigate",
+  NAVIGATE_BACK: "app.navigateBack",
 } as const;
 export type AssistantActionId = (typeof AssistantActionId)[keyof typeof AssistantActionId];
 

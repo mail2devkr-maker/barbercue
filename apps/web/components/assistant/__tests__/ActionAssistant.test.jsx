@@ -14,6 +14,8 @@ jest.mock('../../../lib/api', () => ({
   },
 }));
 jest.mock('next/link', () => ({ __esModule: true, default: ({ children, href }) => <a href={href}>{children}</a> }));
+const mockRouter = { push: jest.fn(), back: jest.fn(), replace: jest.fn(), prefetch: jest.fn() };
+jest.mock('next/navigation', () => ({ useRouter: () => mockRouter }));
 
 const textOf = (node) => (typeof node === 'string' ? node : (node.children ?? []).map(textOf).join(''));
 const byText = (tree, type, text) => tree.root.find((n) => n.type === type && textOf(n) === text);
@@ -156,7 +158,7 @@ describe('ActionAssistant drawer', () => {
     expect(drawer().props['aria-labelledby']).toBe('fastque-assistant-title');
 
     // Open the microphone notice, then Escape closes only the notice.
-    await act(async () => tree.root.findByProps({ 'aria-label': 'Speak' }).props.onClick());
+    await act(async () => tree.root.findByProps({ 'aria-label': 'Speak one question' }).props.onClick());
     expect(textOf(tree.root)).toContain('Before you use the microphone');
     const esc = { key: 'Escape', stopPropagation() {} };
     await act(async () => drawer().props.onKeyDown(esc));
@@ -221,7 +223,7 @@ describe('ActionAssistant drawer', () => {
     it('explains that the browser may send audio to Google and opens the mic only after Allow', async () => {
       route([]);
       const tree = await open();
-      await act(async () => tree.root.findByProps({ 'aria-label': 'Speak' }).props.onClick());
+      await act(async () => tree.root.findByProps({ 'aria-label': 'Speak one question' }).props.onClick());
       expect(started).toEqual([]);
       expect(textOf(tree.root)).toContain('sent to Google');
 
@@ -229,7 +231,7 @@ describe('ActionAssistant drawer', () => {
       expect(started).toEqual([]);
       expect(textOf(tree.root)).not.toContain('sent to Google');
 
-      await act(async () => tree.root.findByProps({ 'aria-label': 'Speak' }).props.onClick());
+      await act(async () => tree.root.findByProps({ 'aria-label': 'Speak one question' }).props.onClick());
       await act(async () => byText(tree, 'button', 'Allow microphone').props.onClick());
       expect(started).toEqual(['hi-IN']);
       expect(JSON.parse(storage['fastque.assistant.voiceConsent.v1'])).toEqual(['browser']);
@@ -239,7 +241,7 @@ describe('ActionAssistant drawer', () => {
       storage['fastque.assistant.voiceConsent.v1'] = JSON.stringify(['browser']);
       route([]);
       const tree = await open();
-      await act(async () => tree.root.findByProps({ 'aria-label': 'Speak' }).props.onClick());
+      await act(async () => tree.root.findByProps({ 'aria-label': 'Speak one question' }).props.onClick());
       expect(started).toEqual(['hi-IN']);
       expect(textOf(tree.root)).not.toContain('Before you use the microphone');
     });
@@ -247,7 +249,7 @@ describe('ActionAssistant drawer', () => {
     it('prefers the private FastQue server when it is set up, with its own notice', async () => {
       route([], { browser: true, local: true });
       const tree = await open();
-      const mic = tree.root.findByProps({ 'aria-label': 'Speak' });
+      const mic = tree.root.findByProps({ 'aria-label': 'Speak one question' });
       expect(mic.props.title).toBe('Private voice (FastQue server)');
       await act(async () => mic.props.onClick());
       expect(textOf(tree.root)).toContain("FastQue's own private server");

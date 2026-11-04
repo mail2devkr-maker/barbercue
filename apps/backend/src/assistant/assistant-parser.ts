@@ -4,6 +4,8 @@ import { parsePhase3, type Phase3Intent } from './assistant-parser-phase3';
 import { parsePhase4, type Phase4Intent } from './assistant-parser-phase4';
 import { parsePhase5, type Phase5Intent } from './assistant-parser-phase5';
 import { parsePhase7, type Phase7Intent } from './assistant-parser-phase7';
+import { parsePhase8, type Phase8Intent } from './assistant-parser-phase8';
+import { romanize } from './assistant-transliterate';
 import {
   parseAdminReads,
   parsePhase6,
@@ -62,7 +64,8 @@ export type ParsedIntent =
   | Phase5Intent
   | Phase6Intent
   | AdminReadIntent
-  | Phase7Intent;
+  | Phase7Intent
+  | Phase8Intent;
 
 export function normalizeText(text: string): string {
   return (
@@ -170,7 +173,25 @@ export function parseAssistantText(
 ): ParsedIntent | null {
   const text = normalizeText(raw);
   if (!text) return null;
+  // Issue #368: hi-IN speech recognition writes English words in Devanagari ("चेयर्स अवेलेबल").
+  // The romanized reading is tried only where the sentence as written matched nothing.
+  const roman = romanize(text);
+  const basics =
+    parsePhase8(text, surface) ??
+    (roman !== text ? parsePhase8(roman, surface) : null);
+  if (basics) return basics;
+  return (
+    parseNormalized(text, raw, surface, year) ??
+    (roman !== text ? parseNormalized(roman, roman, surface, year) : null)
+  );
+}
 
+function parseNormalized(
+  text: string,
+  raw: string,
+  surface: 'shop' | 'customer' | 'admin' | 'employee',
+  year: number,
+): ParsedIntent | null {
   if (INVENTORY.test(text) && !SERVICE.test(text))
     return { action: 'unreleased', feature: 'inventory' };
   if (ONBOARDING.test(text))
