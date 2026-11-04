@@ -86,6 +86,19 @@ import { SalonShareLinksService } from '../owner-ops/salon-share-links.service';
 import { BATCH14_HANDLERS } from './actions/batch14.actions';
 import { BATCH15_HANDLERS } from './actions/batch15.actions';
 import { helpTurn, notUnderstoodTurn } from './assistant-help';
+import {
+  ACK_REQUIRED_MESSAGE,
+  CANCELLED_MESSAGE,
+  EDIT_DISABLED_MESSAGE,
+  PREVIEW_FOOTER,
+  PreviewMutationError,
+  VOICE_YES_MESSAGE,
+  confirmationQuestion,
+  consequenceFor,
+  isBareYes,
+  isHighRisk,
+  readOnly,
+} from './assistant-write-policy';
 import { ASSISTANT_ROLLOUT, AssistantRollout } from './assistant-rollout';
 import { AdminCustomerAnalyticsService } from '../admin/analytics/admin-customer-analytics.service';
 import { AdminStaffAnalyticsService } from '../admin/analytics/admin-staff-analytics.service';
@@ -131,8 +144,25 @@ const UNRELEASED: Record<'inventory' | 'onboarding', string> = {
  * previewed and sealed) and, on confirmation: verify seal → re-authorize → handler.execute → audit.
  * Handlers (actions/*.ts) only call existing FastQue services as the session user.
  */
-const WRITES_OFF =
-  'Changes through the assistant are switched off for now. Nothing was changed. You can still do this on the page itself.';
+const WRITES_OFF = EDIT_DISABLED_MESSAGE;
+
+// Where an owner can make a refused change by hand (issue #372): a chip that opens the page.
+const PAGE_FOR_PREFIX: Record<string, string> = {
+  chairs: 'Chairs page kholo',
+  staff: 'Staff page kholo',
+  services: 'Services page kholo',
+  hours: 'Settings kholo',
+  queue: 'Live queue kholo',
+  bookings: 'Bookings kholo',
+  schedule: 'Bookings kholo',
+  offers: 'Offers kholo',
+  reviews: 'Reviews kholo',
+};
+function pageOption(actionId: string, surface: string) {
+  const text =
+    surface === 'shop' ? PAGE_FOR_PREFIX[actionId.split('.')[0]] : undefined;
+  return text ? [{ label: text.replace(' kholo', ''), text }] : undefined;
+}
 
 @Injectable()
 export class AssistantService {
@@ -258,6 +288,12 @@ export class AssistantService {
     input: AssistantTurnInput,
   ): Promise<AssistantTurnDto> {
     const requestId = randomUUID();
+    // Issue #372: "haan / yes / ok" is never a confirmation of anything.
+    if (isBareYes(input.text))
+      return this.finish(requestId, null, {
+        status: 'UNSUPPORTED',
+        message: VOICE_YES_MESSAGE,
+      });
     const parsed = await this.interpreter.interpret(input.text, input.surface);
     if (!parsed) {
       return this.finish(
@@ -311,17 +347,26 @@ export class AssistantService {
           message:
             'That action is not available in the assistant yet. Nothing was changed.',
         });
-      // Release gate: no write preview while writes are off for this user (before any lookup).
-      if (def.kind === 'WRITE' && !this.rollout.writesFor(user))
+      // Release gate (#362) and shop + action allowlist (#372): no write preview unless THIS action
+      // may be edited in THIS shop by this user. Checked before any lookup; default deny.
+      if (
+        def.kind === 'WRITE' &&
+        !this.rollout.writeAllowed(user, actionId, salonId)
+      )
         throw new Reply({
           status: 'UNAVAILABLE',
           message: WRITES_OFF,
+          options: pageOption(actionId, input.surface),
         });
       await this.authorize(user, actionId, salonId);
-      const turn = await handler.plan(
-        this.planCtx(user, actionId, salonId, input.text),
+      const planned = await handler.plan(
+        this.planCtx(user, actionId, salonId, input.text, def.kind === 'WRITE'),
         parsed,
       );
+      const turn =
+        def.kind === 'WRITE'
+          ? this.asConfirmation(actionId, def.title, planned)
+          : planned;
       await this.audit(
         user.id,
         salonId,
@@ -378,6 +423,28 @@ export class AssistantService {
       });
     }
     const salonId = sealed.salonId || null;
+    // Issue #372: a high-risk change needs the on-screen acknowledgement. Checked WITHOUT using up
+    // the token, so the same preview can be confirmed after ticking the box.
+    if (
+      input.decision === 'confirm' &&
+      isHighRisk(actionId) &&
+      input.acknowledged !== true
+    ) {
+      this.ledger.release(sealed.nonce);
+      await this.audit(
+        user.id,
+        sealed.salonId || null,
+        requestId,
+        actionId,
+        'CONFIRM',
+        'REFUSED_NOT_ACKNOWLEDGED',
+        {},
+      );
+      return this.finish(requestId, actionId, {
+        status: 'NEEDS_CONFIRMATION',
+        message: ACK_REQUIRED_MESSAGE,
+      });
+    }
     if (input.decision === 'cancel') {
       await this.audit(
         user.id,
@@ -390,10 +457,10 @@ export class AssistantService {
       );
       return this.finish(requestId, actionId, {
         status: 'CANCELLED',
-        message: 'Cancelled. Nothing was changed.',
+        message: CANCELLED_MESSAGE,
       });
     }
-    if (!this.rollout.writesFor(user)) {
+    if (!this.rollout.writeAllowed(user, actionId, salonId)) {
       // Writes were switched off after the preview: refuse, change nothing.
       await this.audit(
         user.id,
@@ -437,17 +504,65 @@ export class AssistantService {
 
   // ---------------------------------------------------------------- contexts
 
+  /**
+   * Issue #372: a WRITE's first command may only produce a sealed preview (or ask for a detail, or
+   * refuse). Anything else - a handler reporting DONE or changes without a confirmation - is refused,
+   * and the preview gets the plain question, the consequence warning and the risk tier.
+   */
+  private asConfirmation(
+    actionId: string,
+    title: string,
+    turn: Planned,
+  ): Planned {
+    if (
+      turn.status === 'NEEDS_CONFIRMATION' &&
+      turn.confirmation &&
+      turn.preview
+    ) {
+      const question = confirmationQuestion(actionId, title, turn.preview.rows);
+      const consequence = consequenceFor(actionId);
+      const warning = [turn.preview.warning, consequence]
+        .filter(Boolean)
+        .join(' ');
+      return {
+        ...turn,
+        message: `${question} ${PREVIEW_FOOTER}`,
+        preview: {
+          ...turn.preview,
+          question,
+          ...(warning ? { warning } : {}),
+          ...(isHighRisk(actionId) ? { risk: 'high' as const } : {}),
+        },
+      };
+    }
+    // A preview cannot write (read-only services), so an answer like "already in the queue" is
+    // fine. Only a preview that claims a change, or asks to confirm without a sealed token, is refused.
+    if (turn.status === 'NEEDS_CONFIRMATION' || turn.result?.changed?.length)
+      return {
+        status: 'FAILED',
+        message:
+          'This change could not be prepared for confirmation, so nothing was changed.',
+      };
+    return turn;
+  }
+
   private planCtx(
     user: AuthenticatedUser,
     actionId: AssistantActionId,
     salonId: string | null,
     text: string,
+    preview = false,
   ) {
     return {
       user,
       salonId: salonId ?? '',
       text,
-      deps: this.deps,
+      // A write PREVIEW gets read-only services: a data-changing call throws (#372).
+      deps: preview
+        ? (readOnly(
+            this.deps as unknown as Record<string, unknown>,
+          ) as unknown as typeof this.deps)
+        : this.deps,
       seal: (
         payload: Record<string, unknown>,
         before: unknown,
@@ -463,7 +578,7 @@ export class AssistantService {
         });
         return {
           status: 'NEEDS_CONFIRMATION',
-          message: 'Please check and confirm. Nothing has changed yet.',
+          message: `Please check and confirm. ${PREVIEW_FOOTER}`,
           preview: { rows, ...(warning ? { warning } : {}) },
           confirmation,
         };
@@ -585,6 +700,26 @@ export class AssistantService {
         {},
       );
       return this.finish(requestId, actionId, err.turn);
+    }
+    // Issue #372: a preview tried to change data. It was blocked before reaching the database.
+    if (err instanceof PreviewMutationError) {
+      this.logger.error(
+        `assistant ${actionId} preview attempted ${err.method}; blocked`,
+      );
+      await this.audit(
+        userId,
+        salonId,
+        requestId,
+        actionId,
+        'PREVIEW',
+        'REFUSED_PREVIEW_MUTATION',
+        {},
+      );
+      return this.finish(requestId, actionId, {
+        status: 'FAILED',
+        message:
+          'This change could not be prepared safely, so nothing was changed.',
+      });
     }
     // Authorization refusals, and 401/403 from a service, are DENIED. A service's other refusals
     // (e.g. "This shop is closed for today") keep their real reason below.

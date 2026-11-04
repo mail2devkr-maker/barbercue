@@ -108,7 +108,7 @@ export const SHOP_CATALOG_HANDLERS: HandlerMap = {
         };
       return c.seal(
         { staffId: target.id, status: next },
-        { id: target.id, status: target.status },
+        { id: target.id, name: target.displayName, status: target.status },
         [
           {
             label: target.displayName,
@@ -126,7 +126,11 @@ export const SHOP_CATALOG_HANDLERS: HandlerMap = {
         (r) => r.id === c.payload.staffId,
       );
       if (!row) throw staleReply();
-      c.assertUnchanged({ id: row.id, status: row.status });
+      c.assertUnchanged({
+        id: row.id,
+        name: row.displayName,
+        status: row.status,
+      });
       const updated = await c.deps.staff.update(c.user.id, c.salonId, row.id, {
         status: c.payload.status as StaffMemberStatus,
       });
@@ -350,7 +354,12 @@ export const SHOP_CATALOG_HANDLERS: HandlerMap = {
         };
       return c.seal(
         { serviceId: target.id, price: next },
-        { id: target.id, price: target.price, isActive: true },
+        {
+          id: target.id,
+          name: target.name,
+          price: target.price,
+          isActive: true,
+        },
         [
           {
             label: `${target.name} price`,
@@ -368,6 +377,7 @@ export const SHOP_CATALOG_HANDLERS: HandlerMap = {
       if (!row) throw staleReply();
       c.assertUnchanged({
         id: row.id,
+        name: row.name,
         price: row.price,
         isActive: row.isActive,
       });

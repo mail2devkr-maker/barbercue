@@ -308,7 +308,7 @@ function AssistantDrawer({ salonId, surface = "shop", onRevoked }: { salonId?: s
     [runTurn, readAloud, lang, inConversation],
   );
 
-  async function decide(entryId: string, token: string, decision: "confirm" | "cancel") {
+  async function decide(entryId: string, token: string, decision: "confirm" | "cancel", acknowledged = false) {
     if (busyRef.current) return;
     busyRef.current = true;
     setLog((l) => l.map((e) => (e.id === entryId && e.kind === "turn" ? { ...e, settled: true } : e)));
@@ -319,12 +319,23 @@ function AssistantDrawer({ salonId, surface = "shop", onRevoked }: { salonId?: s
     try {
       turn = await apiFetch<AssistantTurnDto>(`${ASSISTANT_PATHS.assistant}/${ASSISTANT_PATHS.confirmations}`, {
         method: "POST",
-        body: JSON.stringify({ token, decision }),
+        body: JSON.stringify({ token, decision, ...(acknowledged ? { acknowledged: true } : {}) }),
       });
     } catch (err) {
       turn = failTurn(err);
     }
-    setLog((l) => l.map((e) => (e.id === pendingId ? { kind: "turn", id: pendingId, turn, settled: false, voice: false } : e)));
+    // A refusal that did not use up the confirmation (e.g. the acknowledgement was missing) leaves
+    // the original preview usable.
+    const reusable = turn.status === "NEEDS_CONFIRMATION" && !turn.confirmation;
+    setLog((l) =>
+      l.map((e) =>
+        e.id === pendingId
+          ? { kind: "turn", id: pendingId, turn, settled: false, voice: false }
+          : reusable && e.id === entryId && e.kind === "turn"
+            ? { ...e, settled: false }
+            : e,
+      ),
+    );
     if (turn.refresh?.length) announceAssistantChange(turn.refresh);
     busyRef.current = false;
     setBusy(false);
@@ -619,11 +630,14 @@ function TurnCard({
   entry: Extract<Entry, { kind: "turn" }>;
   busy: boolean;
   salonId?: string;
-  onDecide: (id: string, token: string, decision: "confirm" | "cancel") => void;
+  onDecide: (id: string, token: string, decision: "confirm" | "cancel", acknowledged?: boolean) => void;
   onOption: (text: string) => void;
   onOpen: (to: string) => void;
 }) {
   const { turn } = entry;
+  // Issue #372: a high-risk change needs a deliberate "I understand" before Confirm is enabled.
+  const [ack, setAck] = useState(false);
+  const highRisk = turn.preview?.risk === "high";
   const tone =
     turn.status === "DONE" ? styles.ok : turn.status === "NEEDS_CONFIRMATION" || turn.status === "NEEDS_INPUT" ? styles.ask : styles.stop;
   // A navigation turn already opened its page; other answers offer to open theirs.
@@ -639,7 +653,14 @@ function TurnCard({
           <li key={s.label} className={styles[`stage_${s.state}`]}>{s.label}</li>
         ))}
       </ol>
-      <p className={styles.message}>{turn.message}</p>
+      {turn.preview?.question ? (
+        <>
+          <p className={styles.question}>{turn.preview.question}</p>
+          <p className={styles.message}>{turn.message.replace(turn.preview.question, "").trim()}</p>
+        </>
+      ) : (
+        <p className={styles.message}>{turn.message}</p>
+      )}
       {turn.preview && (
         <table className={styles.preview}>
           <thead>
@@ -657,9 +678,20 @@ function TurnCard({
         </table>
       )}
       {turn.preview?.warning && <p className={styles.warning}>{turn.preview.warning}</p>}
+      {turn.confirmation && !entry.settled && turn.status === "NEEDS_CONFIRMATION" && highRisk && (
+        <label className={styles.ack}>
+          <input type="checkbox" checked={ack} onChange={(ev) => setAck(ev.target.checked)} /> Main samajhta/samajhti hoon ki yeh ek bada badlav hai. (I
+          understand what this change does.)
+        </label>
+      )}
       {turn.confirmation && !entry.settled && turn.status === "NEEDS_CONFIRMATION" && (
         <div className={styles.decide}>
-          <button type="button" className={styles.confirm} disabled={busy} onClick={() => onDecide(entry.id, turn.confirmation!.token, "confirm")}>
+          <button
+            type="button"
+            className={styles.confirm}
+            disabled={busy || (highRisk && !ack)}
+            onClick={() => onDecide(entry.id, turn.confirmation!.token, "confirm", highRisk ? ack : undefined)}
+          >
             Confirm
           </button>
           <button type="button" className={styles.cancel} disabled={busy} onClick={() => onDecide(entry.id, turn.confirmation!.token, "cancel")}>

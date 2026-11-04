@@ -87,6 +87,9 @@ maybe('Action Assistant batch 7 (e2e, disposable local database)', () => {
     // These suites exercise the assistant itself, so the release gate is opened for everyone here.
     process.env.ASSISTANT_MODE = 'all';
     process.env.ASSISTANT_WRITES = 'all';
+    // Disposable test database only: every shop and every action may be edited here (#372).
+    process.env.ASSISTANT_WRITE_SALON_IDS = '*';
+    process.env.ASSISTANT_WRITE_ACTIONS = '*';
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     })

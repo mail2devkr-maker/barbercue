@@ -48,7 +48,7 @@ maybe('Action Assistant (e2e, disposable local database)', () => {
     request(app.getHttpServer())
       .post('/api/v1/assistant/confirmations')
       .set('Authorization', `Bearer ${tok[who]}`)
-      .send({ token, decision })
+      .send({ token, decision, acknowledged: true }) // the user ticked "I understand" (#372)
       .expect(200)
       .then((r) => r.body as AssistantTurnDto);
 
@@ -65,6 +65,9 @@ maybe('Action Assistant (e2e, disposable local database)', () => {
     // These suites exercise the assistant itself, so the release gate is opened for everyone here.
     process.env.ASSISTANT_MODE = 'all';
     process.env.ASSISTANT_WRITES = 'all';
+    // Disposable test database only: every shop and every action may be edited here (#372).
+    process.env.ASSISTANT_WRITE_SALON_IDS = '*';
+    process.env.ASSISTANT_WRITE_ACTIONS = '*';
     const moduleFixture: TestingModule = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleFixture.createNestApplication();
     app.setGlobalPrefix('api/v1');
