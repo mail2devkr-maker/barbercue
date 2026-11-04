@@ -138,10 +138,18 @@ export class SalonAccessService {
     salonId: string,
     operational = false,
   ): Promise<'CO_FOUNDER'> {
-    const [membership, caller, salon] = await Promise.all([
-      this.prisma.userRole.findFirst({
-        where: { userId, role: Role.CO_FOUNDER, salonId: null },
-      }),
+    // Fail closed before even looking up shop metadata for an unauthorized role.
+    const membership = await this.prisma.userRole.findFirst({
+      where: { userId, role: Role.CO_FOUNDER, salonId: null },
+    });
+    if (!membership) {
+      throw new AppException(
+        QueueErrorCode.SALON_ACCESS_DENIED,
+        'You do not have access to this salon.',
+        HttpStatus.FORBIDDEN,
+      );
+    }
+    const [caller, salon] = await Promise.all([
       this.prisma.user.findUnique({
         where: { id: userId },
         select: { status: true },
@@ -151,7 +159,7 @@ export class SalonAccessService {
         select: { status: true },
       }),
     ]);
-    if (!membership || caller?.status !== 'ACTIVE') {
+    if (caller?.status !== 'ACTIVE') {
       throw new AppException(
         QueueErrorCode.SALON_ACCESS_DENIED,
         'You do not have access to this salon.',
