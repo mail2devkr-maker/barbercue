@@ -77,6 +77,16 @@ export function ActionAssistant({ salonId, surface = "shop" }: { salonId?: strin
   const [consentFor, setConsentFor] = useState<VoiceProvider | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const fabRef = useRef<HTMLButtonElement>(null);
+  const wasOpen = useRef(false);
+
+  // Keyboard and screen-reader users: focus goes into the message box when the drawer opens and
+  // back to the Assistant button when it closes, so nobody is left on a removed element.
+  useEffect(() => {
+    if (open) inputRef.current?.focus();
+    else if (wasOpen.current) fabRef.current?.focus();
+    wasOpen.current = open;
+  }, [open]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView?.({ block: "end" });
@@ -184,19 +194,37 @@ export function ActionAssistant({ salonId, surface = "shop" }: { salonId?: strin
     startVoice(provider);
   }
 
+  function closeDrawer() {
+    speech.stop();
+    local.stop();
+    setConsentFor(null);
+    setOpen(false);
+  }
+
   return (
     <>
-      <button type="button" className={styles.fab} onClick={() => setOpen(true)} aria-label="Open FastQue Assistant" hidden={open}>
+      <button ref={fabRef} type="button" className={styles.fab} onClick={() => setOpen(true)} aria-label="Open FastQue Assistant" aria-expanded={open} hidden={open}>
         <span aria-hidden="true">✦</span> Assistant
       </button>
       {open && (
-        <aside className={styles.drawer} aria-label="FastQue Assistant" role="complementary">
+        <aside
+          className={styles.drawer}
+          aria-labelledby="fastque-assistant-title"
+          role="complementary"
+          onKeyDown={(ev) => {
+            // Escape closes the microphone notice first, then the drawer.
+            if (ev.key !== "Escape") return;
+            ev.stopPropagation();
+            if (consentFor) setConsentFor(null);
+            else closeDrawer();
+          }}
+        >
           <header className={styles.header}>
             <div>
-              <strong>FastQue Assistant</strong>
+              <strong id="fastque-assistant-title">FastQue Assistant</strong>
               <p className={styles.sub}>Bol kar ya likh kar batayein · Speak or type</p>
             </div>
-            <button type="button" className={styles.close} onClick={() => { speech.stop(); local.stop(); setOpen(false); }} aria-label="Close assistant">×</button>
+            <button type="button" className={styles.close} onClick={closeDrawer} aria-label="Close assistant">×</button>
           </header>
 
           <div className={styles.log} aria-live="polite">

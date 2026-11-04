@@ -113,6 +113,45 @@ describe('ActionAssistant drawer', () => {
     expect(textOf(tree.root.find((n) => n.props['data-status'] === 'NEEDS_CONFIRMATION'))).toContain('Decision sent');
   });
 
+  it('keyboard: focus moves into the message box, Escape closes the notice then the drawer, focus returns', async () => {
+    route([], { browser: true, local: false });
+    globalThis.window.webkitSpeechRecognition = class {
+      start() {}
+      stop() {}
+      abort() {}
+    };
+    const focused = [];
+    let tree;
+    await act(async () => {
+      tree = TestRenderer.create(<ActionAssistant salonId="s1" />, {
+        createNodeMock: (el) => ({ focus: () => focused.push(el.props['aria-label'] ?? el.type), scrollIntoView() {} }),
+      });
+    });
+    const fab = () => tree.root.findByProps({ 'aria-label': 'Open FastQue Assistant' });
+    expect(fab().props['aria-expanded']).toBe(false);
+    await act(async () => fab().props.onClick());
+    expect(focused).toEqual(['Message to the assistant']);
+    const drawer = () => tree.root.find((n) => n.props.role === 'complementary');
+    expect(drawer().props['aria-labelledby']).toBe('fastque-assistant-title');
+
+    // Open the microphone notice, then Escape closes only the notice.
+    await act(async () => tree.root.findByProps({ 'aria-label': 'Speak' }).props.onClick());
+    expect(textOf(tree.root)).toContain('Before you use the microphone');
+    const esc = { key: 'Escape', stopPropagation() {} };
+    await act(async () => drawer().props.onKeyDown(esc));
+    expect(textOf(tree.root)).not.toContain('Before you use the microphone');
+    expect(tree.root.findAll((n) => n.props.role === 'complementary')).toHaveLength(1);
+
+    // A second Escape closes the drawer and returns focus to the Assistant button.
+    await act(async () => drawer().props.onKeyDown(esc));
+    expect(tree.root.findAll((n) => n.props.role === 'complementary')).toHaveLength(0);
+    expect(focused.at(-1)).toBe('Open FastQue Assistant');
+    // Other keys do nothing.
+    await act(async () => fab().props.onClick());
+    await act(async () => drawer().props.onKeyDown({ key: 'a', stopPropagation() {} }));
+    expect(tree.root.findAll((n) => n.props.role === 'complementary')).toHaveLength(1);
+  });
+
   it('sends the customer surface and shows customer examples on customer screens', async () => {
     route([{ ...applied, refresh: ['myBookings'], status: 'DONE', action: null, message: 'You have no upcoming appointments.' }]);
     const tree = await open({ surface: 'customer' });

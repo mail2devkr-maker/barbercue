@@ -51,7 +51,10 @@
   font-size: 13px;
 }
 .close {
+  min-width: 44px;
+  min-height: 44px;
   border: 0;
+  border-radius: 10px;
   background: transparent;
   font-size: 26px;
   line-height: 1;
@@ -329,4 +332,31 @@
   color: var(--bc-accent);
   font-size: 13px;
   font-weight: 600;
+}
+
+/* Phones: the drawer already fills the width; keep touch targets at least 44px, keep the
+   composer clear of the home indicator, and use a 16px input so iOS does not zoom on focus. */
+@media (max-width: 600px) {
+  .fab {
+    right: 16px;
+    bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+    min-height: 48px;
+  }
+  .drawer {
+    border-left: 0;
+  }
+  .composer {
+    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+  .input {
+    font-size: 16px;
+    min-height: 44px;
+  }
+  .chip,
+  .send,
+  .mic,
+  .confirm,
+  .cancel {
+    min-height: 44px;
+  }
 }

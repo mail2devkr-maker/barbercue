@@ -159,6 +159,19 @@ The full route list is in [ROUTE_INVENTORY.md](ROUTE_INVENTORY.md). Status meani
 | Read replies aloud | Opt-in | Browser `speechSynthesis` |
 | Paid AI or voice providers | **Not implemented** | No Gemini, OpenAI, cloud speech or paid hosting without owner approval |
 
+## 3b. Accessibility and phones (batch 10)
+
+- The drawer is labelled by its heading. The Assistant button reports `aria-expanded`.
+- Focus moves into the message box when the drawer opens and back to the Assistant button when it closes.
+- Escape closes the microphone notice first, then the drawer.
+- Results stay in a polite live region; refusals and voice errors use `role="alert"`.
+- At 600px and below:
+  - Buttons, chips and the close control are at least 44px tall.
+  - The message box uses a 16px font, so iOS does not zoom.
+  - The composer and Assistant button stay clear of the phone's home indicator (safe-area insets).
+- Verified in the browser at 375×812: full-width drawer, no horizontal scroll, focus and Escape as described.
+- Unit test: `ActionAssistant.test.jsx` (keyboard).
+
 ## 4. Screens that update after a confirmed change
 
 | Resource | Screen | Hook |
