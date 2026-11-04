@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { DASHBOARD_PATHS } from "@barbercue/shared";
 import type { OwnerBookingDetailDto, PaginatedResult, SalonStaffDto } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../lib/api";
+import { useAssistantRefresh } from "../../lib/assistant-events";
 import { Button } from "../ui/Button";
 import styles from "./schedule.module.css";
 
@@ -94,6 +95,9 @@ export function DayScheduler({ salonId }: { salonId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [nowTick, setNowTick] = useState(() => Date.now());
+  // Bumped when the Assistant reports a server-confirmed booking change, to refetch this day.
+  const [refreshTick, setRefreshTick] = useState(0);
+  useAssistantRefresh("bookings", () => setRefreshTick((n) => n + 1));
 
   // Resolve the salon's own timezone once, then default the viewed date to "today" *in that
   // zone* — defaulting to the browser's own local date would show the wrong day for a shop in a
@@ -142,7 +146,7 @@ export function DayScheduler({ salonId }: { salonId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [salonId, date]);
+  }, [salonId, date, refreshTick]);
 
   // Redraws the current-time line roughly once a minute — cheap (one interval, one re-render),
   // and only actually visible when the viewed date happens to be today.

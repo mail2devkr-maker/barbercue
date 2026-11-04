@@ -52,6 +52,15 @@ import { AssignmentReleaseModule } from '../queue/assignment-release.module';
     SalonContactImportPreviewService,
     ContactLedgerService,
   ],
-  exports: [SalonActivationService, SalonLocationService],
+  exports: [
+    SalonActivationService,
+    SalonLocationService,
+    SalonServicesService,
+    SalonStaffService,
+    SalonOperatingHoursService,
+    SalonChairsService,
+    StaffWorkingHoursService,
+    SalonProfileService,
+  ],
 })
 export class SalonSetupModule {}

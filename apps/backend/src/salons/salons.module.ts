@@ -31,5 +31,6 @@ import { FavoritesService } from './favorites.service';
     CustomerAssistantSearchService,
     FavoritesService,
   ],
+  exports: [CustomerAssistantSearchService, FavoritesService],
 })
 export class SalonsModule {}

@@ -11,6 +11,7 @@ import {
   type SalonTimezoneResultDto,
 } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../lib/api";
+import { useAssistantRefresh } from "../../lib/assistant-events";
 import { getRealtimeSocket, joinSalonRoom, onReconnect } from "../../lib/realtime";
 import { useAuth } from "../../lib/auth-context";
 import {
@@ -303,6 +304,11 @@ export function OwnerBookingsView({ salonId }: { salonId: string }) {
     },
     [salonId],
   );
+
+  // A booking changed through the Assistant reloads the current filter from the server.
+  useAssistantRefresh("bookings", () => {
+    void loadPage(filterRef.current, undefined, false);
+  });
 
   useEffect(() => {
     // Deferred a tick so this effect body never calls setState synchronously — same pattern as

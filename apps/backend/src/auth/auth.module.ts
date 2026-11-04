@@ -83,6 +83,8 @@ import { ResendEmailSender } from './services/resend-email-sender';
   // through the same transport the forgot-password flow already uses, rather than binding a
   // second EmailSender of its own. No auth behavior changes — this is an export-list addition.
   exports: [
+    // AuthService: the Action Assistant reuses setLanguage for the signed-in user (issue #362).
+    AuthService,
     TokenService,
     PasswordService,
     TotpService,

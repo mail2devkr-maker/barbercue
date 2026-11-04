@@ -22,6 +22,7 @@ import type { CapabilityMap } from "../../lib/capabilities";
 import { rememberLastShop } from "../../lib/last-shop";
 import { getRealtimeSocket, joinSalonRoom, onReconnect } from "../../lib/realtime";
 import { AdminManagingBanner } from "../dashboard/AdminManagingBanner";
+import { ActionAssistant } from "../assistant/ActionAssistant";
 import { Icon } from "./icons";
 import { BrandLockup } from "../ui/BrandLockup";
 import { NAV_GROUPS, NAV_ITEMS, activeItemId, hrefFor, navItemsFor, type NavItem } from "./owner-nav";
@@ -403,6 +404,7 @@ function ShellInner({ salonId, children }: { salonId: string; children: ReactNod
           </button>
         </nav>
       </div>
+      <ActionAssistant salonId={salonId} />
     </ShellContext.Provider>
   );
 }

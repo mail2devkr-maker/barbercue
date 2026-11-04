@@ -4,6 +4,7 @@ import { DISCOVERY_PATHS } from "@barbercue/shared";
 import type { PublicSalonStatusDto, SalonProfileDto } from "@barbercue/shared";
 import { fetchDiscoveryOrNull } from "../../../../lib/discovery-api";
 import { BookingFlow } from "../../../../components/booking/BookingFlow";
+import { CustomerActionAssistant } from "../../../../components/assistant/CustomerActionAssistant";
 import { CampaignCapture } from "../../../../components/booking/CampaignCapture";
 import { salonKey } from "../../../../lib/campaign-token";
 import { isOfferId } from "../../../../lib/public-offers";
@@ -70,6 +71,7 @@ export default async function BookPage({
       {publicStatus && <PublicSalonStatus status={publicStatus} compact />}
 
       <CampaignCapture salonKey={campaignKey} />
+      <CustomerActionAssistant salonId={salon.id} />
       <BookingFlow
         campaignKey={campaignKey}
         // An offer chosen on the public Offers page; the booking flow looks it up and the server decides eligibility.

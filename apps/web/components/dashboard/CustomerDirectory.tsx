@@ -6,6 +6,7 @@ import { DASHBOARD_PATHS } from "@barbercue/shared";
 import type { OwnerCustomerDirectoryItemDto } from "@barbercue/shared";
 import { Button } from "../ui/Button";
 import { useCursorList } from "../../lib/use-cursor-list";
+import { useAssistantRefresh } from "../../lib/assistant-events";
 import {
   DIRECTORY_SEGMENTS,
   DIRECTORY_SORTS,
@@ -54,6 +55,7 @@ export function CustomerDirectory({ salonId, onRouteMissing }: { salonId: string
   }, [draft]);
 
   const list = useCursorList<OwnerCustomerDirectoryItemDto>(`${base}/directory`, directoryParams(applied), true, OPTIONS);
+  useAssistantRefresh("customers", list.reload);
   const missing = useRef(false);
   useEffect(() => {
     if (list.errorStatus === 404 && !missing.current) {
