@@ -105,6 +105,13 @@ export const AssistantActionId = {
   QUEUE_START: "queue.start",
   BOOKING_IN_SHOP: "bookings.inShop",
   BOOKING_CORRECT_COMPLETED: "bookings.correctCompleted",
+  // Batch 5 — offers, shop profile, customer review, language
+  OFFERS_CREATE: "offers.create",
+  OFFERS_EDIT: "offers.edit",
+  SALON_PROFILE_VIEW: "salon.profile",
+  SALON_PROFILE_SET: "salon.setProfile",
+  REVIEW_WRITE: "me.writeReview",
+  LANGUAGE_SET: "me.language",
 } as const;
 export type AssistantActionId = (typeof AssistantActionId)[keyof typeof AssistantActionId];
 
@@ -159,7 +166,8 @@ export type AssistantResource =
   | "offers"
   | "reviews"
   | "notifications"
-  | "favorites";
+  | "favorites"
+  | "profile";
 
 export type AssistantCapabilityState = "SUPPORTED" | "DENIED" | "UNAVAILABLE";
 

@@ -400,4 +400,41 @@ export const ASSISTANT_ACTIONS: Record<AssistantActionId, ActionDef> = {
     'STAFF_OR_ADMIN',
     ['5 baje wala appointment no show galat tha, completed karo'],
   ),
+  // ---- batch 5: offers, shop profile, customer review, language
+  [AssistantActionId.OFFERS_CREATE]: write(
+    'Create an offer (as a draft)',
+    OWNERS,
+    'OWNER_ONLY',
+    ['Diwali offer banao 20% off 10 din ke liye'],
+  ),
+  [AssistantActionId.OFFERS_EDIT]: write(
+    'Change an offer’s discount or end date',
+    OWNERS,
+    'OWNER_ONLY',
+    ['Diwali offer 25% karo', 'Diwali offer 30 nov tak badhao'],
+  ),
+  [AssistantActionId.SALON_PROFILE_VIEW]: read(
+    'Show my shop profile',
+    SHOP_MANAGERS,
+    'OWNER_OR_ADMIN',
+    ['Dukaan ki profile dikhao'],
+  ),
+  [AssistantActionId.SALON_PROFILE_SET]: write(
+    'Change shop description, phone, email or address',
+    SHOP_MANAGERS,
+    'OWNER_OR_ADMIN',
+    ['Dukaan ka description badlo: Best haircuts in town'],
+  ),
+  [AssistantActionId.REVIEW_WRITE]: write(
+    'Review a completed visit',
+    CUSTOMERS,
+    'SELF',
+    ['Haircut ko 5 star review do: bahut badiya'],
+  ),
+  [AssistantActionId.LANGUAGE_SET]: write(
+    'Change my app language',
+    EVERYONE,
+    'ANY_SIGNED_IN',
+    ['Meri language Hindi karo'],
+  ),
 };

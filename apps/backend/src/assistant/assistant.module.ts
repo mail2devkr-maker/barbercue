@@ -10,6 +10,8 @@ import { DashboardReviewsModule } from '../dashboard-reviews/dashboard-reviews.m
 import { OffersModule } from '../offers/offers.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { AdminModule } from '../admin/admin.module';
+import { ReviewsModule } from '../reviews/reviews.module';
+import { AuthModule } from '../auth/auth.module';
 import { AssistantController } from './assistant.controller';
 import { AssistantService } from './assistant.service';
 import { interpreterFromEnv } from './assistant-interpreter';
@@ -33,6 +35,8 @@ import {
     OffersModule,
     NotificationsModule,
     AdminModule,
+    ReviewsModule,
+    AuthModule,
   ],
   controllers: [AssistantController],
   providers: [

@@ -60,6 +60,7 @@ import { AssignmentReleaseModule } from '../queue/assignment-release.module';
     SalonOperatingHoursService,
     SalonChairsService,
     StaffWorkingHoursService,
+    SalonProfileService,
   ],
 })
 export class SalonSetupModule {}

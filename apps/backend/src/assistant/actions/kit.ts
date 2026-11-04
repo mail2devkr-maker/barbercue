@@ -29,6 +29,9 @@ import type { NotificationsService } from '../../notifications/notifications.ser
 import type { FavoritesService } from '../../salons/favorites.service';
 import type { AdminExecutiveOverviewService } from '../../admin/analytics/admin-executive-overview.service';
 import type { AdminShopStatusService } from '../../admin/analytics/admin-shop-status.service';
+import type { SalonProfileService } from '../../salon-setup/salon-profile.service';
+import type { ReviewsService } from '../../reviews/reviews.service';
+import type { AuthService } from '../../auth/auth.service';
 import type { SealedWrite } from '../assistant-confirmation';
 import { matchByName } from '../assistant-parser';
 
@@ -88,6 +91,9 @@ export interface Deps {
   favorites: FavoritesService;
   executive: AdminExecutiveOverviewService;
   shopStatus: AdminShopStatusService;
+  salonProfile: SalonProfileService;
+  customerReviews: ReviewsService;
+  auth: AuthService;
 }
 
 export interface PlanCtx {

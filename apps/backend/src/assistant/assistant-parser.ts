@@ -2,6 +2,7 @@ import { AssistantActionId } from '@barbercue/shared';
 import { parsePhase2, type Phase2Intent } from './assistant-parser-phase2';
 import { parsePhase3, type Phase3Intent } from './assistant-parser-phase3';
 import { parsePhase4, type Phase4Intent } from './assistant-parser-phase4';
+import { parsePhase5, type Phase5Intent } from './assistant-parser-phase5';
 
 /**
  * Deterministic English / Hindi / Hinglish interpreter for the Action Assistant (issue #362).
@@ -50,7 +51,8 @@ export type ParsedIntent =
   | { action: 'unreleased'; feature: 'inventory' | 'onboarding' }
   | Phase2Intent
   | Phase3Intent
-  | Phase4Intent;
+  | Phase4Intent
+  | Phase5Intent;
 
 export function normalizeText(text: string): string {
   return (
@@ -164,6 +166,8 @@ export function parseAssistantText(
   if (ONBOARDING.test(text))
     return { action: 'unreleased', feature: 'onboarding' };
 
+  const phase5 = parsePhase5(text, raw, surface, year);
+  if (phase5) return phase5;
   if (surface === 'shop') {
     const phase4 = parsePhase4(text, raw, year);
     if (phase4) return phase4;

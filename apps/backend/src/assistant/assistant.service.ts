@@ -69,6 +69,10 @@ import { SHOP_OPS_HANDLERS } from './actions/shop-ops.actions';
 import { CUSTOMER_HANDLERS } from './actions/customer.actions';
 import { BATCH3_HANDLERS } from './actions/batch3.actions';
 import { BATCH4_HANDLERS } from './actions/batch4.actions';
+import { BATCH5_HANDLERS } from './actions/batch5.actions';
+import { SalonProfileService } from '../salon-setup/salon-profile.service';
+import { ReviewsService } from '../reviews/reviews.service';
+import { AuthService } from '../auth/auth.service';
 
 export { ASSISTANT_ACTIONS };
 
@@ -80,6 +84,7 @@ export const ASSISTANT_HANDLERS: HandlerMap = {
   ...CUSTOMER_HANDLERS,
   ...BATCH3_HANDLERS,
   ...BATCH4_HANDLERS,
+  ...BATCH5_HANDLERS,
 };
 
 const UNRELEASED: Record<'inventory' | 'onboarding', string> = {
@@ -125,6 +130,9 @@ export class AssistantService {
     favorites: FavoritesService,
     executive: AdminExecutiveOverviewService,
     shopStatus: AdminShopStatusService,
+    salonProfile: SalonProfileService,
+    customerReviews: ReviewsService,
+    auth: AuthService,
     @Inject(ASSISTANT_INTERPRETER)
     private readonly interpreter: IntentInterpreter,
     @Inject(ASSISTANT_TRANSCRIBER) private readonly transcriber: Transcriber,
@@ -153,6 +161,9 @@ export class AssistantService {
       favorites,
       executive,
       shopStatus,
+      salonProfile,
+      customerReviews,
+      auth,
     };
   }
 

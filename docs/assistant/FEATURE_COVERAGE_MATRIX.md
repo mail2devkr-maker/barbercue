@@ -8,8 +8,9 @@ Branch `claude/fastque-action-assistant-362`, Draft PR #363. **Nothing here is d
   - `P2` = `test/assistant-phase2.e2e-spec.ts`
   - `B3` = `test/assistant-batch3.e2e-spec.ts`
   - `B4` = `test/assistant-batch4.e2e-spec.ts`
+  - `B5` = `test/assistant-batch5.e2e-spec.ts`
   - `unit` = parser, interpreter and transcriber specs
-- **CI** is the GitHub *Owner Operations Certification* workflow, which runs P1, P2, B3 and B4.
+- **CI** is the GitHub *Owner Operations Certification* workflow, which runs P1, P2, B3, B4 and B5.
 - **Live** and **Physical** are "no" for every row, because the assistant has never been deployed and has never had a real-microphone or real-device test.
 
 All 32 actions share these rules:
@@ -19,7 +20,7 @@ All 32 actions share these rules:
 - Every step writes an audit row with no transcript text.
 - The screen updates only after the server reports success (`refresh` → the page re-fetches from the API).
 
-## 1. Actions the assistant runs (58)
+## 1. Actions the assistant runs (64)
 
 **Access levels**
 - `owner/admin` = `assertOwnerOrAdminAccess` (the shop owner or a delegated platform admin).
@@ -89,6 +90,12 @@ All 32 actions share these rules:
 | 56 | `queue.start` | Owner, staff, admin | `QueueService.startService` (assigned customers only) | team/admin | yes | "Token 5 start karo" | B4 |
 | 57 | `bookings.inShop` | Owner, staff, admin | `ShopBookingActionsService.createInShop` — mobile saved **only** when the operator says the customer agreed; idempotency key = confirmation nonce | team/admin | yes | "Amit ke liye kal 5 baje haircut appointment book karo" | B4 (books once; phone not saved without consent) |
 | 58 | `bookings.correctCompleted` | Owner, staff, admin | `BookingNoShowService.correctToCompleted` — warns that the no-show charge is removed | team/admin | yes | "5 baje wala appointment no show galat tha, completed karo" | B4 |
+| 59 | `offers.create` | Owner | `OffersService.create` — **draft only** (kind OFFER, audience all, 1 use per customer); publishing stays the separate `offers.publish` action; validated with `createOfferSchema` before the preview | owner | yes | "Diwali offer banao 20% off 10 din ke liye" | B5 (draft once; staff and other shop denied; 150% refused) |
+| 60 | `offers.edit` | Owner | `OffersService.update` (discount, end date) — a live offer must be paused first, refused in the preview | owner | yes | "Diwali offer 25% karo" | B5 (live offer unchanged) |
+| 61 | `salon.profile` | Owner, admin | `SalonProfileService.get` (read) | owner/admin | – | "Dukaan ki profile dikhao" | B5 |
+| 62 | `salon.setProfile` | Owner, admin | `SalonProfileService.update` — description, phone, email or address only, with a public-page warning; the shop **name** is not changed by voice | owner/admin | yes | "Dukaan ka description badlo: Best haircuts in town" | B5 (bad email refused; staff and other shop denied) |
+| 63 | `me.writeReview` | Customer | `ReviewsService.create` on the customer's own latest unreviewed completed visit | self | yes | "Haircut ko 5 star review do: bahut badiya" | B5 (once per visit) |
+| 64 | `me.language` | Everyone signed in | `AuthService.setLanguage` (own account only) | self | yes | "Meri language Hindi karo" | B5 (customer and staff; others unchanged) |
 
 **Cross-cutting negative tests**
 - Another shop's owner is denied, even when the request names the victim shop.
@@ -112,11 +119,11 @@ The full route list is in [ROUTE_INVENTORY.md](ROUTE_INVENTORY.md). Status meani
 | Area | Persona | Existing API | Status | Blocker or reason |
 |---|---|---|---|---|
 | Invoices: issue, record payment, void; CSV downloads | Owner | `InvoicesService` | BLOCKED | Money movement; needs owner sign-off on confirmation strength. Lists and the report are done (#44, #45) |
-| Offers: create or edit (wording, discount, dates) | Owner | `OffersService.create/update` | NEXT | Many fields; best as a guided form card |
-| Salon profile, description, timezone, payment QR | Owner | salon-setup services | NEXT | – |
+| Offers: description, audience, per-customer limit, birthday/anniversary kinds | Owner | `OffersService.create/update` | NEXT | Draft create and discount/end-date edit are done (#59, #60); the rest stays in the Offers page |
+| Salon timezone, payment QR, shop name | Owner | salon-setup services | BLOCKED | Timezone moves every slot and a QR is an image upload; renaming the shop is an owner decision. Profile fields are done (#61, #62) |
 | Photos (upload, cover) | Owner | `SalonPhotosService` | BLOCKED | A file upload can't come from a sentence; link to the page |
 | Shop open/close for today | Owner | `SalonActivationService` | BLOCKED | Owner decision: an instant public effect needs a stronger confirmation |
-| Customer: profile edit, write a review | Customer | auth profile, reviews | NEXT | Favorites and bills are done (#49–52) |
+| Customer: profile name/email edit, edit or delete a review | Customer | auth profile, reviews | NEXT | Write a review and language are done (#63, #64) |
 | Guest (not signed in) actions | Guest | guest queue routes | BLOCKED | The assistant requires sign-in; guests keep the existing OTP and guest flows |
 | Field employee: leads, follow-ups, visits | Employee | employee module | NEXT (read first) | Employee-audience session; Android UI is Codex's 1.0.7 lane, by API contract only |
 | Platform admin: verification queue, shop activity, CRM, exports | Admin | admin module | NEXT (read) / BLOCKED (decisions) | Overview and shop status are done (#53, #54). Verify/suspend and exports need owner sign-off |
