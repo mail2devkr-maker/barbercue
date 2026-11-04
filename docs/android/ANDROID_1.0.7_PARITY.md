@@ -12,7 +12,7 @@ Statuses: **SOURCE** means a native path and current API usage exist; **PARTIAL*
 | 2 | Settings | English/Hindi `OwnerSettingsScreen` edits salon name/contact/address/description and explicitly confirms the shop IANA time zone through the existing owner-scoped profile/timezone APIs; `OwnerShopScreen` retains hours, photos and payment QR | PARTIAL; native core profile/timezone flows are source-tested, but complete device acceptance and audit of every web preference remain |
 | 3 | Bookings | `OwnerBookingsScreen`, owner booking list/status actions | PARTIAL; web calendar/schedule workflows require separate audit |
 | 4 | In-shop appointments | `InShopAppointmentPanel` on Owner Bookings uses the shared in-shop booking schema, active salon services, shop timezone, qualified-staff and availability APIs, customer phone-contact consent, and an idempotency key | SOURCE; synthetic UI/API-contract tests added; authenticated real-shop and physical acceptance pending |
-| 5 | Schedule | Booking list plus opening-hours editor; no native calendar/per-staff schedule planner | PARTIAL |
+| 5 | Schedule | Shop opening-hours editor plus salon-scoped per-staff weekly-hours editor; no native visual calendar/day planner | PARTIAL; owner weekly hours are now editable in native UI, while calendar scheduling remains absent |
 | 6 | Customers | `OwnerCustomersScreen` and detail/history APIs | SOURCE; PHYSICAL_REQUIRED |
 | 7 | Analytics/revenue | New `OwnerBusinessScreen` consumes owner analytics and recorded revenue APIs | PARTIAL; service/staff breakdown and recorded daily/weekly/monthly summaries shown; custom date exports remain absent |
 | 8 | Cancellations/no-shows | New owner cancellation panel consumes `analytics/cancellations` and distinguishes Live Queue outcomes | SOURCE for report; booking-level charge management still requires review |
@@ -23,7 +23,7 @@ Statuses: **SOURCE** means a native path and current API usage exist; **PARTIAL*
 | 13 | Opening hours | Existing `HoursEditor` | SOURCE; PHYSICAL_REQUIRED |
 | 14 | Shop photos | Existing `PhotosSection` | SOURCE for current hosted-photo workflow; upload/edit behavior must be verified on device |
 | 15 | Chairs/SPA beds | Existing chair management | PARTIAL; verify chair types and occupancy conflict behaviors on device |
-| 16 | Staff management | Existing roster/add flow plus salon-scoped editing of display name, bio and years of experience using the deployed staff PATCH API | PARTIAL; phone/email linking, qualifications, working schedules and a complete access-management workflow are not fully mirrored |
+| 16 | Staff management | Existing roster/add flow, salon-scoped staff profile editing, and per-staff weekly working-hours editor | PARTIAL; phone/email linking, qualifications, full access management, and visual schedule planning are not fully mirrored |
 
 ### Other owner capabilities
 
@@ -83,3 +83,4 @@ Therefore this matrix does **not** certify 100% website parity or a Play-ready p
 - Android Gradle/AAB: not run. This runner has no Android SDK (`ANDROID_HOME` and `ANDROID_SDK_ROOT` are unset and the checked SDK paths are absent). EAS cloud version/build queries are also blocked by DNS (`api.expo.dev` resolves with `ENOTFOUND`). No cloud build was started.
 - ADB physical-device check: blocked because the local ADB daemon could not start (`could not read ok from ADB Server`). No device was installed, modified, or reset by this check.
 - EAS remote versionCode, production signing and Play account access remain unverified; the config uses the last verified local seed `17` with EAS remote auto-increment, but the next value is not claimed here.
+

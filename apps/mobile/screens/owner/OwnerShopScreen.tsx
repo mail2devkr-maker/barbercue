@@ -31,6 +31,7 @@ import {
   EditStaffProfile,
   styles as sectionStyles,
 } from '../../components/owner/ShopSetupSections';
+import { StaffWorkingHoursEditor } from '../../components/owner/StaffWorkingHoursEditor';
 import type { OwnerShopStackParamList } from '../../navigation/OwnerShopStack';
 
 // Owner's day-to-day shop management (post-onboarding). Every form here is shared with
@@ -164,6 +165,7 @@ export default function OwnerShopScreen() {
                 </View>
               </View>
               <EditStaffProfile salonId={selectedSalonId} staff={member} onSaved={() => void load()} />
+              <StaffWorkingHoursEditor salonId={selectedSalonId} staffId={member.id} />
             </View>
           ))
         )}
