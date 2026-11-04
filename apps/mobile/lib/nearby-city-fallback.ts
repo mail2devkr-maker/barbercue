@@ -1,6 +1,7 @@
 import * as Location from 'expo-location';
 import {
   DISCOVERY_PATHS,
+  haversineDistanceKm,
   type CityDto,
   type SalonListItemDto,
 } from '@barbercue/shared';
@@ -62,16 +63,24 @@ export function buildCityFallbackQuery(gpsQuery: string, city: Pick<CityDto, 'sl
   return params.toString();
 }
 
-export function appendUnpinnedCitySalons(
+export function appendCityMatchesToNearby(
   located: SalonListItemDto[],
   inSameCity: SalonListItemDto[],
+  from: Coords,
 ): SalonListItemDto[] {
   const seen = new Set(located.map((shop) => shop.id));
-  const extra = inSameCity.filter((shop) => {
-    if (seen.has(shop.id) || (shop.lat != null && shop.lng != null)) return false;
+  const extra = inSameCity.flatMap((shop) => {
+    if (seen.has(shop.id)) return [];
     seen.add(shop.id);
-    return true;
+    // A verified pin can show a real straight-line distance from the user's
+    // permission-granted GPS; an unpinned shop must explicitly show null.
+    const distanceKm = shop.lat != null && shop.lng != null
+      ? Math.round(haversineDistanceKm(from.lat, from.lng, shop.lat, shop.lng) * 10) / 10
+      : null;
+    return [{ ...shop, distanceKm }];
   });
+  // Keep verified nearby results first; city listings are supplemental, NOT
+  // promises that any shop lies inside a selected radius.
   return [...located, ...extra];
 }
 
