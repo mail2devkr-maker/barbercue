@@ -14,6 +14,7 @@ import { QueueQrSection } from "../../../../../../components/dashboard/QueueQrSe
 import { SetupChecklist } from "../../../../../../components/dashboard/SetupChecklist";
 import { PaymentQrSection } from "../../../../../../components/dashboard/PaymentQrSection";
 import { ProfileSection } from "../../../../../../components/dashboard/ProfileSection";
+import { SalonTypeSection } from "../../../../../../components/dashboard/SalonTypeSection";
 import { OwnerVoiceSettings } from "../../../../../../components/dashboard/OwnerVoiceSettings";
 import { OwnerPhoneLinkPanel } from "../../../../../../components/auth/OwnerPhoneLinkPanel";
 import { ShopControls } from "../../../../../../components/owner/ShopControls";
@@ -387,6 +388,7 @@ export default function DashboardSettingsPage({
           discloses that session). Placed first: it's the most foundational "fix this shop's
           details" concern on this hub. */}
       {salon && <ProfileSection salonId={salonId} />}
+      {salon && <SalonTypeSection salonId={salonId} />}
       {/* Payment QR moved up here (Part 1, shop-onboarding mission): this settings page is exactly
           where RegisterSalonForm lands a brand-new owner right after creating their shop, so QR —
           "Required for online bookings" — is presented immediately rather than buried below the
