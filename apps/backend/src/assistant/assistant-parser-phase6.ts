@@ -1,6 +1,7 @@
 import {
   AssistantActionId,
   CrmLeadStatus,
+  CrmVisitOutcome,
   VerificationStatus,
 } from '@barbercue/shared';
 
@@ -19,7 +20,16 @@ export type Phase6Intent =
       action: typeof AssistantActionId.EMPLOYEE_FOLLOW_UPS;
       overdueOnly: boolean;
     }
-  | { action: typeof AssistantActionId.EMPLOYEE_VISITS };
+  | { action: typeof AssistantActionId.EMPLOYEE_VISITS }
+  | {
+      action: typeof AssistantActionId.EMPLOYEE_LOG_VISIT;
+      outcome: CrmVisitOutcome | null;
+      notes: string | null;
+    }
+  | {
+      action: typeof AssistantActionId.EMPLOYEE_CLOSE_FOLLOW_UP;
+      outcome: string | null;
+    };
 
 export type AdminReadIntent =
   | {
@@ -47,7 +57,57 @@ const LEAD_STATUS: [RegExp, CrmLeadStatus][] = [
   [W('lost|gaya|chhod|खोए'), CrmLeadStatus.LOST],
 ];
 
-export function parsePhase6(text: string): Phase6Intent | null {
+const LOG = W(
+  'log|log karo|darj|record|save|kiya|ki|ho gaya|ho gayi|gaya tha|gayi thi|mila|mili|लॉग|दर्ज',
+);
+const DONE = W(
+  'done|ho gaya|ho gayi|complete|completed|poora|pura|khatam|close|band karo|पूरा|हो गया',
+);
+const VISIT_OUTCOME: [RegExp, CrmVisitOutcome][] = [
+  [
+    W('not interested|interested nahi|mana|mana kar diya|nahi chahiye|मना'),
+    CrmVisitOutcome.NOT_INTERESTED,
+  ],
+  [W('demo'), CrmVisitOutcome.DEMO_COMPLETED],
+  [
+    W('follow up chahiye|dobara|phir se|fir se|दोबारा'),
+    CrmVisitOutcome.FOLLOW_UP_REQUIRED,
+  ],
+  [W('interested|dilchaspi|ichchhuk|रुचि'), CrmVisitOutcome.INTERESTED],
+  [W('baat hui|contacted|mil liya|मिल'), CrmVisitOutcome.CONTACTED],
+];
+
+function afterColon(raw: string): string | null {
+  const i = raw.indexOf(':');
+  const v = i >= 0 ? raw.slice(i + 1).trim() : '';
+  return v || null;
+}
+
+export function parsePhase6(text: string, raw = text): Phase6Intent | null {
+  // Writes first: "X ka follow up ho gaya: ...", "X visit kiya, interested".
+  if (
+    FOLLOW_UP.test(text) &&
+    DONE.test(text) &&
+    !VISIT.test(text) &&
+    !W('dikhao|batao|list|kitne').test(text)
+  ) {
+    return {
+      action: AssistantActionId.EMPLOYEE_CLOSE_FOLLOW_UP,
+      outcome: afterColon(raw),
+    };
+  }
+  if (
+    VISIT.test(text) &&
+    LOG.test(text) &&
+    !W('dikhao|batao|list|kitni|meri visits|mere visits').test(text)
+  ) {
+    const outcome = VISIT_OUTCOME.find(([re]) => re.test(text))?.[1] ?? null;
+    return {
+      action: AssistantActionId.EMPLOYEE_LOG_VISIT,
+      outcome,
+      notes: afterColon(raw),
+    };
+  }
   if (FOLLOW_UP.test(text))
     return {
       action: AssistantActionId.EMPLOYEE_FOLLOW_UPS,

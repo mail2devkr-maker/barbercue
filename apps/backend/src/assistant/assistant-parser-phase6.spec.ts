@@ -18,6 +18,17 @@ describe('assistant batch 6 intents (field employee, read-only)', () => {
     expect(employee('meri visits dikhao')).toEqual({ action: AssistantActionId.EMPLOYEE_VISITS });
   });
 
+  it('employee writes: log a visit with an outcome, close a follow-up with what happened', () => {
+    expect(employee('Sharma Salon visit kiya, interested')).toEqual({ action: AssistantActionId.EMPLOYEE_LOG_VISIT, outcome: 'INTERESTED', notes: null });
+    expect(employee('Sharma Salon visit kiya, not interested')).toMatchObject({ outcome: 'NOT_INTERESTED' });
+    expect(employee('Sharma Salon visit kiya: owner kal milega')).toEqual({ action: AssistantActionId.EMPLOYEE_LOG_VISIT, outcome: null, notes: 'owner kal milega' });
+    expect(employee('Sharma Salon visit kiya, follow up chahiye')).toMatchObject({ action: AssistantActionId.EMPLOYEE_LOG_VISIT, outcome: 'FOLLOW_UP_REQUIRED' });
+    expect(employee('Sharma Salon ka follow up ho gaya: demo kal')).toEqual({ action: AssistantActionId.EMPLOYEE_CLOSE_FOLLOW_UP, outcome: 'demo kal' });
+    // Asking to see them is still a read.
+    expect(employee('meri visits dikhao')).toEqual({ action: AssistantActionId.EMPLOYEE_VISITS });
+    expect(employee('complete follow ups dikhao')).toMatchObject({ action: AssistantActionId.EMPLOYEE_FOLLOW_UPS });
+  });
+
   it('language still works for an employee; shop phrases do not', () => {
     expect(employee('meri language hindi karo')).toEqual({ action: AssistantActionId.LANGUAGE_SET, language: 'HI' });
     expect(employee('aaj ki queue dikhao')).toBeNull();

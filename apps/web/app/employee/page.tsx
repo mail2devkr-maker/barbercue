@@ -21,6 +21,7 @@ import { useAuth } from "../../lib/auth-context";
 import styles from "./employee.module.css";
 import { EmployeeShopDetails } from "./EmployeeShopDetails";
 import { ActionAssistant } from "../../components/assistant/ActionAssistant";
+import { useAssistantRefresh } from "../../lib/assistant-events";
 
 type Tab = "dashboard" | "leads" | "visits" | "followups";
 
@@ -103,6 +104,11 @@ export default function EmployeeDashboardPage() {
       setLoading(false);
     }
   }, []);
+
+  // A visit or follow-up saved through the Assistant: reload the CRM lists.
+  useAssistantRefresh("employee", () => {
+    void refreshAll();
+  });
 
   useEffect(() => {
     if (status === "loading") return;

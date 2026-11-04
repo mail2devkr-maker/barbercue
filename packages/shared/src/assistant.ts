@@ -123,6 +123,9 @@ export const AssistantActionId = {
   // batch 7: platform reads with the admin routes' own audiences (ADMIN session)
   ADMIN_VERIFICATION_QUEUE: "admin.verificationQueue",
   ADMIN_CRM_OVERVIEW: "admin.crmOverview",
+  // batch 8: a field employee records their own work (confirmed writes, own leads only)
+  EMPLOYEE_LOG_VISIT: "employee.logVisit",
+  EMPLOYEE_CLOSE_FOLLOW_UP: "employee.closeFollowUp",
 } as const;
 export type AssistantActionId = (typeof AssistantActionId)[keyof typeof AssistantActionId];
 
@@ -178,7 +181,8 @@ export type AssistantResource =
   | "reviews"
   | "notifications"
   | "favorites"
-  | "profile";
+  | "profile"
+  | "employee";
 
 export type AssistantCapabilityState = "SUPPORTED" | "DENIED" | "UNAVAILABLE";
 

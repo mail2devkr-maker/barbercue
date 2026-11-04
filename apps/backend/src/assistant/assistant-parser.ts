@@ -177,7 +177,7 @@ export function parseAssistantText(
   const phase5 = parsePhase5(text, raw, surface, year);
   if (phase5) return phase5;
   // A field employee's screens only offer their own CRM; shop and customer phrases do not apply.
-  if (surface === 'employee') return parsePhase6(text);
+  if (surface === 'employee') return parsePhase6(text, raw);
   if (surface === 'admin') {
     const adminRead = parseAdminReads(text);
     if (adminRead) return adminRead;

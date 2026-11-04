@@ -72,6 +72,7 @@ import { BATCH4_HANDLERS } from './actions/batch4.actions';
 import { BATCH5_HANDLERS } from './actions/batch5.actions';
 import { BATCH6_HANDLERS } from './actions/batch6.actions';
 import { BATCH7_HANDLERS } from './actions/batch7.actions';
+import { BATCH8_HANDLERS } from './actions/batch8.actions';
 import { AdminVerificationService } from '../admin/admin-verification.service';
 import { AdminCrmService } from '../admin/admin-crm.service';
 import { EmployeeService } from '../employee/employee.service';
@@ -92,6 +93,7 @@ export const ASSISTANT_HANDLERS: HandlerMap = {
   ...BATCH5_HANDLERS,
   ...BATCH6_HANDLERS,
   ...BATCH7_HANDLERS,
+  ...BATCH8_HANDLERS,
 };
 
 const UNRELEASED: Record<'inventory' | 'onboarding', string> = {

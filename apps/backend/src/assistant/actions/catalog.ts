@@ -474,4 +474,17 @@ export const ASSISTANT_ACTIONS: Record<AssistantActionId, ActionDef> = {
     'PLATFORM',
     ['Sales team ka kaam dikhao', 'CRM overview'],
   ),
+  // ---- batch 8: a field employee records their own work
+  [AssistantActionId.EMPLOYEE_LOG_VISIT]: write(
+    'Log a visit to one of my leads',
+    EMPLOYEES,
+    'EMPLOYEE',
+    ['Sharma Salon visit kiya, interested'],
+  ),
+  [AssistantActionId.EMPLOYEE_CLOSE_FOLLOW_UP]: write(
+    'Mark my follow-up done',
+    EMPLOYEES,
+    'EMPLOYEE',
+    ['Sharma Salon ka follow up ho gaya: demo kal'],
+  ),
 };
