@@ -34,7 +34,7 @@ const ROOT = `dashboard/salons/:salonId/${INVENTORY_PATHS.root}`;
  * assumptions, supplier lead times, stock alerts and period analytics.
  */
 @Controller()
-@Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN)
+@Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN, Role.CO_FOUNDER)
 export class InventoryForecastController {
   constructor(private readonly forecast: InventoryForecastService) {}
 

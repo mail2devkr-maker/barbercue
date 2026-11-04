@@ -55,7 +55,7 @@ const CATALOG = `${ROOT}/${CATALOG_PATHS.catalog}`;
  * between the professional and retail shelves. Owner/admin only, like the rest of inventory.
  */
 @Controller()
-@Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN)
+@Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN, Role.CO_FOUNDER)
 export class ProductCatalogController {
   constructor(
     private readonly catalog: ProductCatalogService,
