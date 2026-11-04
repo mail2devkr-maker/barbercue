@@ -1,3 +1,5 @@
+import { PermanentDeletionController } from './permanent-deletion.controller';
+import { PermanentDeletionService } from './permanent-deletion.service';
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { SalonSetupController } from './salon-setup.controller';
@@ -32,11 +34,13 @@ import { AssignmentReleaseModule } from '../queue/assignment-release.module';
   imports: [AuthModule, StorageModule, AssignmentReleaseModule],
   controllers: [
     SalonSetupController,
+    PermanentDeletionController,
     SalonContactImportPreviewController,
     ContactLedgerController,
     ContactLedgerAdminController,
   ],
   providers: [
+    PermanentDeletionService,
     SalonServicesService,
     ServiceCatalogImportService,
     SalonChairsService,
