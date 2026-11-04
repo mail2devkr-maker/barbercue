@@ -130,8 +130,8 @@ export default function OwnerShopScreen() {
       />
 
       <Text style={sectionStyles.sectionTitle}>{language === Language.HI ? 'इन्वेंटरी' : 'Inventory'}</Text>
-      <Text style={sectionStyles.hint}>{language === 'hi' ? 'इस दुकान का स्टॉक और कम-स्टॉक उत्पाद प्रबंधित करें।' : 'Track stock, low-stock products, purchases and adjustments for this shop.'}</Text>
-      <Button title={language === 'hi' ? 'इन्वेंटरी प्रबंधित करें' : 'Manage inventory'} variant="outline" onPress={() => navigation.navigate('OwnerInventory')} style={sectionStyles.addButton} />
+      <Text style={sectionStyles.hint}>{language === Language.HI ? 'इस दुकान का स्टॉक और कम-स्टॉक उत्पाद प्रबंधित करें।' : 'Track stock, low-stock products, purchases and adjustments for this shop.'}</Text>
+      <Button title={language === Language.HI ? 'इन्वेंटरी प्रबंधित करें' : 'Manage inventory'} variant="outline" onPress={() => navigation.navigate('OwnerInventory')} style={sectionStyles.addButton} />
 
       <Text style={sectionStyles.sectionTitle}>{t.servicesLabel}</Text>
       <Card style={sectionStyles.card}>
