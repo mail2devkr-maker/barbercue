@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import * as Location from 'expo-location';
 import {
   DISCOVERY_PATHS,
   Language,
@@ -40,7 +39,7 @@ import {
 import { useLanguage } from '../lib/language-context';
 import { useAuth } from '../lib/auth-context';
 import { DEFAULT_DISCOVERY_FILTERS, buildDiscoveryQuery, type DiscoveryFilters } from '../lib/discovery-search';
-import { findCityForDeviceLocation, buildCityFallbackQuery, appendCityMatchesToNearby } from '../lib/nearby-city-fallback';
+import { findCityForDeviceLocation, buildCityFallbackQuery, appendCityMatchesToNearby, getSearchGpsCoordinates } from '../lib/nearby-city-fallback';
 import type { SearchStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<SearchStackParamList, 'SalonSearch'>;
@@ -450,13 +449,12 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
       setLocating(true);
       setError(null);
       try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-          setError(t.locationDenied);
+        const gps = await getSearchGpsCoordinates(false);
+        if (gps.kind !== 'ok') {
+          setError(gps.kind === 'denied' ? t.locationDenied : t.couldNotGetLocation);
           return;
         }
-        const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-        const coords = { lat: position.coords.latitude, lng: position.coords.longitude };
+        const coords = gps.coords;
         setNearMe(coords);
         setRadiusKm(value);
         await runSearch(false, coords, { radiusKm: value, priceMin, priceMax, service });
@@ -514,13 +512,12 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
     setLocating(true);
     setError(null);
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        setError(t.locationDenied);
+      const gps = await getSearchGpsCoordinates(true);
+      if (gps.kind !== 'ok') {
+        setError(gps.kind === 'denied' ? t.locationDenied : t.couldNotGetLocation);
         return;
       }
-      const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      const coords = { lat: position.coords.latitude, lng: position.coords.longitude };
+      const coords = gps.coords;
       setNearMe(coords);
       await runSearch(false, coords);
     } catch {
