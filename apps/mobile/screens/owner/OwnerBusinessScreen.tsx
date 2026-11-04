@@ -9,15 +9,20 @@ import {
   type InvoiceListDto,
   type InvoiceSummaryDto,
   type OfferDto,
+  type OfferPreviewDto,
   type OwnerAnalyticsDto,
   type OwnerRevenueDto,
   type OwnerReviewsResponseDto,
   type RecordedPaymentListDto,
   type SalonCapabilitiesDto,
+  type SalonServiceDto,
   type SalonTimezoneResultDto,
   type VerificationRequestDto,
 } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../../lib/api';
+import { newIdempotencyKey } from '../../lib/idempotency';
+import { buildOfferBody, buildOfferPatch, type OfferErrors, type OfferForm } from '../../lib/offers';
+import { OffersPanel } from '../../components/owner/OffersPanel';
 import { useLanguage } from '../../lib/language-context';
 import { useSalon } from '../../lib/salon-context';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
@@ -36,7 +41,7 @@ const COPY = {
     noInvoices: 'No invoices yet', invoiceDetail: 'Invoice details', amountPaid: 'Recorded paid', balanceDue: 'Balance due', backToInvoices: 'Back to invoices',
     noPaymentsRows: 'No recorded payments in this period.', received: 'Received', refunded: 'Refunded', net: 'Net recorded',
     noReviews: 'No reviews yet', replyPlaceholder: 'Write a response to this review', saveReply: 'Save response', responseSaved: 'Response saved',
-    noOffers: 'No offers yet', offersUnavailable: 'Offers are not enabled for this shop on the current backend.', publish: 'Publish', pause: 'Pause', publishingTitle: 'Publish this offer?', publishingMessage: 'The offer will become available according to its dates and eligibility rules.', confirm: 'Publish offer', cancel: 'Cancel',
+    noOffers: 'No offers yet', offerPanelTitle: 'Offers, promotions and daily deals', offerTypeOption: 'Offer', promotionTypeOption: 'Promotion', dailyDealTypeOption: 'Daily deal', percentOption: 'Percent', flatOption: 'Fixed amount', allAudienceOption: 'All', newAudienceOption: 'New', repeatAudienceOption: 'Repeat', inactiveAudienceOption: 'Inactive', previewLimited: 'This preview covers the first 100 of {count} active services.', offersUnavailable: 'Offers are not enabled for this shop on the current backend.', createOffer: 'Create an offer', editOffer: 'Edit', previewPrices: 'Preview prices', saveDraft: 'Save as draft', saveChanges: 'Save changes', checkPrices: 'Check prices', offerTitle: 'Offer name', offerDescription: 'Description (optional)', offerKind: 'Offer type', discountType: 'Discount type', discountValueLabel: 'Discount value', audience: 'Who can use it', inactiveDays: 'Days since last visit', startsAt: 'Starts in shop timezone', endsAt: 'Ends in shop timezone', maxRedemptions: 'Total uses allowed (optional)', perCustomerLimit: 'Uses per customer', services: 'Services', allActiveServices: 'No service selection includes every active service.', offerTimezoneUnavailable: 'Set the shop timezone before creating or editing offers.', pauseBeforeEdit: 'Pause this offer before editing it.', offerSafetyNote: 'Saving only creates or updates a draft. FastQue checks prices; this does not collect payment or message customers.', noActiveServices: 'No active services are available.', publish: 'Publish', pause: 'Pause', publishingTitle: 'Publish this offer?', publishingMessage: 'The offer will become available according to its dates and eligibility rules.', confirm: 'Publish offer', cancel: 'Cancel',
     noVerification: 'No verification request has been submitted.', verificationPending: 'Under review', evidenceNotes: 'Evidence notes', evidenceUrl: 'Hosted HTTPS evidence URL (optional)', submitVerification: 'Submit for review',
     serviceBreakdown: 'Estimated service value by service', staffBreakdown: 'Completed work by staff', noEstimate: 'No completed service value in this range.', anonymous: 'Customer not named', outstanding: 'Outstanding', waived: 'Waived', settled: 'Settled', reason: 'Reason', cancelledBy: 'Cancelled by',
     sevenDays: '7 days', thirtyDays: '30 days', ninetyDays: '90 days', status: 'Status', offerDiscount: 'Discount', redemption: 'Redemptions', estimateNote: 'Estimated from completed services at listed prices; this is not recorded cash or audited revenue.',
@@ -51,7 +56,7 @@ const COPY = {
     noInvoices: 'अभी कोई इनवॉइस नहीं', invoiceDetail: 'इनवॉइस विवरण', amountPaid: 'दर्ज भुगतान', balanceDue: 'बाकी राशि', backToInvoices: 'इनवॉइस पर वापस',
     noPaymentsRows: 'इस अवधि में कोई भुगतान दर्ज नहीं।', received: 'प्राप्त', refunded: 'वापस किया', net: 'कुल दर्ज राशि',
     noReviews: 'अभी कोई समीक्षा नहीं', replyPlaceholder: 'इस समीक्षा का उत्तर लिखें', saveReply: 'उत्तर सहेजें', responseSaved: 'उत्तर सहेजा गया',
-    noOffers: 'अभी कोई ऑफ़र नहीं', offersUnavailable: 'इस दुकान के लिए वर्तमान बैकएंड पर ऑफ़र उपलब्ध नहीं हैं।', publish: 'प्रकाशित करें', pause: 'रोकें', publishingTitle: 'यह ऑफ़र प्रकाशित करें?', publishingMessage: 'तारीख और पात्रता नियमों के अनुसार ऑफ़र उपलब्ध हो जाएगा।', confirm: 'ऑफ़र प्रकाशित करें', cancel: 'रद्द करें',
+    noOffers: 'अभी कोई ऑफ़र नहीं', offerPanelTitle: 'ऑफ़र, प्रमोशन और दैनिक डील', offerTypeOption: 'ऑफ़र', promotionTypeOption: 'प्रमोशन', dailyDealTypeOption: 'दैनिक डील', percentOption: 'प्रतिशत', flatOption: 'निश्चित राशि', allAudienceOption: 'सभी', newAudienceOption: 'नए', repeatAudienceOption: 'नियमित', inactiveAudienceOption: 'निष्क्रिय', previewLimited: 'यह पूर्वावलोकन {count} सक्रिय सेवाओं में से पहली 100 को शामिल करता है।', offersUnavailable: 'इस दुकान के लिए वर्तमान बैकएंड पर ऑफ़र उपलब्ध नहीं हैं।', createOffer: 'ऑफ़र बनाएँ', editOffer: 'संपादित करें', previewPrices: 'कीमत देखें', saveDraft: 'ड्राफ़्ट सहेजें', saveChanges: 'बदलाव सहेजें', checkPrices: 'कीमत जाँचें', offerTitle: 'ऑफ़र का नाम', offerDescription: 'विवरण (वैकल्पिक)', offerKind: 'ऑफ़र प्रकार', discountType: 'छूट का प्रकार', discountValueLabel: 'छूट का मूल्य', audience: 'कौन उपयोग कर सकता है', inactiveDays: 'आख़िरी विज़िट के बाद दिन', startsAt: 'दुकान के समय क्षेत्र में शुरू', endsAt: 'दुकान के समय क्षेत्र में समाप्त', maxRedemptions: 'कुल उपयोग सीमा (वैकल्पिक)', perCustomerLimit: 'प्रति ग्राहक उपयोग', services: 'सेवाएँ', allActiveServices: 'कुछ न चुनने पर सभी सक्रिय सेवाएँ शामिल होंगी।', offerTimezoneUnavailable: 'ऑफ़र बनाने या संपादित करने से पहले दुकान का समय क्षेत्र सेट करें।', pauseBeforeEdit: 'संपादन से पहले इस ऑफ़र को रोकें।', offerSafetyNote: 'सहेजने पर केवल ड्राफ़्ट बनेगा या बदलेगा। कीमत FastQue जाँचेगा; भुगतान या ग्राहक संदेश नहीं भेजा जाता।', noActiveServices: 'कोई सक्रिय सेवा उपलब्ध नहीं है।', publish: 'प्रकाशित करें', pause: 'रोकें', publishingTitle: 'यह ऑफ़र प्रकाशित करें?', publishingMessage: 'तारीख और पात्रता नियमों के अनुसार ऑफ़र उपलब्ध हो जाएगा।', confirm: 'ऑफ़र प्रकाशित करें', cancel: 'रद्द करें',
     noVerification: 'कोई सत्यापन अनुरोध जमा नहीं है।', verificationPending: 'समीक्षा जारी है', evidenceNotes: 'साक्ष्य विवरण', evidenceUrl: 'होस्ट किया HTTPS साक्ष्य URL (वैकल्पिक)', submitVerification: 'समीक्षा हेतु जमा करें',
     serviceBreakdown: 'सेवा के अनुसार अनुमानित मूल्य', staffBreakdown: 'कर्मचारी के पूरे किए कार्य', noEstimate: 'इस अवधि में कोई पूर्ण सेवा मूल्य नहीं।', anonymous: 'ग्राहक का नाम उपलब्ध नहीं', outstanding: 'बाकी', waived: 'माफ़', settled: 'निपटाया', reason: 'कारण', cancelledBy: 'रद्द करने वाला',
     sevenDays: '7 दिन', thirtyDays: '30 दिन', ninetyDays: '90 दिन', status: 'स्थिति', offerDiscount: 'छूट', redemption: 'रिडेम्पशन', estimateNote: 'पूरी सेवाओं की सूची कीमत से अनुमान; यह दर्ज नकद या ऑडिटेड आय नहीं है।',
@@ -108,6 +113,10 @@ export default function OwnerBusinessScreen() {
   const [reviews, setReviews] = useState<OwnerReviewsResponseDto | null>(null);
   const [offers, setOffers] = useState<OfferDto[]>([]);
   const [offersEnabled, setOffersEnabled] = useState(false);
+  const [offerTimeZone, setOfferTimeZone] = useState<string | null>(null);
+  const [offerServices, setOfferServices] = useState<SalonServiceDto[]>([]);
+  const [offerEditor, setOfferEditor] = useState<{ offer: OfferDto | null } | null>(null);
+  const offerKeys = useRef(new Map<string, string>());
   const [verification, setVerification] = useState<VerificationRequestDto | null>(null);
   const [evidenceNotes, setEvidenceNotes] = useState('');
   const [evidenceUrl, setEvidenceUrl] = useState('');
@@ -130,7 +139,7 @@ export default function OwnerBusinessScreen() {
     else if (panel === 'invoices') { setInvoices([]); setInvoice(null); }
     else if (panel === 'payments') setPayments(null);
     else if (panel === 'reviews') setReviews(null);
-    else if (panel === 'offers') { setOffersEnabled(false); setOffers([]); }
+    else if (panel === 'offers') { setOffersEnabled(false); setOffers([]); setOfferTimeZone(null); setOfferServices([]); setOfferEditor(null); }
     else setVerification(null);
     try {
       if (panel === 'analytics') {
@@ -167,6 +176,18 @@ export default function OwnerBusinessScreen() {
         if (!enabled) { if (requestId === requestSeq.current) setOffers([]); return; }
         const page = await apiFetch<OfferPage>(`${base}/offers?limit=50`);
         if (requestId === requestSeq.current) setOffers(page.items);
+        try {
+          const [timezone, services] = await Promise.all([
+            apiFetch<SalonTimezoneResultDto>(base + '/' + DASHBOARD_PATHS.timezone),
+            apiFetch<SalonServiceDto[]>(base + '/' + DASHBOARD_PATHS.services),
+          ]);
+          if (requestId === requestSeq.current) {
+            setOfferTimeZone(timezone.timezone ?? null);
+            setOfferServices(Array.isArray(services) ? services.filter((service) => service.isActive !== false) : []);
+          }
+        } catch {
+          if (requestId === requestSeq.current) { setOfferTimeZone(null); setOfferServices([]); }
+        }
       } else {
         const data = await apiFetch<VerificationRequestDto | null>(`${base}/${DASHBOARD_PATHS.verification}`);
         if (requestId === requestSeq.current) setVerification(data);
@@ -227,6 +248,37 @@ export default function OwnerBusinessScreen() {
     } else await run();
   };
 
+  const openOfferEditor = (offer: OfferDto | null) => {
+    if (!offerTimeZone) { setError(c.offerTimezoneUnavailable); return; }
+    if (offer && offer.status !== 'DRAFT' && offer.status !== 'PAUSED') { setError(c.pauseBeforeEdit); return; }
+    setError(null);
+    setOfferEditor({ offer });
+  };
+
+  const saveOffer = async (offer: OfferDto | null, form: OfferForm, onErrors: (errors: OfferErrors) => void) => {
+    if (!selectedSalonId || !offersEnabled || !offerTimeZone) return;
+    const result = offer ? buildOfferPatch(offer, form, offerTimeZone) : buildOfferBody(form, offerTimeZone);
+    onErrors(result.errors);
+    if (Object.keys(result.errors).length) return;
+    if (!result.body) { setOfferEditor(null); return; }
+    const signature = offer ? 'patch:' + offer.id + ':' + JSON.stringify(result.body) : 'create:' + JSON.stringify(result.body);
+    const idempotencyKey = offerKeys.current.get(signature) ?? newIdempotencyKey();
+    offerKeys.current.set(signature, idempotencyKey);
+    setBusyId('offer');
+    setError(null);
+    try {
+      const path = basePath(selectedSalonId) + '/offers' + (offer ? '/' + offer.id : '');
+      await apiFetch<OfferDto>(path, { method: offer ? 'PATCH' : 'POST', headers: { 'Idempotency-Key': idempotencyKey }, body: JSON.stringify(result.body) });
+      offerKeys.current.delete(signature);
+      setOfferEditor(null);
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : c.error);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const submitVerification = async () => {
     if (!selectedSalonId) return;
     const notes = evidenceNotes.trim();
@@ -274,7 +326,7 @@ export default function OwnerBusinessScreen() {
           {panel === 'invoices' && <InvoicePanel items={invoices} invoice={invoice} onOpen={openInvoice} onBack={() => setInvoice(null)} busyId={busyId} c={c} />}
           {panel === 'payments' && payments && <PaymentsPanel data={payments} c={c} />}
           {panel === 'reviews' && <ReviewPanel data={reviews} replies={replies} setReplies={setReplies} onRespond={respond} busyId={busyId} c={c} />}
-          {panel === 'offers' && <OffersPanel enabled={offersEnabled} items={offers} busyId={busyId} onAction={changeOfferState} c={c} />}
+          {panel === 'offers' && <OffersPanel enabled={offersEnabled} items={offers} busyId={busyId} onAction={changeOfferState} timeZone={offerTimeZone} services={offerServices} editor={offerEditor} base={basePath(selectedSalonId)} onCreate={() => openOfferEditor(null)} onEdit={openOfferEditor} onCancelEdit={() => setOfferEditor(null)} onSave={saveOffer} c={c} />}
           {panel === 'verification' && <VerificationPanel request={verification} notes={evidenceNotes} url={evidenceUrl} setNotes={setEvidenceNotes} setUrl={setEvidenceUrl} onSubmit={submitVerification} busy={busyId === 'verification'} c={c} />}
         </>
       )}
@@ -350,18 +402,6 @@ function ReviewPanel({ data, replies, setReplies, onRespond, busyId, c }: { data
     {review.ownerResponse ? <Text style={styles.response}>{review.ownerResponse}</Text> : null}
     <TextInput accessibilityLabel={c.replyPlaceholder} placeholder={c.replyPlaceholder} value={replies[review.id] ?? review.ownerResponse ?? ''} onChangeText={(value) => setReplies((previous) => ({ ...previous, [review.id]: value }))} multiline maxLength={1000} style={styles.input} />
     <Button title={busyId === review.id ? c.loading : c.saveReply} disabled={busyId === review.id || !(replies[review.id] ?? review.ownerResponse ?? '').trim()} onPress={() => onRespond(review.id)} />
-  </Card>)}</>;
-}
-
-function OffersPanel({ enabled, items, busyId, onAction, c }: { enabled: boolean; items: OfferDto[]; busyId: string | null; onAction: (offer: OfferDto, action: 'publish' | 'pause') => void; c: Copy }) {
-  if (!enabled) return <EmptyState title={c.offersUnavailable} />;
-  if (items.length === 0) return <EmptyState title={c.noOffers} />;
-  return <>{items.map((offer) => <Card key={offer.id}>
-    <Text style={styles.heading}>{offer.title}</Text><Text style={styles.line}>{`${offer.kind} · ${offer.status}`}</Text>
-    <Text style={styles.muted}>{`${c.offerDiscount}: ${offer.discountType === 'PERCENT' ? `${offer.discountValue}%` : money(offer.discountValue, offer.currency)} · ${dateLabel(offer.validFrom)} – ${dateLabel(offer.validTo)}`}</Text>
-    <Text style={styles.muted}>{`${c.redemption}: ${offer.redemptionCount}${offer.maxRedemptions ? ` / ${offer.maxRedemptions}` : ''}`}</Text>
-    {offer.status === 'DRAFT' && <Button title={c.publish} disabled={busyId === offer.id} onPress={() => onAction(offer, 'publish')} style={styles.action} />}
-    {offer.status === 'ACTIVE' && <Button title={c.pause} variant="outline" disabled={busyId === offer.id} onPress={() => onAction(offer, 'pause')} style={styles.action} />}
   </Card>)}</>;
 }
 
