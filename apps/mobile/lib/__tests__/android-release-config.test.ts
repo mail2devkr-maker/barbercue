@@ -1,7 +1,8 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 const plugin = require('../../plugins/withAndroidLargeScreenOrientation');
 const appJson = require('../../app.json');
-const mobileRoot = require('node:path').resolve(__dirname, '../..');
+// npm workspace test/typecheck commands run with apps/mobile as the current directory.
+const mobileRoot = require('node:path').resolve('.');
 const resolvedExpoConfig = require('@expo/config').getConfig(mobileRoot, { skipSDKVersionRequirement: true }).exp;
 
 function effectiveAppVersion(platform: 'ios' | 'android'): string {
