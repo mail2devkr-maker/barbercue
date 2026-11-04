@@ -154,7 +154,7 @@ jobs:
         run: |
           export JWT_ACCESS_SECRET="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
           export TOTP_ENCRYPTION_KEY="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
-          npx jest --config ./test/jest-e2e.json --runInBand --ci test/inventory.e2e-spec.ts
+          npx jest --config ./test/jest-e2e.json --runInBand --ci test/inventory.e2e-spec.ts test/service-usage.e2e-spec.ts test/inventory-forecast.e2e-spec.ts
       - name: Owner demo workspace E2E - isolation, authorization, idempotency and append-only audit
         working-directory: apps/backend
         env:

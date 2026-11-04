@@ -14,18 +14,22 @@ import ui from "../owner.module.css";
 
 export const INVENTORY_SECTIONS: ReadonlyArray<{ path: string; label: string }> = [
   { path: "", label: "Overview" },
+  { path: "scan", label: "Scan / Add stock" },
   { path: "products", label: "Products" },
+  { path: "recipes", label: "Service recipes" },
+  { path: "usage", label: "Product usage" },
   { path: "categories", label: "Categories" },
   { path: "suppliers", label: "Suppliers" },
   { path: "purchases", label: "Purchases" },
   { path: "consumption", label: "Stock used" },
   { path: "adjustments", label: "Adjustments" },
   { path: "low-stock", label: "Low stock" },
+  { path: "predictions", label: "Predictions" },
   { path: "history", label: "Stock history" },
   { path: "reports", label: "Reports" },
 ];
 
-/** Links between the ten inventory pages. The current page is marked; the row scrolls sideways on a narrow screen. */
+/** Links between the inventory pages. The current page is marked; the row scrolls sideways on a narrow screen. */
 export function InventoryTabs({ salonId }: { salonId: string }) {
   const pathname = usePathname() ?? "";
   const root = `/dashboard/salons/${salonId}/inventory`;

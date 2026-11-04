@@ -27,9 +27,25 @@ export const InventoryMovementKind = {
   PURCHASE: "PURCHASE",
   CONSUMPTION: "CONSUMPTION",
   ADJUSTMENT: "ADJUSTMENT",
+  // Inventory Phase 1: stock leaving for a recorded reason, and moves between the professional and
+  // retail shelves of the same catalog product (always a TRANSFER_OUT/TRANSFER_IN pair).
+  RETURN: "RETURN",
+  DAMAGE: "DAMAGE",
+  EXPIRY: "EXPIRY",
+  WASTAGE: "WASTAGE",
+  TRANSFER_OUT: "TRANSFER_OUT",
+  TRANSFER_IN: "TRANSFER_IN",
 } as const;
 export type InventoryMovementKind =
   (typeof InventoryMovementKind)[keyof typeof InventoryMovementKind];
+
+/** Stock leaving the salon for a recorded reason (returned to the supplier, damaged, expired, wasted). */
+export const INVENTORY_LOSS_KINDS = [
+  InventoryMovementKind.RETURN,
+  InventoryMovementKind.DAMAGE,
+  InventoryMovementKind.EXPIRY,
+  InventoryMovementKind.WASTAGE,
+] as const;
 
 export const InventoryErrorCode = {
   CATEGORY_EXISTS: "INVENTORY_CATEGORY_EXISTS",
@@ -76,6 +92,8 @@ export const createInventorySupplierSchema = z
     phone: z.string().trim().max(40).optional().nullable(),
     email: z.string().trim().email().max(254).optional().nullable(),
     notes: z.string().trim().max(500).optional().nullable(),
+    // Inventory Phase 3: days from ordering to delivery (null = the shop's default).
+    leadTimeDays: z.number().int().min(0).max(90).optional().nullable(),
   })
   .strict();
 export type CreateInventorySupplierInput = z.infer<
@@ -90,6 +108,14 @@ export const createInventoryProductSchema = z
     categoryId: z.string().uuid().optional().nullable(),
     supplierId: z.string().uuid().optional().nullable(),
     isActive: z.boolean().optional(),
+    // Inventory Phase 1 (optional on every product, catalog-linked or not).
+    sellingPrice: nonNegativeMoney.optional().nullable(),
+    storageLocation: z.string().trim().max(80).optional().nullable(),
+    minimumOrderQuantity: positiveQuantity.optional().nullable(),
+    // Inventory Phase 2: what one counted piece/pack/box contains (1 bottle = 195 ml), so a
+    // service recipe in ml can be taken off stock counted in pieces.
+    contentSize: positiveQuantity.optional().nullable(),
+    contentUnit: z.nativeEnum(InventoryUnit).optional().nullable(),
     reorderThreshold: z
       .number()
       .finite()
@@ -122,11 +148,38 @@ export const createInventoryMovementSchema = z
     adjustmentDirection: z.enum(["INCREASE", "DECREASE"]).optional(),
     reason: z.string().trim().max(300).optional(),
     reference: z.string().trim().max(120).optional(),
+    batchNumber: z.string().trim().max(60).optional().nullable(),
+    expiryDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD")
+      .optional()
+      .nullable(),
   })
   .strict()
   .superRefine((value, ctx) => {
     const fail = (path: string, message: string) =>
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message });
+    if (
+      value.kind === InventoryMovementKind.TRANSFER_IN ||
+      value.kind === InventoryMovementKind.TRANSFER_OUT
+    ) {
+      fail("kind", "Move stock between shelves with the transfer action");
+    }
+    if ((INVENTORY_LOSS_KINDS as readonly string[]).includes(value.kind)) {
+      if (value.unitCost !== undefined)
+        fail("unitCost", "Cost is derived from stock valuation");
+      if (value.adjustmentDirection !== undefined)
+        fail("adjustmentDirection", "Not valid for this movement");
+      if (value.supplierId && value.kind !== InventoryMovementKind.RETURN)
+        fail("supplierId", "Only a return can name a supplier");
+    }
+    if (
+      (value.batchNumber || value.expiryDate) &&
+      value.kind !== InventoryMovementKind.OPENING &&
+      value.kind !== InventoryMovementKind.PURCHASE
+    ) {
+      fail("batchNumber", "Batch and expiry are recorded on incoming stock");
+    }
     if (
       value.kind === InventoryMovementKind.OPENING ||
       value.kind === InventoryMovementKind.PURCHASE
@@ -227,6 +280,7 @@ export interface InventorySupplierDto {
   phone: string | null;
   email: string | null;
   notes: string | null;
+  leadTimeDays?: number | null;
   createdAt: string;
 }
 
@@ -244,6 +298,17 @@ export interface InventoryProductDto {
   category: { id: string; name: string } | null;
   supplier: { id: string; name: string } | null;
   updatedAt: string;
+  // Inventory Phase 1 — null/defaults for products not linked to the Global Product Master.
+  globalProductId?: string | null;
+  usage?: "PROFESSIONAL" | "RETAIL";
+  barcode?: string | null;
+  imageUrl?: string | null;
+  brand?: string | null;
+  sellingPrice?: string | null;
+  storageLocation?: string | null;
+  minimumOrderQuantity?: string | null;
+  contentSize?: string | null;
+  contentUnit?: InventoryUnit | null;
 }
 
 export interface InventoryMovementDto {
@@ -262,6 +327,8 @@ export interface InventoryMovementDto {
   reason: string | null;
   reference: string | null;
   recordedAt: string;
+  batchNumber?: string | null;
+  expiryDate?: string | null;
 }
 
 export interface InventoryPageDto<T> {
