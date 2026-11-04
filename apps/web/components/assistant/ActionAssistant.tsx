@@ -519,14 +519,14 @@ function AssistantDrawer({ salonId, surface = "shop", onRevoked }: { salonId?: s
               <button type="button" className={styles.ctl} aria-expanded={panel === "settings"} onClick={() => setPanel(panel === "settings" ? "none" : "settings")}>
                 Voice settings &amp; speaker test
               </button>
-              {handsFree && !inConversation && (
+              {handsFree && !inConversation && surface === "shop" && (
                 <button type="button" className={styles.ctl} aria-expanded={panel === "check"} onClick={() => setPanel(panel === "check" ? "none" : "check")}>
                   Check voice accuracy
                 </button>
               )}
             </div>
             {panel === "settings" && <VoiceSettings out={out} lang={lang} onLang={setLang} />}
-            {panel === "check" && !inConversation && <VoiceCheck lang={lang} onClose={() => setPanel("none")} />}
+            {panel === "check" && !inConversation && surface === "shop" && <VoiceCheck lang={lang} onClose={() => setPanel("none")} />}
           </div>
 
           <div className={styles.log} aria-live="polite">

@@ -401,3 +401,12 @@ describe('spoken replies and voice tools (#371)', () => {
     expect(textOf(tree.root)).toContain('heard: how can you yelp me (alternative used)');
   });
 });
+
+describe('surface scoping (#371 review)', () => {
+  it('customers keep voice settings but do not see the shop-owner accuracy check', async () => {
+    route([]);
+    const tree = await open({ surface: 'customer' });
+    expect(findText(tree, 'button', 'Voice settings').length).toBe(1);
+    expect(findText(tree, 'button', 'Check voice accuracy')).toHaveLength(0);
+  });
+});
