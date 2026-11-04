@@ -5,6 +5,7 @@ import Link from "next/link";
 import { DASHBOARD_PATHS, Role, SalonType, formatMoney } from "@barbercue/shared";
 import type { SalonServiceDto, SalonTypeResultDto } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../../../../../lib/api";
+import { useAssistantRefresh } from "../../../../../../lib/assistant-events";
 import { RequireRole } from "../../../../../../components/auth/RequireRole";
 import { ServiceCatalogPicker } from "../../../../../../components/dashboard/ServiceCatalogPicker";
 import { CatalogImportPanel } from "../../../../../../components/dashboard/CatalogImportPanel";
@@ -156,6 +157,11 @@ export default function DashboardServicesPage({
       });
     return () => { cancelled = true; };
   }, [base]);
+
+  // A change confirmed through the Assistant reloads the list from the server.
+  useAssistantRefresh("services", () => {
+    apiFetch<SalonServiceDto[]>(base).then(setServices).catch(() => undefined);
+  });
 
   async function saveSalonType(nextType: SalonType) {
     // Re-choosing the current type is allowed while it is unconfirmed: that click IS the confirmation.

@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { Role } from "@barbercue/shared";
 import { RequireRole } from "../../../components/auth/RequireRole";
 import { CustomerShell } from "../../../components/layout/CustomerShell";
+import { CustomerActionAssistant } from "../../../components/assistant/CustomerActionAssistant";
 import styles from "./account-shell.module.css";
 
 const ACCOUNT_LINKS = [
@@ -47,6 +48,7 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
           </nav>
           <div className={styles.content}>{children}</div>
         </main>
+        <CustomerActionAssistant />
       </CustomerShell>
     </RequireRole>
   );

@@ -6,5 +6,6 @@ import { EmployeeVoiceVisitService } from './employee-voice-visit.service';
 @Module({
   controllers: [EmployeeController],
   providers: [EmployeeService, EmployeeVoiceVisitService],
+  exports: [EmployeeService],
 })
 export class EmployeeModule {}

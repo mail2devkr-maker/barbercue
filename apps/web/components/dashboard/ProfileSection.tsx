@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { DASHBOARD_PATHS, updateSalonProfileSchema } from "@barbercue/shared";
 import type { SalonProfileDetailDto } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../lib/api";
+import { useAssistantRefresh } from "../../lib/assistant-events";
 import { Button } from "../ui/Button";
 import { DescriptionAssistant } from "./DescriptionAssistant";
 import styles from "./dashboard.module.css";
@@ -59,6 +60,11 @@ export function ProfileSection({ salonId }: { salonId: string }) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [salonId]);
+
+  // Profile changed through the Assistant: reload it from the server.
+  useAssistantRefresh("profile", () => {
+    apiFetch<SalonProfileDetailDto>(base).then((result) => setForm(toForm(result))).catch(() => undefined);
+  });
 
   function update(patch: Partial<FormState>) {
     setForm((prev) => (prev ? { ...prev, ...patch } : prev));

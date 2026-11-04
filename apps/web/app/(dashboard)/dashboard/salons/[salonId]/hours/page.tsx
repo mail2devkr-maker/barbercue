@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { DASHBOARD_PATHS, Role, setOperatingHoursSchema } from "@barbercue/shared";
 import type { OperatingHoursDto } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../../../../../lib/api";
+import { useAssistantRefresh } from "../../../../../../lib/assistant-events";
 import { RequireRole } from "../../../../../../components/auth/RequireRole";
 import { Button } from "../../../../../../components/ui/Button";
 import { SetupNavigation } from "../../../../../../components/dashboard/SetupNavigation";
@@ -48,6 +49,11 @@ export default function DashboardHoursPage({
       cancelled = true;
     };
   }, [base]);
+
+  // Hours changed through the Assistant: reload them from the server.
+  useAssistantRefresh("hours", () => {
+    apiFetch<OperatingHoursDto[]>(base).then(setDays).catch(() => undefined);
+  });
 
   function updateDay(dayOfWeek: number, patch: Partial<OperatingHoursDto>) {
     setNotice(null);

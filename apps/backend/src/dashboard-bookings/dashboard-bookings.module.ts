@@ -12,5 +12,6 @@ import { DashboardBookingsService } from './dashboard-bookings.service';
   imports: [BookingsModule],
   controllers: [DashboardBookingsController],
   providers: [DashboardBookingsService],
+  exports: [DashboardBookingsService],
 })
 export class DashboardBookingsModule {}

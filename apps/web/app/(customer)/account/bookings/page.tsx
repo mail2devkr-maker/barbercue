@@ -24,6 +24,7 @@ import { CancelBookingDialog } from "../../../../components/booking/CancelBookin
 import { RescheduleBookingDialog } from "../../../../components/booking/RescheduleBookingDialog";
 import { BookingActionsBar } from "../../../../components/booking/BookingActionsBar";
 import { ReviewPanel } from "../../../../components/booking/ReviewPanel";
+import { useAssistantRefresh } from "../../../../lib/assistant-events";
 import { CheckInPanel, canCheckIn } from "../../../../components/queue/CheckInPanel";
 import { QueueStatusPanel } from "../../../../components/queue/QueueStatusPanel";
 import { Card } from "../../../../components/ui/Card";
@@ -138,6 +139,19 @@ export default function MyBookingsPage() {
   const [cancelTarget, setCancelTarget] = useState<BookingDetailDto | null>(null);
   const [rescheduleTarget, setRescheduleTarget] = useState<BookingDetailDto | null>(null);
   const [activeQueueEntry, setActiveQueueEntry] = useState<QueueEntryDetailDto | null>(null);
+
+  // Booked, moved or cancelled through the Assistant: reload from the server.
+  useAssistantRefresh("myBookings", () => {
+    void loadPage()
+      .then((result) => {
+        setBookings(result.items);
+        setNextCursor(result.nextCursor);
+      })
+      .catch(() => undefined);
+  });
+  useAssistantRefresh("myQueue", () => {
+    apiFetch<QueueEntryDetailDto | null>(`${QUEUE_ENTRIES_PATH}/mine/active`).then(setActiveQueueEntry).catch(() => undefined);
+  });
 
   useEffect(() => {
     let cancelled = false;

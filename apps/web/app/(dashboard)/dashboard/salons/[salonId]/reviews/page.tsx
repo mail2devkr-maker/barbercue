@@ -4,6 +4,7 @@ import { use, useCallback, useEffect, useState } from "react";
 import { DASHBOARD_PATHS } from "@barbercue/shared";
 import type { OwnerReviewDto, OwnerReviewsResponseDto, ReviewSource, ReviewSourceDto } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../../../../../lib/api";
+import { useAssistantRefresh } from "../../../../../../lib/assistant-events";
 import { Button } from "../../../../../../components/ui/Button";
 import { ExternalSourceView, ReviewProfileLinks, ReviewSourceTabs } from "../../../../../../components/dashboard/ReviewSourcesPanel";
 import { parseSources } from "../../../../../../lib/review-profiles";
@@ -165,6 +166,9 @@ export default function DashboardReviewsPage({
     // Deferred a tick so this effect body never calls setState synchronously.
     void Promise.resolve().then(() => loadPage(undefined, false));
   }, [loadPage]);
+
+  // Replied through the Assistant: reload from the server.
+  useAssistantRefresh("reviews", () => void loadPage(undefined, false));
 
   function handleResponded(updated: OwnerReviewDto) {
     setItems((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));

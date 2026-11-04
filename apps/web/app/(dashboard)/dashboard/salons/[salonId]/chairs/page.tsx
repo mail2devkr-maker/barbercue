@@ -4,6 +4,7 @@ import { use, useEffect, useState } from "react";
 import { ChairStatus, DASHBOARD_PATHS, Role } from "@barbercue/shared";
 import type { SalonChairDto } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../../../../../lib/api";
+import { useAssistantRefresh } from "../../../../../../lib/assistant-events";
 import { RequireRole } from "../../../../../../components/auth/RequireRole";
 import { Button } from "../../../../../../components/ui/Button";
 import { SetupNavigation } from "../../../../../../components/dashboard/SetupNavigation";
@@ -36,6 +37,9 @@ export default function DashboardChairsPage({
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
 
   // Reloads the real list after a bulk removal, so the page never shows what the server did not do.
+  // Chairs changed through the Assistant: reload the real list.
+  useAssistantRefresh("chairs", () => void reloadChairs());
+
   async function reloadChairs() {
     try {
       setChairs(await apiFetch<SalonChairDto[]>(base));

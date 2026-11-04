@@ -38,6 +38,7 @@ import {
 import { Badge, Banner, Btn, Card, Dialog, EmptyState, Field, Skeleton } from "../parts";
 import { OfferPromoPanel } from "./OfferPromoPanel";
 import ui from "../owner.module.css";
+import { useAssistantRefresh } from "../../../lib/assistant-events";
 
 const MISMATCH = ["INVALID_FILTER", "CURSOR_FILTER_MISMATCH"] as const;
 const LIST_OPTIONS = { mismatchCodes: MISMATCH, errorText: offerErrorText };
@@ -70,6 +71,8 @@ export function OffersWorkspace({ salonId }: { salonId: string }) {
   const keys = useRef(new Map<string, string>());
 
   const list = useCursorList<OfferDto>(`${base}/offers`, { kind, status }, usable, LIST_OPTIONS);
+  // Published or paused through the Assistant: reload from the server.
+  useAssistantRefresh("offers", list.reload);
 
   useEffect(() => {
     if (!usable) return;

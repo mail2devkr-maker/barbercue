@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { DASHBOARD_PATHS } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../lib/api";
+import { useAssistantRefresh } from "../../lib/assistant-events";
 import { Banner, Card } from "./parts";
 import ui from "./owner.module.css";
 
@@ -33,6 +34,8 @@ export function AutoAssignSetting({ salonId }: { salonId: string }) {
   useEffect(() => {
     load();
   }, [load]);
+  // The Action Assistant can switch this setting; reload from the server when it does.
+  useAssistantRefresh("queue", load);
 
   async function toggle() {
     if (enabled === null || saving) return;

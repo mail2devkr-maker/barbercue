@@ -80,6 +80,12 @@ async function setFavorite(salonId: string, favorite: boolean) {
 }
 
 /** Test hook: resets the shared state between tests. */
+/** Re-read saved salons from the server (e.g. after the Assistant changed them). */
+export async function reloadFavoritesFor(userId: string): Promise<void> {
+  loadedFor = null;
+  await loadFor(userId);
+}
+
 export function resetFavoritesForTests() {
   ids = new Set();
   loadedFor = null;

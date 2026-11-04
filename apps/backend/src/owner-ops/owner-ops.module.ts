@@ -67,6 +67,16 @@ import { OwnerAssistantService } from './owner-assistant.service';
     SalonShareLinksService,
     OwnerAssistantService,
   ],
-  exports: [QueueAutoAssignService, InvoicesService],
+  exports: [
+    QueueAutoAssignService,
+    InvoicesService,
+    OwnerAssistantService,
+    ShopBookingActionsService,
+    RevenueReportService,
+    StaffWorkService,
+    CancellationAnalyticsService,
+    BookingAttributionService,
+    SalonShareLinksService,
+  ],
 })
 export class OwnerOpsModule {}
