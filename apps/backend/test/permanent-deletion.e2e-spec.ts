@@ -38,6 +38,7 @@ maybe(
   () => {
     let app: INestApplication<App>;
     let prisma: PrismaService;
+    let tokenService: TokenService;
     const run = randomUUID().slice(0, 8);
     const tok: Record<string, string> = {};
     const ids: Record<string, string> = {};
@@ -100,6 +101,7 @@ maybe(
       await app.init();
       prisma = app.get(PrismaService);
       const tokens = app.get(TokenService);
+      tokenService = tokens;
       const city = await prisma.city.create({
         data: {
           name: `Del ${run}`,
@@ -570,6 +572,265 @@ maybe(
         (await api('shopAOwner').preview(ids.shopA, 'staff', randomUUID()))
           .status,
       ).toBe(404);
+    });
+
+    // ---------------------------------------------------------------- review fixes (PR #380)
+
+    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    const nonceOf = (token: string) =>
+      (
+        JSON.parse(
+          Buffer.from(token.split('.')[0], 'base64url').toString('utf8'),
+        ) as { n: string }
+      ).n;
+
+    /** A fresh owner + shop, so revoking or transferring it cannot disturb the other tests. */
+    async function freshShop(tag: string) {
+      const owner = await prisma.user.create({
+        data: {
+          email: `del378-${run}-${tag}@example.test`,
+          emailVerifiedAt: new Date(),
+          status: UserStatus.ACTIVE,
+        },
+      });
+      const city = await prisma.city.findFirstOrThrow({
+        where: { slug: `del-${run}` },
+      });
+      const s = await prisma.salon.create({
+        data: {
+          ownerUserId: owner.id,
+          name: `Del ${tag} ${run}`,
+          slug: `del-${tag}-${run}`,
+          cityId: city.id,
+          addressLine: 'Synthetic',
+          timezone: 'Asia/Kolkata',
+          currency: 'INR',
+          status: SalonStatus.ACTIVE,
+        },
+      });
+      await prisma.userRole.create({
+        data: { userId: owner.id, role: Role.SALON_OWNER, salonId: s.id },
+      });
+      tok[tag] = tokenService.signAccessToken(
+        owner.id,
+        [Role.SALON_OWNER],
+        SessionAudience.STAFF,
+      );
+      return { ownerId: owner.id, salonId: s.id };
+    }
+
+    it('owner role revoked WHILE the confirmation runs: the in-transaction gate refuses, nothing is deleted', async () => {
+      const { ownerId, salonId } = await freshShop('revoke');
+      const c = await chair(salonId, `Revoke Race ${run}`);
+      const p = (
+        await api('revoke').preview(salonId, 'chairs', c.id).expect(200)
+      ).body;
+      let release!: () => void;
+      const held = new Promise<void>((r) => (release = r));
+      // A concurrent revocation: deleted but not committed yet, so the confirmation's early check still sees the role.
+      const revoke = prisma.$transaction(
+        async (tx) => {
+          await tx.userRole.deleteMany({
+            where: { userId: ownerId, salonId, role: Role.SALON_OWNER },
+          });
+          await held;
+        },
+        { timeout: 20_000 },
+      );
+      await sleep(300);
+      const confirm = api('revoke')
+        .confirm(salonId, 'chairs', c.id, {
+          token: p.token,
+          typedName: c.label,
+          acknowledged: true,
+        })
+        .then((r) => r);
+      await sleep(1_000); // the confirmation now waits on the locked role row
+      release();
+      await revoke;
+      const r = await confirm;
+      expect(r.status).toBe(403);
+      expect(r.body.error?.code ?? r.body.code).toBe(
+        'PERMANENT_DELETE_ACCESS_CHANGED',
+      );
+      expect(await prisma.chair.count({ where: { id: c.id } })).toBe(1);
+    });
+
+    it('shop ownership transferred WHILE the confirmation runs: refused, nothing is deleted', async () => {
+      const { ownerId, salonId } = await freshShop('transfer');
+      const newOwner = await prisma.user.create({
+        data: {
+          email: `del378-${run}-newowner@example.test`,
+          status: UserStatus.ACTIVE,
+        },
+      });
+      const c = await chair(salonId, `Transfer Race ${run}`);
+      const p = (
+        await api('transfer').preview(salonId, 'chairs', c.id).expect(200)
+      ).body;
+      let release!: () => void;
+      const held = new Promise<void>((r) => (release = r));
+      const transfer = prisma.$transaction(
+        async (tx) => {
+          await tx.salon.update({
+            where: { id: salonId },
+            data: { ownerUserId: newOwner.id },
+          });
+          await tx.userRole.deleteMany({
+            where: { userId: ownerId, salonId, role: Role.SALON_OWNER },
+          });
+          await tx.userRole.create({
+            data: { userId: newOwner.id, role: Role.SALON_OWNER, salonId },
+          });
+          await held;
+        },
+        { timeout: 20_000 },
+      );
+      await sleep(300);
+      const confirm = api('transfer')
+        .confirm(salonId, 'chairs', c.id, {
+          token: p.token,
+          typedName: c.label,
+          acknowledged: true,
+        })
+        .then((r) => r);
+      await sleep(1_000);
+      release();
+      await transfer;
+      const r = await confirm;
+      expect(r.status).toBe(403);
+      expect(await prisma.chair.count({ where: { id: c.id } })).toBe(1);
+    });
+
+    it('a token already used on ANOTHER server instance (recorded in the shared table) is refused; nothing is deleted', async () => {
+      const c = await chair(ids.shopA, `Other Instance ${run}`);
+      const p = (
+        await api('shopAOwner').preview(ids.shopA, 'chairs', c.id).expect(200)
+      ).body;
+      await prisma.idempotencyKey.create({
+        data: {
+          key: `permanent-delete:${nonceOf(p.token)}`,
+          endpoint: 'permanent-deletion:chair',
+          requestHash: 'x',
+          expiresAt: new Date(Date.now() + 86_400_000),
+        },
+      });
+      const r = await api('shopAOwner').confirm(ids.shopA, 'chairs', c.id, {
+        token: p.token,
+        typedName: c.label,
+        acknowledged: true,
+      });
+      expect(r.status).toBe(409);
+      expect(r.body.error?.code ?? r.body.code).toBe(
+        'PERMANENT_DELETE_TOKEN_USED',
+      );
+      expect(await prisma.chair.count({ where: { id: c.id } })).toBe(1);
+    });
+
+    it('a successful deletion records the token as used in the shared table (durable across instances and restarts)', async () => {
+      const c = await chair(ids.shopA, `Recorded ${run}`);
+      const p = (
+        await api('shopAOwner').preview(ids.shopA, 'chairs', c.id).expect(200)
+      ).body;
+      await api('shopAOwner')
+        .confirm(ids.shopA, 'chairs', c.id, {
+          token: p.token,
+          typedName: c.label,
+          acknowledged: true,
+        })
+        .expect(200);
+      expect(
+        await prisma.idempotencyKey.count({
+          where: { key: `permanent-delete:${nonceOf(p.token)}` },
+        }),
+      ).toBe(1);
+    });
+
+    it('a refused confirmation (wrong name) does NOT use up the token', async () => {
+      const c = await chair(ids.shopA, `Not Used Up ${run}`);
+      const p = (
+        await api('shopAOwner').preview(ids.shopA, 'chairs', c.id).expect(200)
+      ).body;
+      expect(
+        (
+          await api('shopAOwner').confirm(ids.shopA, 'chairs', c.id, {
+            token: p.token,
+            typedName: 'wrong',
+            acknowledged: true,
+          })
+        ).status,
+      ).toBe(400);
+      expect(
+        await prisma.idempotencyKey.count({
+          where: { key: `permanent-delete:${nonceOf(p.token)}` },
+        }),
+      ).toBe(0);
+      await api('shopAOwner')
+        .confirm(ids.shopA, 'chairs', c.id, {
+          token: p.token,
+          typedName: c.label,
+          acknowledged: true,
+        })
+        .expect(200);
+    });
+
+    it('two separate server instances confirming the same token at once delete exactly once', async () => {
+      const second = await Test.createTestingModule({ imports: [AppModule] })
+        .overrideProvider(ThrottlerStorage)
+        .useValue({
+          increment: () =>
+            Promise.resolve({
+              totalHits: 1,
+              timeToExpire: 60,
+              isBlocked: false,
+              timeToBlockExpire: 0,
+            }),
+        })
+        .compile();
+      const app2 = second.createNestApplication<INestApplication<App>>();
+      app2.setGlobalPrefix('api/v1');
+      app2.useGlobalFilters(new AllExceptionsFilter());
+      await app2.init();
+      try {
+        const c = await chair(ids.shopA, `Two Instances ${run}`);
+        const p = (
+          await api('shopAOwner').preview(ids.shopA, 'chairs', c.id).expect(200)
+        ).body;
+        const body = { token: p.token, typedName: c.label, acknowledged: true };
+        const path = `/api/v1/dashboard/salons/${ids.shopA}/chairs/${c.id}/permanent-deletion`;
+        const auth = { Authorization: `Bearer ${tok.shopAOwner}` };
+        const [a, b] = await Promise.all([
+          request(app.getHttpServer()).post(path).set(auth).send(body),
+          request(app2.getHttpServer()).post(path).set(auth).send(body),
+        ]);
+        expect([a.status, b.status].filter((x) => x === 200)).toHaveLength(1);
+        expect(
+          await prisma.auditLog.count({
+            where: { entityId: c.id, action: 'CHAIR_PERMANENTLY_DELETED' },
+          }),
+        ).toBe(1);
+      } finally {
+        await app2.close();
+      }
+    });
+
+    it('a suspended caller is refused even with a valid confirmation', async () => {
+      const { ownerId, salonId } = await freshShop('suspend');
+      const c = await chair(salonId, `Suspended ${run}`);
+      const p = (
+        await api('suspend').preview(salonId, 'chairs', c.id).expect(200)
+      ).body;
+      await prisma.user.update({
+        where: { id: ownerId },
+        data: { status: UserStatus.SUSPENDED },
+      });
+      const r = await api('suspend').confirm(salonId, 'chairs', c.id, {
+        token: p.token,
+        typedName: c.label,
+        acknowledged: true,
+      });
+      expect([401, 403]).toContain(r.status);
+      expect(await prisma.chair.count({ where: { id: c.id } })).toBe(1);
     });
   },
 );

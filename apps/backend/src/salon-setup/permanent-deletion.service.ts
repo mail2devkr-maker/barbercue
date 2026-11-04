@@ -35,7 +35,6 @@ import { SalonAccessService } from '../common/salon-access/salon-access.service'
  * never deletes the person's User account, other shops' roles or any other data.
  */
 const TTL_MS = 5 * 60 * 1000;
-const USED_TTL_MS = 15 * 60 * 1000;
 
 interface TokenBody {
   u: string; // user
@@ -61,8 +60,6 @@ const fingerprint = (v: unknown) =>
 
 @Injectable()
 export class PermanentDeletionService {
-  private readonly used = new Map<string, number>();
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly salonAccess: SalonAccessService,
@@ -108,16 +105,14 @@ export class PermanentDeletionService {
     input: PermanentDeletionConfirmInput,
   ): Promise<PermanentDeletionResultDto> {
     // Access to THIS shop first: an outsider learns nothing about the token.
-    const actor = await this.salonAccess.assertOwnerOrAdminAccess(
-      userId,
-      salonId,
-    );
+    await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
     const body = this.openToken(input.token, userId, salonId, 'chair', chairId);
     const label = await this.prisma
       .$transaction(async (tx) => {
         await tx.$queryRaw`SELECT id FROM chairs WHERE id = ${chairId} AND "salonId" = ${salonId} FOR UPDATE`;
         const chair = await this.chairRow(tx, salonId, chairId);
         this.assertSame(body, chair, input.typedName, chair.label);
+        const actor = await this.finalGate(tx, userId, salonId, body);
         const blockers = await this.chairBlockers(tx, chairId);
         if (blockers.length) throw this.blocked(blockers);
         await tx.chair.delete({ where: { id: chairId } });
@@ -137,7 +132,6 @@ export class PermanentDeletionService {
         return chair.label;
       })
       .catch((err) => this.raceSafe(err));
-    this.consume(body);
     return {
       kind: 'chair',
       deletedId: chairId,
@@ -250,16 +244,14 @@ export class PermanentDeletionService {
     input: PermanentDeletionConfirmInput,
   ): Promise<PermanentDeletionResultDto> {
     // Access to THIS shop first: an outsider learns nothing about the token.
-    const actor = await this.salonAccess.assertOwnerOrAdminAccess(
-      userId,
-      salonId,
-    );
+    await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
     const body = this.openToken(input.token, userId, salonId, 'staff', staffId);
     const name = await this.prisma
       .$transaction(async (tx) => {
         await tx.$queryRaw`SELECT id FROM salon_staff WHERE id = ${staffId} AND "salonId" = ${salonId} FOR UPDATE`;
         const staff = await this.staffRow(tx, salonId, staffId);
         this.assertSame(body, staff, input.typedName, staff.displayName);
+        const actor = await this.finalGate(tx, userId, salonId, body);
         const owner = await tx.salon.findUniqueOrThrow({
           where: { id: salonId },
           select: { ownerUserId: true },
@@ -313,7 +305,6 @@ export class PermanentDeletionService {
         return staff.displayName;
       })
       .catch((err) => this.raceSafe(err));
-    this.consume(body);
     return {
       kind: 'staff',
       deletedId: staffId,
@@ -510,13 +501,6 @@ export class PermanentDeletionService {
         'This confirmation expired. Nothing was deleted. Open the delete dialog again.',
         HttpStatus.GONE,
       );
-    this.prune();
-    if (this.used.has(body.n))
-      throw new AppException(
-        E.TOKEN_USED,
-        'This confirmation was already used. Nothing more was deleted.',
-        HttpStatus.CONFLICT,
-      );
     return body;
   }
 
@@ -540,14 +524,68 @@ export class PermanentDeletionService {
       );
   }
 
-  private consume(body: TokenBody) {
-    this.used.set(body.n, Date.now());
-  }
-
-  private prune() {
-    const now = Date.now();
-    for (const [n, at] of this.used)
-      if (now - at > USED_TTL_MS) this.used.delete(n);
+  /**
+   * Review fix (PR #380): the LAST check before the delete, inside the same transaction.
+   *
+   * 1. Access, re-read under row locks: the shop row and the caller's owner/admin role rows are
+   *    locked FOR SHARE, so an ownership transfer (updates the shop, moves the owner role) or a
+   *    role revocation (deletes the role row) either waits for this transaction or has already
+   *    committed and is seen here. A suspended or deleted caller is refused too.
+   * 2. Single use, durably: the token's nonce is written to idempotency_keys (primary key) in the
+   *    same transaction. A second use - concurrent, on another server instance or after a restart -
+   *    hits the key and is refused; if this transaction rolls back nothing was deleted, so the
+   *    token correctly remains unused.
+   */
+  private async finalGate(
+    tx: Tx,
+    userId: string,
+    salonId: string,
+    body: TokenBody,
+  ): Promise<'OWNER' | 'PLATFORM_ADMIN'> {
+    const salon = await tx.$queryRaw<
+      { id: string }[]
+    >`SELECT id FROM salons WHERE id = ${salonId} FOR SHARE`;
+    if (!salon.length) this.notFound('That shop');
+    const caller = await tx.$queryRaw<
+      { status: string }[]
+    >`SELECT status::text AS status FROM users WHERE id = ${userId} FOR SHARE`;
+    const roles = await tx.$queryRaw<{ role: string }[]>`
+      SELECT role::text AS role FROM user_roles
+      WHERE "userId" = ${userId}
+        AND (("salonId" = ${salonId} AND role = 'SALON_OWNER') OR ("salonId" IS NULL AND role = 'PLATFORM_ADMIN'))
+      FOR SHARE`;
+    if (caller[0]?.status !== 'ACTIVE' || roles.length === 0)
+      throw new AppException(
+        E.ACCESS_CHANGED,
+        'Your access to this shop changed, so nothing was deleted.',
+        HttpStatus.FORBIDDEN,
+      );
+    try {
+      await tx.idempotencyKey.create({
+        data: {
+          key: `permanent-delete:${body.n}`,
+          endpoint: `permanent-deletion:${body.k}`,
+          requestHash: createHash('sha256')
+            .update(`${body.u}|${body.s}|${body.t}`)
+            .digest('hex'),
+          expiresAt: new Date(body.e + 24 * 60 * 60 * 1000),
+        },
+      });
+    } catch (err) {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2002'
+      )
+        throw new AppException(
+          E.TOKEN_USED,
+          'This confirmation was already used. Nothing more was deleted.',
+          HttpStatus.CONFLICT,
+        );
+      throw err;
+    }
+    return roles.some((r) => r.role === 'SALON_OWNER')
+      ? 'OWNER'
+      : 'PLATFORM_ADMIN';
   }
 
   private blocked(blockers: PermanentDeletionBlocker[]) {
