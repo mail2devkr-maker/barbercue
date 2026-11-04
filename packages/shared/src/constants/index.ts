@@ -20,6 +20,8 @@ export const AUTH_PATHS = {
   customerPhoneLinkRequest: 'customer/phone/link/request',
   customerPhoneLinkVerify: 'customer/phone/link/verify',
   google: 'google',
+  appleNonce: 'apple/nonce',
+  apple: 'apple',
   staffLogin: 'staff/login',
   // Self-service shop-owner account creation before salon onboarding.
   ownerSignup: 'owner/signup',
@@ -30,6 +32,7 @@ export const AUTH_PATHS = {
   // user on no match; this one must never create one), and keeping them physically separate
   // makes that difference impossible to blur by accident in either handler.
   staffGoogle: 'staff/google',
+  staffApple: 'staff/apple',
   adminLogin: 'admin/login',
   adminGoogle: 'admin/google',
   refresh: 'refresh',
@@ -42,6 +45,9 @@ export const AUTH_PATHS = {
   // DELETE auth/account — customer-only irreversible account deletion/anonymization. The server
   // derives the affected account entirely from the authenticated token; no user id is accepted.
   accountDeletion: 'account',
+  // GET/POST/DELETE auth/account/deletion-request — role-aware, non-destructive request/status flow for
+  // accounts whose business, employment, or platform relationships require resolution first.
+  accountDeletionRequest: 'account/deletion-request',
   me: 'me',
   // auth/methods — which sign-in methods this deployment can actually complete right now.
   // Booleans only; never echoes any configuration value.

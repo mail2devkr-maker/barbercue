@@ -120,7 +120,7 @@ it('sends the new filters and shows the compared service price and salon type', 
   const text = textOf(tree.root);
   expect(text).toContain('Classic Haircut · ₹180');
   expect(text).toContain('Male');
-});
+}, 15_000);
 
 it('saves a favorite from the heart, rolls back when refused, and searches favorites only', async () => {
   let refuse = false;

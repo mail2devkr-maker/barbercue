@@ -244,7 +244,7 @@ export default function HomeScreen({ navigation }: Props) {
     } else if (command.destination === 'queue') {
       navigation.navigate('QueueTab', { screen: 'QueueHome' });
     } else {
-      navigation.navigate('AccountTab', { screen: 'CreditsHistory' });
+      navigation.navigate('SearchTab', { screen: 'Offers' });
     }
   }
 
@@ -338,22 +338,18 @@ export default function HomeScreen({ navigation }: Props) {
                 </View>
                 <Text style={styles.benefitLabel}>{t.joinLiveKicker}</Text>
               </Pressable>
-              {/* Google Play release gate (see lib/feature-flags.ts) — Great offers is FastQue
-                  Credits' hero entry point; hidden outright, not just disabled, in this build. */}
-              {isCreditsEnabled() && (
-                <Pressable
-                  style={({ pressed }) => [styles.benefitItem, pressed && styles.benefitItemPressed]}
-                  onPress={() => handleHeroAction('greatOffers')}
-                  accessibilityRole="button"
-                  accessibilityLabel={t.trustOffersLabel}
-                  hitSlop={8}
-                >
-                  <View style={styles.benefitIconWrap}>
-                    <TabIcon name="offer" color={color.surface} size={18} />
-                  </View>
-                  <Text style={styles.benefitLabel}>{t.trustOffersLabel}</Text>
-                </Pressable>
-              )}
+              <Pressable
+                style={({ pressed }) => [styles.benefitItem, pressed && styles.benefitItemPressed]}
+                onPress={() => handleHeroAction('greatOffers')}
+                accessibilityRole="button"
+                accessibilityLabel={t.trustOffersLabel}
+                hitSlop={8}
+              >
+                <View style={styles.benefitIconWrap}>
+                  <TabIcon name="offer" color={color.surface} size={18} />
+                </View>
+                <Text style={styles.benefitLabel}>{t.trustOffersLabel}</Text>
+              </Pressable>
             </View>
           </View>
         </ImageBackground>
@@ -557,14 +553,10 @@ export default function HomeScreen({ navigation }: Props) {
             <TabIcon name="today" color={color.gold} size={20} />
             <Text style={styles.trustLabel} numberOfLines={2}>{t.trustRealTimeLabel}</Text>
           </View>
-          {/* Google Play release gate (see lib/feature-flags.ts) — this bullet advertises the same
-              "Great offers" concept as the hero Credits shortcut above; hidden alongside it. */}
-          {isCreditsEnabled() && (
-            <View style={styles.trustItem}>
-              <TabIcon name="offer" color={color.gold} size={20} />
-              <Text style={styles.trustLabel} numberOfLines={2}>{t.trustOffersLabel}</Text>
-            </View>
-          )}
+          <Pressable style={styles.trustItem} onPress={() => handleHeroAction('greatOffers')} accessibilityRole="button" accessibilityLabel={t.trustOffersLabel}>
+            <TabIcon name="offer" color={color.gold} size={20} />
+            <Text style={styles.trustLabel} numberOfLines={2}>{t.trustOffersLabel}</Text>
+          </Pressable>
         </View>
 
         <View style={styles.shortcutRow}>
