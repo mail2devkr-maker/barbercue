@@ -1,6 +1,6 @@
 # FastQue Android 1.0.7 parity audit
 
-Audit baseline: production source at master `f0aa6acb3028ad24352b7225180c7ae88f67b3d7`, including the R7 inventory release and FastQue Assistant release. The fresh Android 1.0.7 integration candidate is based on that master and carries the reviewed Draft PR #364 / Employee Login PR #361 mobile changes. This is a source/API audit, not authenticated runtime acceptance or physical-device certification.
+Audit baseline: production source at master `90651cb3c32251739d8ab4b559f98e8347dab0c6`. The isolated Android candidate integrates the reviewed PR #369 Android 1.0.7 source and PR #379 GPS/keyboard fixes on that baseline. This is a source/API audit, not authenticated runtime acceptance or physical-device certification.
 
 Statuses: **SOURCE** means a native path and current API usage exist; **PARTIAL** means part of the web workflow is present but a material function remains; **GAP** means no equivalent native workflow was found; **PHYSICAL_REQUIRED** means source is present but real-device behavior is not yet verified; **WEB_ONLY** means privileged scope is intentionally excluded pending an explicit mobile authorization.
 
@@ -43,12 +43,13 @@ Statuses: **SOURCE** means a native path and current API usage exist; **PARTIAL*
 
 | Website capability | Android status | Evidence / gap |
 |---|---|---|
-| Discovery/search, city/service/price sorting and salon details | SOURCE / PHYSICAL_REQUIRED | Existing `SalonSearchScreen` and `SalonProfileScreen`; confirm reported Hajipur distance issue with real coordinates and API response on device |
-| Location and distance | PARTIAL | Existing location permission/search flow; accurate nearest-salon behavior and denied-permission recovery require device verification |
+| Discovery/search, city/service/price sorting and salon details | SOURCE / PHYSICAL_REQUIRED | `SalonSearchScreen` and `nearby-city-fallback`; without an explicit radius, consented GPS can fall back to an unambiguous same-country city search while retaining other filters. Hajipur and other real-phone searches still require device acceptance. |
+| Location and distance | PARTIAL / PHYSICAL_REQUIRED | Real Haversine distance is shown only for salons with stored coordinates; missing pins remain unavailable. The latest read-only aggregate recorded 6/107 active salons pinned and 101 without pins. Radius searches stay strict, wrong-country/ambiguous city matches are rejected, and stale requests are guarded. No coordinates or distances are fabricated. |
 | Favorites/offers | PARTIAL | Existing discovery/favorites support; offer parity depends on enabled production capability and customer-facing availability |
 | Google and +91 SMS OTP login | SOURCE / BACKEND_DEPENDENCY | Existing mobile screens and auth integrations; require production login tests, rate-limit behavior and OTP delivery authorization |
 | Booking, multi-service, queue, arrival/cancellation | SOURCE / PHYSICAL_REQUIRED | Existing native booking/queue flows; production-like and device race/reconnect acceptance pending |
 | Notifications | SOURCE / PHYSICAL_REQUIRED | Existing push registration and navigation code; verify Android notification permission, foreground/background delivery and taps |
+| Keyboard accessibility | SOURCE / PHYSICAL_REQUIRED | PR #379 makes Android shared screens reflow around the keyboard and hides bottom tabs while typing; verify Samsung Keyboard and Gboard on long forms on device |
 | Profile, invoices, reviews, account deletion | PARTIAL | Account and customer invoice/API foundations exist; screen-level invoice details and actual account-deletion completion need separate proof |
 
 ## Employees, salon staff and privileged web roles
@@ -92,19 +93,19 @@ Therefore this matrix does **not** certify 100% website parity or a Play-ready p
 
 PR #367's exact head `41dc54d4efcdfb4013312c23e00666d3e1141f09` was certified against master `94ef6c1cfb26da9f1535d44a94284d67e3234548` by runs 41808853743, 41808853735 and 41808853825. This evidence remains valid for that tree but does not certify an integration with the current master.
 
-## Current Android 1.0.7 integration candidate
+## Previous Android 1.0.7 candidate — PR #369 (preserved)
 
 Branch: `codex/android-107-ai-integration-20261104`  
 PR: #369 (OPEN / DRAFT)  
-Exact head: `d3f63e4447004028b014e8bb3e462bdc6fcc1dd2`  
+Exact head: `431f011c5d0c24dab6554f0d9544c650c05c89d1`  
 Base master: `f0aa6acb3028ad24352b7225180c7ae88f67b3d7`
 
 The candidate preserves the merged Assistant backend/web source and R7 inventory APIs from current master, carries the reviewed mobile changes from PRs #361/#364/#367, and adds native Inventory Management. PRs #361/#364/#367 remain separate Drafts. This is not 100% parity: the table above marks remaining sections PARTIAL/GAP.
 
 Exact-head GitHub certification passed:
-- Owner Operations Certification [run 41822455390](https://github.com/mail2devkr-maker/barbercue/actions/runs/41822455390): Android config validation, TypeScript, **47 Jest suites / 306 tests passed**, Android JavaScript export (1,219 modules); web TypeScript and production build passed; disposable PostgreSQL migrations and E2E passed. Baseline comparison reported 3 known backend unit failures, 18 known backend E2E failures, and 14 known web test failures, with **zero new failures**. The run also reported 85 table/sequence fingerprints matching and schema, indexes, constraints, triggers and financial guards verified on its disposable database.
-- Nitesh Admin + Discovery [run 41822455418](https://github.com/mail2devkr-maker/barbercue/actions/runs/41822455418): backend, web and mobile jobs passed; focused mobile discovery tests **7/7** and Android JS export passed.
-- Salon Location Verification [run 41822455413](https://github.com/mail2devkr-maker/barbercue/actions/runs/41822455413): full migration chain/checksums/schema drift checks passed; authenticated disposable-PostgreSQL location review **5/5** passed.
+- Owner Operations Certification [run 41823467171](https://github.com/mail2devkr-maker/barbercue/actions/runs/41823467171): Android config validation, TypeScript, **47 Jest suites / 306 tests passed**, Android JavaScript export (1,219 modules); web TypeScript and production build passed; disposable PostgreSQL migrations and E2E passed. Baseline comparison reported 3 known backend unit failures, 18 known backend E2E failures, and 14 known web test failures, with **zero new failures**. The run also reported 85 table/sequence fingerprints matching and schema, indexes, constraints, triggers and financial guards verified on its disposable database.
+- Nitesh Admin + Discovery [run 41823467238](https://github.com/mail2devkr-maker/barbercue/actions/runs/41823467238): backend, web and mobile jobs passed; focused mobile discovery tests **7/7** and Android JS export passed.
+- Salon Location Verification [run 41823467047](https://github.com/mail2devkr-maker/barbercue/actions/runs/41823467047): full migration chain/checksums/schema drift checks passed; authenticated disposable-PostgreSQL location review **5/5** passed.
 
 The configuration check resolves Android version/runtime to **1.0.7**, iOS version/runtime to **1.0.6**, package to `com.dcw.fastque`, local versionCode seed **17**, and remote EAS auto-increment. The Android internal profile is configured for a store AAB, uses the isolated preview update channel, and targets Play internal track as a draft. This verifies repository configuration only; EAS's remote next versionCode, account authentication, signing readiness and build allowance are not verified by GitHub CI.
 
@@ -114,4 +115,15 @@ Release gates still open:
 - Physical Galaxy S20 FE acceptance is not certified; ADB/UI host access was unavailable in this session.
 - Owner/customer/employee authenticated runtime acceptance and parity rows marked PARTIAL/GAP remain open.
 
-No production action is authorized or claimed.
+No production action was authorized or claimed for PR #369.
+
+## Combined Android GPS/keyboard integration candidate
+
+Branch: `codex/fastque-mobile-overnight-20261104`  
+Base production master: `90651cb3c32251739d8ab4b559f98e8347dab0c6`  
+Source: reviewed PR #369 HEAD `431f011c5d0c24dab6554f0d9544c650c05c89d1` plus reviewed PR #379 HEAD `8cc9f53af977d92907dfe6e441c28afa2cff64cc`  
+Integration state: both merges are local and conflict-free; exact combined CI is not yet run.
+
+The source keeps package `com.dcw.fastque`, resolves Android to app/runtime `1.0.7`, and keeps iOS pinned to app/runtime `1.0.6`. The integration adds the Android location fallback, strict-radius behavior, unknown-distance handling, keyboard avoidance and regression tests to the Android 1.0.7 employee/owner/inventory candidate. It does not change iOS PR #375 or the existing OTA assignment.
+
+Local dependency install could not complete because `registry.npmjs.org` and `api.expo.dev` DNS lookups both fail in this execution environment; the interrupted install was stopped and no source/lockfile changes resulted. The physical handset was not visible through ADB (0 ready, unauthorized, or offline devices). EAS read-only build/update queries are likewise network-blocked here. No build, OTA publication, Play upload, production change, or physical acceptance is claimed.
