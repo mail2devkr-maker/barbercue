@@ -1,4 +1,4 @@
-# FastQue Action Assistant: release runbook (issue #362, PR #363)
+# FastQue Action Assistant: controlled release runbook (issue #362, source PR #363, post-R7 integration PR #366)
 
 This follows the owner directive of 2026-11-04 ("prepare, certify, and safely deploy"). It lists every
 gate, what evidence exists, and the exact owner approvals that are still needed. Nothing in this file
@@ -28,7 +28,7 @@ What happens:
 
 **A production deploy without any of these variables set therefore ships the code with the Assistant hidden from everyone.**
 
-## 2. Source audit against production master `f4f15e98`
+## 2. Source audit against deployed R7 master `94ef6c1c`
 
 - **Migrations:** none. No `schema.prisma` change and no migration files.
 - **Start-up behaviour:** no new start-up job, cron or queue worker. The interpreter is `rules` unless `ASSISTANT_INTERPRETER=local` and a private model URL are set. The transcriber is off unless `ASSISTANT_WHISPER_URL` is set. No paid AI or STT provider is called.
@@ -44,23 +44,23 @@ What happens:
 
 | # | Gate | Status | Evidence / blocker |
 |---|---|---|---|
-| 1 | Source readiness | Done for the scope above | 86 actions; unit, e2e (twice in one shared DB) and web tests; exact-head CI per batch (see PR #363 checkpoints) |
+| 1 | Source readiness | Combined source and CI PASS | 86 actions on PR #363; R7 + Assistant integration merge `47b7a10802ab17f926f331c7a01b37049263a951` in Draft PR #366 passed all 14/14 exact-head checks. Re-run on the final documentation commit before release. |
 | 2 | Feature flag, fail closed, cohort, separate writes | Done | Section 1 |
-| 3 | Staging certification | **BLOCKED (owner)** | Railway has `production` and `fastque-otp-test`. The second runs the phone-OTP pilot (#352/#355). Deploying the Assistant there would replace that candidate and its test state. No other free staging exists, and creating one adds a cloud resource. Done instead: local isolated certification on disposable PostgreSQL clones plus the local browser demo. **Owner decision:** allow a time-boxed deploy to `fastque-otp-test` (then restore the OTP candidate), or approve a new staging environment and its cost |
-| 4 | Pre-production change gate | **BLOCKED (owner)** | Neon P1 has no fresh snapshot (latest manual 2026-10-26). An owner-controlled encrypted backup and an independent restore rehearsal are required (owner procedure; never in chat) |
-| 5 | Controlled production deployment | **STOP: owner approval** | Production deploys on merge to `master`, so a deploy means a master merge. The directive says to stop at this exact gate |
+| 3 | Staging certification | **No isolated cloud staging; owner risk decision required** | Railway has `production` and `fastque-otp-test`; the OTP pilot must not be overwritten. Isolated local disposable-Postgres browser/e2e tests and PR #366 exact-head CI provide non-production evidence, not a dedicated deployed staging runtime. Require explicit risk acceptance before a flag-OFF production deployment without staging, or provision a separately authorized nonproduction environment. No paid resource is approved. |
+| 4 | Pre-production change gate | **Previous backup verified; post-R7 checkpoint desirable** | Owner encrypted direct Neon P1 backup `p1-nitesh-r7` stamp `20261104T075102Z` was integrity-checked and restored twice to local copies; R7 migration/recovery rehearsal PASS. Backup predates live R7. Post-R7 production is 84 public tables / 75 completed migrations; take/verify a new post-R7 backup before the Assistant cutover where possible. Never expose its URI or keys. |
+| 5 | Controlled production deployment | **NO DEPLOYMENT YET — exact-head review/approval** | Candidate is Draft PR #366 on live R7; use the current integration SHA after complete CI. Production merge and Railway web/backend deployment are authorized only if owner accepts the staging limitation and approves the precise final SHA. The Assistant must remain fully flag-OFF. |
 | 6 | Read-only smoke after deploy | Pending gate 5 | Section 5 |
 | 7 | Owner-only canary, then public | Pending; separate explicit approvals | Section 6 |
 
 ## 4. Production deployment plan (only after gates 3–5 are approved)
 
-1. Confirm both Railway services are healthy on R6 (`c2a9d173` backend, `a3443694` web) and that nothing else is deploying.
+1. Confirm both Railway services are healthy on live R7 (`bd6d562f` backend, `1dff1b09` web, master `94ef6c1c`) and that nothing else is deploying.
 2. Leave `ASSISTANT_MODE`, `ASSISTANT_WRITES`, `ASSISTANT_COHORT_USER_IDS`, `ASSISTANT_INTERPRETER` and `ASSISTANT_WHISPER_URL` **unset** in production.
-3. The owner approves the exact PR #363 head SHA. The merge to `master` is done with the approved method: no unrelated draft PRs, no R7 (#357) or R8 (#358).
+3. The owner reviews and approves the exact post-R7 integrated Draft PR #366 head SHA, including the no-staging risk exception if applicable. Merge it to `master` via the approved method: no unrelated PRs and no R8 (#358). Original Assistant source PR #363 remains independent.
 4. Watch both Railway deployments until they report SUCCESS. Check that the build log shows the approved SHA. `railway redeploy` can rebuild the wrong commit, so pin the commit when redeploying.
 5. The pre-deploy migration step must report **no pending migrations**, because this PR adds none.
 
-**Rollback:** revert the merge commit on `master`, which redeploys code equal to `f4f15e98`, or redeploy the previous successful Railway deployments. There is no schema change, so no database rollback is needed.
+**Rollback:** revert the Assistant integration merge to code equivalent to **R7 master `94ef6c1c`**, or redeploy the previous successful **R7** Railway deployments: backend `bd6d562f-954b-4239-a487-49e4ccd8bcff` and web `1dff1b09-b8e2-49c6-8a41-ae220001cde0`. Do NOT roll back to R6 `f4f15e98` by default because R7 is already production. The Assistant changes add no schema migration, so no Assistant-specific database down migration should be needed. Restore only with a separate approved recovery procedure if data is damaged.
 
 ## 5. Read-only smoke checks after deploy
 
@@ -86,4 +86,12 @@ These do not modify real customers or shops:
 - Local model hosting.
 - Lead creation by voice (third-party phone consent).
 - Review delete, sign-in email change, verify/suspend, role changes, exports, money.
-- R7 and R8 stay separate and blocked on the fresh P1 backup.
+- R7 is deployed and independently verified (84 tables, 75 completed migrations). R8 remains Draft and independently release-gated.
+
+## 8. Post-R7 P0 checkpoint
+
+- **Current released baseline:** master `94ef6c1cfb26da9f1535d44a94284d67e3234548`, R7 Inventory, backend and web SUCCESS.
+- **Integrated source:** R7 + Assistant merge commit `47b7a10802ab17f926f331c7a01b37049263a951` (parents `94ef6c1c` and original Assistant `49cf0c54`); Draft PR #366. This is NOT a production deployment. Revalidate exact CI on every later documentation/source commit.
+- **Production variables:** inspect variable names before any merge; ensure `ASSISTANT_MODE`, `ASSISTANT_COHORT_USER_IDS`, `ASSISTANT_WRITES`, `ASSISTANT_INTERPRETER`, `ASSISTANT_WHISPER_URL` are absent or securely OFF; default off is not a substitute for monitoring authenticated API responses.
+- **Independent risk gates:** no existing dedicated staging that can safely replace the OTP pilot; a post-R7 backup would narrow RPO. Obtain explicit owner acknowledgment of these two exceptions before merging the flag-OFF P0 candidate.
+- **Owner-only canary and broad enablement:** not included in flag-OFF deployment approval; each requires separate authorization and real-user checks.
