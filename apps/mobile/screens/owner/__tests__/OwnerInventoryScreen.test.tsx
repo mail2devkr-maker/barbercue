@@ -7,6 +7,9 @@ import OwnerInventoryScreen from '../OwnerInventoryScreen';
 jest.mock('@react-navigation/native', () => ({
   useFocusEffect: (callback: () => void | (() => void)) => jest.requireActual('react').useEffect(callback, [callback]),
 }));
+jest.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+}));
 jest.mock('../../../lib/salon-context', () => ({
   useSalon: () => ({ selectedSalonId: 'salon-1' }),
 }));
