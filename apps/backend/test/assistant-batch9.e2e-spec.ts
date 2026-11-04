@@ -112,7 +112,15 @@ maybe('Action Assistant batch 9 (e2e, disposable local database)', () => {
   });
 
   it('schedules a follow-up on my own lead in India time, once; refuses a past time', async () => {
-    const past = await say('asha', 'Sharma Salon ka follow up aaj 12:01 am lagao', 'employee');
+    // Keep the past-time assertion stable around midnight in India. At 00:00 IST,
+    // "today 12:01 am" is still in the future; the suite must not depend on when CI runs.
+    jest.useFakeTimers({ now: new Date('2026-11-04T06:30:00.000Z') }); // 12:00 IST
+    let past: AssistantTurnDto;
+    try {
+      past = await say('asha', 'Sharma Salon ka follow up aaj 12:01 am lagao', 'employee');
+    } finally {
+      jest.useRealTimers();
+    }
     expect(past.status).toBe('NEEDS_INPUT');
     const preview = await say('asha', 'Sharma Salon ka whatsapp follow up kal 4 baje lagao: menu bhejna', 'employee');
     expect(preview.status).toBe('NEEDS_CONFIRMATION');
