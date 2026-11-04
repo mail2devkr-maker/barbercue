@@ -40,7 +40,7 @@ import {
 import { useLanguage } from '../lib/language-context';
 import { useAuth } from '../lib/auth-context';
 import { DEFAULT_DISCOVERY_FILTERS, buildDiscoveryQuery, type DiscoveryFilters } from '../lib/discovery-search';
-import { findCityForDeviceLocation, buildCityFallbackQuery, appendUnpinnedCitySalons } from '../lib/nearby-city-fallback';
+import { findCityForDeviceLocation, buildCityFallbackQuery, appendCityMatchesToNearby } from '../lib/nearby-city-fallback';
 import type { SearchStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<SearchStackParamList, 'SalonSearch'>;
@@ -376,9 +376,9 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
       if (requestId !== searchSequence.current) return;
       setResults(result.items);
 
-      // Most older salon records have no verified shop pin and are excluded
-      // from GPS distance ranking. Without a hard radius, show *only* unpinned
-      // shops in the canonical current city after real distance-ranked shops.
+      // Older salons without verified map pins are excluded from nearby rankings.
+      // Without a hard radius, supplement with canonical same-city salons,
+      // preserving real distances for pinned shops and null for unpinned ones.
       if (coords && filters.radiusKm === null) {
         const city = await findCityForDeviceLocation(coords);
         if (requestId !== searchSequence.current) return;
@@ -388,12 +388,12 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
               `${DISCOVERY_PATHS.salons}?${buildCityFallbackQuery(built.query, city)}`,
             );
             if (requestId !== searchSequence.current) return;
-            const combined = appendUnpinnedCitySalons(result.items, byCity.items);
+            const combined = appendCityMatchesToNearby(result.items, byCity.items, coords);
             if (combined.length > result.items.length) {
               setResults(combined);
               setNotice(language === Language.HI
-                ? `${city.name} के कुछ सैलून के मैप पिन उपलब्ध नहीं हैं। उनकी दूरी नहीं बताई जा सकती।`
-                : `Some ${city.name} shops have no confirmed map pin; their distance is unavailable.`);
+                ? `${city.name} के अन्य सैलून दिखाए गए हैं। बिना मैप पिन वाले सैलून की दूरी उपलब्ध नहीं है।`
+                : `Showing other ${city.name} shops. Distance is unavailable for shops without map pins.`);
             }
           } catch {
             // Keep actual GPS results if the optional city lookup fails.
@@ -803,6 +803,11 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
                     {item.isOpenNow !== null ? (item.isOpenNow ? t.openNowLabel : t.closedNowLabel) : ''}
                     {item.isOpenNow !== null && item.distanceKm !== null ? ' · ' : ''}
                     {item.distanceKm !== null ? `${formatDistance(item.distanceKm, item.countryCode)}${t.awaySuffix}` : ''}
+                  </Text>
+                )}
+                {nearMe && (item.lat == null || item.lng == null) && (
+                  <Text style={styles.cardMeta}>
+                    {language === Language.HI ? 'दूरी उपलब्ध नहीं (मैप पिन बाकी)' : 'Distance unavailable (shop pin missing)'}
                   </Text>
                 )}
               </View>
