@@ -84,7 +84,7 @@ export class SalonAccessService {
   async assertAccessOrAdminAccess(
     userId: string,
     salonId: string,
-  ): Promise<'STAFF_OR_OWNER' | 'PLATFORM_ADMIN'> {
+  ): Promise<'STAFF_OR_OWNER' | 'PLATFORM_ADMIN' | 'CO_FOUNDER'> {
     const membership = await this.prisma.userRole.findFirst({
       where: {
         userId,
