@@ -116,6 +116,7 @@ export default function RootNavigator() {
       <Tab.Navigator
         screenOptions={{
         headerShown: false,
+        tabBarHideOnKeyboard: true,
         // FastQue brand accent on the active tab (visual-fidelity checkpoint) — was plain ink,
         // indistinguishable from a default/unbranded tab bar; every tab (Home included) now reads
         // clearly as "selected" via the same brand accent the rest of Home's redesign uses.
