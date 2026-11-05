@@ -1948,6 +1948,27 @@ export interface AdminShopActivityCountsDto {
   };
 }
 
+/** Platform live-queue monitor: counts only, never a customer. Shops with someone in the queue now. */
+export interface AdminLiveQueueShopDto {
+  id: string;
+  publicId: string;
+  name: string;
+  city: string | null;
+  status: SalonStatus;
+  waiting: number;
+  called: number;
+  inService: number;
+  activeChairs: number;
+  /** When the longest-waiting WAITING customer joined (null when nobody is waiting). */
+  oldestWaitingSince: string | null;
+}
+export interface AdminLiveQueueDto {
+  generatedAt: string;
+  totals: { shops: number; waiting: number; called: number; inService: number };
+  /** Longest wait first, then busiest; at most 200 shops. */
+  shops: AdminLiveQueueShopDto[];
+}
+
 export interface AdminShopActivityDto extends AdminShopActivityCountsDto {
   from: string;
   to: string;
