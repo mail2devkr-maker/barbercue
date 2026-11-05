@@ -79,6 +79,7 @@ export const ADMIN_PATHS = {
   shopActivity: 'shop-activity',
   liveQueue: 'live-queue',
   allBookings: 'bookings',
+  onboarding: 'onboarding',
   // admin/analytics/overview?from&to — Executive Command Center (docs/admin-dashboard-2.0).
   analytics: 'analytics',
   // admin/shops/status — live scheduled open/closed status; admin/analytics/timeseries — chart builder.
