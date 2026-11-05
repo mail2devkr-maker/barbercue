@@ -57,6 +57,11 @@ const CASES: Array<[string, string, 'shop' | 'customer']> = [
   ['go to bookings', A.NAVIGATE, 'shop'],
   ['peeche jao', A.NAVIGATE_BACK, 'shop'],
   ['go back', A.NAVIGATE_BACK, 'shop'],
+  ['location kholo', A.NAVIGATE, 'shop'],
+  ['लोकेशन खोलो', A.NAVIGATE, 'shop'],
+  ['verification page kholo', A.NAVIGATE, 'shop'],
+  ['open contacts', A.NAVIGATE, 'shop'],
+  ['upi qr page kholo', A.NAVIGATE, 'shop'],
   ['tum kya kya kar sakte ho', A.HELP, 'shop'],
   ['help', A.HELP, 'shop'],
   ['meri booking dikhao', A.MY_BOOKINGS, 'customer'],
@@ -94,5 +99,32 @@ describe('assistant understanding (Hinglish / Hindi / English)', () => {
     expect(
       parseAssistantText('customer amit line mein hai', 'shop')?.action,
     ).toBe(A.CUSTOMERS_FIND);
+  });
+
+  it('opens the location, verification, contacts and payment QR screens by voice', () => {
+    expect(parseAssistantText('location kholo', 'shop')).toEqual({
+      action: A.NAVIGATE,
+      page: 'location',
+    });
+    expect(parseAssistantText('वेरिफिकेशन पेज खोलो', 'shop')).toEqual({
+      action: A.NAVIGATE,
+      page: 'verification',
+    });
+    expect(parseAssistantText('open contacts', 'shop')).toEqual({
+      action: A.NAVIGATE,
+      page: 'contacts',
+    });
+    expect(parseAssistantText('payment qr kholo', 'shop')).toEqual({
+      action: A.NAVIGATE,
+      page: 'paymentQr',
+    });
+    expect(parseAssistantText('payments kholo', 'shop')).toEqual({
+      action: A.NAVIGATE,
+      page: 'payments',
+    });
+    // A change is never navigation.
+    expect(parseAssistantText('address badlo', 'shop')?.action).not.toBe(
+      A.NAVIGATE,
+    );
   });
 });

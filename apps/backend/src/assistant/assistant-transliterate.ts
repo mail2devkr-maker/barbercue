@@ -110,6 +110,12 @@ add('cancellations', 'कैंसिलेशन', 'कैंसिलेशं
 add('inventory', 'इन्वेंटरी', 'इनवेंटरी');
 add('notifications', 'नोटिफिकेशन', 'नोटिफिकेशंस');
 add('analytics', 'एनालिटिक्स');
+add('location', 'लोकेशन');
+add('address', 'एड्रेस', 'ऐड्रेस');
+add('verification', 'वेरिफिकेशन', 'वैरिफिकेशन');
+add('contacts', 'कॉन्टैक्ट्स', 'कांटेक्ट्स', 'कॉन्टेक्ट्स');
+add('contact', 'कॉन्टैक्ट', 'कांटेक्ट');
+add('qr', 'क्यूआर');
 add('report', 'रिपोर्ट');
 add('total', 'टोटल');
 
