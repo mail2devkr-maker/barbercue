@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import {
   QUEUE_ENTRIES_PATH,
@@ -154,7 +154,7 @@ export default function WalkInJoinScreen({ route }: Props) {
   }
 
   return (
-    <Screen scroll={false} contentStyle={styles.screenContent}>
+    <Screen scroll={Platform.OS === 'ios'} contentStyle={styles.screenContent}>
       <SectionHeader eyebrow={t.liveQueue} title={t.joinTheQueueTitle} subtitle={t.serviceOptional} />
       <View style={styles.serviceList}>
         <Pressable

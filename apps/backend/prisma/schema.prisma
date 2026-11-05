@@ -78,8 +78,14 @@ enum OtpDeliveryAttemptStatus {
 // verification + a paid-per-message account, neither of which exists yet, so no WhatsAppOtpSender
 // is wired up. The enum value exists now so a future AuthIdentity row never needs a schema change,
 // only a new OtpSender-style implementation.
+enum AccountDeletionRequestStatus {
+  REQUESTED
+  CANCELLED
+}
+
 enum AuthProvider {
   GOOGLE
+  APPLE
   WHATSAPP
 }
 
@@ -447,6 +453,7 @@ model User {
 
   roles                         UserRole[]
   authIdentities                AuthIdentity[]
+  accountDeletionRequest AccountDeletionRequest?
   refreshTokens                 RefreshToken[]
   passwordResetTokens           PasswordResetToken[]
   ownedSalons                   Salon[]                  @relation("SalonOwner")
@@ -516,6 +523,8 @@ model AuthIdentity {
   // The provider's own stable subject identifier (Google's `sub` claim) — never the email, which
   // can change or be reused. This is the actual identity key for lookups.
   providerSub String
+  // Encrypted Apple refresh token retained only to revoke Sign in with Apple on account deletion.
+  providerRefreshTokenEncrypted String? @map("provider_refresh_token_encrypted") @db.Text
   // Snapshot of the verified email at link time, for display/support only — never used to look up
   // or match an identity; account linking keys off (provider, providerSub) plus a one-time,
   // explicit "does an existing User already have this verified email" check at link time (see
@@ -2792,4 +2801,25 @@ model InventoryAlert {
 
   @@index([salonId, resolvedAt, createdAt])
   @@map("inventory_alerts")
+}
+
+model AccountDeletionRequest {
+  id        String                       @id @default(uuid())
+  userId    String                       @unique
+  user      User                         @relation(fields: [userId], references: [id], onDelete: Restrict)
+  status    AccountDeletionRequestStatus @default(REQUESTED)
+  createdAt DateTime                     @default(now())
+  updatedAt DateTime                     @updatedAt
+
+  @@index([status, createdAt])
+  @@map("account_deletion_requests")
+}
+
+model AppleAuthNonce {
+  nonceHash String   @id @map("nonce_hash") @db.VarChar(64)
+  expiresAt DateTime @map("expires_at") @db.Timestamp(3)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(3)
+
+  @@index([expiresAt])
+  @@map("apple_auth_nonces")
 }

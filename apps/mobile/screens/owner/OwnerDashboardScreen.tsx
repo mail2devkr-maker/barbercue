@@ -89,7 +89,7 @@ export default function OwnerDashboardScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const summaryRequestIdRef = useRef(0);
   const unreadCount = useUnreadNotificationCount();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
 
   const loadSummary = useCallback(async () => {
     const requestId = ++summaryRequestIdRef.current;
@@ -318,6 +318,41 @@ export default function OwnerDashboardScreen() {
         </Pressable>
         <Pressable style={styles.quickLink} onPress={() => navigation.navigate('OwnerShopTab')}>
           <Text style={styles.quickLinkText}>{t.manageShop}</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          style={styles.quickLink}
+          onPress={() => navigation.navigate('OwnerShopTab', { screen: 'OwnerAnalytics' })}
+        >
+          <Text style={styles.quickLinkText}>{language === 'HI' ? 'व्यावसायिक विश्लेषण' : 'Business analytics'}</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          style={styles.quickLink}
+          onPress={() => navigation.navigate('OwnerShopTab', { screen: 'OwnerRevenueReport' })}
+        >
+          <Text style={styles.quickLinkText}>{language === 'HI' ? 'आय रिपोर्ट' : 'Revenue report'}</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          style={styles.quickLink}
+          onPress={() => navigation.navigate('OwnerShopTab', { screen: 'OwnerInventory' })}
+        >
+          <Text style={styles.quickLinkText}>{language === 'HI' ? 'इन्वेंटरी' : 'Inventory'}</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          style={styles.quickLink}
+          onPress={() => navigation.navigate('OwnerShopTab', { screen: 'OwnerCancellations' })}
+        >
+          <Text style={styles.quickLinkText}>{language === 'HI' ? 'रद्दीकरण' : 'Cancellations'}</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          style={styles.quickLink}
+          onPress={() => navigation.navigate('OwnerShopTab', { screen: 'OwnerReviews' })}
+        >
+          <Text style={styles.quickLinkText}>{language === 'HI' ? 'समीक्षाएँ' : 'Reviews'}</Text>
         </Pressable>
       </View>
     </PremiumScreen>
