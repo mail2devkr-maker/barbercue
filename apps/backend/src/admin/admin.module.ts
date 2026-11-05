@@ -10,6 +10,7 @@ import { AdminCrmService } from './admin-crm.service';
 import { AdminAccessManagementService } from './admin-access-management.service';
 import { AdminShopActivityService } from './admin-shop-activity.service';
 import { AdminLiveQueueService } from './admin-live-queue.service';
+import { AdminBookingsService } from './admin-bookings.service';
 import { AdminExecutiveOverviewService } from './analytics/admin-executive-overview.service';
 import { AdminShopStatusService } from './analytics/admin-shop-status.service';
 import { AdminTimeseriesService } from './analytics/admin-timeseries.service';
@@ -39,6 +40,7 @@ import { AdminDataExportService } from './analytics/admin-data-export.service';
     AdminAccessManagementService,
     AdminShopActivityService,
     AdminLiveQueueService,
+    AdminBookingsService,
     AdminExecutiveOverviewService,
     AdminShopStatusService,
     AdminTimeseriesService,
