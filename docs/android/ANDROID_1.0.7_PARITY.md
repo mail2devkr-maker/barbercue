@@ -1,8 +1,8 @@
 # FastQue Android 1.0.7 parity audit
 
-Audit baseline: production master `d5295c2d2ca5e25ee8310325b392d79f9e448956`. This matrix describes the current Android 1.0.7 integration candidate, Draft PR #398 at `b3ad672c5c62d8554dad3ed636f98f00327703a8`, which integrates PR #385 (Android 1.0.7/Employee Login/Assistant), PR #389 (QR preview/share), and the GPS/keyboard fixes from PR #379. It is a source/API audit, not authenticated production runtime acceptance or physical-device certification.
+Audit baseline: production master `d5295c2d2ca5e25ee8310325b392d79f9e448956`. Current candidate: Draft PR #398 at exact HEAD `f631df8568bc8e9844192832fcef6334fc65b4dd`, integrating PR #385 (Android 1.0.7/Employee Login/Assistant), PR #389 (QR preview/share), and GPS/keyboard fixes from PR #379. This is a source/API audit, not authenticated production runtime acceptance or physical-device certification.
 
-Current exact-head CI for PR #398: Owner Operations Certification `41997817094`, Nitesh Admin + Discovery `41997817057`, and Salon Location Verification `41997817058` all completed SUCCESS. The Owner Operations workflow passed mobile typecheck, the 1.0.7 Android / 1.0.6 iOS effective-config assertions, Jest, and Android JavaScript export. JavaScript export is not a native AAB build. The older PR #383 certification entries below remain historical evidence for that exact older head only.
+Exact-head CI for PR #398 HEAD `f631df8568bc8e9844192832fcef6334fc65b4dd`: Owner Operations `42004875001`, Nitesh Admin + Discovery `42004875057`, and Salon Location Verification `42004875038` completed SUCCESS. Owner Operations passed Android/iOS effective-config checks, mobile typecheck and Jest (**53 suites / 332 tests passed**), Android JavaScript export (**1,252 modules**), plus the broad disposable-PostgreSQL migration/unit/E2E gate. Nitesh certified mobile/backend/web integration; Location passed PostgreSQL migration and authenticated owner/admin E2E. Backend E2E reported 338 passed, 18 known baseline failures, 1 skipped, and 0 new failures. JavaScript export is not a native AAB build.
 
 Statuses: **SOURCE** means a native path and current API usage exist; **PARTIAL** means part of the web workflow is present but a material function remains; **GAP** means no equivalent native workflow was found; **PHYSICAL_REQUIRED** means source is present but real-device behavior is not yet verified; **WEB_ONLY** means privileged scope is intentionally excluded pending an explicit mobile authorization.
 
@@ -95,11 +95,11 @@ Therefore this matrix does **not** certify 100% website parity or a Play-ready p
 
 PR #367's exact head `41dc54d4efcdfb4013312c23e00666d3e1141f09` was certified against master `94ef6c1cfb26da9f1535d44a94284d67e3234548` by runs 41808853743, 41808853735 and 41808853825. This evidence remains valid for that tree but does not certify an integration with the current master.
 
-## Current mobile integration candidate — PR #385
+## Historical mobile integration candidate — PR #385 (superseded by PR #398)
 
-The current isolated source starts from the PR #383 Android 1.0.7/GPS/keyboard candidate and incorporates production master `98c724cc56402fafd679ec0f6c8d1e17ce86421b`, including the backend Assistant write-confirmation and role-consistency changes. Mobile Assistant high-risk confirmation sends `acknowledged: true` only after the user checks the native acknowledgement control. The backend independently enforces the acknowledgement and keeps writes denied unless the relevant action and salon are allowlisted.
+That earlier PR #385 candidate incorporated then-current Assistant write-confirmation and role-consistency changes. PR #398 was integrated on production master `d5295c2d2ca5e25ee8310325b392d79f9e448956`; it preserves the latest server-side Assistant authorization and confirmation requirements.
 
-Current local verification on this candidate: mobile TypeScript passed; mobile Jest passed (51 suites / 327 tests); Assistant safety tests passed again after the explicit acknowledgement guard (1 suite / 7 tests); shared Jest passed (29 suites / 527 tests); Android and iOS Expo JavaScript exports passed (1,226 and 1,230 modules respectively). Exact-head CI is required after the source is pushed. No EAS build, store upload, production runtime, or physical-device acceptance is claimed.
+Those local test/export counts are historical evidence for the earlier PR #385 candidate. PR #398's current exact-head results are listed above. No EAS native build, store upload, production runtime, or physical-device acceptance is claimed.
 
 ## Previous Android 1.0.7 candidate — PR #369 (preserved)
 
@@ -125,7 +125,7 @@ Release gates still open:
 
 No production action was authorized or claimed for PR #369.
 
-## Current combined Android GPS/keyboard integration candidate — PR #383
+## Historical combined Android GPS/keyboard integration candidate — PR #383 (superseded)
 
 Branch: `codex/fastque-mobile-overnight-20261104`  
 PR: #383 (OPEN / DRAFT)
@@ -142,4 +142,4 @@ Exact-head GitHub CI — all three workflows **SUCCESS**:
 
 The parity matrix above remains honest: several owner flows are PARTIAL, printable public QR poster export and native Assistant are GAP, and owner/customer/employee production-authenticated runtime acceptance is pending. Public shop QR preview/link-share is only source-level in the current candidate until device acceptance. The last cited read-only map-pin aggregate was 6/107 active salons pinned; the other 101 distances remain unavailable until owners provide real coordinates.
 
-Current environment gates: EAS [0m`api.expo.dev`[0m and npm registry DNS resolution failed from this host; EAS account/version/build allowance/signing reads and native AAB build were not available. ADB detected 0 ready, unauthorized or offline devices, so Galaxy S20 FE installation and physical acceptance remain NOT VERIFIED. No Play upload, OTA publication, production deployment/database change, master merge, or public rollout occurred.
+Current environment gates, rechecked 2026-11-05: `Resolve-DnsName api.expo.dev` failed and `Test-NetConnection api.expo.dev -Port 443` returned `False`; `eas.cmd whoami` did not return before the diagnostic was interrupted. EAS account identity, remote Android versionCode, current allowance and signing readiness are therefore NOT VERIFIED and no build was started. ADB attempted its read-only device listing but the local daemon failed with `could not read ok from ADB Server`; the Galaxy S20 FE was not detected or changed. No Play upload, OTA publication, production deployment/database change, master merge, or public rollout occurred.
