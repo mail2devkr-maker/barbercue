@@ -8,21 +8,22 @@ import { apiFetch, ApiError } from "../../lib/api";
 import { useAssistantRefresh } from "../../lib/assistant-events";
 import { useAuth } from "../../lib/auth-context";
 import { formatShopDate, formatShopTime } from "./format";
-import { useOwnerShell } from "./OwnerShell";
+import { useOwnerShell, useShopTimeZone } from "./OwnerShell";
 import { Badge, Banner, Btn, Card, EmptyState, PageHead, Skeleton } from "./parts";
 import ui from "./owner.module.css";
 
-function timeAgo(iso: string): string {
+function timeAgo(iso: string, shopTz: string | null): string {
   const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000);
   if (mins < 1) return "just now";
   if (mins < 60) return `${mins} min ago`;
   const hours = Math.floor(mins / 60);
   if (hours < 24) return `${hours} h ago`;
-  return `${formatShopDate(iso, null)} ${formatShopTime(iso, null)}`;
+  return `${formatShopDate(iso, shopTz)} ${formatShopTime(iso, shopTz)}`;
 }
 
 /** The notification center: everything the app told this user, newest first, with read/unread. */
 export function NotificationsPanel() {
+  const shopTz = useShopTimeZone();
   const router = useRouter();
   const { user } = useAuth();
   const { refreshCounts } = useOwnerShell();
@@ -90,7 +91,7 @@ export function NotificationsPanel() {
                         {notificationTypeLabel(user?.preferredLanguage, n.type)} {!n.readAt && <Badge tone="info">New</Badge>}
                       </div>
                       {message && <div className={ui.listSub}>{message}</div>}
-                      <div className={ui.listSub}>{timeAgo(n.createdAt)}</div>
+                      <div className={ui.listSub}>{timeAgo(n.createdAt, shopTz)}</div>
                     </div>
                     {(n.deepLink || !n.readAt) && (
                       <Btn small onClick={() => void open(n)}>

@@ -20,7 +20,7 @@ import { formatShopTime } from "./format";
 import { InvoiceAction } from "./InvoiceActions";
 import { NewQueueCustomerDialog } from "./NewQueueCustomerDialog";
 import { ServiceUsageDialog } from "./inventory/ServiceUsageDialog";
-import { useOwnerShell } from "./OwnerShell";
+import { useOwnerShell, useShopTimeZone } from "./OwnerShell";
 import { Badge, Banner, Btn, BtnLink, Card, Dialog, EmptyState, Field, PageHead, Skeleton, Tabs } from "./parts";
 import ui from "./owner.module.css";
 
@@ -42,7 +42,7 @@ const PHASE_LABEL: Record<QueueEntryPhase, { text: string; tone: "ok" | "warn" |
   NO_SHOW: { text: "NO SHOW", tone: "bad" },
 };
 
-function availabilityText(member: StaffStatusDto, assignedTo?: QueueEntryDetailDto): { text: string; dot: string } {
+function availabilityText(member: StaffStatusDto, assignedTo: QueueEntryDetailDto | undefined, shopTz: string | null): { text: string; dot: string } {
   // A barber who has been given a customer (service not started) is spoken for - say so precisely.
   if (assignedTo && member.status === StaffMemberStatus.ACTIVE) {
     return { text: `Reserved for #${assignedTo.tokenNumber} · not started`, dot: ui.dotInfo };
@@ -53,7 +53,7 @@ function availabilityText(member: StaffStatusDto, assignedTo?: QueueEntryDetailD
     case "IN_SERVICE":
       return { text: "With a customer", dot: ui.dotWarn };
     case "RESERVED":
-      return { text: member.busyUntil ? `Booked until ${formatShopTime(member.busyUntil, null)}` : "Booked", dot: ui.dotInfo };
+      return { text: member.busyUntil ? `Booked until ${formatShopTime(member.busyUntil, shopTz)}` : "Booked", dot: ui.dotInfo };
     case "OFF_DUTY":
       return { text: "Off duty", dot: ui.dotOff };
     default:
@@ -72,6 +72,7 @@ function minutesSince(iso: string | null): number | null {
 }
 
 export function LiveQueueConsole({ salonId }: { salonId: string }) {
+  const shopTz = useShopTimeZone();
   const base = `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}`;
   const router = useRouter();
   const pathname = usePathname();
@@ -595,7 +596,7 @@ export function LiveQueueConsole({ salonId }: { salonId: string }) {
             ) : (
               <div>
                 {data.staffRoster.map((member) => {
-                  const state = availabilityText(member, assignedByStaff.get(member.id));
+                  const state = availabilityText(member, assignedByStaff.get(member.id), shopTz);
                   const on = member.status === StaffMemberStatus.ACTIVE;
                   return (
                     <div key={member.id} className={ui.barberRow}>
@@ -772,6 +773,7 @@ function EntryCard({
 }
 
 function AssignForm({ entry, data, onDone }: { entry: QueueEntryDetailDto; data: DashboardQueueDto; onDone: () => void }) {
+  const shopTz = useShopTimeZone();
   const needsService = !entry.serviceId;
   const [staffId, setStaffId] = useState(entry.preferredStaffId ?? "");
   const [chairId, setChairId] = useState("");
@@ -819,7 +821,7 @@ function AssignForm({ entry, data, onDone }: { entry: QueueEntryDetailDto; data:
         <select id={`as-staff-${entry.id}`} className={ui.select} value={staffId} onChange={(e) => setStaffId(e.target.value)} disabled={Boolean(entry.preferredStaffId)}>
           <option value="">Choose…</option>
           {options.map((s) => {
-            const state = s.id === entry.assignedStaffId ? { text: "currently assigned" } : availabilityText(s);
+            const state = s.id === entry.assignedStaffId ? { text: "currently assigned" } : availabilityText(s, undefined, shopTz);
             return (
               <option key={s.id} value={s.id} disabled={s.id !== entry.assignedStaffId && (s.availabilityState === "IN_SERVICE" || s.availabilityState === "RESERVED")}>
                 {s.displayName} — {state.text}
@@ -852,6 +854,7 @@ function AssignForm({ entry, data, onDone }: { entry: QueueEntryDetailDto; data:
 }
 
 function ReassignForm({ entry, data, onDone }: { entry: QueueEntryDetailDto; data: DashboardQueueDto; onDone: () => void }) {
+  const shopTz = useShopTimeZone();
   const [staffId, setStaffId] = useState(entry.assignedStaffId ?? "");
   const [chairId, setChairId] = useState(entry.assignedChairId ?? "");
   const [error, setError] = useState<string | null>(null);
@@ -883,7 +886,7 @@ function ReassignForm({ entry, data, onDone }: { entry: QueueEntryDetailDto; dat
           {staff.map((s) => (
             <option key={s.id} value={s.id}>
               {s.displayName}
-              {s.id !== entry.assignedStaffId ? ` — ${availabilityText(s).text}` : ""}
+              {s.id !== entry.assignedStaffId ? ` — ${availabilityText(s, undefined, shopTz).text}` : ""}
             </option>
           ))}
         </select>

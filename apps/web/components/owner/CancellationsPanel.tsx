@@ -9,6 +9,7 @@ import { ShareBar } from "./charts";
 import { formatMoney, formatShopDate, formatShopTime } from "./format";
 import { Badge, Banner, Card, EmptyState, PageHead, Skeleton, type BadgeTone } from "./parts";
 import ui from "./owner.module.css";
+import { useShopTimeZone } from "./OwnerShell";
 
 const ACTORS: ReadonlyArray<{ id: CancellationActorOrUnknown; label: string; short: string; color: string; tone: BadgeTone }> = [
   { id: "CUSTOMER", label: "Cancelled by customer", short: "Customer", color: "#3b6df0", tone: "info" },
@@ -26,6 +27,7 @@ const ACTORS: ReadonlyArray<{ id: CancellationActorOrUnknown; label: string; sho
  * and never mixed into the booking figures.
  */
 export function CancellationsPanel({ salonId }: { salonId: string }) {
+  const shopTz = useShopTimeZone();
   const base = `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}`;
   const [range, setRange] = useState<"7d" | "30d" | "90d">("30d");
   const [actor, setActor] = useState<CancellationActorOrUnknown | "ALL">("ALL");
@@ -137,8 +139,8 @@ export function CancellationsPanel({ salonId }: { salonId: string }) {
                         const a = ACTORS.find((x) => x.id === r.actor)!;
                         return (
                           <tr key={r.bookingId}>
-                            <td>{formatShopDate(r.cancelledAt, null, true)} {formatShopTime(r.cancelledAt, null)}</td>
-                            <td>{formatShopDate(r.slotStart, null, true)} {formatShopTime(r.slotStart, null)}</td>
+                            <td>{formatShopDate(r.cancelledAt, shopTz, true)} {formatShopTime(r.cancelledAt, shopTz)}</td>
+                            <td>{formatShopDate(r.slotStart, shopTz, true)} {formatShopTime(r.slotStart, shopTz)}</td>
                             <td>{r.serviceNames.join(" + ")}</td>
                             <td><Badge tone={a.tone}>{a.short}</Badge></td>
                             <td>{r.reason ?? <span className={ui.mutedCell}>—</span>}</td>

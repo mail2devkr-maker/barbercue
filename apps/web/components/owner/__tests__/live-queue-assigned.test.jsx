@@ -20,7 +20,7 @@ jest.mock("../../../lib/voice-preference", () => ({
   speakOwnerVoice: jest.fn(),
   useVoiceEnabled: jest.fn(() => false),
 }));
-jest.mock("../OwnerShell", () => ({ useOwnerShell: () => ({ kind: "owner", refreshCounts: jest.fn() }) }));
+jest.mock("../OwnerShell", () => ({ useOwnerShell: () => ({ kind: "owner", refreshCounts: jest.fn() }), useShopTimeZone: () => "Asia/Kolkata" }));
 jest.mock("../NewQueueCustomerDialog", () => ({ NewQueueCustomerDialog: () => null }));
 jest.mock("next/link", () => ({
   __esModule: true,
