@@ -404,6 +404,38 @@ export interface UiStrings {
   roleOwnerSubtitle: string;
   roleStaff: string;
   roleStaffSubtitle: string;
+  roleEmployee: string;
+  roleEmployeeSubtitle: string;
+  employeeLoginEyebrow: string;
+  employeeLoginTitle: string;
+  employeeLoginSubtitle: string;
+  employeeCodeLabel: string;
+  employeePasswordLabel: string;
+  employeeTerritory: string;
+  employeeLoginHelp: string;
+  employeeDashboardNavTitle: string;
+  employeeDashboardTitle: string;
+  employeeDashboardSubtitle: string;
+  employeeActivity: string;
+  employeeAssignedLeads: string;
+  employeeShopsOnboarded: string;
+  employeeVisitsLast30Days: string;
+  employeeOpenFollowUps: string;
+  employeeOverdueFollowUps: string;
+  employeeRecentLeads: string;
+  employeeNoLeads: string;
+  employeeUpcomingFollowUps: string;
+  employeeNoFollowUps: string;
+  employeeRecentVisits: string;
+  employeeNoVisits: string;
+  employeePortalHandoff: string;
+  employeePortalAction: string;
+  employeeDashboardLoading: string;
+  employeeDashboardUnavailable: string;
+  employeeTryAgain: string;
+  restrictedSessionTitle: string;
+  restrictedSessionSubtitle: string;
+  restrictedSessionBody: string;
 
   // HomeScreen (the first screen a signed-in customer sees).
   welcomeBack: string;
@@ -1194,6 +1226,38 @@ const enUi: UiStrings = {
   roleOwnerSubtitle: 'Run your salon, queue, and team',
   roleStaff: 'Barber / Staff',
   roleStaffSubtitle: "Work today's queue and bookings",
+  roleEmployee: 'Employee (Field Executive)',
+  roleEmployeeSubtitle: 'Sign in with your FastQue Employee ID',
+  employeeLoginEyebrow: 'FastQue Field Team',
+  employeeLoginTitle: 'Employee sign in',
+  employeeLoginSubtitle: 'Use the Employee ID and password issued to you by FastQue.',
+  employeeCodeLabel: 'Employee ID',
+  employeePasswordLabel: 'Password',
+  employeeTerritory: 'Territory',
+  employeeLoginHelp: 'If you cannot sign in, contact your FastQue administrator.',
+  employeeDashboardNavTitle: 'Employee Dashboard',
+  employeeDashboardTitle: 'Your work',
+  employeeDashboardSubtitle: 'A private overview of your assigned field activity.',
+  employeeActivity: 'Activity',
+  employeeAssignedLeads: 'Assigned leads',
+  employeeShopsOnboarded: 'Shops onboarded',
+  employeeVisitsLast30Days: 'Visits · 30 days',
+  employeeOpenFollowUps: 'Open follow-ups',
+  employeeOverdueFollowUps: 'Overdue follow-ups',
+  employeeRecentLeads: 'Recent assigned leads',
+  employeeNoLeads: 'No leads assigned yet.',
+  employeeUpcomingFollowUps: 'Upcoming follow-ups',
+  employeeNoFollowUps: 'No open follow-ups.',
+  employeeRecentVisits: 'Recent visits',
+  employeeNoVisits: 'No visits recorded yet.',
+  employeePortalHandoff: 'For lead updates, visit logs, follow-up scheduling, and onboarding, open the full Employee Portal.',
+  employeePortalAction: 'Open Employee Portal',
+  employeeDashboardLoading: 'Loading your dashboard…',
+  employeeDashboardUnavailable: 'Your employee dashboard is unavailable right now.',
+  employeeTryAgain: 'Try again',
+  restrictedSessionTitle: 'This account cannot use the mobile app',
+  restrictedSessionSubtitle: 'Sign out and use an account with an enabled mobile role.',
+  restrictedSessionBody: 'Your account was not given access to a customer, shop, or employee workspace.',
 
   welcomeBack: 'Welcome back',
   welcomeSubtitle: 'Book ahead, or join a live queue near you.',
@@ -1913,6 +1977,38 @@ const hiUi: UiStrings = {
   roleOwnerSubtitle: 'अपना सैलून, कतार और टीम चलाएं',
   roleStaff: 'बार्बर / स्टाफ',
   roleStaffSubtitle: 'आज की कतार और बुकिंग्स संभालें',
+  roleEmployee: 'कर्मचारी (फील्ड एग्जीक्यूटिव)',
+  roleEmployeeSubtitle: 'अपने FastQue Employee ID से साइन इन करें',
+  employeeLoginEyebrow: 'FastQue फील्ड टीम',
+  employeeLoginTitle: 'कर्मचारी साइन इन',
+  employeeLoginSubtitle: 'FastQue द्वारा दिया गया Employee ID और पासवर्ड इस्तेमाल करें।',
+  employeeCodeLabel: 'कर्मचारी आईडी',
+  employeePasswordLabel: 'पासवर्ड',
+  employeeTerritory: 'क्षेत्र',
+  employeeLoginHelp: 'साइन इन न हो तो अपने FastQue एडमिनिस्ट्रेटर से संपर्क करें।',
+  employeeDashboardNavTitle: 'कर्मचारी डैशबोर्ड',
+  employeeDashboardTitle: 'आपका काम',
+  employeeDashboardSubtitle: 'आपकी सौंपी गई फील्ड गतिविधि का निजी सारांश।',
+  employeeActivity: 'गतिविधि',
+  employeeAssignedLeads: 'सौंपी गई लीड',
+  employeeShopsOnboarded: 'ऑनबोर्ड किए गए शॉप',
+  employeeVisitsLast30Days: 'विज़िट · 30 दिन',
+  employeeOpenFollowUps: 'खुले फॉलो-अप',
+  employeeOverdueFollowUps: 'देरी वाले फॉलो-अप',
+  employeeRecentLeads: 'हाल की सौंपी गई लीड',
+  employeeNoLeads: 'अभी कोई लीड नहीं सौंपी गई है।',
+  employeeUpcomingFollowUps: 'आने वाले फॉलो-अप',
+  employeeNoFollowUps: 'कोई खुला फॉलो-अप नहीं है।',
+  employeeRecentVisits: 'हाल की विज़िट',
+  employeeNoVisits: 'अभी कोई विज़िट दर्ज नहीं है।',
+  employeePortalHandoff: 'लीड अपडेट, विज़िट लॉग, फॉलो-अप शेड्यूल और ऑनबोर्डिंग के लिए पूरा Employee Portal खोलें।',
+  employeePortalAction: 'Employee Portal खोलें',
+  employeeDashboardLoading: 'आपका डैशबोर्ड लोड हो रहा है…',
+  employeeDashboardUnavailable: 'अभी कर्मचारी डैशबोर्ड उपलब्ध नहीं है।',
+  employeeTryAgain: 'फिर कोशिश करें',
+  restrictedSessionTitle: 'यह अकाउंट मोबाइल ऐप इस्तेमाल नहीं कर सकता',
+  restrictedSessionSubtitle: 'साइन आउट करें और मोबाइल रोल वाले अकाउंट से साइन इन करें।',
+  restrictedSessionBody: 'आपके अकाउंट को ग्राहक, शॉप या कर्मचारी वर्कस्पेस की अनुमति नहीं है।',
 
   welcomeBack: 'वापसी पर स्वागत है',
   welcomeSubtitle: 'पहले से बुक करें, या पास की लाइव कतार में शामिल हों।',
