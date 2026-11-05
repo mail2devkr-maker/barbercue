@@ -16,9 +16,9 @@ jest.mock('@barbercue/shared', () => ({
 }));
 
 describe('QrMatrixView', () => {
-  it('renders each QR module as a native square and keeps the whole code accessible as one image', () => {
+  it('renders each QR module as a native square and keeps the whole code accessible as one image', async () => {
     const label = 'Public QR code for Example Salon';
-    const { getByLabelText, getByTestId, getAllByTestId } = render(
+    const { getByLabelText, getByTestId, getAllByTestId } = await render(
       <QrMatrixView value="https://fastque.com/in/example" label={label} />,
     );
 
@@ -34,9 +34,9 @@ describe('QrMatrixView', () => {
     );
   });
 
-  it('rebuilds the native matrix when the canonical URL changes', () => {
-    const { rerender } = render(<QrMatrixView value="https://fastque.com/a" label="Shop QR" />);
-    rerender(<QrMatrixView value="https://fastque.com/b" label="Shop QR" />);
+  it('rebuilds the native matrix when the canonical URL changes', async () => {
+    const { rerender } = await render(<QrMatrixView value="https://fastque.com/a" label="Shop QR" />);
+    await rerender(<QrMatrixView value="https://fastque.com/b" label="Shop QR" />);
 
     expect(createQrMatrix).toHaveBeenLastCalledWith('https://fastque.com/b');
   });
