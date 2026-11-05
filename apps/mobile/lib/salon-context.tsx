@@ -70,3 +70,8 @@ export function useSalon(): SalonContextValue {
   if (!ctx) throw new Error('useSalon must be used within a SalonProvider');
   return ctx;
 }
+
+/** Optional variant for a screen shared by authenticated customer and shop navigators. */
+export function useOptionalSalon(): SalonContextValue | null {
+  return useContext(SalonContext);
+}
