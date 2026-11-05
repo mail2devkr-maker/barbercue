@@ -123,6 +123,11 @@ export default function RoleSelectScreen({ navigation }: Props) {
     }
   }
 
+  function employeeLogin() {
+    setMenuOpen(false);
+    navigation.navigate('EmployeeLogin');
+  }
+
   // Shop-owner registration has its own email/password account-creation screen. That signup
   // creates only an authenticated onboarding account; POST /salons remains the boundary that
   // creates the real salon-scoped SALON_OWNER role and replays into the existing onboarding flow.
@@ -172,6 +177,15 @@ export default function RoleSelectScreen({ navigation }: Props) {
           <Pressable style={styles.menuItem} onPress={() => choose('STAFF')}>
             <Text style={styles.menuItemTitle}>{t.roleStaff}</Text>
             <Text style={styles.menuItemSubtitle}>{t.roleStaffSubtitle}</Text>
+          </Pressable>
+          <Pressable
+            style={styles.menuItem}
+            onPress={employeeLogin}
+            accessibilityRole="button"
+            accessibilityLabel={t.roleEmployee}
+          >
+            <Text style={styles.menuItemTitle}>{t.roleEmployee}</Text>
+            <Text style={styles.menuItemSubtitle}>{t.roleEmployeeSubtitle}</Text>
           </Pressable>
           <Pressable style={styles.menuItem} onPress={registerShop}>
             <Text style={styles.menuItemTitle}>{t.registerShopCta}</Text>

@@ -12,7 +12,7 @@ import {
   WorkSans_600SemiBold,
   WorkSans_700Bold,
 } from '@expo-google-fonts/work-sans';
-import { Role } from '@barbercue/shared';
+import type { MeResponse } from '@barbercue/shared';
 import { AuthProvider, useAuth } from './lib/auth-context';
 import { LanguageProvider } from './lib/language-context';
 import { hasIntroPlayed, markIntroPlayed } from './lib/startup-intro';
@@ -23,6 +23,9 @@ import AuthStack from './navigation/AuthStack';
 import RootNavigator from './navigation/RootNavigator';
 import OwnerNavigator from './navigation/OwnerNavigator';
 import StaffNavigator from './navigation/StaffNavigator';
+import EmployeeNavigator from './navigation/EmployeeNavigator';
+import RestrictedSessionScreen from './screens/RestrictedSessionScreen';
+import { getAuthenticatedDestination } from './lib/auth-routing';
 import { navigationRef } from './navigation/navigation-ref';
 import { replayPendingOwnerBookingPushNavigation } from './lib/push-navigation';
 import { PushNotificationCoordinator } from './components/PushNotificationCoordinator';
@@ -75,15 +78,20 @@ function useAppUpdates(): void {
   }, []);
 }
 
-// Routes by the account's ACTUAL roles (never by which login screen was used to sign in) — an
-// owner-role account routes to the Owner shell even if it somehow also carries CUSTOMER, and an
-// owner+staff account gets the strictly-more-capable Owner shell. Customer is the fallback: every
-// account has at least one role, and the only other roles this app's login screens ever produce
-// are OWNER/STAFF, so falling through to Customer only happens for a genuine customer account.
-function AuthenticatedNavigator({ roles }: { roles: Role[] }) {
-  if (roles.includes(Role.SALON_OWNER)) return <OwnerNavigator />;
-  if (roles.includes(Role.SALON_STAFF)) return <StaffNavigator />;
-  return <RootNavigator />;
+// Route only to the shell authorized by the server-issued roles and audience. Unsupported roles
+// must never fall through to a customer surface, and the dedicated employee shell requires its
+// separate EMPLOYEE audience.
+function AuthenticatedNavigator({ user }: { user: MeResponse }) {
+  // FIELD_EXECUTIVE is an internal platform role, never a customer fallback. The dedicated
+  // navigator is selected only for a server-issued EMPLOYEE-audience session with exactly that
+  // scoped role. Other unsupported roles see a restricted sign-out screen.
+  switch (getAuthenticatedDestination(user)) {
+    case 'employee': return <EmployeeNavigator />;
+    case 'owner': return <OwnerNavigator />;
+    case 'staff': return <StaffNavigator />;
+    case 'customer': return <RootNavigator />;
+    default: return <RestrictedSessionScreen />;
+  }
 }
 
 function Root() {
@@ -100,7 +108,7 @@ function Root() {
   return (
     <NavigationContainer ref={navigationRef} onReady={replayPendingOwnerBookingPushNavigation}>
       <OfflineBanner />
-      {status === 'authenticated' && user ? <AuthenticatedNavigator roles={user.roles} /> : <AuthStack />}
+      {status === 'authenticated' && user ? <AuthenticatedNavigator user={user} /> : <AuthStack />}
     </NavigationContainer>
   );
 }

@@ -20,6 +20,7 @@ import { getRealtimeSocket, joinSalonRoom, onReconnect } from '../../lib/realtim
 import { useSalon } from '../../lib/salon-context';
 import { speakBooking } from '../../lib/voice-announce';
 import { claimBookingVoiceEvent } from '../../lib/booking-voice-dedupe';
+import InShopAppointmentPanel from './InShopAppointmentPanel';
 import { color, font, fontSize, lineHeightFor, radius, space } from '../../lib/theme';
 import { Screen, SectionHeader, Card, Button, EmptyState, Skeleton, InlineError } from '../../components/ui';
 import type { OwnerTabParamList } from '../../navigation/OwnerNavigator';
@@ -117,6 +118,7 @@ export default function OwnerBookingsScreen({ route }: Props) {
   // when Hindi is the active language but this device has no installed Hindi voice, so
   // speakBooking skipped speaking rather than risking an English/default-voice fallback.
   const [hindiVoiceWarning, setHindiVoiceWarning] = useState(false);
+  const [creatingInShopAppointment, setCreatingInShopAppointment] = useState(false);
 
   const notifiedIdsRef = useRef<Set<string>>(new Set());
   const filterRef = useRef(filter);
@@ -330,9 +332,18 @@ export default function OwnerBookingsScreen({ route }: Props) {
     );
   }
 
+  if (creatingInShopAppointment) {
+    return <InShopAppointmentPanel
+      salonId={selectedSalonId}
+      onBack={() => setCreatingInShopAppointment(false)}
+      onCreated={() => { void loadPage(filterRef.current, undefined, false); }}
+    />;
+  }
+
   return (
     <Screen scroll={false}>
       <SectionHeader eyebrow={t.ownerEyebrow} title={t.bookingsTitle} />
+      <Button title="New in-shop appointment" variant="secondary" onPress={() => setCreatingInShopAppointment(true)} />
 
       {newNotice && (
         <Pressable style={styles.noticeBanner} onPress={() => setNewNotice(null)}>
