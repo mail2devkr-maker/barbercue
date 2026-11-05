@@ -1,6 +1,6 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import * as Speech from 'expo-speech';
 import {
   ASSISTANT_PATHS,
@@ -11,7 +11,14 @@ import {
   type AssistantTurnDto,
 } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
-import { assistantSurfaceForUser, toAssistantDisplayTurn, type AssistantDisplayTurn } from '../lib/assistant-client';
+import {
+  assistantConfirmationReadiness,
+  assistantSurfaceForUser,
+  pendingAssistantConfirmation,
+  toAssistantDisplayTurn,
+  type AssistantDisplayTurn,
+  type PendingAssistantConfirmation,
+} from '../lib/assistant-client';
 import { resolveAssistantDestination, type AssistantDestination } from '../lib/assistant-navigation';
 import { navigationRef } from '../navigation/navigation-ref';
 import { useAuth } from '../lib/auth-context';
@@ -28,6 +35,7 @@ interface ConversationTurn {
   text: string;
   assistant?: AssistantDisplayTurn;
   destination?: AssistantDestination | null;
+  canConfirm?: boolean;
 }
 
 export default function AssistantScreen({ route }: { route?: { params?: AssistantScreenParams } } = {}) {
@@ -46,6 +54,19 @@ export default function AssistantScreen({ route }: { route?: { params?: Assistan
   const [error, setError] = useState<string | null>(null);
   const requestId = useRef(0);
   const listRef = useRef<ScrollView>(null);
+  const confirmationTokens = useRef(new Map<string, PendingAssistantConfirmation>());
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const confirmationContext = useRef({ surface, salonId: selectedSalonId });
+  confirmationContext.current = { surface, salonId: selectedSalonId };
+
+  useEffect(() => () => confirmationTokens.current.clear(), []);
+
+  useEffect(() => {
+    confirmationTokens.current.clear();
+    setTurns((previous) => previous.some((turn) => turn.canConfirm)
+      ? previous.map((turn) => turn.canConfirm ? { ...turn, canConfirm: false } : turn)
+      : previous);
+  }, [selectedSalonId, surface]);
 
   useFocusEffect(
     useCallback(() => {
@@ -73,7 +94,11 @@ export default function AssistantScreen({ route }: { route?: { params?: Assistan
           if (active && current === requestId.current) setLoading(false);
         }
       })();
-      return () => { active = false; requestId.current += 1; };
+      return () => {
+        active = false;
+        requestId.current += 1;
+        confirmationTokens.current.clear();
+      };
     }, [surface]),
   );
 
@@ -116,11 +141,21 @@ export default function AssistantScreen({ route }: { route?: { params?: Assistan
             isOwner,
           })
         : null;
+      const contextStillCurrent = confirmationContext.current.surface === surface
+        && confirmationContext.current.salonId === selectedSalonId;
+      const pendingConfirmation = contextStillCurrent
+        ? pendingAssistantConfirmation(response, access.writes, surface, selectedSalonId)
+        : null;
+      if (pendingConfirmation) {
+        // The bearer-like token remains in component memory only. It is never rendered or persisted.
+        confirmationTokens.current.set(displayed.requestId, pendingConfirmation);
+      }
       setTurns((previous) => [...previous, {
         id: displayed.requestId,
         text: '',
         assistant: displayed,
         destination,
+        canConfirm: pendingConfirmation !== null,
       }]);
     } catch (cause) {
       setDraft(clean);
@@ -129,7 +164,67 @@ export default function AssistantScreen({ route }: { route?: { params?: Assistan
       setSending(false);
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
     }
-  }, [access?.enabled, isOwner, selectedSalonId, sending, surface]);
+  }, [access?.enabled, access?.writes, isOwner, selectedSalonId, sending, surface]);
+
+  const decide = useCallback(async (entryId: string, decision: 'confirm' | 'cancel') => {
+    const pending = confirmationTokens.current.get(entryId);
+    const context = confirmationContext.current;
+    const activeSurface = context.surface;
+    if (!pending || confirmingId || !activeSurface) return;
+    const readiness = assistantConfirmationReadiness(pending, { surface: activeSurface, salonId: context.salonId });
+    if (readiness === 'expired') {
+      confirmationTokens.current.delete(entryId);
+      setTurns((previous) => previous.map((turn) => turn.id === entryId ? { ...turn, canConfirm: false } : turn));
+      setError('That preview expired. Ask FastQue again to create a fresh preview.');
+      return;
+    }
+    if (readiness === 'context-changed') {
+      confirmationTokens.current.delete(entryId);
+      setTurns((previous) => previous.map((turn) => turn.id === entryId ? { ...turn, canConfirm: false } : turn));
+      setError('Your selected account or shop changed. Ask FastQue again before confirming.');
+      return;
+    }
+
+    // Consume locally before sending so a rapid second tap cannot replay the token.
+    confirmationTokens.current.delete(entryId);
+    setConfirmingId(entryId);
+    setError(null);
+    setTurns((previous) => previous.map((turn) => turn.id === entryId ? { ...turn, canConfirm: false } : turn));
+    try {
+      const response = await apiFetch<AssistantTurnDto>(`${ASSISTANT_PATHS.assistant}/${ASSISTANT_PATHS.confirmations}`, {
+        method: 'POST',
+        body: JSON.stringify({ token: pending.token, decision }),
+      });
+      const displayed = toAssistantDisplayTurn(response, decision === 'confirm');
+      setTurns((previous) => [...previous, { id: `decision-${response.requestId}-${Date.now()}`, text: '', assistant: displayed }]);
+    } catch (cause) {
+      setError(cause instanceof ApiError ? cause.message : 'FastQue could not apply that decision. Refresh the preview before trying again.');
+    } finally {
+      setConfirmingId(null);
+      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
+    }
+  }, [confirmingId]);
+
+  function requestDecision(turn: ConversationTurn) {
+    const pending = confirmationTokens.current.get(turn.id);
+    if (!turn.canConfirm || !turn.assistant || !pending || !surface) return;
+    const readiness = assistantConfirmationReadiness(pending, { surface, salonId: selectedSalonId });
+    if (readiness !== 'ready') {
+      confirmationTokens.current.delete(turn.id);
+      setTurns((previous) => previous.map((item) => item.id === turn.id ? { ...item, canConfirm: false } : item));
+      setError(readiness === 'expired'
+        ? 'That preview expired. Ask FastQue again to create a fresh preview.'
+        : 'Your selected account or shop changed. Ask FastQue again before confirming.');
+      return;
+    }
+    const rows = turn.assistant.preview?.rows.map((row) => `${row.label}: ${row.before ?? '—'} → ${row.after ?? '—'}`) ?? [];
+    const message = [turn.assistant.message, ...rows, turn.assistant.preview?.warning].filter(Boolean).join('\n');
+    Alert.alert('Review this change', message, [
+      { text: 'Not now', style: 'cancel' },
+      { text: 'Cancel proposed change', style: 'destructive', onPress: () => void decide(turn.id, 'cancel') },
+      { text: 'Confirm change', onPress: () => void decide(turn.id, 'confirm') },
+    ]);
+  }
 
   function openDestination(destination: AssistantDestination) {
     if (!navigationRef.isReady()) return;
@@ -189,7 +284,10 @@ export default function AssistantScreen({ route }: { route?: { params?: Assistan
                     {turn.assistant.result?.items?.map((item, index) => <Text key={item.id ?? `${turn.id}-${index}`} style={styles.item}>{item.title}{item.detail ? ` · ${item.detail}` : ''}</Text>)}
                     {turn.assistant.preview?.rows.map((row, index) => <Text key={`${turn.id}-preview-${index}`} style={styles.item}>{row.label}: {row.before ?? '—'} → {row.after ?? '—'}</Text>)}
                     {turn.assistant.status === 'NEEDS_CONFIRMATION' ? (
-                      <Text style={styles.notice}>Nothing has changed. This mobile release cannot confirm changes yet; use the website for this action.</Text>
+                      <>
+                        <Text style={styles.notice}>Nothing changes until you review the preview and confirm. The confirmation expires at the time set by the server.</Text>
+                        {turn.canConfirm ? <PremiumButton title={confirmingId === turn.id ? 'Sending decision…' : 'Review & confirm'} onPress={() => requestDecision(turn)} disabled={confirmingId !== null} style={styles.openButton} /> : null}
+                      </>
                     ) : null}
                     {turn.destination ? <PremiumButton title="Open this screen" variant="secondary" onPress={() => openDestination(turn.destination!)} style={styles.openButton} /> : null}
                     {turn.assistant.status === 'NEEDS_INPUT' ? turn.assistant.options?.map((option) => (
@@ -219,7 +317,7 @@ export default function AssistantScreen({ route }: { route?: { params?: Assistan
               />
               <PremiumButton title={sending ? 'Sending…' : 'Send'} onPress={() => void send(draft)} disabled={!draft.trim() || sending} style={styles.send} />
             </View>
-            <Text style={styles.footnote}>{access.writes ? 'Changes are previewed first; this screen does not execute confirmations.' : 'Read and navigation access only. Changes are disabled.'}</Text>
+            <Text style={styles.footnote}>{access.writes ? 'Changes are previewed first and require your explicit confirmation.' : 'Read and navigation access only. Changes are disabled.'}</Text>
           </>
         ) : null}
       </PremiumScreen>

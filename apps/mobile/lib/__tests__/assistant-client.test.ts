@@ -1,5 +1,10 @@
 import { AssistantActionId, Role, SessionAudience, type AssistantTurnDto } from '@barbercue/shared';
-import { assistantSurfaceForUser, toAssistantDisplayTurn } from '../assistant-client';
+import {
+  assistantConfirmationReadiness,
+  assistantSurfaceForUser,
+  pendingAssistantConfirmation,
+  toAssistantDisplayTurn,
+} from '../assistant-client';
 import { resolveAssistantDestination } from '../assistant-navigation';
 
 describe('mobile Assistant safety adapter', () => {
@@ -40,6 +45,49 @@ describe('mobile Assistant safety adapter', () => {
     const display = toAssistantDisplayTurn(turn);
     expect(display.status).toBe('FAILED');
     expect(display.message).toContain('cannot confirm changes');
+  });
+
+  it('accepts a completed write only when it came from the explicit confirmation response', () => {
+    const turn = {
+      requestId: 'req-confirmed',
+      status: 'DONE',
+      action: { id: AssistantActionId.QUEUE_CANCEL, title: 'Cancel queue entry', kind: 'WRITE' },
+      message: 'Queue entry cancelled.',
+      completedAt: '2026-11-04T00:00:00.000Z',
+    } satisfies AssistantTurnDto;
+
+    expect(toAssistantDisplayTurn(turn).status).toBe('FAILED');
+    expect(toAssistantDisplayTurn(turn, true).status).toBe('DONE');
+  });
+
+  it('issues an in-memory confirmation only for enabled, pending write previews', () => {
+    const turn = {
+      requestId: 'req-pending',
+      status: 'NEEDS_CONFIRMATION',
+      action: { id: AssistantActionId.QUEUE_CANCEL, title: 'Cancel queue entry', kind: 'WRITE' },
+      message: 'Preview only.',
+      confirmation: { token: 'short-lived-token', expiresAt: '2026-11-05T01:00:00.000Z' },
+      completedAt: '2026-11-05T00:00:00.000Z',
+    } satisfies AssistantTurnDto;
+
+    const pending = pendingAssistantConfirmation(turn, true, 'shop', 'salon-1');
+    expect(pending).toEqual({ token: 'short-lived-token', expiresAt: '2026-11-05T01:00:00.000Z', surface: 'shop', salonId: 'salon-1' });
+    expect(pendingAssistantConfirmation(turn, false, 'shop', 'salon-1')).toBeNull();
+    expect(pendingAssistantConfirmation({ ...turn, status: 'DONE' }, true, 'shop', 'salon-1')).toBeNull();
+    expect(pendingAssistantConfirmation({ ...turn, action: { ...turn.action!, kind: 'READ' } }, true, 'shop', 'salon-1')).toBeNull();
+  });
+
+  it('expires confirmations and rejects confirmation after a role or shop switch', () => {
+    const pending = {
+      token: 'short-lived-token',
+      expiresAt: '2026-11-05T01:00:00.000Z',
+      surface: 'shop' as const,
+      salonId: 'salon-1',
+    };
+    expect(assistantConfirmationReadiness(pending, { surface: 'shop', salonId: 'salon-1', now: Date.parse('2026-11-05T00:30:00.000Z') })).toBe('ready');
+    expect(assistantConfirmationReadiness(pending, { surface: 'shop', salonId: 'salon-2', now: Date.parse('2026-11-05T00:30:00.000Z') })).toBe('context-changed');
+    expect(assistantConfirmationReadiness(pending, { surface: 'customer', salonId: null, now: Date.parse('2026-11-05T00:30:00.000Z') })).toBe('context-changed');
+    expect(assistantConfirmationReadiness(pending, { surface: 'shop', salonId: 'salon-1', now: Date.parse('2026-11-05T01:00:00.000Z') })).toBe('expired');
   });
 
   it('opens only known routes and binds shop navigation to the selected salon', () => {
