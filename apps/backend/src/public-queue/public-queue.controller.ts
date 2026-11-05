@@ -120,7 +120,8 @@ export class PublicQueueController {
   @Post(`${PUBLIC_QUEUE_PATHS.publicQueue}/:token/guest-join`)
   async guestJoin(
     @Param('token') token: string,
-    @Body(new ZodValidationPipe(joinQueueSchema.required())) body: Required<JoinQueueInput>,
+    @Body(new ZodValidationPipe(joinQueueSchema.required()))
+    body: Required<JoinQueueInput>,
   ) {
     const salon = await this.tokenService.resolveToken(token);
     if (!salon || !this.tokenService.isQueueAvailable(salon)) {
@@ -131,7 +132,10 @@ export class PublicQueueController {
       );
     }
     return this.queueService.joinGuestWalkIn(
-      salon.id, body.serviceId, body.contactName, body.contactPhone,
+      salon.id,
+      body.serviceId,
+      body.contactName,
+      body.contactPhone,
     );
   }
 
@@ -139,7 +143,12 @@ export class PublicQueueController {
   // explicitly managing a selected ACTIVE shop; the salon-specific access check below still
   // prevents cross-shop access for ordinary owner/staff sessions and keeps delegated queue
   // access limited to operational shops.
-  @Roles(Role.SALON_OWNER, Role.SALON_STAFF, Role.PLATFORM_ADMIN)
+  @Roles(
+    Role.SALON_OWNER,
+    Role.SALON_STAFF,
+    Role.PLATFORM_ADMIN,
+    Role.CO_FOUNDER,
+  )
   @Get(
     `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/:salonId/${DASHBOARD_PATHS.queueQr}`,
   )

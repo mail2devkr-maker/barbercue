@@ -8,12 +8,14 @@ describe('SalonAccessService', () => {
   let prisma: {
     userRole: { findFirst: jest.Mock };
     salon: { findUnique: jest.Mock };
+    user: { findUnique: jest.Mock };
   };
 
   beforeEach(async () => {
     prisma = {
       userRole: { findFirst: jest.fn() },
       salon: { findUnique: jest.fn() },
+      user: { findUnique: jest.fn() },
     };
 
     const moduleRef = await Test.createTestingModule({
@@ -91,6 +93,33 @@ describe('SalonAccessService', () => {
     await expect(
       service.assertAccess('mixed-role-user', 'salon-c'),
     ).rejects.toMatchObject({ code: 'SALON_ACCESS_DENIED' });
+  });
+
+  // Co-Founder role is a distinct, admin-audience-only delegated shop operator.
+  describe('Co-Founder delegated access', () => {
+    it('opens a real shop without pretending to be the owner or Super Admin', async () => {
+      prisma.userRole.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ role: Role.CO_FOUNDER, salonId: null });
+      prisma.user.findUnique.mockResolvedValue({ status: 'ACTIVE' });
+      prisma.salon.findUnique.mockResolvedValue({ status: SalonStatus.ACTIVE });
+      await expect(service.assertOwnerOrAdminAccess('founder', 'shop-a')).resolves.toBe('CO_FOUNDER');
+      expect(prisma.userRole.findFirst).toHaveBeenLastCalledWith({
+        where: { userId: 'founder', role: Role.CO_FOUNDER, salonId: null },
+      });
+    });
+    it('never passes an explicit Super Admin check', async () => {
+      prisma.userRole.findFirst.mockResolvedValue(null);
+      await expect(service.assertPlatformAdminAccess('founder', 'shop-a'))
+        .rejects.toMatchObject({ code: 'SALON_ACCESS_DENIED' });
+    });
+    it('refuses a suspended Co-Founder even if their JWT has not expired', async () => {
+      prisma.userRole.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ role: Role.CO_FOUNDER, salonId: null });
+      prisma.user.findUnique.mockResolvedValue({ status: 'SUSPENDED' });
+      prisma.salon.findUnique.mockResolvedValue({ status: SalonStatus.ACTIVE });
+      await expect(service.assertOwnerOrAdminAccess('founder', 'shop-a'))
+        .rejects.toMatchObject({ code: 'SALON_ACCESS_DENIED' });
+    });
   });
 
   // Part 2 — PLATFORM_ADMIN delegated shop management.

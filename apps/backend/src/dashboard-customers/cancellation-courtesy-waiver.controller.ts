@@ -1,5 +1,9 @@
 import { Controller, Param, Post } from '@nestjs/common';
-import { DASHBOARD_PATHS, Role, type AuthenticatedUser } from '@barbercue/shared';
+import {
+  DASHBOARD_PATHS,
+  Role,
+  type AuthenticatedUser,
+} from '@barbercue/shared';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CancellationCourtesyWaiverService } from './cancellation-courtesy-waiver.service';
@@ -8,7 +12,7 @@ import { CancellationCourtesyWaiverService } from './cancellation-courtesy-waive
 // assertOwnerOrAdminAccess enforces ACTIVE-only + global-admin, and both actions already audit the
 // real actorUserId unconditionally, so no separate admin-only branch is needed for attribution.
 @Controller(DASHBOARD_PATHS.dashboard)
-@Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN)
+@Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN, Role.CO_FOUNDER)
 export class CancellationCourtesyWaiverController {
   constructor(private readonly courtesy: CancellationCourtesyWaiverService) {}
 

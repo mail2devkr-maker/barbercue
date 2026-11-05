@@ -76,7 +76,7 @@ function ShellInner({ salonId, children }: { salonId: string; children: ReactNod
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  const isAdmin = Boolean(user?.roles.includes(Role.PLATFORM_ADMIN));
+  const isAdmin = Boolean(user?.roles.includes(Role.PLATFORM_ADMIN) || user?.roles.includes(Role.CO_FOUNDER));
   const workplace = workplaces.find((w) => w.id === salonId) ?? null;
   // Until the workplace list arrives, fall back to the roles in the session so the first paint is
   // already the right menu for an owner-only or a barber-only account.
@@ -250,7 +250,7 @@ function ShellInner({ salonId, children }: { salonId: string; children: ReactNod
                 <BrandLockup compact canonicalArtwork />
               </div>
               <div className={ui.shopName}>{workplace?.name ?? "Your shop"}</div>
-              <div className={ui.shopSub}>{kind === "owner" ? (isAdmin ? "Managing as admin" : "Shop owner") : "Barber"}</div>
+              <div className={ui.shopSub}>{kind === "owner" ? (isAdmin ? (user?.roles.includes(Role.PLATFORM_ADMIN) ? "Managing as admin" : "Managing as Co-Founder") : "Shop owner") : "Barber"}</div>
             </div>
             {visibleGroups.map((group) => (
               <div key={group.id}>

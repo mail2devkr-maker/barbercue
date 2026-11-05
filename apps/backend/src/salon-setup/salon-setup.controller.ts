@@ -96,7 +96,7 @@ const SALON_SCOPE = `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/:sal
  * path from this controller's `dashboard/salons/:salonId/staff/:staffId`, so the two never collide.
  */
 @Controller()
-@Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN)
+@Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN, Role.CO_FOUNDER)
 export class SalonSetupController {
   constructor(
     private readonly services: SalonServicesService,

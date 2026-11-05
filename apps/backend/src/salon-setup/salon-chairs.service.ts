@@ -65,7 +65,7 @@ export class SalonChairsService {
     const created = await this.prisma.chair.create({
       data: { salonId, label: input.label, status: ChairStatus.ACTIVE },
     });
-    if (actor === 'PLATFORM_ADMIN') {
+    if (actor !== 'OWNER') {
       await this.prisma.auditLog.create({
         data: {
           actorUserId: userId,
@@ -124,7 +124,7 @@ export class SalonChairsService {
     // QueueEntry — see this file's own header comment) — setting status to INACTIVE via this same
     // update() IS how a chair is "removed", so that case is recorded here too rather than under a
     // separate, non-existent remove action.
-    if (actor === 'PLATFORM_ADMIN') {
+    if (actor !== 'OWNER') {
       await this.prisma.auditLog.create({
         data: {
           actorUserId: userId,
