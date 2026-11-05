@@ -11,6 +11,7 @@ import type {
   InvoicePaymentStatus,
   InvoiceSummaryDto,
   OwnerRevenueDto,
+  SalonTimezoneResultDto,
 } from "@barbercue/shared";
 import { apiFetch, apiFetchBlob, ApiError } from "../../lib/api";
 import { newIdempotencyKey } from "../../lib/idempotency";
@@ -35,6 +36,20 @@ export function InvoicesPanel({ salonId }: { salonId: string }) {
   const params = useSearchParams();
   const tab: Tab = params.get("tab") === "billing" ? "billing" : "invoices";
   const openId = params.get("open");
+  // Invoice and payment times are the SHOP's local time, not the viewer's device zone (an owner or
+  // Co-Founder viewing from elsewhere must see what the customer's bill says).
+  const [timeZone, setTimeZone] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    apiFetch<SalonTimezoneResultDto>(`${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.timezone}`)
+      .then((tz) => live && setTimeZone(tz.timezone ?? null))
+      .catch(() => {
+        /* falls back to the device zone, as before */
+      });
+    return () => {
+      live = false;
+    };
+  }, [salonId]);
 
   const setParam = (key: string, value: string | null) => {
     const next = new URLSearchParams(params.toString());
@@ -61,12 +76,12 @@ export function InvoicesPanel({ salonId }: { salonId: string }) {
           />
         }
       />
-      {tab === "billing" ? <BillingProfile salonId={salonId} /> : <InvoiceList salonId={salonId} openId={openId} onOpen={(id) => setParam("open", id)} />}
+      {tab === "billing" ? <BillingProfile salonId={salonId} /> : <InvoiceList salonId={salonId} timeZone={timeZone} openId={openId} onOpen={(id) => setParam("open", id)} />}
     </>
   );
 }
 
-function InvoiceList({ salonId, openId, onOpen }: { salonId: string; openId: string | null; onOpen: (id: string | null) => void }) {
+function InvoiceList({ salonId, timeZone, openId, onOpen }: { salonId: string; timeZone: string | null; openId: string | null; onOpen: (id: string | null) => void }) {
   const base = `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}`;
   const [filter, setFilter] = useState<InvoicePaymentStatus | "ALL">("ALL");
   const [q, setQ] = useState("");
@@ -175,7 +190,7 @@ function InvoiceList({ salonId, openId, onOpen }: { salonId: string; openId: str
                       <td>
                         <strong>{inv.number}</strong>
                       </td>
-                      <td>{formatShopDate(inv.issuedAt, null, true)}</td>
+                      <td>{formatShopDate(inv.issuedAt, timeZone, true)}</td>
                       <td>{inv.customerName ?? <span className={ui.mutedCell}>Customer</span>}</td>
                       <td>{inv.sourceType === "BOOKING" ? "Booking" : "Live Queue visit"}</td>
                       <td className={ui.num}>{formatMoney(inv.total, inv.currency)}</td>
@@ -209,12 +224,12 @@ function InvoiceList({ salonId, openId, onOpen }: { salonId: string; openId: str
           </div>
         )}
       </Card>
-      {openId && <InvoiceDrawer salonId={salonId} invoiceId={openId} onClose={() => onOpen(null)} onChanged={() => void load()} />}
+      {openId && <InvoiceDrawer salonId={salonId} timeZone={timeZone} invoiceId={openId} onClose={() => onOpen(null)} onChanged={() => void load()} />}
     </>
   );
 }
 
-function InvoiceDrawer({ salonId, invoiceId, onClose, onChanged }: { salonId: string; invoiceId: string; onClose: () => void; onChanged: () => void }) {
+function InvoiceDrawer({ salonId, timeZone, invoiceId, onClose, onChanged }: { salonId: string; timeZone: string | null; invoiceId: string; onClose: () => void; onChanged: () => void }) {
   const base = `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/invoices/${invoiceId}`;
   const [inv, setInv] = useState<InvoiceDetailDto | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -263,9 +278,9 @@ function InvoiceDrawer({ salonId, invoiceId, onClose, onChanged }: { salonId: st
             <dt>Customer</dt>
             <dd>{inv.customerName ?? "Customer"}{inv.customerPhone ? ` · ${inv.customerPhone}` : ""}</dd>
             <dt>Issued</dt>
-            <dd>{formatShopDate(inv.issuedAt, null, true)} {formatShopTime(inv.issuedAt, null)}</dd>
+            <dd>{formatShopDate(inv.issuedAt, timeZone, true)} {formatShopTime(inv.issuedAt, timeZone)}</dd>
             <dt>Service date</dt>
-            <dd>{formatShopDate(inv.serviceDate, null, true)}</dd>
+            <dd>{formatShopDate(inv.serviceDate, timeZone, true)}</dd>
             {inv.staffName && (<><dt>Served by</dt><dd>{inv.staffName}</dd></>)}
             <dt>Billed by</dt>
             <dd>
@@ -324,7 +339,7 @@ function InvoiceDrawer({ salonId, invoiceId, onClose, onChanged }: { salonId: st
                       {p.kind === "REFUND" ? "Refund" : "Payment"} · {METHOD_LABEL[p.method]}
                       {p.reference ? ` · ${p.reference}` : ""}
                     </div>
-                    <div className={ui.listSub}>{formatShopDate(p.recordedAt, null, true)} {formatShopTime(p.recordedAt, null)}{p.note ? ` · ${p.note}` : ""}</div>
+                    <div className={ui.listSub}>{formatShopDate(p.recordedAt, timeZone, true)} {formatShopTime(p.recordedAt, timeZone)}{p.note ? ` · ${p.note}` : ""}</div>
                   </div>
                   <strong>{p.kind === "REFUND" ? "-" : ""}{money(p.amount)}</strong>
                 </li>
