@@ -41,8 +41,29 @@ export type NavPage =
   | 'verification'
   | 'contacts';
 
+export type AdminNavPage =
+  | 'adminHome'
+  | 'liveQueue'
+  | 'allBookings'
+  | 'onboarding'
+  | 'shopStatus'
+  | 'verification'
+  | 'shopDeletions'
+  | 'employees'
+  | 'crm'
+  | 'commandCenter'
+  | 'customers'
+  | 'salonStaff'
+  | 'inventory'
+  | 'adminUsers'
+  | 'locationProposals';
+
 export type Phase8Intent =
   | { action: typeof AssistantActionId.HELP; greeting: boolean }
+  | {
+      action: typeof AssistantActionId.ADMIN_NAVIGATE;
+      page: AdminNavPage | null;
+    }
   | { action: typeof AssistantActionId.NAVIGATE; page: NavPage | null }
   | { action: typeof AssistantActionId.NAVIGATE_BACK };
 
@@ -159,6 +180,7 @@ export function parsePhase8(
   if (HELP.test(t) || HELP_ALONE.test(t))
     return { action: AssistantActionId.HELP, greeting: false };
 
+  if (surface === 'admin') return parseAdminNav(t);
   if (surface !== 'shop') return null;
   if (BACK.test(t)) return { action: AssistantActionId.NAVIGATE_BACK };
   if (/\d/u.test(t) || NOT_NAV.test(t)) return null;
@@ -170,5 +192,54 @@ export function parsePhase8(
   // "wo page kholo": a navigation request without a page we know -> ask which one.
   if (PAGE_WORD.test(t) && W('page|screen|tab|section').test(t))
     return { action: AssistantActionId.NAVIGATE, page: null };
+  return null;
+}
+
+// Admin screens (issue #362 follow-up): the same "X kholo / open X" phrasing opens a fixed admin page.
+// Order matters: more specific phrases first ("live queue" before "queue", "all bookings" before "bookings").
+const ADMIN_PAGES: Array<[AdminNavPage, RegExp]> = [
+  [
+    'liveQueue',
+    W(
+      'live queue monitoring|live queue|queue monitoring|queue monitor|live line',
+    ),
+  ],
+  ['allBookings', W('all bookings|bookings|booking list|appointments')],
+  ['onboarding', W('new shop onboarding|shop onboarding|onboarding|new shops')],
+  [
+    'shopDeletions',
+    W('shop deletions|deletion requests|deletions|trash|recovery trash'),
+  ],
+  ['locationProposals', W('location proposals|location proposal')],
+  [
+    'shopStatus',
+    W('shop status|shops status|open shops|closed shops|shops|shop list'),
+  ],
+  ['verification', W('verification queue|verifications|verification|kyc')],
+  ['employees', W('employees|employee|field executives')],
+  ['crm', W('crm|leads|follow ups|follow-ups')],
+  ['commandCenter', W('command center|executive overview|business overview')],
+  ['customers', W('customers|customer analytics')],
+  ['salonStaff', W('salon staff|staff analytics|barbers|staff')],
+  ['inventory', W('inventory|catalog|product catalog')],
+  ['adminUsers', W('admin users|admin access|access management')],
+  ['adminHome', W('dashboard|home|overview|platform operations|main page')],
+];
+
+// "kitni shops open hain" asks a question (it is answered by the admin reads), it is not "open X".
+const ADMIN_QUESTION = W(
+  'kitni|kitne|kitna|how many|how much|kya|kaun|kaunsi|kaunse|which|what|kab|when|hain|hai',
+);
+
+function parseAdminNav(t: string): Phase8Intent | null {
+  if (BACK.test(t)) return { action: AssistantActionId.NAVIGATE_BACK };
+  if (/\d/u.test(t) || NOT_NAV.test(t) || ADMIN_QUESTION.test(t)) return null;
+  const verb =
+    OPEN.test(t) || (SHOWISH.test(t) && W('page|screen|tab').test(t));
+  if (!verb) return null;
+  for (const [page, re] of ADMIN_PAGES)
+    if (re.test(t)) return { action: AssistantActionId.ADMIN_NAVIGATE, page };
+  if (W('page|screen|tab|section').test(t))
+    return { action: AssistantActionId.ADMIN_NAVIGATE, page: null };
   return null;
 }

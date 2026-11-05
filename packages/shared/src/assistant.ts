@@ -160,6 +160,7 @@ export const AssistantActionId = {
   HELP: "app.help",
   NAVIGATE: "app.navigate",
   NAVIGATE_BACK: "app.navigateBack",
+  ADMIN_NAVIGATE: "admin.navigate",
 } as const;
 export type AssistantActionId = (typeof AssistantActionId)[keyof typeof AssistantActionId];
 
