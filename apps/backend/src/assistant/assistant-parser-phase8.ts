@@ -35,7 +35,11 @@ export type NavPage =
   | 'payments'
   | 'photos'
   | 'marketing'
-  | 'bookingSources';
+  | 'bookingSources'
+  | 'paymentQr'
+  | 'location'
+  | 'verification'
+  | 'contacts';
 
 export type Phase8Intent =
   | { action: typeof AssistantActionId.HELP; greeting: boolean }
@@ -129,9 +133,13 @@ const PAGES: Array<[NavPage, RegExp]> = [
   ['cancellations', W('cancellations')],
   ['inventory', W('inventory|stock')],
   ['notifications', W('notifications|notification')],
+  ['paymentQr', W('payment qr|qr code|qr|upi qr|upi')],
   ['payments', W('payments|payment')],
   ['photos', W('photos|photo|gallery')],
   ['marketing', W('marketing')],
+  ['location', W('location|address|map|shop location|shop address')],
+  ['verification', W('verification|verify|kyc|documents|document')],
+  ['contacts', W('contacts|contact list|contact')],
   ['settings', W('settings|setting')],
 ];
 
