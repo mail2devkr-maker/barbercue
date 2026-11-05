@@ -28,6 +28,25 @@ export const ASSISTANT_LIMITS = {
 /** Which screen family the assistant is opened from; it limits which phrases apply. */
 export type AssistantSurface = "shop" | "customer" | "admin" | "employee";
 
+export const assistantPeriodSchema = z.union([
+  z.object({ kind: z.enum(["today", "yesterday", "thisWeek", "lastWeek", "thisMonth", "lastMonth"]) }),
+  z.object({ kind: z.literal("lastDays"), days: z.number().int().min(1).max(366) }),
+  z.object({
+    kind: z.literal("range"),
+    from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  }),
+]);
+export type AssistantPeriod = z.infer<typeof assistantPeriodSchema>;
+
+export const assistantReportContextSchema = z.object({
+  action: z.enum(["bookings.report", "queue.history"]),
+  period: assistantPeriodSchema,
+  status: z.enum(["CONFIRMED", "COMPLETED", "CANCELLED", "NO_SHOW", "PENDING_PAYMENT"]).nullable().optional(),
+  page: z.number().int().min(1).max(100),
+});
+export type AssistantReportContext = z.infer<typeof assistantReportContextSchema>;
+
 export const assistantTurnSchema = z.object({
   text: z.string().trim().min(1).max(ASSISTANT_LIMITS.maxTextLength),
   // The screen the user is on. Only a hint: access is re-checked against the session for every action.
@@ -42,6 +61,10 @@ export const assistantTurnSchema = z.object({
   alternatives: z.array(z.string().trim().min(1).max(ASSISTANT_LIMITS.maxTextLength)).max(4).optional(),
   // The recognizer's confidence in `text` (0..1), when the browser reports one.
   confidence: z.number().min(0).max(1).nullable().optional(),
+  // A follow-up that changes only the period ("aur last month?") or the page ("aur dikhao") of the
+  // previous period REPORT: the server returned this context with that report. Only the two read
+  // report actions are accepted, so a follow-up can never become a change.
+  context: assistantReportContextSchema.optional(),
 });
 export type AssistantTurnInput = z.infer<typeof assistantTurnSchema>;
 
@@ -161,6 +184,8 @@ export const AssistantActionId = {
   NAVIGATE: "app.navigate",
   NAVIGATE_BACK: "app.navigateBack",
   ADMIN_NAVIGATE: "admin.navigate",
+  BOOKINGS_REPORT: "bookings.report",
+  QUEUE_HISTORY: "queue.history",
 } as const;
 export type AssistantActionId = (typeof AssistantActionId)[keyof typeof AssistantActionId];
 
@@ -202,6 +227,8 @@ export interface AssistantTurnDto {
   // Issue #371: set when a speech ALTERNATIVE (not the top transcript) was used, so the screen can
   // show "Understood as: ...".
   understoodAs?: string;
+  /** Present on a period report: send it back as `context` so "aur last month?" / "aur dikhao" follow up. */
+  reportContext?: AssistantReportContext;
   completedAt: string;
 }
 

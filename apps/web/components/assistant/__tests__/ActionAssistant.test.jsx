@@ -161,6 +161,29 @@ describe('ActionAssistant drawer', () => {
     expect(JSON.parse(callsTo('assistant/turns')[3][1].body).text).toBe('staff list dikhao');
   });
 
+  it('period follow-up: the report context goes back with the next turn, and an unrelated answer ends it', async () => {
+    const ctx = { action: 'bookings.report', period: { kind: 'thisWeek' }, status: null, page: 1 };
+    const report = {
+      requestId: 'p1',
+      status: 'DONE',
+      action: { id: 'bookings.report', title: 'Bookings for a period', kind: 'READ' },
+      message: 'This week: 12 bookings.',
+      reportContext: ctx,
+      completedAt: '2026-11-05T10:00:00.000Z',
+    };
+    const other = { ...report, requestId: 'p3', action: { id: 'staff.list', title: 'Staff', kind: 'READ' }, message: '2 staff', reportContext: undefined };
+    route([report, { ...report, requestId: 'p2', reportContext: { ...ctx, period: { kind: 'lastMonth' } } }, other, other]);
+    const tree = await open();
+    await say(tree, "this week's bookings");
+    expect(JSON.parse(callsTo('assistant/turns')[0][1].body).context).toBeUndefined();
+    await say(tree, 'aur last month?');
+    expect(JSON.parse(callsTo('assistant/turns')[1][1].body).context).toEqual(ctx);
+    await say(tree, 'staff dikhao');
+    expect(JSON.parse(callsTo('assistant/turns')[2][1].body).context).toEqual({ ...ctx, period: { kind: 'lastMonth' } });
+    await say(tree, 'aur last month?');
+    expect(JSON.parse(callsTo('assistant/turns')[3][1].body).context).toBeUndefined();
+  });
+
   it('keyboard: focus moves into the message box, Escape closes the notice then the drawer, focus returns', async () => {
     route([], { browser: true, local: false });
     globalThis.window.webkitSpeechRecognition = class {

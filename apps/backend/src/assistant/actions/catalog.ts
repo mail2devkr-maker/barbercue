@@ -604,6 +604,18 @@ export const ASSISTANT_ACTIONS: Record<AssistantActionId, ActionDef> = {
     'OWNER_OR_ADMIN',
     ['Bookings kholo', 'Services page kholo', 'Live queue kholo'],
   ),
+  [AssistantActionId.BOOKINGS_REPORT]: read(
+    'Bookings for a period',
+    SHOP_MANAGERS,
+    'OWNER_OR_ADMIN',
+    ["Is hafte ki bookings dikhao", 'Pichhle 7 din mein kitni bookings hui', 'Last month cancelled bookings'],
+  ),
+  [AssistantActionId.QUEUE_HISTORY]: read(
+    'Queue activity for a period',
+    SHOP_MANAGERS,
+    'OWNER_OR_ADMIN',
+    ['Is mahine kitne customers queue mein aaye', 'Last week queue mein kitne aaye'],
+  ),
   [AssistantActionId.ADMIN_NAVIGATE]: read(
     'Open an admin page',
     [
