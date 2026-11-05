@@ -26,9 +26,11 @@ export interface PushPayload {
 }
 
 // The Android channel the mobile app creates at push registration (lib/push-notifications.ts:
-// ANDROID_BOOKING_CHANNEL_ID) — HIGH importance, default sound, vibration. The arrival check is
-// the one push where silence defeats its purpose, so it names the channel explicitly and requests
-// the default tone rather than relying on Expo/FCM's fallback channel.
+// ANDROID_BOOKING_CHANNEL_ID) — HIGH importance, default sound, vibration. Time-sensitive booking
+// lifecycle changes and arrival checks must explicitly target this channel; without channelId/
+// sound/priority the OS may use a different, silent or delayed default notification channel.
+// This is OS alert sound, NOT background spoken TTS; background voice needs a separately
+// certified native approach and a compatible installed binary.
 const ANDROID_BOOKING_CHANNEL_ID = 'booking-updates';
 
 const PUSH_KIND_CATEGORY: Record<
@@ -121,9 +123,10 @@ export class PushDispatchService {
       title,
       body,
       data,
-      ...(kind === 'arrivalCheck'
+      ...(kind === 'arrivalCheck' ? { categoryId: 'booking_arrival_check' } : {}),
+      ...(kind === 'newBooking' || kind === 'bookingRescheduled' ||
+        kind === 'bookingCancelled' || kind === 'arrivalCheck'
         ? {
-            categoryId: 'booking_arrival_check',
             channelId: ANDROID_BOOKING_CHANNEL_ID,
             sound: 'default' as const,
             priority: 'high' as const,
