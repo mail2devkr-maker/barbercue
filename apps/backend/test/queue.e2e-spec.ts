@@ -162,7 +162,11 @@ describe('Queue & Check-In (e2e, live database)', () => {
     }
     if (outsiderSalonId) {
       await prisma.userRole.deleteMany({ where: { salonId: outsiderSalonId } });
-      await prisma.salon.delete({ where: { id: outsiderSalonId } });
+      // Synthetic fixture only: the #381 guard refuses every other shop hard delete.
+      await prisma.$transaction([
+        prisma.$executeRaw`SELECT set_config('app.fastque_synthetic_shop_cleanup', 'on', true)`,
+        prisma.salon.delete({ where: { id: outsiderSalonId } }),
+      ]);
     }
     if (outsiderOwnerUserId) {
       await prisma.user.delete({ where: { id: outsiderOwnerUserId } });

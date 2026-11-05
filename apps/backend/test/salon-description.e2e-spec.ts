@@ -127,9 +127,13 @@ maybe(
           });
         }
         if (createdSalonIds.length) {
-          await prisma.salon.deleteMany({
-            where: { id: { in: createdSalonIds } },
-          });
+          // Synthetic fixtures only: the #381 guard refuses every other shop hard delete.
+          await prisma.$transaction([
+            prisma.$executeRaw`SELECT set_config('app.fastque_synthetic_shop_cleanup', 'on', true)`,
+            prisma.salon.deleteMany({
+              where: { id: { in: createdSalonIds } },
+            }),
+          ]);
         }
         if (createdUserIds.length) {
           await prisma.user.deleteMany({
