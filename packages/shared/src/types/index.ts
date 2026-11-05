@@ -2,6 +2,8 @@ import type {
   BookingAttributionSource,
   BookingSource,
   BookingStatus,
+  AccountDeletionRequestStatus,
+  AccountDeletionResolution,
   ChairStatus,
   ChargeType,
   CreditFundingSource,
@@ -82,9 +84,25 @@ export interface MeResponse extends AuthenticatedUser {
  */
 export interface AuthMethodsDto {
   google: boolean;
+  apple: boolean;
   phoneOtp: boolean;
   /** Owner OTP is separately authorized and issues STAFF audience only for an existing verified owner. */
   ownerPhoneOtp: boolean;
+}
+
+/**
+ * GET/POST/DELETE auth/account/deletion-request. No target user or shop identifiers are returned. The
+ * resolution is recomputed from the authenticated account's current server-side relationships.
+ */
+export interface AccountDeletionRequestDto {
+  request: {
+    id: string;
+    status: AccountDeletionRequestStatus;
+    createdAt: string;
+    updatedAt: string;
+  } | null;
+  resolution: AccountDeletionResolution;
+  relatedShopCount: number;
 }
 
 export interface EmployeeProfileDto {
@@ -129,7 +147,13 @@ export interface EmployeeLeadShopDto {
     onboardedAt: string | null;
     /** The shop's published business phone, only when the owner chose to publish it. */
     businessPhone: string | null;
-    photos: Array<{ id: string; url: string; altText: string | null; type: string; sortOrder: number }>;
+    photos: Array<{
+      id: string;
+      url: string;
+      altText: string | null;
+      type: string;
+      sortOrder: number;
+    }>;
     chairs: Array<{ id: string; label: string; status: string }>;
     chairCounts: { total: number; active: number };
   } | null;
@@ -179,12 +203,7 @@ export interface EmployeeCrmFollowUpDto {
   updatedAt: string;
 }
 
-export type {
-  EmployeeVoiceLanguage,
-  EmployeeVoiceVisitLogDto,
-  EmployeeVoiceVisitLogPageDto,
-  VoiceOnboardingDraft,
-} from '../employee-voice';
+export type { EmployeeVoiceLanguage, EmployeeVoiceVisitLogDto, EmployeeVoiceVisitLogPageDto, VoiceOnboardingDraft } from "../employee-voice";
 
 export interface EmployeeCrmDashboardDto {
   profile: EmployeeProfileDto;
@@ -212,24 +231,15 @@ export interface AdminCrmEmployeePerformanceDto {
 }
 
 export interface AdminCrmLeadDto extends EmployeeCrmLeadDto {
-  employee: Pick<
-    EmployeeProfileDto,
-    "id" | "employeeCode" | "fullName" | "territory"
-  >;
+  employee: Pick<EmployeeProfileDto, "id" | "employeeCode" | "fullName" | "territory">;
 }
 
 export interface AdminCrmVisitDto extends EmployeeCrmVisitDto {
-  employee: Pick<
-    EmployeeProfileDto,
-    "id" | "employeeCode" | "fullName" | "territory"
-  >;
+  employee: Pick<EmployeeProfileDto, "id" | "employeeCode" | "fullName" | "territory">;
 }
 
 export interface AdminCrmFollowUpDto extends EmployeeCrmFollowUpDto {
-  employee: Pick<
-    EmployeeProfileDto,
-    "id" | "employeeCode" | "fullName" | "territory"
-  >;
+  employee: Pick<EmployeeProfileDto, "id" | "employeeCode" | "fullName" | "territory">;
 }
 
 export interface AdminCrmOverviewDto {
@@ -925,14 +935,7 @@ export interface CancelBookingResponseDto {
 // `today`/`upcoming` are date-window views over active bookings; `completed`/`cancelled`/
 // `no_show` are outcome views regardless of date; `all` is the unfiltered history feed. Kept as a
 // flat union (not derived from BookingStatus) since `today`/`upcoming`/`all` aren't statuses.
-export const OWNER_BOOKING_FILTERS = [
-  "today",
-  "upcoming",
-  "completed",
-  "cancelled",
-  "no_show",
-  "all",
-] as const;
+export const OWNER_BOOKING_FILTERS = ["today", "upcoming", "completed", "cancelled", "no_show", "all"] as const;
 export type OwnerBookingFilter = (typeof OWNER_BOOKING_FILTERS)[number];
 
 // Adds owner-operational fields (customer contact, assigned barber, timestamps) on top of
@@ -1049,7 +1052,7 @@ export interface OwnerCustomerDirectoryItemDto {
   currency: string | null;
   /** The name the customer last gave this shop, or null. A visit-supplied label with its source - not a verified identity. */
   displayName: string | null;
-  displayNameSource: 'NOT_ON_FILE' | 'CONTACT_NAME_ON_VISIT' | 'GUEST_NAME_ON_BOOKING';
+  displayNameSource: "NOT_ON_FILE" | "CONTACT_NAME_ON_VISIT" | "GUEST_NAME_ON_BOOKING";
   totalBookings: number;
   completedCount: number;
   cancelledCount: number;
@@ -1083,7 +1086,7 @@ export interface OwnerCustomerServiceHistoryItemDto {
   id: string;
   visitId: string;
   bookingId: string | null;
-  source: 'ONLINE_BOOKING' | 'IN_SHOP_APPOINTMENT' | 'LIVE_QUEUE';
+  source: "ONLINE_BOOKING" | "IN_SHOP_APPOINTMENT" | "LIVE_QUEUE";
   serviceId: string | null;
   serviceName: string;
   staffName: string | null;
@@ -1091,7 +1094,7 @@ export interface OwnerCustomerServiceHistoryItemDto {
   completedAt: string | null;
   /** Invoiced line total only; null means no matching issued invoice line is recorded. */
   amount: number | null;
-  amountKind: 'INVOICED' | null;
+  amountKind: "INVOICED" | null;
   currency: string | null;
 }
 
@@ -1472,8 +1475,7 @@ export interface QueueStatusDto {
 // current) or IN_SERVICE (an ACTIVE ServiceSession, walk-in or appointment-check-in). OFF_DUTY
 // mirrors status === INACTIVE, surfaced here too so a UI can render every roster row from this one
 // field instead of combining it with `status` itself.
-export type StaffAvailabilityState =
-  "AVAILABLE" | "RESERVED" | "IN_SERVICE" | "OFF_DUTY";
+export type StaffAvailabilityState = "AVAILABLE" | "RESERVED" | "IN_SERVICE" | "OFF_DUTY";
 
 // PATCH /dashboard/staff/:id/status response, and the roster entries in DashboardQueueDto below.
 export interface StaffStatusDto {
@@ -1666,12 +1668,7 @@ export interface SalonChairDto {
   status: ChairStatus;
 }
 
-export type ChairDeactivationConflict =
-  | "ACTIVE_SERVICE_SESSION"
-  | "ACTIVE_MANUAL_OCCUPANCY"
-  | "ASSIGNED_QUEUE_ENTRY"
-  | "NOT_ACTIVE"
-  | "STALE_PREVIEW";
+export type ChairDeactivationConflict = "ACTIVE_SERVICE_SESSION" | "ACTIVE_MANUAL_OCCUPANCY" | "ASSIGNED_QUEUE_ENTRY" | "NOT_ACTIVE" | "STALE_PREVIEW";
 
 export interface BulkChairDeactivationPreviewItemDto {
   chairId: string;
@@ -1790,7 +1787,7 @@ export interface SalonShareLinksDto {
   publicUrl: string | null;
   readiness: {
     ready: boolean;
-    reasons: Array<'SALON_NOT_PUBLIC' | 'WEB_BASE_URL_NOT_CONFIGURED'>;
+    reasons: Array<"SALON_NOT_PUBLIC" | "WEB_BASE_URL_NOT_CONFIGURED">;
   };
   metadata: {
     title: string;
@@ -1815,13 +1812,13 @@ export interface SalonLocationDto {
   current: {
     latitude: number | null;
     longitude: number | null;
-    verification: 'VERIFIED' | 'UNVERIFIED';
+    verification: "VERIFIED" | "UNVERIFIED";
     verifiedAt: string | null;
   };
   pendingProposal: SalonLocationProposalDto | null;
   /** Most recent terminal admin decision; visible only to an authorized shop owner/admin. */
   lastDecision: {
-    status: 'APPROVED' | 'REJECTED';
+    status: "APPROVED" | "REJECTED";
     reviewNote: string | null;
     reviewedAt: string | null;
   } | null;
@@ -1904,14 +1901,14 @@ export interface SalonPhotoActivationReadinessDto {
   current: number;
   ready: boolean;
   grandfathered: boolean;
-  reasons: Array<'THREE_VALID_PHOTOS_REQUIRED'>;
+  reasons: Array<"THREE_VALID_PHOTOS_REQUIRED">;
 }
 
 export interface SalonContactImportPreviewDto {
   previewOnly: true;
-  invitationEligibility: 'NOT_EVALUATED';
+  invitationEligibility: "NOT_EVALUATED";
   dispatchEnabled: false;
-  dispatchBlockedReason: 'CONSENT_SUPPRESSION_AND_PROVIDER_GATES_REQUIRED';
+  dispatchBlockedReason: "CONSENT_SUPPRESSION_AND_PROVIDER_GATES_REQUIRED";
   summary: {
     total: number;
     validatedForReview: number;
@@ -2336,7 +2333,7 @@ export interface HealthCheckResponse {
 /** Draft only: the owner must review every statement and save through the existing profile API. */
 export interface SalonDescriptionSuggestionDto {
   draft: string;
-  language: 'en' | 'hi';
+  language: "en" | "hi";
   persisted: false;
   requiresOwnerReview: true;
   notice: string;

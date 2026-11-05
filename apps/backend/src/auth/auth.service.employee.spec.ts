@@ -3,7 +3,11 @@ import { AuthService } from './auth.service';
 import { AppException } from '../common/exceptions/app.exception';
 
 describe('AuthService employee login', () => {
-  const fakeTokens = { accessToken: 'access', refreshToken: 'refresh', expiresIn: 900 };
+  const fakeTokens = {
+    accessToken: 'access',
+    refreshToken: 'refresh',
+    expiresIn: 900,
+  };
 
   function makeService(salonId: string | null) {
     const prisma = {
@@ -28,9 +32,7 @@ describe('AuthService employee login', () => {
       hash: jest.fn(),
     };
     const tokenService = {
-      scopeRolesToAudience: jest
-        .fn()
-        .mockReturnValue([Role.FIELD_EXECUTIVE]),
+      scopeRolesToAudience: jest.fn().mockReturnValue([Role.FIELD_EXECUTIVE]),
       issueTokenPair: jest.fn().mockResolvedValue(fakeTokens),
     };
 
@@ -38,6 +40,7 @@ describe('AuthService employee login', () => {
       prisma as never,
       passwordService as never,
       tokenService as never,
+      {} as never,
       {} as never,
       {} as never,
       {} as never,
