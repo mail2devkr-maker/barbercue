@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import * as Speech from 'expo-speech';
 import {
   ASSISTANT_PATHS,
@@ -12,6 +12,7 @@ import {
 } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
 import {
+  assistantConfirmationCanProceed,
   assistantConfirmationReadiness,
   assistantSurfaceForUser,
   pendingAssistantConfirmation,
@@ -56,6 +57,8 @@ export default function AssistantScreen({ route }: { route?: { params?: Assistan
   const listRef = useRef<ScrollView>(null);
   const confirmationTokens = useRef(new Map<string, PendingAssistantConfirmation>());
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [confirmationDialogId, setConfirmationDialogId] = useState<string | null>(null);
+  const [acknowledged, setAcknowledged] = useState(false);
   const confirmationContext = useRef({ surface, salonId: selectedSalonId });
   confirmationContext.current = { surface, salonId: selectedSalonId };
 
@@ -63,6 +66,8 @@ export default function AssistantScreen({ route }: { route?: { params?: Assistan
 
   useEffect(() => {
     confirmationTokens.current.clear();
+    setConfirmationDialogId(null);
+    setAcknowledged(false);
     setTurns((previous) => previous.some((turn) => turn.canConfirm)
       ? previous.map((turn) => turn.canConfirm ? { ...turn, canConfirm: false } : turn)
       : previous);
@@ -171,15 +176,21 @@ export default function AssistantScreen({ route }: { route?: { params?: Assistan
     const context = confirmationContext.current;
     const activeSurface = context.surface;
     if (!pending || confirmingId || !activeSurface) return;
+    if (decision === 'confirm' && !assistantConfirmationCanProceed(pending, acknowledged)) {
+      setError('Please acknowledge the change before confirming it.');
+      return;
+    }
     const readiness = assistantConfirmationReadiness(pending, { surface: activeSurface, salonId: context.salonId });
     if (readiness === 'expired') {
       confirmationTokens.current.delete(entryId);
+      setConfirmationDialogId(null);
       setTurns((previous) => previous.map((turn) => turn.id === entryId ? { ...turn, canConfirm: false } : turn));
       setError('That preview expired. Ask FastQue again to create a fresh preview.');
       return;
     }
     if (readiness === 'context-changed') {
       confirmationTokens.current.delete(entryId);
+      setConfirmationDialogId(null);
       setTurns((previous) => previous.map((turn) => turn.id === entryId ? { ...turn, canConfirm: false } : turn));
       setError('Your selected account or shop changed. Ask FastQue again before confirming.');
       return;
@@ -187,13 +198,19 @@ export default function AssistantScreen({ route }: { route?: { params?: Assistan
 
     // Consume locally before sending so a rapid second tap cannot replay the token.
     confirmationTokens.current.delete(entryId);
+    setConfirmationDialogId(null);
+    setAcknowledged(false);
     setConfirmingId(entryId);
     setError(null);
     setTurns((previous) => previous.map((turn) => turn.id === entryId ? { ...turn, canConfirm: false } : turn));
     try {
       const response = await apiFetch<AssistantTurnDto>(`${ASSISTANT_PATHS.assistant}/${ASSISTANT_PATHS.confirmations}`, {
         method: 'POST',
-        body: JSON.stringify({ token: pending.token, decision }),
+        body: JSON.stringify({
+          token: pending.token,
+          decision,
+          ...(decision === 'confirm' && pending.requiresAcknowledgement ? { acknowledged: true } : {}),
+        }),
       });
       const displayed = toAssistantDisplayTurn(response, decision === 'confirm');
       setTurns((previous) => [...previous, { id: `decision-${response.requestId}-${Date.now()}`, text: '', assistant: displayed }]);
@@ -203,7 +220,7 @@ export default function AssistantScreen({ route }: { route?: { params?: Assistan
       setConfirmingId(null);
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
     }
-  }, [confirmingId]);
+  }, [acknowledged, confirmingId]);
 
   function requestDecision(turn: ConversationTurn) {
     const pending = confirmationTokens.current.get(turn.id);
@@ -217,13 +234,8 @@ export default function AssistantScreen({ route }: { route?: { params?: Assistan
         : 'Your selected account or shop changed. Ask FastQue again before confirming.');
       return;
     }
-    const rows = turn.assistant.preview?.rows.map((row) => `${row.label}: ${row.before ?? '—'} → ${row.after ?? '—'}`) ?? [];
-    const message = [turn.assistant.message, ...rows, turn.assistant.preview?.warning].filter(Boolean).join('\n');
-    Alert.alert('Review this change', message, [
-      { text: 'Not now', style: 'cancel' },
-      { text: 'Cancel proposed change', style: 'destructive', onPress: () => void decide(turn.id, 'cancel') },
-      { text: 'Confirm change', onPress: () => void decide(turn.id, 'confirm') },
-    ]);
+    setAcknowledged(false);
+    setConfirmationDialogId(turn.id);
   }
 
   function openDestination(destination: AssistantDestination) {
@@ -322,9 +334,63 @@ export default function AssistantScreen({ route }: { route?: { params?: Assistan
         ) : null}
       </PremiumScreen>
   );
-  return Platform.OS === 'ios' ? (
-    <KeyboardAvoidingView style={styles.keyboard} behavior="padding" keyboardVerticalOffset={72}>{content}</KeyboardAvoidingView>
-  ) : content;
+  const confirmationTurn = turns.find((turn) => turn.id === confirmationDialogId);
+  const confirmation = confirmationTurn?.assistant;
+  const pendingConfirmation = confirmationDialogId ? confirmationTokens.current.get(confirmationDialogId) : null;
+  return (
+    <>
+      {Platform.OS === 'ios' ? (
+        <KeyboardAvoidingView style={styles.keyboard} behavior="padding" keyboardVerticalOffset={72}>{content}</KeyboardAvoidingView>
+      ) : content}
+      <Modal
+        visible={confirmationDialogId !== null && confirmation !== undefined && pendingConfirmation !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => { setConfirmationDialogId(null); setAcknowledged(false); }}
+        statusBarTranslucent
+      >
+        <View style={styles.confirmOverlay}>
+          <View accessibilityViewIsModal accessibilityRole="alert" style={styles.confirmDialog}>
+            <Text style={styles.confirmTitle}>Review this change</Text>
+            <ScrollView style={styles.confirmBody} contentContainerStyle={styles.confirmBodyContent}>
+              <Text style={styles.body}>{confirmation?.message}</Text>
+              {confirmation?.preview?.rows.map((row, index) => (
+                <Text key={`confirm-${confirmationDialogId}-${index}`} style={styles.item}>
+                  {row.label}: {row.before ?? '—'} → {row.after ?? '—'}
+                </Text>
+              ))}
+              {confirmation?.preview?.warning ? <Text style={styles.warning}>{confirmation.preview.warning}</Text> : null}
+            </ScrollView>
+            {pendingConfirmation?.requiresAcknowledgement ? (
+              <Pressable
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: acknowledged }}
+                onPress={() => setAcknowledged((current) => !current)}
+                style={styles.acknowledgement}
+              >
+                <View style={[styles.checkbox, acknowledged && styles.checkboxChecked]}>
+                  {acknowledged ? <Text style={styles.checkmark}>✓</Text> : null}
+                </View>
+                <Text style={styles.acknowledgementText}>
+                  I understand the consequence of this change and want to continue.
+                </Text>
+              </Pressable>
+            ) : null}
+            <View style={styles.confirmActions}>
+              <PremiumButton title="Not now" variant="secondary" onPress={() => { setConfirmationDialogId(null); setAcknowledged(false); }} style={styles.confirmActionButton} />
+              <PremiumButton title="Cancel change" variant="secondary" onPress={() => void decide(confirmationDialogId!, 'cancel')} disabled={confirmingId !== null} style={styles.confirmActionButton} />
+              <PremiumButton
+                title={confirmingId === confirmationDialogId ? 'Sending…' : 'Confirm change'}
+                onPress={() => void decide(confirmationDialogId!, 'confirm')}
+                disabled={confirmingId !== null || Boolean(pendingConfirmation && !assistantConfirmationCanProceed(pendingConfirmation, acknowledged))}
+                style={styles.confirmActionButton}
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -352,4 +418,17 @@ const styles = StyleSheet.create({
   muted: { color: fastQue.textMuted, fontFamily: font.bodyRegular, fontSize: fontSize.sm, paddingVertical: space[2] },
   error: { color: fastQue.error, fontFamily: font.bodyMedium, fontSize: fontSize.sm, paddingBottom: space[2] },
   footnote: { color: fastQue.textMuted, fontFamily: font.bodyRegular, fontSize: 11, marginTop: space[2] },
+  confirmOverlay: { flex: 1, justifyContent: 'center', padding: space[4], backgroundColor: 'rgba(10, 8, 12, 0.72)' },
+  confirmDialog: { maxHeight: '82%', borderRadius: radius.lg, padding: space[4], backgroundColor: fastQue.backgroundRaised, borderWidth: 1, borderColor: fastQue.borderStrong },
+  confirmTitle: { color: fastQue.text, fontFamily: font.displaySemiBold, fontSize: fontSize.lg, marginBottom: space[3] },
+  confirmBody: { flexShrink: 1, marginBottom: space[3] },
+  confirmBodyContent: { gap: space[2] },
+  warning: { color: fastQue.warning, fontFamily: font.bodyMedium, fontSize: fontSize.xs, lineHeight: 20, marginTop: space[2] },
+  acknowledgement: { flexDirection: 'row', alignItems: 'flex-start', gap: space[3], paddingVertical: space[3], marginBottom: space[2] },
+  checkbox: { width: 24, height: 24, borderRadius: 5, borderWidth: 2, borderColor: fastQue.textMuted, alignItems: 'center', justifyContent: 'center' },
+  checkboxChecked: { backgroundColor: fastQue.pink, borderColor: fastQue.pink },
+  checkmark: { color: fastQue.text, fontFamily: font.bodyBold, fontSize: 16, lineHeight: 18 },
+  acknowledgementText: { flex: 1, color: fastQue.text, fontFamily: font.bodyMedium, fontSize: fontSize.xs, lineHeight: 20 },
+  confirmActions: { gap: space[2] },
+  confirmActionButton: { width: '100%' },
 });

@@ -1,5 +1,6 @@
 import { AssistantActionId, Role, SessionAudience, type AssistantTurnDto } from '@barbercue/shared';
 import {
+  assistantConfirmationCanProceed,
   assistantConfirmationReadiness,
   assistantSurfaceForUser,
   pendingAssistantConfirmation,
@@ -71,10 +72,17 @@ describe('mobile Assistant safety adapter', () => {
     } satisfies AssistantTurnDto;
 
     const pending = pendingAssistantConfirmation(turn, true, 'shop', 'salon-1');
-    expect(pending).toEqual({ token: 'short-lived-token', expiresAt: '2026-11-05T01:00:00.000Z', surface: 'shop', salonId: 'salon-1' });
+    expect(pending).toEqual({ token: 'short-lived-token', expiresAt: '2026-11-05T01:00:00.000Z', surface: 'shop', salonId: 'salon-1', requiresAcknowledgement: false });
     expect(pendingAssistantConfirmation(turn, false, 'shop', 'salon-1')).toBeNull();
     expect(pendingAssistantConfirmation({ ...turn, status: 'DONE' }, true, 'shop', 'salon-1')).toBeNull();
     expect(pendingAssistantConfirmation({ ...turn, action: { ...turn.action!, kind: 'READ' } }, true, 'shop', 'salon-1')).toBeNull();
+
+    const highRisk = { ...turn, preview: { rows: [], risk: 'high' } } satisfies AssistantTurnDto;
+    const highRiskPending = pendingAssistantConfirmation(highRisk, true, 'shop', 'salon-1')!;
+    expect(highRiskPending.requiresAcknowledgement).toBe(true);
+    expect(assistantConfirmationCanProceed(highRiskPending, false)).toBe(false);
+    expect(assistantConfirmationCanProceed(highRiskPending, true)).toBe(true);
+    expect(assistantConfirmationCanProceed(pending!, false)).toBe(true);
   });
 
   it('expires confirmations and rejects confirmation after a role or shop switch', () => {
@@ -83,6 +91,7 @@ describe('mobile Assistant safety adapter', () => {
       expiresAt: '2026-11-05T01:00:00.000Z',
       surface: 'shop' as const,
       salonId: 'salon-1',
+      requiresAcknowledgement: false,
     };
     expect(assistantConfirmationReadiness(pending, { surface: 'shop', salonId: 'salon-1', now: Date.parse('2026-11-05T00:30:00.000Z') })).toBe('ready');
     expect(assistantConfirmationReadiness(pending, { surface: 'shop', salonId: 'salon-2', now: Date.parse('2026-11-05T00:30:00.000Z') })).toBe('context-changed');

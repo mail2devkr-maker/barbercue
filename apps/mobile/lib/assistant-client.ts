@@ -8,6 +8,14 @@ export interface PendingAssistantConfirmation {
   expiresAt: string;
   surface: AssistantSurface;
   salonId: string | null;
+  requiresAcknowledgement: boolean;
+}
+
+export function assistantConfirmationCanProceed(
+  pending: PendingAssistantConfirmation,
+  acknowledged: boolean,
+): boolean {
+  return !pending.requiresAcknowledgement || acknowledged;
 }
 
 export function pendingAssistantConfirmation(
@@ -19,7 +27,13 @@ export function pendingAssistantConfirmation(
   const confirmation = turn.confirmation;
   if (!writesEnabled || turn.status !== 'NEEDS_CONFIRMATION' || turn.action?.kind !== 'WRITE') return null;
   if (!confirmation?.token || !Number.isFinite(Date.parse(confirmation.expiresAt))) return null;
-  return { token: confirmation.token, expiresAt: confirmation.expiresAt, surface, salonId };
+  return {
+    token: confirmation.token,
+    expiresAt: confirmation.expiresAt,
+    surface,
+    salonId,
+    requiresAcknowledgement: turn.preview?.risk === 'high',
+  };
 }
 
 export function assistantConfirmationReadiness(

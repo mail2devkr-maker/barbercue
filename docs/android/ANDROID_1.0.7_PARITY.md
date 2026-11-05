@@ -1,6 +1,6 @@
 # FastQue Android 1.0.7 parity audit
 
-Audit baseline: production source at master `90651cb3c32251739d8ab4b559f98e8347dab0c6`. The isolated Android candidate integrates the reviewed PR #369 Android 1.0.7 source and PR #379 GPS/keyboard fixes on that baseline. This is a source/API audit, not authenticated runtime acceptance or physical-device certification.
+Audit baseline: production master `98c724cc56402fafd679ec0f6c8d1e17ce86421b`. The isolated mobile candidate carries the Android 1.0.7 / PR #379 integration from PR #383 and adds the role-aware native Assistant from PR #385. This is a source/API audit, not authenticated runtime acceptance or physical-device certification. The older PR #383 certification entries below are historical evidence for that exact older head, not certification of the current master-integrated candidate.
 
 Statuses: **SOURCE** means a native path and current API usage exist; **PARTIAL** means part of the web workflow is present but a material function remains; **GAP** means no equivalent native workflow was found; **PHYSICAL_REQUIRED** means source is present but real-device behavior is not yet verified; **WEB_ONLY** means privileged scope is intentionally excluded pending an explicit mobile authorization.
 
@@ -37,7 +37,7 @@ Statuses: **SOURCE** means a native path and current API usage exist; **PARTIAL*
 | Inventory | PARTIAL | New native `OwnerInventoryScreen` uses the R7 owner/salon-scoped report, product listing/search/pagination, low-stock filter, product creation, idempotent opening/purchase/adjustment movements, and movement history APIs. Backend enforces owner/admin authorization and salon scope. Exact-head UI/API tests and authenticated runtime/device acceptance remain pending; supplier/category/forecast workflows are not fully represented |
 | Offers/promotions | PARTIAL | Capability-gated center supports existing offer publish/pause, creating Draft offers, backend price preview and editing Draft/Paused offers; writes use idempotency keys |
 
-| FastQue Assistant | GAP | Master now contains the server-owned Assistant and web/customer assistant surfaces behind its default-off rollout gate; this candidate preserves that source, but it does not add a native Android assistant interface or certify the assistant cohort/runtime. |
+| FastQue Assistant | SOURCE / BACKEND_GATED / PHYSICAL_REQUIRED | PR #385 adds role-aware customer, salon owner/staff, and field-employee native entry points; known native navigation; read-result rendering; proposed write previews; and explicit confirmation through the existing server confirmation endpoint. High-risk changes require a separate on-screen acknowledgement, enforced both in the native confirmation handler and by the backend. Server write allowlists remain default-deny. Runtime access depends on deployed backend APIs and authorized flags; no production Assistant action or physical-device flow is certified here. |
 
 ## Customer
 
@@ -92,6 +92,12 @@ Therefore this matrix does **not** certify 100% website parity or a Play-ready p
 ## Superseded integration evidence — PR #367
 
 PR #367's exact head `41dc54d4efcdfb4013312c23e00666d3e1141f09` was certified against master `94ef6c1cfb26da9f1535d44a94284d67e3234548` by runs 41808853743, 41808853735 and 41808853825. This evidence remains valid for that tree but does not certify an integration with the current master.
+
+## Current mobile integration candidate — PR #385
+
+The current isolated source starts from the PR #383 Android 1.0.7/GPS/keyboard candidate and incorporates production master `98c724cc56402fafd679ec0f6c8d1e17ce86421b`, including the backend Assistant write-confirmation and role-consistency changes. Mobile Assistant high-risk confirmation sends `acknowledged: true` only after the user checks the native acknowledgement control. The backend independently enforces the acknowledgement and keeps writes denied unless the relevant action and salon are allowlisted.
+
+Current local verification on this candidate: mobile TypeScript passed; mobile Jest passed (51 suites / 327 tests); Assistant safety tests passed again after the explicit acknowledgement guard (1 suite / 7 tests); shared Jest passed (29 suites / 527 tests); Android and iOS Expo JavaScript exports passed (1,226 and 1,230 modules respectively). Exact-head CI is required after the source is pushed. No EAS build, store upload, production runtime, or physical-device acceptance is claimed.
 
 ## Previous Android 1.0.7 candidate — PR #369 (preserved)
 
