@@ -1027,6 +1027,17 @@ model Salon {
   inventoryAlerts          InventoryAlert[]
   demoWorkspace               OwnerDemoWorkspace?
 
+  // Issue #381 recoverable deletion: a non-null softDeletedAt means the shop is in recovery Trash
+  // (status SUSPENDED, read-only, restorable by a Super Admin until restoreEligibleUntil). A CHECK
+  // constraint keeps these five columns all-null or all-set; triggers make the row read-only.
+  softDeletedAt                     DateTime?
+  restoreEligibleUntil              DateTime?
+  softDeletedByUserId               String?
+  softDeletionRequestId             String?
+  statusBeforeSoftDelete            SalonStatus?
+
+  @@index([softDeletedAt, restoreEligibleUntil])
+  @@index([softDeletionRequestId])
   @@unique([cityId, slug])
   @@map("salons")
 }
@@ -2792,4 +2803,32 @@ model InventoryAlert {
 
   @@index([salonId, resolvedAt, createdAt])
   @@map("inventory_alerts")
+}
+
+enum ShopDeletionRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+/// Issue #381: a Co-Founder's reasoned request to move a shop to recovery Trash. Only a DIFFERENT
+/// Super Admin, with a fresh authenticator code, can approve (quarantine) or reject it. IDs are plain
+/// snapshot columns (no FK) so the request history survives any later change to the shop or users.
+/// The partial unique index shop_deletion_one_pending_per_shop (raw SQL) allows one PENDING per shop.
+model ShopDeletionRequest {
+  id                String                    @id @default(uuid())
+  salonId           String
+  shopName          String
+  shopPublicId      String
+  requestedByUserId String
+  reason            String                    @db.VarChar(500)
+  status            ShopDeletionRequestStatus @default(PENDING)
+  requestedAt       DateTime                  @default(now())
+  decidedByUserId   String?
+  decidedAt         DateTime?
+  decisionNote      String?                   @db.VarChar(500)
+
+  @@index([status, requestedAt])
+  @@index([salonId, status])
+  @@map("shop_deletion_requests")
 }

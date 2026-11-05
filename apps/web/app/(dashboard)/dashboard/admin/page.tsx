@@ -6,6 +6,7 @@ import { useAuth } from "../../../../lib/auth-context";
 import { apiFetch, ApiError } from "../../../../lib/api";
 import { Button, LinkButton } from "../../../../components/ui/Button";
 import { ShopActivityPanel } from "../../../../components/admin/ShopActivityPanel";
+import { ShopDeletionRequestDialog } from "../../../../components/admin/ShopDeletionRequestDialog";
 import styles from "./admin.module.css";
 import { getNextShopStatus } from "./admin-actions";
 
@@ -45,6 +46,7 @@ export default function AdminDashboardPage() {
   const [statusSuccess, setStatusSuccess] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshToken, setRefreshToken] = useState(0);
+  const [deletionShopId, setDeletionShopId] = useState<string | null>(null);
 
   async function handleStatusChange(shopId: string, shopName: string, currentStatus: SalonStatus) {
     const transition = getNextShopStatus(currentStatus);
@@ -227,9 +229,15 @@ export default function AdminDashboardPage() {
                             {statusShopId === shop.id ? "Saving…" : getNextShopStatus(shop.status)?.label}
                           </Button>
                         )}
-                        <span className={styles.readOnlyBadge} title="Shop deletion needs a Co-Founder request, a different Super Admin's fresh TOTP approval, and a 30-day recovery period.">
-                          Deletion approval required
-                        </span>
+                        {coFounder ? (
+                          <Button type="button" variant="outline" onClick={() => { setStatusError(null); setStatusSuccess(null); setDeletionShopId(shop.id); }}>
+                            Request deletion
+                          </Button>
+                        ) : (
+                          <LinkButton href="/dashboard/admin/shop-deletions" variant="outline" title="Shop deletion needs a Co-Founder request, a different Super Admin's fresh authenticator approval, and a 30-day recovery period.">
+                            Deletion approvals
+                          </LinkButton>
+                        )}
                       </>
                     )}
                   </td>
@@ -286,6 +294,17 @@ export default function AdminDashboardPage() {
             </article>)}</div>
             {data.premiumSubscriptions.length === 0 && <p className={styles.empty}>No Premium subscriptions recorded.</p>}
           </section>
+
+          {deletionShopId && (
+            <ShopDeletionRequestDialog
+              salonId={deletionShopId}
+              onClose={() => setDeletionShopId(null)}
+              onRequested={(name) => {
+                setDeletionShopId(null);
+                setStatusSuccess(`Deletion request for ${name} sent. A different Super Admin must approve it with a fresh authenticator code; nothing has changed yet.`);
+              }}
+            />
+          )}
 
           <p className={styles.generated}>Snapshot generated {dateTime(data.generatedAt)}. Refresh the page for a new read-only snapshot.</p>
         </>

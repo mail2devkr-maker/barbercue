@@ -113,6 +113,7 @@ export const ADMIN_NAV_ITEMS: ReadonlyArray<AdminNavItem> = [
   { id: "admin-users", label: "Admin Users", group: "SETTINGS", href: "/dashboard/admin/access", status: "live" },
   { id: "employees", label: "Employees", group: "SETTINGS", href: "/dashboard/admin/employees", status: "live" },
   { id: "verification", label: "Verification Queue", group: "SETTINGS", href: "/dashboard/admin/verification", status: "live" },
+  { id: "shop-deletions", label: "Shop Deletions", group: "SETTINGS", href: "/dashboard/admin/shop-deletions", status: "live" },
   { id: "location-proposals", label: "Location Proposals", group: "SETTINGS", href: "/dashboard/admin/location-proposals", status: "live" },
   planned("SETTINGS", "alert-thresholds", "Alert & KPI Thresholds", "Admin-editable thresholds (fixed in code today)."),
 ];

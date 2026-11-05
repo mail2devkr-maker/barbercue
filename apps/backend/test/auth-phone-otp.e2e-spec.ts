@@ -191,7 +191,11 @@ maybe(
             await prisma.operatingHours.deleteMany({
               where: { salonId: { in: salonIds } },
             });
-            await prisma.salon.deleteMany({ where: { id: { in: salonIds } } });
+            // Synthetic fixtures only: the #381 guard refuses every other shop hard delete.
+            await prisma.$transaction([
+              prisma.$executeRaw`SELECT set_config('app.fastque_synthetic_shop_cleanup', 'on', true)`,
+              prisma.salon.deleteMany({ where: { id: { in: salonIds } } }),
+            ]);
           }
           await prisma.user.deleteMany({ where: { id: { in: userIds } } });
         }

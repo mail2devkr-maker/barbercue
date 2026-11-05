@@ -300,7 +300,12 @@ Would delete:
   const pushDevices = await prisma.pushDevice.deleteMany({ where: { userId: { in: testUserIds } } });
   const userRoles = await prisma.userRole.deleteMany({ where: { userId: { in: testUserIds } } });
 
-  const salonsDeleted = await prisma.salon.deleteMany({ where: { id: { in: salonIds } } });
+  // #381: shop hard deletes are refused by a database guard. This marker-checked, confirmation-gated tool
+  // removes ONLY the synthetic shops resolved above, so it opts in for this one statement's transaction.
+  const [, salonsDeleted] = await prisma.$transaction([
+    prisma.$executeRaw`SELECT set_config('app.fastque_synthetic_shop_cleanup', 'on', true)`,
+    prisma.salon.deleteMany({ where: { id: { in: salonIds } } }),
+  ]);
   const usersDeleted = await prisma.user.deleteMany({ where: { id: { in: testUserIds } } });
 
   log(`
