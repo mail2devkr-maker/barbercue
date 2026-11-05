@@ -3,7 +3,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { CompositeNavigationProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
-import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   AUTH_PATHS,
   LANGUAGE_LABELS,
@@ -21,6 +21,7 @@ import { color, font, fontSize, lineHeightFor, radius, space } from '../lib/them
 import { Screen, SectionHeader, Card, Button } from '../components/ui';
 import { InlineError } from '../components/ui/ErrorState';
 import { OwnerVoiceSettingsCard } from '../components/owner/OwnerVoiceSettingsCard';
+import { AccountDeletionRequestCard } from '../components/account/AccountDeletionRequestCard';
 import { isCreditsEnabled } from '../lib/feature-flags';
 import type { AccountStackParamList, TabParamList } from '../navigation/types';
 
@@ -123,13 +124,16 @@ export default function AccountScreen() {
     setDeleting(true);
     setDeletionError(null);
     try {
-      await apiFetch(`auth/${AUTH_PATHS.accountDeletion}`, {
+      const result = await apiFetch<{ appleRevocation?: 'not_applicable' | 'completed' | 'manual_required' }>(`auth/${AUTH_PATHS.accountDeletion}`, {
         method: 'DELETE',
         body: JSON.stringify({ confirmation: 'DELETE' }),
       });
       // The server has already revoked every session and stripped credentials. logout() still
       // clears this device's secure storage even when its best-effort server call is rejected.
       await logout();
+      if (result.appleRevocation === 'manual_required') {
+        Alert.alert(t.appleRevocationReminderTitle, t.appleRevocationReminderMessage);
+      }
     } catch (err) {
       setDeletionError(err instanceof ApiError ? err.message : 'Could not delete your account. Please try again.');
       setDeleting(false);
@@ -143,6 +147,7 @@ export default function AccountScreen() {
   const otherSessionCount = sessions.filter((s) => !s.current).length;
   const isCustomerOnly = user?.roles.length === 1 && user.roles[0] === Role.CUSTOMER;
   const isSalonOwner = Boolean(user?.roles.includes(Role.SALON_OWNER));
+  const needsRoleAwareDeletionRequest = Boolean(user && !isCustomerOnly);
 
   return (
     <Screen refreshing={refreshing} onRefresh={() => void handleRefresh()}>
@@ -198,6 +203,9 @@ export default function AccountScreen() {
       <View style={styles.shortcutGrid}>
         <Pressable style={styles.shortcutCard} onPress={() => navigation.navigate('BookingsTab', { screen: 'MyBookings' })}>
           <Text style={styles.shortcutTitle}>{t.myBookings}</Text>
+        </Pressable>
+        <Pressable style={styles.shortcutCard} onPress={() => navigation.navigate('BookingsTab', { screen: 'MyInvoices' })} accessibilityRole="button">
+          <Text style={styles.shortcutTitle}>My invoices</Text>
         </Pressable>
         <Pressable style={styles.shortcutCard} onPress={() => navigation.navigate('QueueTab', { screen: 'QueueHome' })}>
           <Text style={styles.shortcutTitle}>{t.liveQueue}</Text>
@@ -305,6 +313,10 @@ export default function AccountScreen() {
         </Card>
       )}
 
+      {needsRoleAwareDeletionRequest && (
+        <AccountDeletionRequestCard />
+      )}
+
       <Button title={t.signOutThisDevice} variant="secondary" onPress={() => void logout()} style={styles.logoutButton} />
     </Screen>
   );
@@ -314,7 +326,6 @@ const styles = StyleSheet.create({
   card: { marginBottom: space[4] },
   cardTitle: { fontFamily: font.displaySemiBold, fontSize: fontSize.lg, color: color.ink, marginBottom: space[3] },
   privacyLink: { alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center', marginTop: space[2] },
-
   fieldRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
