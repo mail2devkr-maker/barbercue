@@ -384,6 +384,16 @@ function parsePhase1(text: string, raw: string): ParsedIntent | null {
       return { action: AssistantActionId.SERVICE_LIST };
   }
 
+  // "<name> ko inactive kar do" with no other subject: switch a team member off by name. The executor
+  // resolves the name against this shop's staff (and asks when it matches none); the change still
+  // needs the on-screen preview and confirmation. ("<x> ko active kar do" stays a service restore.)
+  if (
+    /^(?:\S+\s+){0,2}?\S+\s+(?:ko|को)\s+(?:inactive|deactivate|disable|निष्क्रिय)\s+(?:kar|kr|कर)(?:\s|$)/u.test(
+      text,
+    )
+  )
+    return { action: AssistantActionId.STAFF_SET_STATUS, active: false };
+
   return null;
 }
 
