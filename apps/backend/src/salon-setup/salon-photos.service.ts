@@ -85,7 +85,7 @@ export class SalonPhotosService {
       input.type,
       count,
     );
-    if (actor === 'PLATFORM_ADMIN')
+    if (actor !== 'OWNER')
       await this.logAdminAdd(userId, salonId, photo, 'link');
     return photo;
   }
@@ -151,7 +151,7 @@ export class SalonPhotosService {
       meta.type,
       count,
     );
-    if (actor === 'PLATFORM_ADMIN')
+    if (actor !== 'OWNER')
       await this.logAdminAdd(userId, salonId, photo, 'upload');
     return photo;
   }
@@ -286,7 +286,7 @@ export class SalonPhotosService {
     await this.prisma.photo.deleteMany({ where: { id: photoId, salonId } });
     // Part 2 — every delegated admin mutation gets an AuditLog row with the real admin actor.
     // Logs the photo's URL (already public) and type only — never binary content.
-    if (actor === 'PLATFORM_ADMIN') {
+    if (actor !== 'OWNER') {
       await this.prisma.auditLog.create({
         data: {
           actorUserId: userId,

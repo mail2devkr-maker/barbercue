@@ -1,5 +1,9 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
-import { DASHBOARD_PATHS, Role, type AuthenticatedUser } from '@barbercue/shared';
+import {
+  DASHBOARD_PATHS,
+  Role,
+  type AuthenticatedUser,
+} from '@barbercue/shared';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { DashboardAnalyticsService } from './dashboard-analytics.service';
@@ -10,7 +14,7 @@ import { DashboardAnalyticsService } from './dashboard-analytics.service';
 // service's own assertOwnerOrAdminAccess is what actually enforces the ACTIVE-only + global-admin
 // invariants — this decorator only proves "a real admin session," never salon-specific authority.
 @Controller(DASHBOARD_PATHS.dashboard)
-@Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN)
+@Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN, Role.CO_FOUNDER)
 export class DashboardAnalyticsController {
   constructor(private readonly analytics: DashboardAnalyticsService) {}
 

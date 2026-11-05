@@ -18,7 +18,7 @@ import { DashboardReviewsService } from './dashboard-reviews.service';
 // DashboardBookingsController). PLATFORM_ADMIN is additionally allowed (Part 2 delegated shop
 // management) — the service's own assertOwnerOrAdminAccess enforces ACTIVE-only + global-admin.
 @Controller(DASHBOARD_PATHS.dashboard)
-@Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN)
+@Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN, Role.CO_FOUNDER)
 export class DashboardReviewsController {
   constructor(private readonly reviews: DashboardReviewsService) {}
 

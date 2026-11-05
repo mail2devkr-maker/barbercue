@@ -7,6 +7,8 @@ import { apiFetch, ApiError } from "../../../../../../lib/api";
 import { useAssistantRefresh } from "../../../../../../lib/assistant-events";
 import { RequireRole } from "../../../../../../components/auth/RequireRole";
 import { Button } from "../../../../../../components/ui/Button";
+import { Btn as OwnerBtn } from "../../../../../../components/owner/parts";
+import { PermanentDeleteDialog } from "../../../../../../components/dashboard/PermanentDeleteDialog";
 import { SetupNavigation } from "../../../../../../components/dashboard/SetupNavigation";
 import { ChairBulkActions, ChairSelectBox } from "../../../../../../components/dashboard/ChairBulkActions";
 import styles from "../../../../../../components/dashboard/dashboard.module.css";
@@ -101,6 +103,9 @@ export default function DashboardChairsPage({
     }
   }
 
+  // Issue #378: the chair whose permanent-delete dialog is open (deletion happens only in the dialog).
+  const [deleting, setDeleting] = useState<SalonChairDto | null>(null);
+
   function removeChair(chair: SalonChairDto) {
     if (!window.confirm(`Remove ${chair.label} from active capacity? Past bookings and service history will remain intact.`)) return;
     void changeStatus(chair, ChairStatus.INACTIVE);
@@ -110,7 +115,7 @@ export default function DashboardChairsPage({
   const activeCount = (chairs ?? []).filter((c) => c.status === ChairStatus.ACTIVE).length;
 
   return (
-    <RequireRole roles={[Role.SALON_OWNER, Role.PLATFORM_ADMIN]} redirectTo="/dashboard/salons">
+    <RequireRole roles={[Role.SALON_OWNER, Role.PLATFORM_ADMIN, Role.CO_FOUNDER]} redirectTo="/dashboard/salons">
     <main className={styles.page}>
       <h1 className={styles.pageTitle}>Chairs</h1>
       <p className={styles.pageSubtitle}>
@@ -194,10 +199,31 @@ export default function DashboardChairsPage({
                     </Button>
                   </>
                 )}
+                <OwnerBtn variant="danger" small onClick={() => setDeleting(c)} aria-label={`Delete ${c.label} permanently`}>
+                  Delete permanently
+                </OwnerBtn>
               </div>
             </li>
           ))}
         </ul>
+      )}
+      {deleting && (
+        <PermanentDeleteDialog
+          kind="chair"
+          salonId={salonId}
+          targetId={deleting.id}
+          onClose={() => setDeleting(null)}
+          onDeleted={(result) => {
+            setDeleting(null);
+            setNotice(result.message);
+            setSelected((prev) => {
+              const copy = new Set(prev);
+              copy.delete(result.deletedId);
+              return copy;
+            });
+            void reloadChairs();
+          }}
+        />
       )}
       <SetupNavigation salonId={salonId} currentStep="chairs" section="actions" />
     </main>

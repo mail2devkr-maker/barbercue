@@ -12,6 +12,7 @@ import { SetupNavigation } from "../../../../../../components/dashboard/SetupNav
 import { StaffHoursEditor } from "../../../../../../components/dashboard/StaffHoursEditor";
 import { StaffProfileEditor } from "../../../../../../components/dashboard/StaffProfileEditor";
 import { StaffVerificationPanel } from "../../../../../../components/dashboard/StaffVerificationPanel";
+import { PermanentDeleteDialog } from "../../../../../../components/dashboard/PermanentDeleteDialog";
 import styles from "../../../../../../components/dashboard/dashboard.module.css";
 
 // Staff roster. Name is the only onboarding requirement. Optional phone/email can link an
@@ -78,6 +79,9 @@ export default function DashboardStaffPage({
   useAssistantRefresh("staff", () => {
     apiFetch<SalonStaffDto[]>(base).then(setStaff).catch(() => undefined);
   });
+
+  // Issue #378: the staff member whose permanent-delete dialog is open.
+  const [deleting, setDeleting] = useState<SalonStaffDto | null>(null);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -151,7 +155,7 @@ export default function DashboardStaffPage({
   }
 
   return (
-    <RequireRole roles={[Role.SALON_OWNER, Role.PLATFORM_ADMIN]} redirectTo="/dashboard/salons">
+    <RequireRole roles={[Role.SALON_OWNER, Role.PLATFORM_ADMIN, Role.CO_FOUNDER]} redirectTo="/dashboard/salons">
     <main className={styles.page}>
       <h1 className={styles.pageTitle}>Staff</h1>
       <p className={styles.pageSubtitle}>
@@ -162,7 +166,7 @@ export default function DashboardStaffPage({
       <SetupNavigation salonId={salonId} currentStep="staff" section="steps" />
 
       {error && <p className={`${styles.banner} ${styles.bannerError}`}>{error}</p>}
-      {notice && <p className={`${styles.banner} ${styles.bannerNotice}`}>{notice}</p>}
+      {notice && <p className={`${styles.banner} ${styles.bannerNotice}`} role="status">{notice}</p>}
 
       {inviteUrl && (
         <div className={`${styles.banner} ${styles.bannerWarning}`}>
@@ -271,6 +275,9 @@ export default function DashboardStaffPage({
                 >
                   {verificationOpenFor === m.id ? "Hide verification" : "Verification"}
                 </Button>
+                <OwnerBtn variant="danger" small onClick={() => setDeleting(m)} aria-label={`Delete ${m.displayName} permanently`}>
+                  Delete permanently
+                </OwnerBtn>
               </div>
               {hoursOpenFor === m.id && <StaffHoursEditor salonId={salonId} staffId={m.id} />}
               {profileOpenFor === m.id && (
@@ -305,6 +312,19 @@ export default function DashboardStaffPage({
         </OwnerDialog>
       )}
       <SetupNavigation salonId={salonId} currentStep="staff" section="actions" />
+      {deleting && (
+        <PermanentDeleteDialog
+          kind="staff"
+          salonId={salonId}
+          targetId={deleting.id}
+          onClose={() => setDeleting(null)}
+          onDeleted={(result) => {
+            setDeleting(null);
+            setStaff((current) => (current ?? []).filter((member) => member.id !== result.deletedId));
+            setNotice(result.message);
+          }}
+        />
+      )}
     </main>
     </RequireRole>
   );

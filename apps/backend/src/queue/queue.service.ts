@@ -1286,7 +1286,7 @@ export class QueueService {
   private async assignLoaded(
     entry: Awaited<ReturnType<QueueService['getEntryOrThrow']>>,
     input: AssignQueueEntryInput,
-    by: { userId: string; actor: 'STAFF_OR_OWNER' | 'PLATFORM_ADMIN' } | null,
+    by: { userId: string; actor: 'STAFF_OR_OWNER' | 'PLATFORM_ADMIN' | 'CO_FOUNDER' } | null,
     options: { startService: boolean },
   ): Promise<QueueEntryDetailDto> {
     const entryId = entry.id;
@@ -2646,13 +2646,13 @@ export class QueueService {
   // roll back cleanly on conflict) — a no-op for a real staff/owner actor, an AuditLog row with the
   // real admin actor otherwise.
   private async logAdminQueueAction(
-    actor: 'STAFF_OR_OWNER' | 'PLATFORM_ADMIN',
+    actor: 'STAFF_OR_OWNER' | 'PLATFORM_ADMIN' | 'CO_FOUNDER',
     userId: string,
     action: string,
     entityId: string,
     metadata: Prisma.InputJsonValue,
   ): Promise<void> {
-    if (actor !== 'PLATFORM_ADMIN') return;
+    if (actor === 'STAFF_OR_OWNER') return;
     await this.prisma.auditLog.create({
       data: {
         actorUserId: userId,

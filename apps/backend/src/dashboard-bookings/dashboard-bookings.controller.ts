@@ -16,7 +16,7 @@ import { DashboardBookingsService } from './dashboard-bookings.service';
 // PLATFORM_ADMIN is additionally allowed at the route level (Part 2 delegated shop management);
 // read-only here, so no AuditLog write is needed for the admin path.
 @Controller(DASHBOARD_PATHS.dashboard)
-@Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN)
+@Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN, Role.CO_FOUNDER)
 export class DashboardBookingsController {
   constructor(private readonly bookingsService: DashboardBookingsService) {}
 

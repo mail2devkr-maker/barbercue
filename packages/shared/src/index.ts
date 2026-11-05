@@ -27,4 +27,5 @@ export * from './offers';
 export * from './employee-voice';
 export * from './contact-ledger';
 export * from './assistant';
+export * from './permanent-deletion';
 export * from './assistant-voice-check';

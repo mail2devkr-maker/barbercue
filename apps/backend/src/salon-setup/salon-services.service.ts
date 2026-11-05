@@ -235,7 +235,7 @@ export class SalonServicesService {
       select: { salonType: true, salonTypeConfirmed: true },
     });
 
-    if (actor === 'PLATFORM_ADMIN') {
+    if (actor !== 'OWNER') {
       await this.prisma.auditLog.create({
         data: {
           actorUserId: userId,
@@ -498,7 +498,7 @@ export class SalonServicesService {
       }
       await tx.auditLog.create({ data: {
         actorUserId: userId,
-        action: actor === 'PLATFORM_ADMIN'
+        action: actor !== 'OWNER'
           ? 'ADMIN_SERVICES_BULK_DEACTIVATED' : 'OWNER_SERVICES_BULK_DEACTIVATED',
         entityType: 'Salon',
         entityId: salonId,
@@ -578,7 +578,7 @@ export class SalonServicesService {
       }
       await tx.auditLog.create({ data: {
         actorUserId: userId,
-        action: actor === 'PLATFORM_ADMIN'
+        action: actor !== 'OWNER'
           ? 'ADMIN_SALON_SERVICES_PERMANENTLY_DELETED'
           : 'OWNER_SALON_SERVICES_PERMANENTLY_DELETED',
         entityType: 'Salon', entityId: salonId,
@@ -624,7 +624,7 @@ export class SalonServicesService {
           isActive: true,
         },
       });
-      if (actor === 'PLATFORM_ADMIN') {
+      if (actor !== 'OWNER') {
         await tx.auditLog.create({
           data: {
             actorUserId: userId,
@@ -677,7 +677,7 @@ export class SalonServicesService {
           ...(input.isActive !== undefined && { isActive: input.isActive }),
         },
       });
-      if (actor === 'PLATFORM_ADMIN') {
+      if (actor !== 'OWNER') {
         await tx.auditLog.create({
           data: {
             actorUserId: userId,

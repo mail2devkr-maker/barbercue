@@ -123,7 +123,7 @@ export class SalonTimezoneService {
     });
     // Part 2 — every delegated admin mutation gets an AuditLog row with the real actor; an owner
     // editing their own shop is unchanged (no new logging for that path).
-    if (actor === 'PLATFORM_ADMIN') {
+    if (actor !== 'OWNER') {
       await this.prisma.auditLog.create({
         data: {
           actorUserId: userId,
