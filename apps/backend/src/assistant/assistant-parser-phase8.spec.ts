@@ -113,8 +113,14 @@ describe('safety: the new phrases never become a write', () => {
       AssistantActionId.NAVIGATE,
     );
   });
-  it('navigation and back exist only on the shop screens', () => {
-    for (const s of ['customer', 'admin', 'employee'] as const) {
+  it('shop navigation exists only on the shop screens; back also on the admin screens', () => {
+    expect(parseAssistantText('wapas jao', 'admin')?.action).toBe(
+      AssistantActionId.NAVIGATE_BACK,
+    );
+    expect(parseAssistantText('Bookings kholo', 'admin')?.action).toBe(
+      AssistantActionId.ADMIN_NAVIGATE,
+    );
+    for (const s of ['customer', 'employee'] as const) {
       expect(parseAssistantText('Bookings kholo', s)?.action).not.toBe(
         AssistantActionId.NAVIGATE,
       );

@@ -127,4 +127,29 @@ describe('assistant understanding (Hinglish / Hindi / English)', () => {
       A.NAVIGATE,
     );
   });
+
+  it('admin screens: open admin pages by voice; questions stay questions', () => {
+    const admin = (t: string) => parseAssistantText(t, 'admin');
+    expect(admin('live queue monitoring kholo')).toEqual({
+      action: A.ADMIN_NAVIGATE,
+      page: 'liveQueue',
+    });
+    expect(admin('all bookings page kholo')).toEqual({
+      action: A.ADMIN_NAVIGATE,
+      page: 'allBookings',
+    });
+    expect(admin('onboarding kholo')).toEqual({
+      action: A.ADMIN_NAVIGATE,
+      page: 'onboarding',
+    });
+    expect(admin('open verification queue')).toEqual({
+      action: A.ADMIN_NAVIGATE,
+      page: 'verification',
+    });
+    expect(admin('wapas jao')?.action).toBe(A.NAVIGATE_BACK);
+    expect(admin('kitni shops open hain')?.action).toBe(A.ADMIN_SHOP_STATUS);
+    expect(admin('aaj kaunsi shops busy hain')?.action).not.toBe(
+      A.ADMIN_NAVIGATE,
+    );
+  });
 });

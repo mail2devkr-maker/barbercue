@@ -604,10 +604,29 @@ export const ASSISTANT_ACTIONS: Record<AssistantActionId, ActionDef> = {
     'OWNER_OR_ADMIN',
     ['Bookings kholo', 'Services page kholo', 'Live queue kholo'],
   ),
+  [AssistantActionId.ADMIN_NAVIGATE]: read(
+    'Open an admin page',
+    [
+      Role.PLATFORM_ADMIN,
+      Role.CO_FOUNDER,
+      Role.HR_ADMIN,
+      Role.SALES_ADMIN,
+      Role.PLATFORM_VIEWER,
+    ],
+    'PLATFORM',
+    ['Live queue monitoring kholo', 'All bookings kholo', 'Onboarding page kholo'],
+  ),
+  // Going back changes nothing and the client only returns along pages the assistant itself opened,
+  // so it is available on every screen where "X kholo" is (shop managers and the admin screens).
   [AssistantActionId.NAVIGATE_BACK]: read(
     'Go back',
-    SHOP_MANAGERS,
-    'OWNER_OR_ADMIN',
+    [
+      ...SHOP_MANAGERS,
+      Role.HR_ADMIN,
+      Role.SALES_ADMIN,
+      Role.PLATFORM_VIEWER,
+    ],
+    'ANY_SIGNED_IN',
     ['Wapas jao'],
   ),
 };
