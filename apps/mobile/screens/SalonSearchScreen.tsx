@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import * as Location from 'expo-location';
 import {
   DISCOVERY_PATHS,
+  Language,
   FAVORITES_PATHS,
   MIN_RATING_OPTIONS,
   POPULAR_SERVICES,
@@ -39,6 +39,7 @@ import {
 import { useLanguage } from '../lib/language-context';
 import { useAuth } from '../lib/auth-context';
 import { DEFAULT_DISCOVERY_FILTERS, buildDiscoveryQuery, type DiscoveryFilters } from '../lib/discovery-search';
+import { findCityForDeviceLocation, buildCityFallbackQuery, appendCityMatchesToNearby, getSearchGpsCoordinates } from '../lib/nearby-city-fallback';
 import type { SearchStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<SearchStackParamList, 'SalonSearch'>;
@@ -275,7 +276,7 @@ function PriceFilterDropdown({
 
 // Public discovery endpoint — no auth required, mirrors apps/web's search page.
 export default function SalonSearchScreen({ navigation, route }: Props) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { width: windowWidth } = useWindowDimensions();
   const stackSearchRow = windowWidth < NARROW_SEARCH_ROW_WIDTH;
   const selectedStyleName = route.params?.selectedStyleName;
@@ -288,6 +289,7 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searched, setSearched] = useState(false);
+  const searchSequence = useRef(0);
   const [nearMe, setNearMe] = useState<{ lat: number; lng: number } | null>(
     initialLat !== undefined && initialLng !== undefined ? { lat: initialLat, lng: initialLng } : null,
   );
@@ -356,6 +358,7 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
   ) {
     const filters: DiscoveryFilters = { radiusKm, priceMin, priceMax, service, ...discovery, ...overrides };
     const built = buildDiscoveryQuery({ text: queryOverride ?? q, coords, filters, favoriteIds: isCustomer ? favoriteIds : null });
+    const requestId = ++searchSequence.current;
     setSearched(true);
     setError(null);
     setNotice(null);
@@ -369,9 +372,37 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
       const result = await apiFetch<PaginatedResult<SalonListItemDto>>(
         `${DISCOVERY_PATHS.salons}?${built.query}`,
       );
+      if (requestId !== searchSequence.current) return;
       setResults(result.items);
+
+      // Older salons without verified map pins are excluded from nearby rankings.
+      // Without a hard radius, supplement with canonical same-city salons,
+      // preserving real distances for pinned shops and null for unpinned ones.
+      if (coords && filters.radiusKm === null) {
+        const city = await findCityForDeviceLocation(coords);
+        if (requestId !== searchSequence.current) return;
+        if (city) {
+          try {
+            const byCity = await apiFetch<PaginatedResult<SalonListItemDto>>(
+              `${DISCOVERY_PATHS.salons}?${buildCityFallbackQuery(built.query, city)}`,
+            );
+            if (requestId !== searchSequence.current) return;
+            const combined = appendCityMatchesToNearby(result.items, byCity.items, coords);
+            if (combined.length > result.items.length) {
+              setResults(combined);
+              setNotice(language === Language.HI
+                ? `${city.name} के अन्य सैलून दिखाए गए हैं। बिना मैप पिन वाले सैलून की दूरी उपलब्ध नहीं है।`
+                : `Showing other ${city.name} shops. Distance is unavailable for shops without map pins.`);
+            }
+          } catch {
+            // Keep actual GPS results if the optional city lookup fails.
+          }
+        }
+      }
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t.couldNotSearchSalons);
+      if (requestId === searchSequence.current) {
+        setError(err instanceof ApiError ? err.message : t.couldNotSearchSalons);
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -418,13 +449,12 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
       setLocating(true);
       setError(null);
       try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-          setError(t.locationDenied);
+        const gps = await getSearchGpsCoordinates(false);
+        if (gps.kind !== 'ok') {
+          setError(gps.kind === 'denied' ? t.locationDenied : t.couldNotGetLocation);
           return;
         }
-        const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-        const coords = { lat: position.coords.latitude, lng: position.coords.longitude };
+        const coords = gps.coords;
         setNearMe(coords);
         setRadiusKm(value);
         await runSearch(false, coords, { radiusKm: value, priceMin, priceMax, service });
@@ -482,13 +512,12 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
     setLocating(true);
     setError(null);
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        setError(t.locationDenied);
+      const gps = await getSearchGpsCoordinates(true);
+      if (gps.kind !== 'ok') {
+        setError(gps.kind === 'denied' ? t.locationDenied : t.couldNotGetLocation);
         return;
       }
-      const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      const coords = { lat: position.coords.latitude, lng: position.coords.longitude };
+      const coords = gps.coords;
       setNearMe(coords);
       await runSearch(false, coords);
     } catch {
@@ -771,6 +800,11 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
                     {item.isOpenNow !== null ? (item.isOpenNow ? t.openNowLabel : t.closedNowLabel) : ''}
                     {item.isOpenNow !== null && item.distanceKm !== null ? ' · ' : ''}
                     {item.distanceKm !== null ? `${formatDistance(item.distanceKm, item.countryCode)}${t.awaySuffix}` : ''}
+                  </Text>
+                )}
+                {nearMe && (item.lat == null || item.lng == null) && (
+                  <Text style={styles.cardMeta}>
+                    {language === Language.HI ? 'दूरी उपलब्ध नहीं (मैप पिन बाकी)' : 'Distance unavailable (shop pin missing)'}
                   </Text>
                 )}
               </View>
