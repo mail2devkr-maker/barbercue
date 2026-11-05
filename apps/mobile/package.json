@@ -9,7 +9,8 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "test": "jest",
-    "verify:android-release": "node scripts/verify-android-release.js"
+    "verify:android-release": "node scripts/verify-android-release.js",
+    "verify:android-1.0.7-config": "node scripts/verify-android-107-config.js"
   },
   "dependencies": {
     "@barbercue/shared": "*",
@@ -39,7 +40,8 @@
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
     "react-native-web": "^0.21.2",
-    "socket.io-client": "^4.8.3"
+    "socket.io-client": "^4.8.3",
+    "qrcode": "1.5.4"
   },
   "devDependencies": {
     "@testing-library/react-native": "^14.0.1",
