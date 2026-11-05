@@ -1966,6 +1966,8 @@ export interface AdminBookingRowDto {
 export interface AdminBookingsPageDto {
   items: AdminBookingRowDto[];
   nextCursor: string | null;
+}
+
 /** New shop onboarding funnel: registered -> verified -> configured -> live -> first customer. No owner data. */
 export type AdminOnboardingStage = "REGISTERED" | "VERIFIED" | "CONFIGURED" | "LIVE" | "FIRST_CUSTOMER";
 export interface AdminOnboardingShopDto {
