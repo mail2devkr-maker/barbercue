@@ -110,7 +110,11 @@ const RESCHEDULE = W(
 );
 const CUSTOMERS = W('customer|customers|client|clients|grahak|ग्राहक');
 const MINE = W('my|mera|meri|mere|mujhe|main|मेरा|मेरी|मेरे|मुझे');
-const LEAVE = W('leave|chhod|chhodo|chod|nikal|छोड़');
+const LEAVE = W(
+  'leave|chhod|chhodo|chod|nikal|nikalo|hata|hatao|hatana|remove|छोड़|हटा|हटाओ|निकालो',
+);
+// "How many customers are in the line" asks about the queue, not the customer directory.
+const HOW_MANY = W('kitne|kitna|kitni|how many|कितने|कितना|कितनी');
 const STATUS = W(
   'status|kitna|kitne|kab|position|number|wait|intezar|स्थिति|कितना|कब',
 );
@@ -344,8 +348,8 @@ export function parsePhase2(
     };
   }
 
-  // ---- customers directory
-  if (CUSTOMERS.test(text)) {
+  // ---- customers directory (a head-count of the waiting line is a queue question instead)
+  if (CUSTOMERS.test(text) && !(QUEUE.test(text) && HOW_MANY.test(text))) {
     const query = after(text, CUSTOMERS)
       .replace(SHOW, ' ')
       .replace(
