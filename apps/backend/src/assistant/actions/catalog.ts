@@ -5,11 +5,19 @@ import {
 } from '@barbercue/shared';
 import type { ActionDef } from './kit';
 
-const SHOP_MANAGERS: Role[] = [Role.SALON_OWNER, Role.PLATFORM_ADMIN];
+// CO_FOUNDER manages shops through the same delegated Owner Dashboard access as PLATFORM_ADMIN
+// (#382). Both platform roles only count from an ADMIN-audience (TOTP) session - enforced in
+// AssistantService.effectiveRoles/checkAccess - and the per-shop check still runs on every action.
+const SHOP_MANAGERS: Role[] = [
+  Role.SALON_OWNER,
+  Role.PLATFORM_ADMIN,
+  Role.CO_FOUNDER,
+];
 const SHOP_TEAM: Role[] = [
   Role.SALON_OWNER,
   Role.SALON_STAFF,
   Role.PLATFORM_ADMIN,
+  Role.CO_FOUNDER,
 ];
 const CUSTOMERS: Role[] = [Role.CUSTOMER];
 const OWNERS: Role[] = [Role.SALON_OWNER];
