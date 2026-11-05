@@ -87,3 +87,11 @@ Date: 2026-10-28 (IST)
 - Production Apple/Google authentication, signed store IPA, TestFlight, physical iPhone acceptance, App Review, and public listing remain NOT VERIFIED / NOT DONE. The parity gaps recorded above remain open.
 
 **Decision: NO-GO for App Store submission or public release.**
+
+
+## Current integration checkpoint — 2026-11-05
+
+- Production master is `9885d7da480fc1ec018a5461fdd2f1e4542813ed`, including PR #402 Voice reconnection; Railway web and backend are both online at this SHA. The new master commits modify only `apps/web/lib/voice-conversation.ts` and its web test, which do not overlap PR #399's changed files.
+- Current iOS integration is Draft PR #399, feature head `dd79c32c413a87a2e92153695494181c38697d86`, integrating #387 and #388. Its nine successful checks, including simulator smoke run `41998045860`, were recorded before PR #402. This parity-document refresh triggers a fresh exact-head workflow against the current master merge ref; use the live PR check list for the resulting run IDs.
+- The three migrations in this candidate (`20261027100000_add_apple_auth`, `20261028150000_account_deletion_requests`, `20261028160000_account_deletion_request_cancellation`) are additive and have only been certified on disposable PostgreSQL. They are not applied to production.
+- No new signed IPA, TestFlight upload, production migration, deployment, App Review submission, or physical iPhone test is claimed by this checkpoint.
