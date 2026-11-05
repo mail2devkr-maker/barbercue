@@ -1,6 +1,8 @@
 # FastQue Android 1.0.7 parity audit
 
-Audit baseline: production master `98c724cc56402fafd679ec0f6c8d1e17ce86421b`. The isolated mobile candidate carries the Android 1.0.7 / PR #379 integration from PR #383 and adds the role-aware native Assistant from PR #385. This is a source/API audit, not authenticated runtime acceptance or physical-device certification. The older PR #383 certification entries below are historical evidence for that exact older head, not certification of the current master-integrated candidate.
+Audit baseline: production master `d5295c2d2ca5e25ee8310325b392d79f9e448956`. This matrix describes the current Android 1.0.7 integration candidate, Draft PR #398 at `b3ad672c5c62d8554dad3ed636f98f00327703a8`, which integrates PR #385 (Android 1.0.7/Employee Login/Assistant), PR #389 (QR preview/share), and the GPS/keyboard fixes from PR #379. It is a source/API audit, not authenticated production runtime acceptance or physical-device certification.
+
+Current exact-head CI for PR #398: Owner Operations Certification `41997817094`, Nitesh Admin + Discovery `41997817057`, and Salon Location Verification `41997817058` all completed SUCCESS. The Owner Operations workflow passed mobile typecheck, the 1.0.7 Android / 1.0.6 iOS effective-config assertions, Jest, and Android JavaScript export. JavaScript export is not a native AAB build. The older PR #383 certification entries below remain historical evidence for that exact older head only.
 
 Statuses: **SOURCE** means a native path and current API usage exist; **PARTIAL** means part of the web workflow is present but a material function remains; **GAP** means no equivalent native workflow was found; **PHYSICAL_REQUIRED** means source is present but real-device behavior is not yet verified; **WEB_ONLY** means privileged scope is intentionally excluded pending an explicit mobile authorization.
 
@@ -33,7 +35,7 @@ Statuses: **SOURCE** means a native path and current API usage exist; **PARTIAL*
 | Owner onboarding | SOURCE | Existing native onboarding and registration routes; production acceptance pending |
 | Shop profile and notifications | PARTIAL | Native profile fields and explicit time-zone confirmation are now implemented; compare remaining owner preferences and verify on device |
 | Payment QR | SOURCE | Existing `PaymentQrSection` manages shop payment QR; it is not a printable public shop poster |
-| Public shop QR poster preview/download with long names | PARTIAL | Owner-only native screen previews a QR generated from the backend's canonical HTTPS salon link and shares that link. Printable/downloadable poster export remains unavailable in this candidate. |
+| Public shop QR poster preview/download with long names | PARTIAL | Owner-only native screen previews the backend's canonical HTTPS salon link using native square `View` modules (font-independent rendering) and shares that link. The renderer has a focused component test, but a successful scan on a real S20 FE is still required. Printable/downloadable poster export remains unavailable in this candidate. |
 | Inventory | PARTIAL | New native `OwnerInventoryScreen` uses the R7 owner/salon-scoped report, product listing/search/pagination, low-stock filter, product creation, idempotent opening/purchase/adjustment movements, and movement history APIs. Backend enforces owner/admin authorization and salon scope. Exact-head UI/API tests and authenticated runtime/device acceptance remain pending; supplier/category/forecast workflows are not fully represented |
 | Offers/promotions | PARTIAL | Capability-gated center supports existing offer publish/pause, creating Draft offers, backend price preview and editing Draft/Paused offers; writes use idempotency keys |
 

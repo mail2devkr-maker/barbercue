@@ -1,11 +1,12 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import { Share, StyleSheet, Text, View } from 'react-native';
+import { Share, StyleSheet, Text } from 'react-native';
 import { DASHBOARD_PATHS, type SalonShareLinksDto } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../../lib/api';
 import { useSalon } from '../../lib/salon-context';
 import { useLanguage } from '../../lib/language-context';
-import { classifySalonShareLinks, createQrMatrix, type SalonShareResult } from '../../lib/qr-poster';
+import { classifySalonShareLinks, type SalonShareResult } from '../../lib/qr-poster';
+import { QrMatrixView } from '../../components/owner/QrMatrixView';
 import { Button, Card, InlineError, Screen, SectionHeader } from '../../components/ui';
 import { color, font, fontSize, space } from '../../lib/theme';
 
@@ -15,27 +16,6 @@ type LoadState =
   | ({ salonId: string } & SalonShareResult);
 
 type PosterAction = 'share' | null;
-
-function QrPreview({ value, label }: { value: string; label: string }) {
-  const matrix = useMemo(() => createQrMatrix(value), [value]);
-  const pairedRows = Math.ceil(matrix.size / 2);
-  const fontSize = 236 / (pairedRows * 1.2);
-  const lines: string[] = [];
-  for (let row = 0; row < matrix.size; row += 2) {
-    let line = '';
-    for (let column = 0; column < matrix.size; column += 1) {
-      const top = matrix.cells[row * matrix.size + column];
-      const bottom = row + 1 < matrix.size && matrix.cells[(row + 1) * matrix.size + column];
-      line += top ? (bottom ? '█' : '▀') : (bottom ? '▄' : ' ');
-    }
-    lines.push(line);
-  }
-  return (
-    <View accessible accessibilityRole="image" accessibilityLabel={label} style={styles.qrFrame}>
-      <Text accessible={false} selectable={false} style={[styles.qrText, { fontSize, lineHeight: 236 / pairedRows }]}>{lines.join('\n')}</Text>
-    </View>
-  );
-}
 
 export default function OwnerQrPosterScreen() {
   const { selectedSalonId, selectedSalon } = useSalon();
@@ -125,7 +105,7 @@ export default function OwnerQrPosterScreen() {
             <Text style={styles.brand}>FASTQUE</Text>
             <Text style={styles.shopName}>{name}</Text>
             <Text style={styles.tagline}>{hindi ? 'बुक करने या लाइव क्यू में आने के लिए स्कैन करें' : 'Scan to book or join the Live Queue'}</Text>
-            <QrPreview value={load.publicUrl} label={hindi ? `${name} का सार्वजनिक QR कोड` : `Public QR code for ${name}`} />
+            <QrMatrixView value={load.publicUrl} label={hindi ? `${name} का सार्वजनिक QR कोड` : `Public QR code for ${name}`} />
             <Text style={styles.callout}>{hindi ? 'SCAN • BOOK • SKIP THE WAIT' : 'SCAN • BOOK • SKIP THE WAIT'}</Text>
             <Text style={styles.powered}>Powered by FastQue</Text>
           </Card>
@@ -147,8 +127,6 @@ const styles = StyleSheet.create({
   brand: { color: '#ff7190', fontFamily: font.bodyBold, fontSize: fontSize.lg, letterSpacing: 2 },
   shopName: { color: '#ffffff', fontFamily: font.bodyBold, fontSize: fontSize.xl, lineHeight: 30, textAlign: 'center', marginTop: space[2], maxWidth: '100%' },
   tagline: { color: '#f6dfe5', fontFamily: font.bodyRegular, fontSize: fontSize.sm, textAlign: 'center', marginTop: space[2], marginBottom: space[3] },
-  qrFrame: { width: 236, height: 236, maxWidth: '100%', aspectRatio: 1, backgroundColor: '#ffffff', borderRadius: 4, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
-  qrText: { color: '#111111', fontFamily: 'monospace', letterSpacing: 0, includeFontPadding: false, textAlign: 'center' },
   callout: { color: '#ff7190', fontFamily: font.bodyBold, fontSize: fontSize.sm, letterSpacing: 0.5, textAlign: 'center', marginTop: space[3] },
   powered: { color: '#c9c3c4', fontFamily: font.bodyRegular, fontSize: fontSize.xs, marginTop: space[1] },
   body: { color: color.ink, fontFamily: font.bodyRegular, fontSize: fontSize.base, lineHeight: 22 },
