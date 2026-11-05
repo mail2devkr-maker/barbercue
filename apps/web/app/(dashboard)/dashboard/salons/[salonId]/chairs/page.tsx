@@ -4,6 +4,8 @@ import { use, useEffect, useState } from "react";
 import { ChairStatus, DASHBOARD_PATHS, Role } from "@barbercue/shared";
 import type { SalonChairDto } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../../../../../lib/api";
+import { useAuth } from "../../../../../../lib/auth-context";
+import { canPermanentlyDelete } from "../../../../../../lib/permanent-delete-access";
 import { useAssistantRefresh } from "../../../../../../lib/assistant-events";
 import { RequireRole } from "../../../../../../components/auth/RequireRole";
 import { Button } from "../../../../../../components/ui/Button";
@@ -29,6 +31,8 @@ export default function DashboardChairsPage({
   params: Promise<{ salonId: string }>;
 }) {
   const { salonId } = use(params);
+  const { user } = useAuth();
+  const mayDelete = canPermanentlyDelete(user?.roles);
   const base = `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.chairs}`;
 
   const [chairs, setChairs] = useState<SalonChairDto[] | null>(null);
@@ -199,9 +203,11 @@ export default function DashboardChairsPage({
                     </Button>
                   </>
                 )}
-                <OwnerBtn variant="danger" small onClick={() => setDeleting(c)} aria-label={`Delete ${c.label} permanently`}>
-                  Delete permanently
-                </OwnerBtn>
+                {mayDelete && (
+                  <OwnerBtn variant="danger" small onClick={() => setDeleting(c)} aria-label={`Delete ${c.label} permanently`}>
+                    Delete permanently
+                  </OwnerBtn>
+                )}
               </div>
             </li>
           ))}
