@@ -20,7 +20,7 @@ import { VerificationService } from './verification.service';
 // throws for a non-owner, so a real submission as/for the owner is genuinely impossible, not just
 // hidden by the UI.
 @Controller(DASHBOARD_PATHS.dashboard)
-@Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN)
+@Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN, Role.CO_FOUNDER)
 export class VerificationController {
   constructor(private readonly verification: VerificationService) {}
 

@@ -56,9 +56,9 @@ export class SalonPaymentQrService {
     input: SetSalonPaymentQrInput,
   ): Promise<SalonPaymentQrDto> {
     const actor = await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
-    const before = actor === 'PLATFORM_ADMIN' ? await this.currentUrl(salonId) : null;
+    const before = actor !== 'OWNER' ? await this.currentUrl(salonId) : null;
     const result = await this.upsert(salonId, input.url);
-    if (actor === 'PLATFORM_ADMIN') {
+    if (actor !== 'OWNER') {
       await this.logAdminAudit(userId, salonId, 'link', before, result.paymentQrImageUrl);
     }
     return result;
@@ -89,12 +89,12 @@ export class SalonPaymentQrService {
       );
     }
 
-    const before = actor === 'PLATFORM_ADMIN' ? await this.currentUrl(salonId) : null;
+    const before = actor !== 'OWNER' ? await this.currentUrl(salonId) : null;
     const routing = await decodePaymentQr(file.buffer);
     const key = `salons/${salonId}/payment-qr/${routing ? DECODED_UPI_KEY_PREFIX : ''}${randomUUID()}.${extensionForMimeType(detected)}`;
     const url = await this.storage.putPublicObject(key, file.buffer, detected);
     const result = await this.upsert(salonId, url, routing);
-    if (actor === 'PLATFORM_ADMIN') {
+    if (actor !== 'OWNER') {
       await this.logAdminAudit(userId, salonId, 'upload', before, result.paymentQrImageUrl);
     }
     return result;
@@ -111,7 +111,7 @@ export class SalonPaymentQrService {
       where: { salonId },
       data: { paymentQrImageUrl: null, upiVpa: null, upiPayeeName: null },
     });
-    if (actor === 'PLATFORM_ADMIN') {
+    if (actor !== 'OWNER') {
       await this.logAdminAudit(userId, salonId, 'remove', policy.paymentQrImageUrl, null);
     }
     try {

@@ -9,7 +9,7 @@ import { RequireRole } from "../../../../components/auth/RequireRole";
 // the real authorization is SalonAccessService.assertOwnerOrAdminAccess on the API side.
 export default function SalonsLayout({ children }: { children: React.ReactNode }) {
   return (
-    <RequireRole roles={[Role.SALON_STAFF, Role.SALON_OWNER, Role.PLATFORM_ADMIN]} redirectTo="/staff/login">
+    <RequireRole roles={[Role.SALON_STAFF, Role.SALON_OWNER, Role.PLATFORM_ADMIN, Role.CO_FOUNDER]} redirectTo="/staff/login">
       {children}
     </RequireRole>
   );

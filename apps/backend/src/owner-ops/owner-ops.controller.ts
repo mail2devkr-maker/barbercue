@@ -85,7 +85,7 @@ const SALON = 'dashboard/salons/:salonId';
  * in the right capacity (owner-only vs owner-or-barber) - see SalonAccessService.
  */
 @Controller()
-@Roles(Role.SALON_OWNER, Role.SALON_STAFF, Role.PLATFORM_ADMIN)
+@Roles(Role.SALON_OWNER, Role.SALON_STAFF, Role.PLATFORM_ADMIN, Role.CO_FOUNDER)
 export class OwnerOpsController {
   constructor(
     private readonly overview: OwnerOverviewService,
@@ -108,7 +108,7 @@ export class OwnerOpsController {
   // ---------- Overview / search / analytics ----------
 
   @Get(`${SALON}/share-links`)
-  @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN)
+  @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN, Role.CO_FOUNDER)
   @Header('Cache-Control', 'private, no-store')
   getSalonShareLinks(
     @CurrentUser() user: AuthenticatedUser,
@@ -118,7 +118,7 @@ export class OwnerOpsController {
   }
 
   @Get(`${SALON}/overview`)
-  @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN)
+  @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN, Role.CO_FOUNDER)
   getOverview(
     @CurrentUser() user: AuthenticatedUser,
     @Param('salonId', ParseUUIDPipe) salonId: string,
@@ -127,7 +127,7 @@ export class OwnerOpsController {
   }
 
   @Get(`${SALON}/revenue`)
-  @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN)
+  @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN, Role.CO_FOUNDER)
   getRevenue(
     @CurrentUser() user: AuthenticatedUser,
     @Param('salonId', ParseUUIDPipe) salonId: string,
@@ -137,7 +137,7 @@ export class OwnerOpsController {
 
   @Post(`${SALON}/${DASHBOARD_PATHS.assistant}/query`)
   @HttpCode(200)
-  @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN)
+  @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN, Role.CO_FOUNDER)
   @Header('Cache-Control', 'private, no-store')
   @Throttle({
     default: {
@@ -155,7 +155,7 @@ export class OwnerOpsController {
   }
 
   @Get(`${SALON}/revenue/report`)
-  @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN)
+  @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN, Role.CO_FOUNDER)
   @Header('Cache-Control', 'private, no-store')
   getRevenueReport(
     @CurrentUser() user: AuthenticatedUser,
@@ -167,7 +167,7 @@ export class OwnerOpsController {
   }
 
   @Get(`${SALON}/revenue/report.csv`)
-  @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN)
+  @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN, Role.CO_FOUNDER)
   @Header('Content-Type', 'text/csv; charset=utf-8')
   async exportRevenueReport(
     @CurrentUser() user: AuthenticatedUser,
@@ -187,7 +187,7 @@ export class OwnerOpsController {
   }
 
   @Get(`${SALON}/revenue/report.excel.xml`)
-  @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN)
+  @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN, Role.CO_FOUNDER)
   @Header('Content-Type', 'application/vnd.ms-excel; charset=utf-8')
   async exportRevenueReportExcel(
     @CurrentUser() user: AuthenticatedUser,
@@ -215,7 +215,7 @@ export class OwnerOpsController {
   }
 
   @Get(`${SALON}/analytics/cancellations`)
-  @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN)
+  @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN, Role.CO_FOUNDER)
   getCancellationAnalytics(
     @CurrentUser() user: AuthenticatedUser,
     @Param('salonId', ParseUUIDPipe) salonId: string,
@@ -306,7 +306,7 @@ export class OwnerOpsController {
   }
 
   @Patch(`${SALON}/queue/settings`)
-  @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN)
+  @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN, Role.CO_FOUNDER)
   setQueueSettings(
     @CurrentUser() user: AuthenticatedUser,
     @Param('salonId', ParseUUIDPipe) salonId: string,
@@ -338,7 +338,7 @@ export class OwnerOpsController {
   }
 
   @Post(`${SALON}/staff/:staffId/access/revoke`)
-  @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN)
+  @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN, Role.CO_FOUNDER)
   revokeStaffAccess(
     @CurrentUser() user: AuthenticatedUser,
     @Param('salonId', ParseUUIDPipe) salonId: string,
@@ -350,7 +350,7 @@ export class OwnerOpsController {
   }
 
   @Post(`${SALON}/staff/:staffId/access/restore`)
-  @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN)
+  @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN, Role.CO_FOUNDER)
   restoreStaffAccess(
     @CurrentUser() user: AuthenticatedUser,
     @Param('salonId', ParseUUIDPipe) salonId: string,
@@ -364,7 +364,7 @@ export class OwnerOpsController {
   // ---------- Contact visibility ----------
 
   @Patch(`${SALON}/contact-visibility`)
-  @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN)
+  @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN, Role.CO_FOUNDER)
   async setContactVisibility(
     @CurrentUser() user: AuthenticatedUser,
     @Param('salonId', ParseUUIDPipe) salonId: string,
@@ -397,7 +397,7 @@ export class OwnerOpsController {
   // ---------- Billing ----------
 
   @Get(`${SALON}/billing-profile`)
-  @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN)
+  @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN, Role.CO_FOUNDER)
   getBillingProfile(
     @CurrentUser() user: AuthenticatedUser,
     @Param('salonId', ParseUUIDPipe) salonId: string,
@@ -406,7 +406,7 @@ export class OwnerOpsController {
   }
 
   @Put(`${SALON}/billing-profile`)
-  @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN)
+  @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN, Role.CO_FOUNDER)
   saveBillingProfile(
     @CurrentUser() user: AuthenticatedUser,
     @Param('salonId', ParseUUIDPipe) salonId: string,
@@ -436,7 +436,7 @@ export class OwnerOpsController {
   }
 
   @Get(`${SALON}/invoices`)
-  @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN)
+  @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN, Role.CO_FOUNDER)
   listInvoices(
     @CurrentUser() user: AuthenticatedUser,
     @Param('salonId', ParseUUIDPipe) salonId: string,
@@ -465,7 +465,7 @@ export class OwnerOpsController {
   }
 
   @Get(`${SALON}/payments`)
-  @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN)
+  @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN, Role.CO_FOUNDER)
   listPayments(
     @CurrentUser() user: AuthenticatedUser,
     @Param('salonId', ParseUUIDPipe) salonId: string,
@@ -540,7 +540,7 @@ export class OwnerOpsController {
   }
 
   @Post(`${SALON}/invoices/:invoiceId/void`)
-  @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN)
+  @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN, Role.CO_FOUNDER)
   @Idempotent()
   voidInvoice(
     @CurrentUser() user: AuthenticatedUser,
