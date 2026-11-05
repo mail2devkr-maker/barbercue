@@ -33,7 +33,7 @@ Statuses: **SOURCE** means a native path and current API usage exist; **PARTIAL*
 | Owner onboarding | SOURCE | Existing native onboarding and registration routes; production acceptance pending |
 | Shop profile and notifications | PARTIAL | Native profile fields and explicit time-zone confirmation are now implemented; compare remaining owner preferences and verify on device |
 | Payment QR | SOURCE | Existing `PaymentQrSection` manages shop payment QR; it is not a printable public shop poster |
-| Public shop QR poster preview/download with long names | GAP | No equivalent poster design/print/download workflow found |
+| Public shop QR poster preview/download with long names | PARTIAL | Owner-only native screen previews a QR generated from the backend's canonical HTTPS salon link and shares that link. Printable/downloadable poster export remains unavailable in this candidate. |
 | Inventory | PARTIAL | New native `OwnerInventoryScreen` uses the R7 owner/salon-scoped report, product listing/search/pagination, low-stock filter, product creation, idempotent opening/purchase/adjustment movements, and movement history APIs. Backend enforces owner/admin authorization and salon scope. Exact-head UI/API tests and authenticated runtime/device acceptance remain pending; supplier/category/forecast workflows are not fully represented |
 | Offers/promotions | PARTIAL | Capability-gated center supports existing offer publish/pause, creating Draft offers, backend price preview and editing Draft/Paused offers; writes use idempotency keys |
 
@@ -138,6 +138,6 @@ Exact-head GitHub CI — all three workflows **SUCCESS**:
 - Nitesh Admin + Discovery [run 41935874882](https://github.com/mail2devkr-maker/barbercue/actions/runs/41935874882): backend, web and mobile jobs passed.
 - Salon Location Verification [run 41935874917](https://github.com/mail2devkr-maker/barbercue/actions/runs/41935874917): full disposable migration chain/schema guards and authenticated owner/admin PostgreSQL E2E passed.
 
-The parity matrix above remains honest: several owner flows are PARTIAL, printable public QR poster and native Assistant are GAP, and owner/customer/employee production-authenticated runtime acceptance is pending. The last cited read-only map-pin aggregate was 6/107 active salons pinned; the other 101 distances remain unavailable until owners provide real coordinates.
+The parity matrix above remains honest: several owner flows are PARTIAL, printable public QR poster export and native Assistant are GAP, and owner/customer/employee production-authenticated runtime acceptance is pending. Public shop QR preview/link-share is only source-level in the current candidate until device acceptance. The last cited read-only map-pin aggregate was 6/107 active salons pinned; the other 101 distances remain unavailable until owners provide real coordinates.
 
 Current environment gates: EAS [0m`api.expo.dev`[0m and npm registry DNS resolution failed from this host; EAS account/version/build allowance/signing reads and native AAB build were not available. ADB detected 0 ready, unauthorized or offline devices, so Galaxy S20 FE installation and physical acceptance remain NOT VERIFIED. No Play upload, OTA publication, production deployment/database change, master merge, or public rollout occurred.

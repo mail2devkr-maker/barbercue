@@ -184,6 +184,19 @@ export default function OwnerShopScreen() {
 
       <PhotosSection salonId={selectedSalonId} photos={photos} onChanged={() => void load()} />
 
+      <Text style={sectionStyles.sectionTitle}>{language === Language.HI ? 'दुकान का QR पोस्टर' : 'Public shop QR poster'}</Text>
+      <Text style={sectionStyles.hint}>
+        {language === Language.HI
+          ? 'अपनी दुकान के सार्वजनिक FastQue पेज का QR पूर्वावलोकन करें या लिंक साझा करें।'
+          : 'Preview the QR and share your shop’s canonical public FastQue link.'}
+      </Text>
+      <Button
+        title={language === Language.HI ? 'QR पोस्टर खोलें' : 'Open QR poster'}
+        variant="outline"
+        onPress={() => navigation.navigate('OwnerQrPoster')}
+        style={sectionStyles.addButton}
+      />
+
       <PaymentQrSection salonId={selectedSalonId} paymentQr={paymentQr} onChanged={() => void load()} />
 
       <Text style={sectionStyles.sectionTitle}>{t.customersLabel}</Text>

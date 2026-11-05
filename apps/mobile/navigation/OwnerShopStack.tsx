@@ -5,6 +5,7 @@ import OwnerCustomerDetailScreen from '../screens/owner/OwnerCustomerDetailScree
 import OwnerInventoryScreen from '../screens/owner/OwnerInventoryScreen';
 import OwnerBusinessScreen from '../screens/owner/OwnerBusinessScreen';
 import OwnerSettingsScreen from '../screens/owner/OwnerSettingsScreen';
+import OwnerQrPosterScreen from '../screens/owner/OwnerQrPosterScreen';
 import { useLanguage } from '../lib/language-context';
 
 export type OwnerShopStackParamList = {
@@ -14,6 +15,7 @@ export type OwnerShopStackParamList = {
   OwnerInventory: undefined;
   OwnerBusiness: { initialPanel?: 'analytics' | 'cancellations' | 'invoices' | 'payments' | 'reviews' | 'offers' | 'verification' } | undefined;
   OwnerSettings: undefined;
+  OwnerQrPoster: undefined;
 };
 
 const Stack = createNativeStackNavigator<OwnerShopStackParamList>();
@@ -30,6 +32,7 @@ export default function OwnerShopStack() {
       <Stack.Screen name="OwnerInventory" component={OwnerInventoryScreen} />
       <Stack.Screen name="OwnerBusiness" component={OwnerBusinessScreen} options={{ headerShown: true, title: 'Business center' }} />
       <Stack.Screen name="OwnerSettings" component={OwnerSettingsScreen} options={{ headerShown: true, title: 'Shop settings' }} />
+      <Stack.Screen name="OwnerQrPoster" component={OwnerQrPosterScreen} options={{ headerShown: true, title: 'Shop QR poster' }} />
       <Stack.Screen name="OwnerCustomers" component={OwnerCustomersScreen} options={{ headerShown: true, title: t.customersLabel }} />
       <Stack.Screen
         name="OwnerCustomerDetail"
