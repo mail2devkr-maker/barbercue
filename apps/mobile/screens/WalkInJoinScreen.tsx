@@ -154,7 +154,7 @@ export default function WalkInJoinScreen({ route }: Props) {
   }
 
   return (
-    <Screen scroll={false} contentStyle={styles.screenContent}>
+    <Screen contentStyle={styles.screenContent}>
       <SectionHeader eyebrow={t.liveQueue} title={t.joinTheQueueTitle} subtitle={t.serviceOptional} />
       <View style={styles.serviceList}>
         <Pressable
