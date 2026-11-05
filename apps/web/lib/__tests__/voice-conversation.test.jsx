@@ -290,3 +290,59 @@ describe('spoken replies (#371)', () => {
     expect(r.v.snapshot.state).toBe('listening');
   });
 });
+
+describe('VoiceConversation network recovery', () => {
+  it('a brief connection drop reconnects on its own (mic closed meanwhile), then the conversation continues', async () => {
+    const r = rig({ speaker: false });
+    r.v.start('hi-IN');
+    r.last().onerror({ error: 'network' });
+    expect(r.v.snapshot.state).toBe('paused');
+    expect(r.v.snapshot.note).toMatch(/Reconnecting/);
+    expect(r.recs).toHaveLength(1);
+    await r.tick(VOICE_LIMITS.networkRetryMs);
+    expect(r.v.snapshot.state).toBe('listening');
+    expect(r.recs).toHaveLength(2);
+    await r.say('queue status');
+    expect(r.sent.map((s) => s.text)).toEqual(['queue status']);
+  });
+
+  it('gives up after the retry budget and asks for Resume, without a hidden microphone', async () => {
+    const r = rig({ speaker: false });
+    r.v.start();
+    r.last().onerror({ error: 'network' });
+    await r.tick(VOICE_LIMITS.networkRetryMs);
+    r.last().onerror({ error: 'network' });
+    await r.tick(VOICE_LIMITS.networkRetryMs * 2);
+    r.last().onerror({ error: 'network' });
+    expect(r.v.snapshot.state).toBe('paused');
+    expect(r.v.snapshot.note).toMatch(/Press Resume/);
+    const opened = r.recs.length;
+    await r.tick(60_000);
+    expect(r.recs).toHaveLength(opened); // nothing reopens on its own
+    r.v.resume();
+    expect(r.v.snapshot.state).toBe('listening');
+  });
+
+  it('Stop during a reconnect wait cancels the reconnect', async () => {
+    const r = rig({ speaker: false });
+    r.v.start();
+    r.last().onerror({ error: 'network' });
+    r.v.end();
+    await r.tick(VOICE_LIMITS.networkRetryMs * 4);
+    expect(r.v.snapshot.state).toBe('off');
+    expect(r.recs).toHaveLength(1);
+  });
+
+  it('a successful phrase restores the full retry budget', async () => {
+    const r = rig({ speaker: false });
+    r.v.start();
+    r.last().onerror({ error: 'network' });
+    await r.tick(VOICE_LIMITS.networkRetryMs);
+    r.last().onerror({ error: 'network' });
+    await r.tick(VOICE_LIMITS.networkRetryMs * 2);
+    await r.say('queue status');
+    await r.tick(VOICE_LIMITS.afterSpeechDelayMs);
+    r.last().onerror({ error: 'network' });
+    expect(r.v.snapshot.note).toMatch(/Reconnecting/);
+  });
+});
