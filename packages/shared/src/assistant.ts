@@ -229,6 +229,8 @@ export interface AssistantTurnDto {
   understoodAs?: string;
   /** Present on a period report: send it back as `context` so "aur last month?" / "aur dikhao" follow up. */
   reportContext?: AssistantReportContext;
+  /** Open `navigateTo` on the MAIN screen now (the page this answer, preview or change is about). */
+  mainScreen?: boolean;
   completedAt: string;
 }
 

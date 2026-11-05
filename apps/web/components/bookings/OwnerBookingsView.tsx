@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { bookingRangeFromQuery } from "../../lib/booking-range";
 import {
   DASHBOARD_PATHS,
   OWNER_BOOKING_FILTERS,
@@ -181,7 +183,15 @@ function BookingCard({ booking, isNew, onOutcome }: { booking: OwnerBookingDetai
  */
 export function OwnerBookingsView({ salonId }: { salonId: string }) {
   const { user } = useAuth();
-  const [filter, setFilter] = useState<OwnerBookingFilter>("today");
+  // A period opened by the Assistant ("pichhle mahine ki bookings"): /bookings?from=&to=&period=&filter=
+  const params = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  const range = bookingRangeFromQuery(params);
+  const rangeKey = range ? `${range.from}|${range.to}|${range.filter}` : "";
+  const [filter, setFilter] = useState<OwnerBookingFilter>(range?.filter ?? "today");
+  const rangeRef = useRef(range);
+  rangeRef.current = range;
   const [items, setItems] = useState<OwnerBookingDetailDto[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -287,9 +297,14 @@ export function OwnerBookingsView({ salonId }: { salonId: string }) {
         setLoading(true);
         setError(null);
       }
-      const params = new URLSearchParams({ filter: targetFilter, limit: String(PAGE_SIZE) });
-      if (cursor) params.set("cursor", cursor);
-      return apiFetch<PaginatedResult<OwnerBookingDetailDto>>(`${bookingsPath(salonId)}?${params}`)
+      const query = new URLSearchParams({ filter: targetFilter, limit: String(PAGE_SIZE) });
+      if (cursor) query.set("cursor", cursor);
+      const r = rangeRef.current;
+      if (r) {
+        query.set("from", r.from);
+        query.set("to", r.to);
+      }
+      return apiFetch<PaginatedResult<OwnerBookingDetailDto>>(`${bookingsPath(salonId)}?${query}`)
         .then((result) => {
           setItems((prev) => (append ? [...prev, ...result.items] : result.items));
           setNextCursor(result.nextCursor);
@@ -314,7 +329,13 @@ export function OwnerBookingsView({ salonId }: { salonId: string }) {
     // Deferred a tick so this effect body never calls setState synchronously — same pattern as
     // DashboardQueueView's own initial-load effect.
     void Promise.resolve().then(() => loadPage(filter, undefined, false));
-  }, [filter, loadPage]);
+  }, [filter, loadPage, rangeKey]);
+
+  // The Assistant opening another period (or the same page with a new filter) switches the list.
+  useEffect(() => {
+    if (range?.filter) void Promise.resolve().then(() => setFilter(range.filter));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rangeKey]);
 
   useEffect(() => {
     const socket = getRealtimeSocket();
@@ -438,6 +459,14 @@ export function OwnerBookingsView({ salonId }: { salonId: string }) {
         )}
       </div>
 
+      {range && (
+        <p className={styles.filterRow} role="status">
+          <span className={`${styles.filterChip} ${styles.filterChipActive}`}>Showing {range.label}</span>
+          <button type="button" className={styles.filterChip} onClick={() => router.replace(pathname)}>
+            Clear period
+          </button>
+        </p>
+      )}
       <div className={styles.filterRow}>
         {OWNER_BOOKING_FILTERS.map((f) => (
           <button

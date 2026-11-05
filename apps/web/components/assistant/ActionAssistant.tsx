@@ -102,8 +102,15 @@ const EXAMPLES: Record<AssistantSurface, string[]> = {
  */
 export function safeRoute(path: string | undefined, salonId?: string): string | null {
   if (!path || !path.startsWith("/") || path.startsWith("//") || /[\s\\]/.test(path)) return null;
-  const shop = path.match(/^\/dashboard\/salons\/([^/?#]+)(\/[a-z-]+)?$/);
-  if (shop) return salonId && shop[1] === salonId ? path : null;
+  // A shop page, optionally with a plain query the assistant builds (Bookings period: ?from=&to=&period=&filter=).
+  const shop = path.match(/^\/dashboard\/salons\/([^/?#]+)(\/[a-z-]+)?(?:\?([A-Za-z0-9=&%._:+-]{1,400}))?$/);
+  if (shop) {
+    if (!salonId || shop[1] !== salonId) return null;
+    if (shop[3] === undefined) return path;
+    // A query is accepted only for the Bookings period the assistant builds.
+    const keys = [...new URLSearchParams(shop[3]).keys()];
+    return shop[2] === "/bookings" && keys.length > 0 && keys.every((k) => ["from", "to", "period", "filter"].includes(k)) ? path : null;
+  }
   if (/^\/(account|employee|search)(\/[a-z-]+)?$/.test(path) || /^\/dashboard\/admin(\/[a-z-]+){0,2}$/.test(path)) return path;
   return null;
 }
@@ -235,8 +242,7 @@ function AssistantDrawer({ salonId, surface = "shop", onRevoked }: { salonId?: s
   /** Apply what a turn asks of the MAIN screen (navigation), and return the turn to show. */
   const applyToScreen = useCallback(
     (turn: AssistantTurnDto): AssistantTurnDto => {
-      if (turn.status !== "DONE") return turn;
-      if (turn.action?.id === AssistantActionId.NAVIGATE_BACK) {
+      if (turn.status === "DONE" && turn.action?.id === AssistantActionId.NAVIGATE_BACK) {
         if (trail.current.length === 0)
           return { ...turn, message: "I haven't opened another page in this conversation, so there is nowhere to go back to." };
         trail.current.pop();
@@ -244,13 +250,22 @@ function AssistantDrawer({ salonId, surface = "shop", onRevoked }: { salonId?: s
         setMode((m) => (m === "open" ? "docked" : m));
         return turn;
       }
-      if (turn.action?.id === AssistantActionId.NAVIGATE) {
+      const isNav =
+        turn.status === "DONE" &&
+        (turn.action?.id === AssistantActionId.NAVIGATE || turn.action?.id === AssistantActionId.ADMIN_NAVIGATE);
+      if (isNav || turn.mainScreen) {
         const to = safeRoute(turn.navigateTo, salonId);
-        if (!to) return { ...turn, message: "I can't open that page from here.", navigateTo: undefined };
-        trail.current.push(to);
-        router.push(to);
-        // The page opens on the MAIN screen; the assistant shrinks to a small bar beside it.
-        setMode((m) => (m === "open" ? "docked" : m));
+        if (!to) return isNav ? { ...turn, message: "I can't open that page from here.", navigateTo: undefined } : turn;
+        // The page this answer, question or preview is about opens on the MAIN screen (only when it is
+        // not already open, so a refresh-only change does not reload the page).
+        const here = typeof window === "undefined" || !window.location ? "" : `${window.location.pathname}${window.location.search}`;
+        if (to !== here) {
+          trail.current.push(to);
+          router.push(to);
+        }
+        // A plain answer docks beside the page; a preview or a question keeps the panel open so its
+        // Confirm / choice buttons stay in view.
+        if (turn.status === "DONE") setMode((m) => (m === "open" ? "docked" : m));
       }
       return turn;
     },
