@@ -1,5 +1,7 @@
 import { createNavigationContainerRef, type NavigatorScreenParams } from '@react-navigation/native';
 import type { AccountStackParamList, BookingsStackParamList, QueueStackParamList, SearchStackParamList } from './types';
+import type { OwnerShopStackParamList } from './OwnerShopStack';
+import type { DashboardAccountStackParamList } from './DashboardAccountStack';
 
 // The authenticated root swaps between customer, owner and staff navigators. A notification can
 // open the app before its authenticated navigator has mounted, so this ref is deliberately paired
@@ -10,8 +12,13 @@ import type { AccountStackParamList, BookingsStackParamList, QueueStackParamList
 // "this specific route only exists once the right role-specific navigator has mounted" cases
 // sharing one generic ref.
 export type AppNavigationParamList = {
+  OwnerDashboardTab: undefined;
   OwnerBookingsTab: undefined;
   OwnerQueueTab: undefined;
+  OwnerShopTab: NavigatorScreenParams<OwnerShopStackParamList>;
+  OwnerAccountTab: NavigatorScreenParams<DashboardAccountStackParamList>;
+  StaffTodayTab: undefined;
+  StaffAccountTab: NavigatorScreenParams<DashboardAccountStackParamList>;
   GuestQueueStatus: { salonId: string; entryId: string };
   SearchTab: NavigatorScreenParams<SearchStackParamList>;
   BookingsTab: NavigatorScreenParams<BookingsStackParamList>;
