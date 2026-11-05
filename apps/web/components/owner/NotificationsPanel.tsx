@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { notificationTypeLabel } from "@barbercue/shared";
 import type { NotificationDto, PaginatedResult } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../lib/api";
+import { useAssistantRefresh } from "../../lib/assistant-events";
 import { useAuth } from "../../lib/auth-context";
 import { formatShopDate, formatShopTime } from "./format";
 import { useOwnerShell } from "./OwnerShell";
@@ -41,6 +42,11 @@ export function NotificationsPanel() {
   useEffect(() => {
     void load();
   }, [load]);
+  // "Mark all read" done by the Assistant: reload the list and the sidebar badge.
+  useAssistantRefresh("notifications", () => {
+    void load();
+    refreshCounts();
+  });
 
   async function open(n: NotificationDto) {
     if (!n.readAt) {

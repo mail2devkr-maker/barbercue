@@ -21,6 +21,7 @@ import { useCapabilities } from "../../lib/use-capabilities";
 import type { CapabilityMap } from "../../lib/capabilities";
 import { rememberLastShop } from "../../lib/last-shop";
 import { getRealtimeSocket, joinSalonRoom, onReconnect } from "../../lib/realtime";
+import { useAssistantRefresh } from "../../lib/assistant-events";
 import { AdminManagingBanner } from "../dashboard/AdminManagingBanner";
 import { ActionAssistant } from "../assistant/ActionAssistant";
 import { Icon } from "./icons";
@@ -127,6 +128,10 @@ function ShellInner({ salonId, children }: { salonId: string; children: ReactNod
       .then((r) => setCounts((prev) => ({ ...prev, unread: r.count })))
       .catch(() => {});
   }, [salonId]);
+
+  // Badges follow Assistant changes immediately instead of waiting for the next poll.
+  useAssistantRefresh("notifications", refreshCounts);
+  useAssistantRefresh("queue", refreshCounts);
 
   useEffect(() => {
     refreshCounts();
