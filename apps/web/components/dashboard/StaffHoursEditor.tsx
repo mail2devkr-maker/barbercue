@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { DASHBOARD_PATHS, setStaffWorkingHoursSchema } from "@barbercue/shared";
 import type { StaffWorkingHoursDto } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../lib/api";
+import { useAssistantRefresh } from "../../lib/assistant-events";
 import { Button } from "../ui/Button";
 import styles from "./dashboard.module.css";
 
@@ -22,6 +23,9 @@ export function StaffHoursEditor({ salonId, staffId }: { salonId: string; staffI
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+  // Staff hours changed through the Assistant: reload from the API (never from the reply).
+  useAssistantRefresh("staffHours", () => setReloadKey((k) => k + 1));
 
   useEffect(() => {
     let cancelled = false;
@@ -35,7 +39,7 @@ export function StaffHoursEditor({ salonId, staffId }: { salonId: string; staffI
     return () => {
       cancelled = true;
     };
-  }, [base]);
+  }, [base, reloadKey]);
 
   function updateDay(dayOfWeek: number, patch: Partial<StaffWorkingHoursDto>) {
     setNotice(null);

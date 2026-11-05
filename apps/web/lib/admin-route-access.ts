@@ -37,6 +37,10 @@ export function canOpenAdminPath(roles: Role[], pathname: string): boolean {
   if (pathname.startsWith("/dashboard/admin/inventory")) {
     return superAdmin || coFounder || roles.includes(Role.PLATFORM_VIEWER);
   }
+  // Live queue monitoring is counts-only: every internal admin role, like shop activity (GET admin/live-queue).
+  if (pathname.startsWith("/dashboard/admin/live-queue")) return true;
+  // All Bookings: mirrors GET admin/bookings (PLATFORM_ADMIN, CO_FOUNDER, PLATFORM_VIEWER).
+  if (pathname.startsWith("/dashboard/admin/bookings")) return superAdmin || coFounder || roles.includes(Role.PLATFORM_VIEWER);
   if (pathname.startsWith("/dashboard/admin/access")) return superAdmin;
   // Shop deletion approvals, rejections and restores: PLATFORM_ADMIN only on the server (issue #381).
   if (pathname.startsWith("/dashboard/admin/shop-deletions")) return superAdmin;

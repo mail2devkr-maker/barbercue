@@ -74,7 +74,7 @@ export const ADMIN_NAV_ITEMS: ReadonlyArray<AdminNavItem> = [
   planned("SHOPS", "shop-rankings", "Shop Rankings", "A paginated shop-ranking API with geography filters."),
 
   { id: "booking-trends", label: "Booking Trends", group: "BOOKINGS", href: CHARTS, query: "preset=bookings", status: "live" },
-  planned("BOOKINGS", "all-bookings", "All Bookings", "A paginated, privacy-safe booking list API for admins."),
+  { id: "all-bookings", label: "All Bookings", group: "BOOKINGS", href: "/dashboard/admin/bookings", status: "live" },
 
   planned("SERVICES", "service-performance", "Service Performance", "A canonical platform service-category mapping."),
 
@@ -95,7 +95,7 @@ export const ADMIN_NAV_ITEMS: ReadonlyArray<AdminNavItem> = [
 
   { id: "shop-status-ops", label: "Open / Closed Monitoring", group: "OPERATIONS", href: STATUS, query: "view=hourly", status: "live" },
   { id: "waiting-time", label: "Waiting Time Analysis", group: "OPERATIONS", href: CHARTS, query: "preset=wait", status: "live" },
-  planned("OPERATIONS", "live-queue", "Live Queue Monitoring", "A national live-queue read model (per-shop data exists)."),
+  { id: "live-queue", label: "Live Queue Monitoring", group: "OPERATIONS", href: "/dashboard/admin/live-queue", status: "live" },
   planned("OPERATIONS", "chair-utilization", "Chair Utilization", "Phase 3 utilisation model (chairs × operating hours × sessions)."),
 
   { id: "chart-builder", label: "Chart Builder", group: "ANALYTICS", href: CHARTS, status: "live" },

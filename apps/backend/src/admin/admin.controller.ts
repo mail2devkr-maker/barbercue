@@ -61,6 +61,10 @@ import { AdminCrmService } from './admin-crm.service';
 import { AdminAccessManagementService } from './admin-access-management.service';
 import { SalonLocationService } from '../salon-setup/salon-location.service';
 import { AdminShopActivityService } from './admin-shop-activity.service';
+import { AdminLiveQueueService } from './admin-live-queue.service';
+import { AdminBookingsService } from './admin-bookings.service';
+import { z } from 'zod';
+import { BookingStatus } from '@barbercue/shared';
 import { AdminExecutiveOverviewService } from './analytics/admin-executive-overview.service';
 import { AdminShopStatusService } from './analytics/admin-shop-status.service';
 import { AdminTimeseriesService } from './analytics/admin-timeseries.service';
@@ -75,6 +79,15 @@ import type { Response } from 'express';
 /** Authentication is global; authorization is admin-role only. Monitoring routes are read-only;
  * the verification routes (Phase 18) and shop deletion are this controller's mutating surfaces —
  * always a human admin's explicit action, never an automated one. */
+
+const isoDay = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD.');
+const adminBookingsQuerySchema = z.object({
+  cursor: z.string().max(400).optional(),
+  status: z.nativeEnum(BookingStatus).optional(),
+  from: isoDay.optional(),
+  to: isoDay.optional(),
+  shop: z.string().trim().max(120).optional(),
+});
 @Controller(ADMIN_PATHS.admin)
 @Roles(Role.PLATFORM_ADMIN)
 export class AdminController {
@@ -94,6 +107,8 @@ export class AdminController {
     private readonly customerAnalytics: AdminCustomerAnalyticsService,
     private readonly staffAnalytics: AdminStaffAnalyticsService,
     private readonly dataExports: AdminDataExportService,
+    private readonly liveQueue?: AdminLiveQueueService,
+    private readonly allBookings?: AdminBookingsService,
   ) {}
 
   @Get(ADMIN_PATHS.overview)
@@ -126,6 +141,32 @@ export class AdminController {
     query: AdminShopActivityQuery,
   ) {
     return this.shopActivity.getActivity(query);
+  }
+
+  // Live Queue Monitoring: counts only (no customer data), same audience as shop activity.
+  @Get(ADMIN_PATHS.liveQueue)
+  @Roles(
+    Role.PLATFORM_ADMIN,
+    Role.CO_FOUNDER,
+    Role.HR_ADMIN,
+    Role.SALES_ADMIN,
+    Role.PLATFORM_VIEWER,
+  )
+  @Header('Cache-Control', 'private, no-store')
+  liveQueueReport() {
+    return this.liveQueue!.getLiveQueue();
+  }
+
+  // All Bookings: every shop's bookings, cursor paged, never customer contact data. Leadership and the
+  // read-only viewer only (bookings carry shop business detail); HR and Sales use their own workspaces.
+  @Get(ADMIN_PATHS.allBookings)
+  @Roles(Role.PLATFORM_ADMIN, Role.CO_FOUNDER, Role.PLATFORM_VIEWER)
+  @Header('Cache-Control', 'private, no-store')
+  allBookingsReport(
+    @Query(new ZodValidationPipe(adminBookingsQuerySchema))
+    query: z.infer<typeof adminBookingsQuerySchema>,
+  ) {
+    return this.allBookings!.list(query);
   }
 
   // Executive Command Center: company-wide business figures (service value included), so the

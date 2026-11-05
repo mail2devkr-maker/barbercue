@@ -6,6 +6,7 @@ import { DASHBOARD_PATHS } from "@barbercue/shared";
 import type { OwnerOverviewDto, OwnerRevenueDto, PeriodComparisonDto, QueueEntryDetailDto } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../lib/api";
 import { getRealtimeSocket, joinSalonRoom, onReconnect } from "../../lib/realtime";
+import { useAssistantRefresh } from "../../lib/assistant-events";
 import { AreaChart, BarChart, ShareBar } from "./charts";
 import { DaySchedule } from "./DaySchedule";
 import { formatMoney, formatPercentChange, formatShopDate, formatShopTime, initialsOf } from "./format";
@@ -118,6 +119,9 @@ export function OwnerOverview({ salonId }: { salonId: string }) {
       })
       .catch((err) => setError({ message: err instanceof ApiError ? err.message : "Could not load the dashboard.", code: err instanceof ApiError ? err.code : undefined }));
   }, [base]);
+
+  // The Assistant announces "overview" with every confirmed shop change: reload the real figures.
+  useAssistantRefresh("overview", load);
 
   const scheduleLoad = useCallback(() => {
     if (timer.current) window.clearTimeout(timer.current);

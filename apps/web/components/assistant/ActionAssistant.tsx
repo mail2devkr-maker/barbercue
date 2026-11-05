@@ -13,6 +13,7 @@ import {
 } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../lib/api";
 import { announceAssistantChange } from "../../lib/assistant-events";
+import { resolveFollowUp, type FollowUpOption } from "../../lib/assistant-followup";
 import { useSpeechInput, type SpeechLang } from "../../lib/use-speech";
 import { browserSpeechOutput, SPEAK_FAILURE_TEXT, type SpeechOutput } from "../../lib/speech-output";
 import { VoiceSettings } from "./VoiceSettings";
@@ -256,6 +257,10 @@ function AssistantDrawer({ salonId, surface = "shop", onRevoked }: { salonId?: s
     [router, salonId],
   );
 
+  // The options of the last unanswered question ("Which staff member?"): a short reply such as
+  // "Ramesh" or "doosra" answers it with that option's full command (multi-turn follow-up).
+  const openOptions = useRef<FollowUpOption[] | null>(null);
+
   /** One turn to the server. Shared by typing, push-to-talk and the voice conversation. */
   const runTurn = useCallback(
     async (said: string, viaVoice: boolean, heard?: Heard): Promise<AssistantTurnDto | null> => {
@@ -271,7 +276,7 @@ function AssistantDrawer({ salonId, surface = "shop", onRevoked }: { salonId?: s
         turn = await apiFetch<AssistantTurnDto>(`${ASSISTANT_PATHS.assistant}/${ASSISTANT_PATHS.turns}`, {
           method: "POST",
           body: JSON.stringify({
-            text: value,
+            text: resolveFollowUp(value, openOptions.current) ?? value,
             inputMode: viaVoice ? "voice" : "text",
             surface,
             ...(salonId ? { salonId } : {}),
@@ -280,7 +285,9 @@ function AssistantDrawer({ salonId, surface = "shop", onRevoked }: { salonId?: s
           }),
         });
         turn = applyToScreen(turn);
+        openOptions.current = turn.status === "NEEDS_INPUT" && turn.options?.length ? turn.options : null;
       } catch (err) {
+        openOptions.current = null;
         // 404: the assistant was switched off for this account (cohort removed); 401: signed out.
         revoked = err instanceof ApiError && (err.status === 404 || err.status === 401);
         turn = failTurn(err);

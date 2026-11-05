@@ -34,6 +34,10 @@ export const NAV_PAGES: Record<NavPage, { path: string; label: string }> = {
   photos: { path: '/photos', label: 'Photos' },
   marketing: { path: '/marketing', label: 'Marketing' },
   bookingSources: { path: '/booking-sources', label: 'Booking sources' },
+  paymentQr: { path: '/payment-qr', label: 'Payment QR' },
+  location: { path: '/location', label: 'Shop location' },
+  verification: { path: '/verification', label: 'Verification' },
+  contacts: { path: '/contacts', label: 'Contacts' },
 };
 
 const COMMON: NavPage[] = [
