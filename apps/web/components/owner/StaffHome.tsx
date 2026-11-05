@@ -11,6 +11,7 @@ import { NewQueueCustomerDialog } from "./NewQueueCustomerDialog";
 import { ServiceUsageDialog } from "./inventory/ServiceUsageDialog";
 import { Badge, Banner, Btn, BtnLink, Card, Dialog, EmptyState, Field, Kpi, PageHead, Skeleton } from "./parts";
 import ui from "./owner.module.css";
+import { useShopTimeZone } from "./OwnerShell";
 
 const POLL_MS = 30_000;
 
@@ -29,6 +30,7 @@ const AVAILABILITY: Record<StaffWorkDto["availabilityState"], { label: string; t
  * those are owner-only and the server would refuse them anyway.
  */
 export function StaffHome({ salonId }: { salonId: string }) {
+  const shopTz = useShopTimeZone();
   const base = `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}`;
   const [work, setWork] = useState<StaffWorkDto | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -156,7 +158,7 @@ export function StaffHome({ salonId }: { salonId: string }) {
                     <div className={ui.entryMeta}>
                       {current.serviceName ?? "Service"}
                       {current.chairLabel ? ` · ${current.chairLabel}` : ""}
-                      {current.startedAt ? ` · started ${formatShopTime(current.startedAt, null)}` : ""}
+                      {current.startedAt ? ` · started ${formatShopTime(current.startedAt, shopTz)}` : ""}
                     </div>
                     {current.customerPhone && (
                       <a className={`${ui.entryMeta} ${ui.entryPhone}`} href={`tel:${current.customerPhone}`}>
@@ -258,7 +260,7 @@ export function StaffHome({ salonId }: { salonId: string }) {
             <ul className={ui.list}>
               {work.appointmentsToday.map((ap) => (
                 <li key={ap.bookingId} className={ui.listRow} style={{ alignItems: "flex-start" }}>
-                  <span className={ui.timeChip}>{formatShopTime(ap.slotStart, null)}</span>
+                  <span className={ui.timeChip}>{formatShopTime(ap.slotStart, shopTz)}</span>
                   <div className={ui.listMain}>
                     <div className={ui.listTitle}>{ap.serviceNames.join(" + ")}</div>
                     <div className={ui.listSub}>
@@ -342,7 +344,7 @@ export function StaffHome({ salonId }: { salonId: string }) {
         <CancelAppointmentDialog
           salonId={salonId}
           bookingId={cancelFor.bookingId}
-          label={`${cancelFor.serviceNames.join(" + ")} · ${formatShopTime(cancelFor.slotStart, null)}`}
+          label={`${cancelFor.serviceNames.join(" + ")} · ${formatShopTime(cancelFor.slotStart, shopTz)}`}
           onClose={() => setCancelFor(null)}
           onDone={(msg) => {
             setNotice(msg);

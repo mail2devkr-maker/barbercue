@@ -14,7 +14,7 @@ import {
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { DASHBOARD_PATHS, DISCOVERY_PATHS, Role } from "@barbercue/shared";
-import type { CapacitySummaryDto, OwnerSearchResultDto, SalonWorkplaceDto } from "@barbercue/shared";
+import type { CapacitySummaryDto, OwnerSearchResultDto, SalonTimezoneResultDto, SalonWorkplaceDto } from "@barbercue/shared";
 import { apiFetch } from "../../lib/api";
 import { useAuth } from "../../lib/auth-context";
 import { useCapabilities } from "../../lib/use-capabilities";
@@ -41,9 +41,19 @@ interface ShellContextValue {
   counts: { waiting: number; inService: number; unread: number };
   workplaces: SalonWorkplaceDto[];
   refreshCounts: () => void;
+  /** The shop's IANA timezone (null until loaded): every shop time is shown in it, not the device zone. */
+  timeZone: string | null;
 }
 
 const ShellContext = createContext<ShellContextValue | null>(null);
+
+/**
+ * The shop's timezone for formatting times, or null outside an owner shell / before it loads (the
+ * formatters then fall back to the device zone). Never throws, so shared components can use it.
+ */
+export function useShopTimeZone(): string | null {
+  return useContext(ShellContext)?.timeZone ?? null;
+}
 
 export function useOwnerShell(): ShellContextValue {
   const ctx = useContext(ShellContext);
@@ -73,6 +83,18 @@ function ShellInner({ salonId, children }: { salonId: string; children: ReactNod
   // True once the server's list of shops this user may operate has actually arrived.
   const [workplacesLoaded, setWorkplacesLoaded] = useState(false);
   const [counts, setCounts] = useState({ waiting: 0, inService: 0, unread: 0 });
+  const [timeZone, setTimeZone] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    apiFetch<SalonTimezoneResultDto>(`${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.timezone}`)
+      .then((tz) => live && setTimeZone(tz.timezone ?? null))
+      .catch(() => {
+        /* times fall back to the device zone */
+      });
+    return () => {
+      live = false;
+    };
+  }, [salonId]);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -191,8 +213,8 @@ function ShellInner({ salonId, children }: { salonId: string; children: ReactNod
   const ownedShops = workplaces.filter((w) => w.isOwner);
 
   const ctx = useMemo<ShellContextValue>(
-    () => ({ salonId, salonName: workplace?.name ?? null, kind, isAdmin, counts, workplaces, refreshCounts }),
-    [salonId, workplace?.name, kind, isAdmin, counts, workplaces, refreshCounts],
+    () => ({ salonId, salonName: workplace?.name ?? null, kind, isAdmin, counts, workplaces, refreshCounts, timeZone }),
+    [salonId, workplace?.name, kind, isAdmin, counts, workplaces, refreshCounts, timeZone],
   );
 
   const badgeFor = (item: NavItem): number | null => {

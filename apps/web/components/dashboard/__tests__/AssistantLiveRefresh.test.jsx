@@ -12,6 +12,7 @@ jest.mock("../../../lib/api", () => ({
 const refreshCounts = jest.fn();
 jest.mock("../../owner/OwnerShell", () => ({
   useOwnerShell: () => ({ refreshCounts }),
+  useShopTimeZone: () => 'Asia/Kolkata',
 }));
 jest.mock("next/navigation", () => ({
   useRouter: () => ({ push: jest.fn() }),

@@ -10,6 +10,7 @@ import { formatMoney, formatPercentChange, formatShopDate, formatShopTime } from
 import { Badge, Banner, Btn, BtnLink, Card, EmptyState, Field, PageHead, Skeleton, Tabs } from "./parts";
 import { todayIn } from "./SlotPicker";
 import ui from "./owner.module.css";
+import { useShopTimeZone } from "./OwnerShell";
 
 const METHOD_LABEL: Record<InvoicePaymentMethod, string> = { CASH: "Cash", UPI: "UPI", CARD: "Card", OTHER: "Other" };
 
@@ -83,6 +84,7 @@ export function RevenuePanel({ salonId }: { salonId: string }) {
 }
 
 export function PaymentsPanel({ salonId }: { salonId: string }) {
+  const shopTz = useShopTimeZone();
   const base = `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}`;
   const [to, setTo] = useState(() => todayIn(null));
   const [from, setFrom] = useState(() => todayIn(null, -29));
@@ -144,7 +146,7 @@ export function PaymentsPanel({ salonId }: { salonId: string }) {
                     <tbody>
                       {data.items.map((p) => (
                         <tr key={p.id}>
-                          <td>{formatShopDate(p.recordedAt, null, true)} {formatShopTime(p.recordedAt, null)}</td>
+                          <td>{formatShopDate(p.recordedAt, shopTz, true)} {formatShopTime(p.recordedAt, shopTz)}</td>
                           <td><Link className={ui.cardLink} href={`/dashboard/salons/${salonId}/invoices?open=${p.invoiceId}`}>{p.invoiceNumber}</Link></td>
                           <td>{p.customerName ?? <span className={ui.mutedCell}>Customer</span>}</td>
                           <td>{METHOD_LABEL[p.method]}{p.reference ? ` · ${p.reference}` : ""} {p.kind === "REFUND" && <Badge tone="neutral">Refund</Badge>}</td>

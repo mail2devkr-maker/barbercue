@@ -20,6 +20,7 @@ import { formatShopTime } from "../format";
 import { ServiceUsageDialog } from "./ServiceUsageDialog";
 import ui from "../owner.module.css";
 import styles from "./usage.module.css";
+import { useShopTimeZone } from "../OwnerShell";
 
 const errorText = (err: unknown, fallback: string) => (err instanceof ApiError ? err.message || fallback : fallback);
 const RECIPE_UNITS: readonly InventoryUnit[] = ["MILLILITER", "LITER", "GRAM", "KILOGRAM", "EACH", "PACK", "BOX"];
@@ -215,6 +216,7 @@ export function ServiceRecipesView({ salonId }: { salonId: string }) {
 
 /** Owner: completed visits and the products recorded for them; record missed ones or correct mistakes. */
 export function ProductUsageView({ salonId }: { salonId: string }) {
+  const shopTz = useShopTimeZone();
   const [filter, setFilter] = useState<"all" | "missing" | "recorded">("all");
   const visits = useResource<ServiceVisitsDto>(`${inventoryBase(salonId)}/${SERVICE_USAGE_PATHS.visits}?filter=${filter}`);
   const [recordFor, setRecordFor] = useState<string | null>(null);
@@ -277,7 +279,7 @@ export function ProductUsageView({ salonId }: { salonId: string }) {
                 {visits.data!.items.flatMap((v) =>
                   v.services.map((s, i) => (
                     <tr key={`${v.queueEntryId}-${s.serviceId}`}>
-                      <td>{i === 0 ? <>#{v.tokenNumber}{v.customerName ? ` ${v.customerName}` : ""}<div className={ui.hint}>{v.completedAt ? formatShopTime(v.completedAt, null) : ""}{v.staffName ? ` · ${v.staffName}` : ""}</div></> : null}</td>
+                      <td>{i === 0 ? <>#{v.tokenNumber}{v.customerName ? ` ${v.customerName}` : ""}<div className={ui.hint}>{v.completedAt ? formatShopTime(v.completedAt, shopTz) : ""}{v.staffName ? ` · ${v.staffName}` : ""}</div></> : null}</td>
                       <td>{s.serviceName}</td>
                       <td>
                         {s.usage ? (
