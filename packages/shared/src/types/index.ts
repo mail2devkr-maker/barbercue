@@ -1948,6 +1948,26 @@ export interface AdminShopActivityCountsDto {
   };
 }
 
+/** Platform-wide booking list for Super Admin / Co-Founder: never a customer's name, phone, email or note. */
+export interface AdminBookingRowDto {
+  id: string;
+  shop: { id: string; name: string; publicId: string };
+  serviceName: string;
+  slotStart: string;
+  slotEnd: string;
+  status: BookingStatus;
+  source: string;
+  createdAt: string;
+  /** True for a walk-in / phone guest without a FastQue account. */
+  guest: boolean;
+  cancelledBy: string | null;
+  offerTitle: string | null;
+}
+export interface AdminBookingsPageDto {
+  items: AdminBookingRowDto[];
+  nextCursor: string | null;
+}
+
 /** Platform live-queue monitor: counts only, never a customer. Shops with someone in the queue now. */
 export interface AdminLiveQueueShopDto {
   id: string;
