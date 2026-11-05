@@ -4,6 +4,8 @@ import { use, useEffect, useState } from "react";
 import { createSalonStaffSchema, DASHBOARD_PATHS, Role, StaffMemberStatus } from "@barbercue/shared";
 import type { SalonStaffDto, StaffInviteResultDto } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../../../../../lib/api";
+import { useAuth } from "../../../../../../lib/auth-context";
+import { canPermanentlyDelete } from "../../../../../../lib/permanent-delete-access";
 import { useAssistantRefresh } from "../../../../../../lib/assistant-events";
 import { RequireRole } from "../../../../../../components/auth/RequireRole";
 import { Button } from "../../../../../../components/ui/Button";
@@ -23,6 +25,8 @@ export default function DashboardStaffPage({
   params: Promise<{ salonId: string }>;
 }) {
   const { salonId } = use(params);
+  const { user } = useAuth();
+  const mayDelete = canPermanentlyDelete(user?.roles);
   const base = `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.staff}`;
 
   const [staff, setStaff] = useState<SalonStaffDto[] | null>(null);
@@ -275,9 +279,11 @@ export default function DashboardStaffPage({
                 >
                   {verificationOpenFor === m.id ? "Hide verification" : "Verification"}
                 </Button>
-                <OwnerBtn variant="danger" small onClick={() => setDeleting(m)} aria-label={`Delete ${m.displayName} permanently`}>
-                  Delete permanently
-                </OwnerBtn>
+                {mayDelete && (
+                  <OwnerBtn variant="danger" small onClick={() => setDeleting(m)} aria-label={`Delete ${m.displayName} permanently`}>
+                    Delete permanently
+                  </OwnerBtn>
+                )}
               </div>
               {hoursOpenFor === m.id && <StaffHoursEditor salonId={salonId} staffId={m.id} />}
               {profileOpenFor === m.id && (
