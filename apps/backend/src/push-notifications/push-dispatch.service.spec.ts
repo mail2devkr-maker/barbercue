@@ -223,9 +223,32 @@ describe('PushDispatchService.dispatchLocalizedToUser', () => {
     });
   });
 
-  it('leaves every other push kind exactly as it was — no forced channel/sound/priority', async () => {
+  // Regression: booking events were left to Android's fallback channel (often silent) and
+  // Expo's normal priority (which may be delayed when a handset is sleeping).
+  for (const [kind, type] of [
+    ['newBooking', 'booking.created'],
+    ['bookingRescheduled', 'booking.rescheduled'],
+    ['bookingCancelled', 'booking.cancelled'],
+  ] as const) {
+    it(`makes ${kind} an audible high-priority OS alert on the installed booking channel`, async () => {
+      prisma.user.findUnique.mockResolvedValue({ preferredLanguage: Language.HI });
+      await service.dispatchLocalizedToUser('owner-1', kind, 'Haircut', { type });
+      const [[messages]] = expo.send.mock.calls;
+      expect(messages[0]).toMatchObject({
+        channelId: 'booking-updates',
+        sound: 'default',
+        priority: 'high',
+        data: { type },
+      });
+      expect(messages[0]).not.toHaveProperty('categoryId');
+    });
+  }
+
+  it('leaves nonurgent reminders on their previous default channel and normal priority', async () => {
     prisma.user.findUnique.mockResolvedValue({ preferredLanguage: Language.EN });
-    await service.dispatchLocalizedToUser('owner-1', 'newBooking', 'Haircut', { type: 'booking.created' });
+    await service.dispatchLocalizedToUser('customer-1', 'bookingReminder', 'Haircut', {
+      type: 'booking.reminder',
+    });
     const [[messages]] = expo.send.mock.calls;
     expect(messages[0]).not.toHaveProperty('channelId');
     expect(messages[0]).not.toHaveProperty('sound');
