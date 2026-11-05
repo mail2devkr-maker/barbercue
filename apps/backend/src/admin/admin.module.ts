@@ -18,9 +18,11 @@ import { AdminCustomerAnalyticsService } from './analytics/admin-customer-analyt
 import { AdminStaffAnalyticsService } from './analytics/admin-staff-analytics.service';
 import { AdminDataExportService } from './analytics/admin-data-export.service';
 
+import { ShopDeletionController } from './shop-deletion.controller';
+import { ShopDeletionService } from './shop-deletion.service';
 @Module({
   imports: [SalonSetupModule, AuthModule],
-  controllers: [AdminController],
+  controllers: [AdminController, ShopDeletionController],
   // Read-only reuse by the Action Assistant (issue #362); access is enforced there per action.
   exports: [
     AdminExecutiveOverviewService,
@@ -35,6 +37,7 @@ import { AdminDataExportService } from './analytics/admin-data-export.service';
     AdminMonitoringService,
     AdminVerificationService,
     AdminSalonManagementService,
+    ShopDeletionService,
     AdminEmployeeManagementService,
     AdminCrmService,
     AdminAccessManagementService,

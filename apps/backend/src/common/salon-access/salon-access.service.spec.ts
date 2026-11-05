@@ -124,13 +124,36 @@ describe('SalonAccessService', () => {
 
   // Part 2 — PLATFORM_ADMIN delegated shop management.
   describe('assertOwnerOrAdminAccess', () => {
+    it('#381: refuses even the real owner of a shop in recovery Trash with SHOP_QUARANTINED', async () => {
+      prisma.userRole.findFirst.mockResolvedValueOnce({ role: Role.SALON_OWNER });
+      prisma.salon.findUnique.mockResolvedValueOnce({ softDeletedAt: new Date() });
+      await expect(
+        service.assertOwnerOrAdminAccess('owner-1', 'salon-1'),
+      ).rejects.toMatchObject({ code: 'SHOP_QUARANTINED' });
+    });
+
+    it('#381: refuses a PLATFORM_ADMIN on a shop in recovery Trash with SHOP_QUARANTINED', async () => {
+      prisma.userRole.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ role: Role.PLATFORM_ADMIN });
+      prisma.salon.findUnique.mockResolvedValueOnce({ status: 'SUSPENDED', softDeletedAt: new Date() });
+      await expect(
+        service.assertOwnerOrAdminAccess('admin-1', 'salon-1'),
+      ).rejects.toMatchObject({ code: 'SHOP_QUARANTINED' });
+    });
+
     it('grants access to the real owner without ever checking for a global admin role', async () => {
       prisma.userRole.findFirst.mockResolvedValueOnce({ role: Role.SALON_OWNER });
       await expect(
         service.assertOwnerOrAdminAccess('owner-1', 'salon-1'),
       ).resolves.toBe('OWNER');
       expect(prisma.userRole.findFirst).toHaveBeenCalledTimes(1);
-      expect(prisma.salon.findUnique).not.toHaveBeenCalled();
+      // #381: the only shop lookup is the recovery-Trash check, never an admin-role lookup.
+      expect(prisma.salon.findUnique).toHaveBeenCalledTimes(1);
+      expect(prisma.salon.findUnique).toHaveBeenCalledWith({
+        where: { id: 'salon-1' },
+        select: { softDeletedAt: true },
+      });
     });
 
     it('grants a PLATFORM_ADMIN access to an ACTIVE salon', async () => {
@@ -225,7 +248,12 @@ describe('SalonAccessService', () => {
         service.assertAccessOrAdminAccess('staff-1', 'salon-1'),
       ).resolves.toBe('STAFF_OR_OWNER');
       expect(prisma.userRole.findFirst).toHaveBeenCalledTimes(1);
-      expect(prisma.salon.findUnique).not.toHaveBeenCalled();
+      // #381: the only shop lookup is the recovery-Trash check, never an admin-role lookup.
+      expect(prisma.salon.findUnique).toHaveBeenCalledTimes(1);
+      expect(prisma.salon.findUnique).toHaveBeenCalledWith({
+        where: { id: 'salon-1' },
+        select: { softDeletedAt: true },
+      });
     });
 
     it('grants access to the real owner too, without checking for a global admin role', async () => {
@@ -233,7 +261,12 @@ describe('SalonAccessService', () => {
       await expect(
         service.assertAccessOrAdminAccess('owner-1', 'salon-1'),
       ).resolves.toBe('STAFF_OR_OWNER');
-      expect(prisma.salon.findUnique).not.toHaveBeenCalled();
+      // #381: the only shop lookup is the recovery-Trash check, never an admin-role lookup.
+      expect(prisma.salon.findUnique).toHaveBeenCalledTimes(1);
+      expect(prisma.salon.findUnique).toHaveBeenCalledWith({
+        where: { id: 'salon-1' },
+        select: { softDeletedAt: true },
+      });
     });
 
     it('grants a PLATFORM_ADMIN access to an ACTIVE salon when neither staff nor owner', async () => {
