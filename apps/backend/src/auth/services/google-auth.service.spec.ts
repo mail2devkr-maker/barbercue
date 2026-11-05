@@ -1,8 +1,14 @@
-import { OAuth2Client, type LoginTicket, type TokenPayload } from 'google-auth-library';
+import {
+  OAuth2Client,
+  type LoginTicket,
+  type TokenPayload,
+} from 'google-auth-library';
 import { GoogleAuthService } from './google-auth.service';
 
 function ticketWith(payload: Partial<TokenPayload> | undefined): LoginTicket {
-  return { getPayload: () => payload as TokenPayload | undefined } as LoginTicket;
+  return {
+    getPayload: () => payload as TokenPayload | undefined,
+  } as LoginTicket;
 }
 
 describe('GoogleAuthService', () => {
@@ -10,17 +16,27 @@ describe('GoogleAuthService', () => {
   let verifyIdTokenSpy: jest.SpyInstance;
   const originalWebClientId = process.env.GOOGLE_WEB_CLIENT_ID;
   const originalAndroidClientId = process.env.GOOGLE_ANDROID_CLIENT_ID;
+  const originalIosClientId = process.env.GOOGLE_IOS_CLIENT_ID;
 
   beforeEach(() => {
-    process.env.GOOGLE_WEB_CLIENT_ID = 'web-client-id.apps.googleusercontent.com';
+    process.env.GOOGLE_WEB_CLIENT_ID =
+      'web-client-id.apps.googleusercontent.com';
     delete process.env.GOOGLE_ANDROID_CLIENT_ID;
+    delete process.env.GOOGLE_IOS_CLIENT_ID;
     verifyIdTokenSpy = jest.spyOn(OAuth2Client.prototype, 'verifyIdToken');
     service = new GoogleAuthService();
   });
 
   afterEach(() => {
-    process.env.GOOGLE_WEB_CLIENT_ID = originalWebClientId;
-    process.env.GOOGLE_ANDROID_CLIENT_ID = originalAndroidClientId;
+    if (originalWebClientId === undefined)
+      delete process.env.GOOGLE_WEB_CLIENT_ID;
+    else process.env.GOOGLE_WEB_CLIENT_ID = originalWebClientId;
+    if (originalAndroidClientId === undefined)
+      delete process.env.GOOGLE_ANDROID_CLIENT_ID;
+    else process.env.GOOGLE_ANDROID_CLIENT_ID = originalAndroidClientId;
+    if (originalIosClientId === undefined)
+      delete process.env.GOOGLE_IOS_CLIENT_ID;
+    else process.env.GOOGLE_IOS_CLIENT_ID = originalIosClientId;
     jest.restoreAllMocks();
   });
 
@@ -91,9 +107,14 @@ describe('GoogleAuthService', () => {
   });
 
   it('accepts either the web or Android client ID as a valid audience', async () => {
-    process.env.GOOGLE_ANDROID_CLIENT_ID = 'android-client-id.apps.googleusercontent.com';
+    process.env.GOOGLE_ANDROID_CLIENT_ID =
+      'android-client-id.apps.googleusercontent.com';
     verifyIdTokenSpy.mockResolvedValue(
-      ticketWith({ sub: 'google-sub-999', email_verified: true, email: 'a@b.com' }),
+      ticketWith({
+        sub: 'google-sub-999',
+        email_verified: true,
+        email: 'a@b.com',
+      }),
     );
 
     await service.verifyIdToken('token');
@@ -103,6 +124,29 @@ describe('GoogleAuthService', () => {
         audience: [
           'web-client-id.apps.googleusercontent.com',
           'android-client-id.apps.googleusercontent.com',
+        ],
+      }),
+    );
+  });
+
+  it('accepts the explicitly configured iOS client ID as a valid audience', async () => {
+    process.env.GOOGLE_IOS_CLIENT_ID =
+      'ios-client-id.apps.googleusercontent.com';
+    verifyIdTokenSpy.mockResolvedValue(
+      ticketWith({
+        sub: 'google-sub-ios',
+        email_verified: true,
+        email: 'ios@example.com',
+      }),
+    );
+
+    await service.verifyIdToken('token');
+
+    expect(verifyIdTokenSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        audience: [
+          'web-client-id.apps.googleusercontent.com',
+          'ios-client-id.apps.googleusercontent.com',
         ],
       }),
     );
