@@ -1,10 +1,12 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import EmployeeDashboardScreen from '../screens/employee/EmployeeDashboardScreen';
+import AssistantScreen from '../screens/AssistantScreen';
 import { lightStackOptions } from './screenOptions';
 import { useLanguage } from '../lib/language-context';
 
 export type EmployeeStackParamList = {
   EmployeeDashboard: undefined;
+  Assistant: undefined;
 };
 
 const Stack = createNativeStackNavigator<EmployeeStackParamList>();
@@ -19,6 +21,7 @@ export default function EmployeeNavigator() {
         component={EmployeeDashboardScreen}
         options={{ title: t.employeeDashboardNavTitle }}
       />
+      <Stack.Screen name="Assistant" component={AssistantScreen} options={{ title: 'FastQue Assistant' }} />
     </Stack.Navigator>
   );
 }

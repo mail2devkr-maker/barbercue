@@ -12,7 +12,7 @@ export type OwnerShopStackParamList = {
   OwnerCustomers: undefined;
   OwnerCustomerDetail: { customerId: string };
   OwnerInventory: undefined;
-  OwnerBusiness: undefined;
+  OwnerBusiness: { initialPanel?: 'analytics' | 'cancellations' | 'invoices' | 'payments' | 'reviews' | 'offers' | 'verification' } | undefined;
   OwnerSettings: undefined;
 };
 

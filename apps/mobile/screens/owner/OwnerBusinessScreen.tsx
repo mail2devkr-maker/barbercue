@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import {
@@ -98,11 +98,11 @@ function shiftDate(date: string, days: number): string {
   return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
 }
 
-export default function OwnerBusinessScreen() {
+export default function OwnerBusinessScreen({ route }: { route?: { params?: { initialPanel?: Panel } } } = {}) {
   const { selectedSalonId, selectedSalon } = useSalon();
   const { language } = useLanguage();
   const c: Copy = language === Language.HI ? COPY.hi : COPY.en;
-  const [panel, setPanel] = useState<Panel>('analytics');
+  const [panel, setPanel] = useState<Panel>(route?.params?.initialPanel ?? 'analytics');
   const [range, setRange] = useState<'7d' | '30d' | '90d'>('30d');
   const [analytics, setAnalytics] = useState<OwnerAnalyticsDto | null>(null);
   const [revenue, setRevenue] = useState<OwnerRevenueDto | null>(null);
@@ -125,6 +125,10 @@ export default function OwnerBusinessScreen() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const requestSeq = useRef(0);
+
+  useEffect(() => {
+    if (route?.params?.initialPanel) setPanel(route.params.initialPanel);
+  }, [route?.params?.initialPanel]);
 
   const load = useCallback(async () => {
     if (!selectedSalonId) return;

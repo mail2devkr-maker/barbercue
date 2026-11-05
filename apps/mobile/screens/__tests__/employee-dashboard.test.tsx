@@ -7,6 +7,11 @@ import { useAuth } from '../../lib/auth-context';
 
 jest.mock('../../lib/api', () => ({ apiFetch: jest.fn(), ApiError: class ApiError extends Error {} }));
 jest.mock('../../lib/auth-context', () => ({ useAuth: jest.fn() }));
+jest.mock('../../components/assistant/AssistantEntry', () => ({ AssistantEntry: () => null }));
+jest.mock('@react-navigation/native', () => ({
+  ...jest.requireActual('@react-navigation/native'),
+  useNavigation: () => ({ navigate: jest.fn() }),
+}));
 jest.mock('../../lib/language-context', () => ({
   useLanguage: () => ({ language: 'EN', t: require('@barbercue/shared').uiStringsFor('EN') }),
 }));

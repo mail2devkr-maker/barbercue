@@ -3,6 +3,10 @@ import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'r
 import { EMPLOYEE_PATHS, type EmployeeCrmDashboardDto, type EmployeeProfileDto } from '@barbercue/shared';
 import { ApiError, apiFetch } from '../../lib/api';
 import { useAuth } from '../../lib/auth-context';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { AssistantEntry } from '../../components/assistant/AssistantEntry';
+import type { EmployeeStackParamList } from '../../navigation/EmployeeNavigator';
 import { useLanguage } from '../../lib/language-context';
 import { fastQue, font, fontSize, space } from '../../lib/theme';
 import { PremiumButton, PremiumCard, PremiumScreen, PremiumSectionHeader } from '../../components/ui';
@@ -24,6 +28,7 @@ async function fetchEmployeeDashboard(): Promise<EmployeeCrmDashboardDto> {
 
 export default function EmployeeDashboardScreen() {
   const { logout } = useAuth();
+  const navigation = useNavigation<NativeStackNavigationProp<EmployeeStackParamList>>();
   const { t } = useLanguage();
   const [dashboard, setDashboard] = useState<EmployeeCrmDashboardDto | null>(null);
   const [loading, setLoading] = useState(true);
@@ -77,6 +82,8 @@ export default function EmployeeDashboardScreen() {
           <Text style={styles.signOutText}>{signingOut ? '…' : t.signOut}</Text>
         </Pressable>
       </View>
+
+      <AssistantEntry onPress={() => navigation.navigate('Assistant')} />
 
       {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
 

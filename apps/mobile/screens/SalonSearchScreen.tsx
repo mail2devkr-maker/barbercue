@@ -280,7 +280,7 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
   const { width: windowWidth } = useWindowDimensions();
   const stackSearchRow = windowWidth < NARROW_SEARCH_ROW_WIDTH;
   const selectedStyleName = route.params?.selectedStyleName;
-  const { initialQuery, initialLat, initialLng } = route.params ?? {};
+  const { initialQuery, initialLat, initialLng, initialFavoritesOnly } = route.params ?? {};
   const [q, setQ] = useState(initialQuery ?? '');
   const [serviceSuggestions, setServiceSuggestions] = useState<ServiceSuggestionDto[]>([]);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
@@ -303,7 +303,7 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
   // prices by, sort, minimum rating, open now and favorites.
   const [discovery, setDiscovery] = useState<
     Pick<DiscoveryFilters, 'salonType' | 'popularService' | 'sort' | 'minRating' | 'openNow' | 'favoritesOnly'>
-  >(DEFAULT_DISCOVERY_FILTERS);
+  >({ ...DEFAULT_DISCOVERY_FILTERS, favoritesOnly: initialFavoritesOnly === true });
   const [notice, setNotice] = useState<string | null>(null);
   const { user, status: authStatus } = useAuth();
   const isCustomer = authStatus === 'authenticated' && !!user?.roles.includes(Role.CUSTOMER);
@@ -504,6 +504,15 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const initialFavoritesSearchStarted = useRef(false);
+  useEffect(() => {
+    if (!initialFavoritesOnly || !isCustomer || favoriteIds === null || initialFavoritesSearchStarted.current) return;
+    initialFavoritesSearchStarted.current = true;
+    void runSearch(false, nearMe, { favoritesOnly: true });
+    // This one-time handoff waits for the authenticated favorites request before building `ids`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialFavoritesOnly, isCustomer, favoriteIds]);
 
   // "Near Me" (Phase 4) — expo-location's foreground permission flow, no paid Maps/geocoding SDK.
   // Denial/unavailability degrades gracefully to the existing text search rather than blocking the

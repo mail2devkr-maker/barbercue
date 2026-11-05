@@ -8,6 +8,11 @@ import { useAuth } from '../../lib/auth-context';
 import { useLanguage } from '../../lib/language-context';
 import { color, font, fontSize, space } from '../../lib/theme';
 import { Screen, SectionHeader, Card, Button, InlineError, LanguageSwitcher } from '../../components/ui';
+import { AssistantEntry } from '../../components/assistant/AssistantEntry';
+import { useSalon } from '../../lib/salon-context';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useNavigation } from '@react-navigation/native';
+import type { DashboardAccountStackParamList } from '../../navigation/DashboardAccountStack';
 
 function roleLabel(t: UiStrings, role: string): string {
   const labels: Record<string, string> = {
@@ -29,6 +34,8 @@ function roleLabel(t: UiStrings, role: string): string {
 // correctly reading user.preferredLanguage, it just could never become anything but the default.
 export default function DashboardAccountScreen() {
   const { user, logout } = useAuth();
+  const navigation = useNavigation<NativeStackNavigationProp<DashboardAccountStackParamList>>();
+  const { selectedSalonId } = useSalon();
   const { t, language } = useLanguage();
   const [sessions, setSessions] = useState<AuthSession[]>([]);
   const [loading, setLoading] = useState(true);
@@ -72,6 +79,8 @@ export default function DashboardAccountScreen() {
         <SectionHeader eyebrow={t.tabAccount} title={t.yourAccount} />
         <LanguageSwitcher />
       </View>
+
+      <AssistantEntry onPress={() => navigation.navigate('Assistant', { salonId: selectedSalonId ?? undefined })} />
 
       <Card style={styles.card}>
         <View style={styles.fieldRow}>
