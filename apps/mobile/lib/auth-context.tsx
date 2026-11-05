@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AUTH_PATHS,
+  type AppleLoginInput,
   type AuthTokens,
   type GoogleLoginInput,
   type MeResponse,
@@ -8,13 +9,7 @@ import {
   type OwnerSignupInput,
   type StaffLoginInput,
 } from '@barbercue/shared';
-import {
-  apiFetch,
-  clearPersistedRefreshToken,
-  getPersistedRefreshToken,
-  persistRefreshToken,
-  setAccessToken,
-} from './api';
+import { apiFetch, clearPersistedRefreshToken, getPersistedRefreshToken, persistRefreshToken, setAccessToken } from './api';
 import { unregisterCurrentPushDevice } from './push-notifications';
 
 type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated';
@@ -24,6 +19,7 @@ interface AuthContextValue {
   status: AuthStatus;
   verifyCustomerOtp: (input: OtpVerifyInput) => Promise<MeResponse>;
   googleLogin: (input: GoogleLoginInput) => Promise<MeResponse>;
+  appleLogin: (input: AppleLoginInput) => Promise<MeResponse>;
   // Same POST auth/staff/login endpoint web's own /owner/login and /staff/login pages call —
   // it accepts either SALON_OWNER or SALON_STAFF accounts and returns MeResponse.roles, which
   // callers use to route to the right shell. Not customer-facing; never exposed from the
@@ -37,6 +33,7 @@ interface AuthContextValue {
   // screen uses to obtain the ID token — this method only differs in which backend endpoint the
   // token is sent to.
   staffGoogleLogin: (input: GoogleLoginInput) => Promise<MeResponse>;
+  staffAppleLogin: (input: AppleLoginInput) => Promise<MeResponse>;
   logout: () => Promise<void>;
   // Reloads auth/me and applies the result to state — used after a change that doesn't rotate
   // tokens (e.g. PATCH auth/language), mirroring apps/web/lib/auth-context.tsx's own refreshMe.
@@ -126,12 +123,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [applyAuthResult],
   );
 
+  const appleLogin = useCallback(
+    async (input: AppleLoginInput): Promise<MeResponse> => {
+      const result = await apiFetch<{ user: MeResponse; tokens: AuthTokens }>(authPath(AUTH_PATHS.apple), {
+        method: 'POST',
+        body: JSON.stringify(input),
+      });
+      return applyAuthResult(result);
+    },
+    [applyAuthResult],
+  );
+
   const ownerSignup = useCallback(
     async (input: OwnerSignupInput): Promise<MeResponse> => {
-      const result = await apiFetch<{ user: MeResponse; tokens: AuthTokens }>(
-        authPath(AUTH_PATHS.ownerSignup),
-        { method: 'POST', body: JSON.stringify(input) },
-      );
+      const result = await apiFetch<{ user: MeResponse; tokens: AuthTokens }>(authPath(AUTH_PATHS.ownerSignup), {
+        method: 'POST',
+        body: JSON.stringify(input),
+      });
       return applyAuthResult(result);
     },
     [applyAuthResult],
@@ -148,15 +156,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [applyAuthResult],
   );
 
+  const staffAppleLogin = useCallback(
+    async (input: AppleLoginInput): Promise<MeResponse> => {
+      const result = await apiFetch<{ user: MeResponse; tokens: AuthTokens }>(authPath(AUTH_PATHS.staffApple), {
+        method: 'POST',
+        body: JSON.stringify(input),
+      });
+      return applyAuthResult(result);
+    },
+    [applyAuthResult],
+  );
+
   const staffLogin = useCallback(
     async (input: StaffLoginInput): Promise<MeResponse> => {
       // twoFactorRequired is always false in V1 (reserved for a future admin-style TOTP step on
       // staff/owner accounts — see auth.service.ts) — every successful call already returns full
       // tokens, so there is nothing else to branch on here.
-      const result = await apiFetch<{ user: MeResponse; tokens: AuthTokens; twoFactorRequired: boolean }>(
-        authPath(AUTH_PATHS.staffLogin),
-        { method: 'POST', body: JSON.stringify(input) },
-      );
+      const result = await apiFetch<{
+        user: MeResponse;
+        tokens: AuthTokens;
+        twoFactorRequired: boolean;
+      }>(authPath(AUTH_PATHS.staffLogin), {
+        method: 'POST',
+        body: JSON.stringify(input),
+      });
       return applyAuthResult(result);
     },
     [applyAuthResult],
@@ -169,7 +192,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Push-device removal is deliberately best effort and caller-scoped. It happens while the
       // access token still exists, then never prevents an explicit logout from completing.
       await unregisterCurrentPushDevice();
-      await apiFetch(authPath(AUTH_PATHS.logout), { method: 'POST', body: JSON.stringify({ refreshToken }) });
+      await apiFetch(authPath(AUTH_PATHS.logout), {
+        method: 'POST',
+        body: JSON.stringify({ refreshToken }),
+      });
     } finally {
       setAccessToken(null);
       await clearPersistedRefreshToken();
@@ -184,14 +210,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       status,
       verifyCustomerOtp,
       googleLogin,
+      appleLogin,
       staffLogin,
       ownerSignup,
       staffGoogleLogin,
+      staffAppleLogin,
       logout,
       refreshMe,
       applySession: applyAuthResult,
     }),
-    [user, status, verifyCustomerOtp, googleLogin, staffLogin, ownerSignup, staffGoogleLogin, logout, refreshMe, applyAuthResult],
+    [user, status, verifyCustomerOtp, googleLogin, appleLogin, staffLogin, ownerSignup, staffGoogleLogin, staffAppleLogin, logout, refreshMe, applyAuthResult],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

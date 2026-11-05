@@ -394,7 +394,10 @@ describe('DashboardAnalyticsService', () => {
   it('buckets bookings into peak/slow hours by IST hour-of-day', async () => {
     // 09:00 IST = 03:30 UTC, 14:00 IST = 08:30 UTC
     prisma.booking.findMany.mockImplementation(
-      (args: { select?: { slotStart?: boolean } }) => {
+      (args: { select?: { slotStart?: boolean }; where?: { status?: string } }) => {
+        if (args.where?.status === 'COMPLETED') {
+          return Promise.resolve([]); // no completed bookings in this peak-hour-only fixture
+        }
         if (args.select?.slotStart) {
           return Promise.resolve([
             { slotStart: new Date('2026-06-01T03:30:00.000Z') },

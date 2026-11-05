@@ -1,7 +1,7 @@
 /// <reference types="jest" />
 import { act, createElement } from 'react';
 import TestRenderer from 'react-test-renderer';
-import { TextInput } from 'react-native';
+import { Platform, TextInput } from 'react-native';
 import { uiStringsFor } from '@barbercue/shared';
 import WalkInJoinScreen from '../WalkInJoinScreen';
 import { apiFetch } from '../../lib/api';
@@ -23,7 +23,8 @@ jest.mock('../../components/ui', () => {
   const { View, Text } = require('react-native');
   const { createElement: h } = require('react');
   return {
-    Screen: View,
+    Screen: ({ children, scroll = true }: { children: unknown; scroll?: boolean }) =>
+      h(View, { testID: `screen-scroll-${scroll}` }, children),
     SectionHeader: () => null,
     Skeleton: View,
     Button: require('../../components/ui/Button').Button,
@@ -83,6 +84,7 @@ afterEach(async () => {
 
 it('collects a name and a mobile number before joining', async () => {
   await render();
+  expect(tree!.root.findByProps({ testID: `screen-scroll-${Platform.OS === 'ios'}` })).toBeTruthy();
   expect(inputs()).toHaveLength(2);
   expect(screenText()).toContain(t.contactNameLabel);
   expect(screenText()).toContain(t.contactPhoneLabel);
