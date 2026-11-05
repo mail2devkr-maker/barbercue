@@ -136,6 +136,31 @@ describe('ActionAssistant drawer', () => {
     expect(textOf(tree.root.find((n) => n.props['data-status'] === 'NEEDS_CONFIRMATION'))).toContain('Decision sent');
   });
 
+  it('multi-turn: a short spoken/typed answer to "Which staff member?" sends the chosen option; a new request does not', async () => {
+    const question = {
+      requestId: 'q1',
+      status: 'NEEDS_INPUT',
+      action: { id: 'staff.setStatus', title: 'Activate or deactivate staff', kind: 'WRITE' },
+      message: 'Which staff member?',
+      options: [
+        { label: 'Ramesh Kumar', text: 'Deactivate staff Ramesh Kumar' },
+        { label: 'Suresh', text: 'Deactivate staff Suresh' },
+      ],
+      completedAt: '2026-11-05T10:00:00.000Z',
+    };
+    route([question, preview, question, preview]);
+    const tree = await open();
+    await say(tree, 'staff ko inactive karo');
+    await say(tree, 'doosra wala');
+    expect(JSON.parse(callsTo('assistant/turns')[1][1].body).text).toBe('Deactivate staff Suresh');
+    // The user's own words stay in the transcript.
+    expect(textOf(tree.root)).toContain('doosra wala');
+    // After an answer the question is closed: the next short phrase goes as typed.
+    await say(tree, 'staff ko inactive karo');
+    await say(tree, 'staff list dikhao');
+    expect(JSON.parse(callsTo('assistant/turns')[3][1].body).text).toBe('staff list dikhao');
+  });
+
   it('keyboard: focus moves into the message box, Escape closes the notice then the drawer, focus returns', async () => {
     route([], { browser: true, local: false });
     globalThis.window.webkitSpeechRecognition = class {
