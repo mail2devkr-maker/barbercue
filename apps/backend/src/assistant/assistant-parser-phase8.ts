@@ -1,4 +1,10 @@
 import { AssistantActionId } from '@barbercue/shared';
+import { parsePeriod } from './assistant-period';
+
+const periodNamed = (t: string) => {
+  const p = parsePeriod(t, new Date().getUTCFullYear());
+  return !!p && p.kind !== 'today';
+};
 
 /**
  * Phase 8 (issue #368): the conversation basics the owner's QA found missing.
@@ -188,6 +194,8 @@ export function parsePhase8(
   const verb =
     OPEN.test(t) || (SHOWISH.test(t) && W('page|screen|tab').test(t));
   if (!verb) return null;
+  // "Pichhle mahine ki booking kholo": the period report, which opens Bookings filtered to that period.
+  if (page === 'bookings' && periodNamed(t)) return null;
   if (page) return { action: AssistantActionId.NAVIGATE, page };
   // "wo page kholo": a navigation request without a page we know -> ask which one.
   if (PAGE_WORD.test(t) && W('page|screen|tab|section').test(t))

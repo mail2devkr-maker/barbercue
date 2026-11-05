@@ -9,6 +9,7 @@ import {
   addZonedCalendarDays,
 } from '../../common/timezone/timezone';
 import { matchByName } from '../assistant-parser';
+import { chairByNumber } from '../assistant-chair-number';
 import { DAY_LABEL, type DaySpec } from '../assistant-when';
 import {
   chooseBooking,
@@ -144,7 +145,10 @@ export const BATCH3_HANDLERS: HandlerMap = {
     async plan(c, p) {
       const status = p.status as 'ACTIVE' | 'INACTIVE' | 'MAINTENANCE';
       const rows = await c.deps.chairs.list(c.user.id, c.salonId);
-      const target = pick(
+      // "chair number 2" / "chair do" / "doosri chair": by number first; anything unclear asks.
+      const target =
+        chairByNumber(c.text, rows, (r) => r.label) ??
+        pick(
         rows,
         c.text,
         (r) => r.label,

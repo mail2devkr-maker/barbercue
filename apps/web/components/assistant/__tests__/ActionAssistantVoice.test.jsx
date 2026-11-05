@@ -177,6 +177,11 @@ describe('navigation happens on the MAIN screen', () => {
     expect(safeRoute('/dashboard/salons/s1/queue', 's1')).toBe('/dashboard/salons/s1/queue');
     expect(safeRoute('/dashboard/salons/s2/queue', 's1')).toBeNull();
     expect(safeRoute('/dashboard/salons/s1/queue?x=1', 's1')).toBeNull();
+    // The Bookings period the assistant builds is the only query a shop page accepts.
+    const period = '/dashboard/salons/s1/bookings?from=2026-10-31T18%3A30%3A00.000Z&to=2026-11-30T18%3A29%3A59.999Z&period=Last+month+%281+Nov%29&filter=all';
+    expect(safeRoute(period, 's1')).toBe(period);
+    expect(safeRoute('/dashboard/salons/s1/bookings?redirect=evil', 's1')).toBeNull();
+    expect(safeRoute('/dashboard/salons/s2/bookings?from=x', 's1')).toBeNull();
     expect(safeRoute('/account/credits')).toBe('/account/credits');
     expect(safeRoute('javascript:alert(1)')).toBeNull();
   });

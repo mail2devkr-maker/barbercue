@@ -187,6 +187,13 @@ export function parseAssistantText(
   if (surface === 'shop') {
     const report = parseReport(text, year) ?? (roman !== text ? parseReport(roman, year) : null);
     if (report) return report;
+    // "Ramesh ka schedule dikhao": one team member's own schedule (their working week), resolved by
+    // name; the shop's day schedule stays "aaj / kal ka schedule".
+    const whose = (roman !== text ? roman : text).match(
+      /^(?:show\s+)?([a-z][a-z.]*(?:\s+[a-z][a-z.]*)?)\s+(?:ka|ki|ke|'s)\s+(?:schedule|timing|timings|shift|hours|working hours)(?:\s|$)/u,
+    );
+    if (whose && !/^(?:aaj|aj|kal|parso|today|tomorrow|yesterday|is|iss|this|mera|meri|mere|my|shop|dukan|salon|sabka|sab)(?:\s|$)/u.test(whose[1]))
+      return { action: AssistantActionId.STAFF_HOURS_VIEW };
   }
   return (
     parseNormalized(text, raw, surface, year) ??

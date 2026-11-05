@@ -117,6 +117,7 @@ import { AuthService } from '../auth/auth.service';
 import { normalizeText, type ParsedIntent } from './assistant-parser';
 import { romanize } from './assistant-transliterate';
 import { parseReportFollowUp, type ReportIntent } from './assistant-parser-report';
+import { onAdminMainScreen, onMainScreen } from './assistant-main-screen';
 
 export { ASSISTANT_ACTIONS };
 
@@ -296,6 +297,16 @@ export class AssistantService {
     user: AuthenticatedUser,
     input: AssistantTurnInput,
   ): Promise<AssistantTurnDto> {
+    // The answer, question or preview opens its page on the MAIN screen of the authorized shop.
+    return onAdminMainScreen(
+      onMainScreen(await this.turnCore(user, input), input.surface, input.salonId),
+    );
+  }
+
+  private async turnCore(
+    user: AuthenticatedUser,
+    input: AssistantTurnInput,
+  ): Promise<AssistantTurnDto> {
     const reading = await this.read(
       input.text,
       input.alternatives,
@@ -461,6 +472,17 @@ export class AssistantService {
   }
 
   async confirm(
+    user: AuthenticatedUser,
+    input: AssistantConfirmationInput,
+  ): Promise<AssistantTurnDto> {
+    const out = await this.confirmCore(user, input);
+    // A completed change shows its page (built from the sealed, access-checked shop) on the main screen.
+    return out.status === 'DONE' && out.navigateTo?.startsWith('/dashboard/salons/')
+      ? { ...out, mainScreen: true }
+      : out;
+  }
+
+  private async confirmCore(
     user: AuthenticatedUser,
     input: AssistantConfirmationInput,
   ): Promise<AssistantTurnDto> {
@@ -871,6 +893,7 @@ export class AssistantService {
       ...(turn.refresh ? { refresh: turn.refresh } : {}),
       ...(turn.navigateTo ? { navigateTo: turn.navigateTo } : {}),
       ...(turn.reportContext ? { reportContext: turn.reportContext } : {}),
+      ...(turn.mainScreen ? { mainScreen: true } : {}),
       completedAt: new Date().toISOString(),
     };
   }

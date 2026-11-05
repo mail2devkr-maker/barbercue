@@ -168,6 +168,13 @@ export const REPORT_HANDLERS: HandlerMap = {
           page < pages
             ? [{ label: 'Show more', text: 'aur dikhao' }]
             : undefined,
+        // The Bookings page opens filtered to the same period (and status) on the main screen.
+        navigateTo: `/dashboard/salons/${c.salonId}/bookings?${new URLSearchParams({
+          from: period.start.toISOString(),
+          to: new Date(period.end.getTime() - 1).toISOString(),
+          period: period.label,
+          filter: status === 'CANCELLED' ? 'cancelled' : status === 'COMPLETED' ? 'completed' : status === 'NO_SHOW' ? 'no_show' : 'all',
+        }).toString()}`,
         reportContext: {
           action: AssistantActionId.BOOKINGS_REPORT,
           period: p.period as PeriodSpec,
