@@ -26,6 +26,7 @@ export default function StaffNavigator() {
       <Tab.Navigator
         screenOptions={{
           headerShown: false,
+        tabBarHideOnKeyboard: true,
           tabBarActiveTintColor: fastQue.pink,
           tabBarInactiveTintColor: fastQue.textMuted,
           tabBarStyle: { backgroundColor: fastQue.glassStrong, borderTopColor: fastQue.border, borderTopWidth: 1, height: 60, paddingBottom: 8, paddingTop: 8 },

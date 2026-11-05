@@ -2,11 +2,13 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import {
   AUTH_PATHS,
   type AuthTokens,
+  type EmployeeLoginInput,
   type GoogleLoginInput,
   type MeResponse,
   type OtpVerifyInput,
   type OwnerSignupInput,
   type StaffLoginInput,
+  employeeLoginSchema,
 } from '@barbercue/shared';
 import {
   apiFetch,
@@ -16,6 +18,7 @@ import {
   setAccessToken,
 } from './api';
 import { unregisterCurrentPushDevice } from './push-notifications';
+import { isAuthorizedEmployeeSession } from './auth-routing';
 
 type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated';
 
@@ -29,6 +32,9 @@ interface AuthContextValue {
   // callers use to route to the right shell. Not customer-facing; never exposed from the
   // customer login screen.
   staffLogin: (input: StaffLoginInput) => Promise<MeResponse>;
+  // Employee IDs use the backend's separate EMPLOYEE audience and FIELD_EXECUTIVE role. This
+  // never shares the salon staff login endpoint or accepts a role chosen by the client.
+  employeeLogin: (input: EmployeeLoginInput) => Promise<MeResponse>;
   ownerSignup: (input: OwnerSignupInput) => Promise<MeResponse>;
   // Same POST auth/staff/google contract as staffLogin above, but via Google Sign-In — verified
   // server-side, restricted to accounts that already hold SALON_OWNER/SALON_STAFF (see
@@ -162,6 +168,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [applyAuthResult],
   );
 
+  const employeeLogin = useCallback(
+    async (input: EmployeeLoginInput): Promise<MeResponse> => {
+      const parsed = employeeLoginSchema.safeParse(input);
+      if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? 'Enter a valid Employee ID and password.');
+
+      const result = await apiFetch<{ user: MeResponse; tokens: AuthTokens }>(authPath(AUTH_PATHS.employeeLogin), {
+        method: 'POST',
+        body: JSON.stringify(parsed.data),
+      });
+
+      // The employee login endpoint is a distinct server-issued audience. Check both the scoped
+      // role and audience before persisting refresh credentials or making the session visible to
+      // the rest of the app. Never infer employee access from the requested login screen.
+      if (!isAuthorizedEmployeeSession(result.user)) {
+        if (result.tokens?.refreshToken) {
+          try {
+            await apiFetch(authPath(AUTH_PATHS.logout), {
+              method: 'POST',
+              body: JSON.stringify({ refreshToken: result.tokens.refreshToken }),
+            });
+          } catch {
+            // The invalid session is never stored locally; revocation is best effort if a
+            // misconfigured server returned a token with the wrong audience or role.
+          }
+        }
+        throw new Error('Employee access could not be verified. Please try again.');
+      }
+
+      return applyAuthResult(result);
+    },
+    [applyAuthResult],
+  );
+
   const logout = useCallback(async () => {
     authMutationVersionRef.current += 1;
     const refreshToken = await getPersistedRefreshToken();
@@ -185,13 +224,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       verifyCustomerOtp,
       googleLogin,
       staffLogin,
+      employeeLogin,
       ownerSignup,
       staffGoogleLogin,
       logout,
       refreshMe,
       applySession: applyAuthResult,
     }),
-    [user, status, verifyCustomerOtp, googleLogin, staffLogin, ownerSignup, staffGoogleLogin, logout, refreshMe, applyAuthResult],
+    [user, status, verifyCustomerOtp, googleLogin, staffLogin, employeeLogin, ownerSignup, staffGoogleLogin, logout, refreshMe, applyAuthResult],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
