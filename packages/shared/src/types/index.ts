@@ -1968,6 +1968,32 @@ export interface AdminBookingsPageDto {
   nextCursor: string | null;
 }
 
+/** New shop onboarding funnel: registered -> verified -> configured -> live -> first customer. No owner data. */
+export type AdminOnboardingStage = "REGISTERED" | "VERIFIED" | "CONFIGURED" | "LIVE" | "FIRST_CUSTOMER";
+export interface AdminOnboardingShopDto {
+  id: string;
+  publicId: string;
+  name: string;
+  city: string | null;
+  status: SalonStatus;
+  registeredAt: string;
+  verification: "NONE" | "SUBMITTED" | "UNDER_REVIEW" | "APPROVED" | "REJECTED";
+  verifiedAt: string | null;
+  services: number;
+  chairs: number;
+  staff: number;
+  firstCustomerAt: string | null;
+  /** The furthest stage reached (stages are cumulative). */
+  stage: AdminOnboardingStage;
+  daysSinceRegistered: number;
+}
+export interface AdminOnboardingDto {
+  days: number;
+  generatedAt: string;
+  funnel: Record<AdminOnboardingStage, number>;
+  shops: AdminOnboardingShopDto[];
+}
+
 /** Platform live-queue monitor: counts only, never a customer. Shops with someone in the queue now. */
 export interface AdminLiveQueueShopDto {
   id: string;
