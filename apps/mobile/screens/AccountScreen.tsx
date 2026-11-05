@@ -22,6 +22,7 @@ import { Screen, SectionHeader, Card, Button } from '../components/ui';
 import { InlineError } from '../components/ui/ErrorState';
 import { OwnerVoiceSettingsCard } from '../components/owner/OwnerVoiceSettingsCard';
 import { AccountDeletionRequestCard } from '../components/account/AccountDeletionRequestCard';
+import { AssistantEntry } from '../components/assistant/AssistantEntry';
 import { isCreditsEnabled } from '../lib/feature-flags';
 import type { AccountStackParamList, TabParamList } from '../navigation/types';
 
@@ -152,6 +153,8 @@ export default function AccountScreen() {
   return (
     <Screen refreshing={refreshing} onRefresh={() => void handleRefresh()}>
       <SectionHeader eyebrow={t.tabAccount} title={t.yourAccount} subtitle={t.contactDetailsSubtitle} />
+
+      <AssistantEntry onPress={() => navigation.navigate('Assistant')} />
 
       <Card style={styles.card}>
         <Text style={styles.cardTitle}>{t.accountDetailsCard}</Text>

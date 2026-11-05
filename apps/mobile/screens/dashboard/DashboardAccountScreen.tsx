@@ -1,5 +1,7 @@
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { AUTH_PATHS, Role, type AuthSession, type UiStrings } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../../lib/api';
@@ -9,6 +11,9 @@ import { useLanguage } from '../../lib/language-context';
 import { color, font, fontSize, space } from '../../lib/theme';
 import { Screen, SectionHeader, Card, Button, InlineError, LanguageSwitcher } from '../../components/ui';
 import { AccountDeletionRequestCard } from '../../components/account/AccountDeletionRequestCard';
+import { AssistantEntry } from '../../components/assistant/AssistantEntry';
+import { useOptionalSalon } from '../../lib/salon-context';
+import type { DashboardAccountStackParamList } from '../../navigation/DashboardAccountStack';
 
 function roleLabel(t: UiStrings, role: string): string {
   const labels: Record<string, string> = {
@@ -29,6 +34,8 @@ function roleLabel(t: UiStrings, role: string): string {
 // so an owner had no durable way to select Hindi; the voice/push code downstream was already
 // correctly reading user.preferredLanguage, it just could never become anything but the default.
 export default function DashboardAccountScreen() {
+  const navigation = useNavigation<NativeStackNavigationProp<DashboardAccountStackParamList>>();
+  const selectedSalonId = useOptionalSalon()?.selectedSalonId ?? null;
   const { user, logout } = useAuth();
   const { t, language } = useLanguage();
   const [sessions, setSessions] = useState<AuthSession[]>([]);
@@ -74,6 +81,8 @@ export default function DashboardAccountScreen() {
         <SectionHeader eyebrow={t.tabAccount} title={t.yourAccount} />
         <LanguageSwitcher />
       </View>
+
+      <AssistantEntry onPress={() => navigation.navigate('Assistant', { salonId: selectedSalonId ?? undefined })} />
 
       <Card style={styles.card}>
         <View style={styles.fieldRow}>
