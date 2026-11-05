@@ -37,6 +37,8 @@ export function canOpenAdminPath(roles: Role[], pathname: string): boolean {
   if (pathname.startsWith("/dashboard/admin/inventory")) {
     return superAdmin || coFounder || roles.includes(Role.PLATFORM_VIEWER);
   }
+  // Live queue monitoring is counts-only: every internal admin role, like shop activity (GET admin/live-queue).
+  if (pathname.startsWith("/dashboard/admin/live-queue")) return true;
   if (pathname.startsWith("/dashboard/admin/access")) return superAdmin;
   // The platform CRM analytics and its cursor-paged rows are PLATFORM_ADMIN only on the server (ADMIN_CRM_ANALYTICS_V1).
   if (pathname.startsWith("/dashboard/admin/crm/analytics")) return superAdmin;

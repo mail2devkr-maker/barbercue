@@ -77,6 +77,7 @@ export const ADMIN_PATHS = {
   // admin/shop-activity?from=YYYY-MM-DD&to=YYYY-MM-DD — shop-wise bookings and live-queue counts
   // for an IST date range.
   shopActivity: 'shop-activity',
+  liveQueue: 'live-queue',
   // admin/analytics/overview?from&to — Executive Command Center (docs/admin-dashboard-2.0).
   analytics: 'analytics',
   // admin/shops/status — live scheduled open/closed status; admin/analytics/timeseries — chart builder.
