@@ -45,7 +45,7 @@ function TeamPhoto({ url, displayName }: { url: string | null; displayName: stri
 // Public discovery endpoint — same GET /salons/:countryCode/:citySlug/:salonSlug apps/web uses (B9).
 export default function SalonProfileScreen({ route, navigation }: Props) {
   const { t } = useLanguage();
-  const { countryCode, citySlug, salonSlug, selectedStyleName } = route.params;
+  const { countryCode, citySlug, salonSlug, selectedStyleName, offerId, offerTitle } = route.params;
   const [salon, setSalon] = useState<SalonProfileDto | null>(null);
   const [publicStatus, setPublicStatus] = useState<PublicSalonStatusDto | null>(null);
   const [loading, setLoading] = useState(true);
@@ -259,6 +259,8 @@ export default function SalonProfileScreen({ route, navigation }: Props) {
                     operatingHours: salon.operatingHours,
                     salonTimezone: salon.salonTimezone,
                     selectedStyleName,
+                    offerId,
+                    offerTitle,
                   })
                 }
                 style={styles.continueButton}

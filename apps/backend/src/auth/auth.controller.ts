@@ -1,5 +1,6 @@
 import {
   Body,
+  BadRequestException,
   Controller,
   Delete,
   Get,
@@ -20,6 +21,7 @@ import {
   Role,
   type AuthMethodsDto,
   adminGoogleLoginSchema,
+  appleLoginSchema,
   adminLoginSchema,
   forgotPasswordSchema,
   googleLoginSchema,
@@ -30,6 +32,7 @@ import {
   resetPasswordSchema,
   initialPasswordSchema,
   deleteAccountSchema,
+  accountDeletionRequestSchema,
   setLanguageSchema,
   staffLoginSchema,
   ownerSignupSchema,
@@ -37,12 +40,14 @@ import {
   ownerPhoneLinkRequestSchema,
   ownerPhoneLinkVerifySchema,
   type AdminGoogleLoginInput,
+  type AppleLoginInput,
   type AdminLoginInput,
   type AuthenticatedUser,
   type ForgotPasswordInput,
   type GoogleLoginInput,
   type InitialPasswordInput,
   type DeleteAccountInput,
+  type AccountDeletionRequestInput,
   type LogoutRequestInput,
   type OtpRequestInput,
   type OtpVerifyInput,
@@ -56,6 +61,7 @@ import {
   type OwnerPhoneLinkVerifyInput,
 } from '@barbercue/shared';
 import { AuthService } from './auth.service';
+import { isAppleAuthConfigured } from './services/apple-auth.service';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { Public } from './decorators/public.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
@@ -95,10 +101,12 @@ export class AuthController {
   @Get(AUTH_PATHS.methods)
   authMethods(): AuthMethodsDto {
     return {
-      google: Boolean(
-        process.env.GOOGLE_WEB_CLIENT_ID ??
+      google: [
+        process.env.GOOGLE_WEB_CLIENT_ID,
         process.env.GOOGLE_ANDROID_CLIENT_ID,
-      ),
+        process.env.GOOGLE_IOS_CLIENT_ID,
+      ].some(Boolean),
+      apple: isAppleAuthConfigured(),
       phoneOtp: isPhoneOtpConfigured(),
       ownerPhoneOtp: isPhoneOtpConfigured(),
     };
@@ -251,6 +259,30 @@ export class AuthController {
 
   @Public()
   @Throttle(AUTH_THROTTLE)
+  @Post(AUTH_PATHS.appleNonce)
+  createAppleLoginNonce() {
+    return this.authService.createAppleLoginNonce();
+  }
+
+  @Public()
+  @Throttle(AUTH_THROTTLE)
+  @Post(AUTH_PATHS.apple)
+  @UsePipes(new ZodValidationPipe(appleLoginSchema))
+  async appleLogin(
+    @Body() body: AppleLoginInput,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.authService.appleLogin(
+      body,
+      req.headers['user-agent'],
+    );
+    setRefreshCookie(res, result.tokens.refreshToken);
+    return result;
+  }
+
+  @Public()
+  @Throttle(AUTH_THROTTLE)
   @Post(AUTH_PATHS.employeeLogin)
   @UsePipes(new ZodValidationPipe(employeeLoginSchema))
   async employeeLogin(
@@ -318,6 +350,23 @@ export class AuthController {
   ) {
     const result = await this.authService.staffGoogleLogin(
       body.idToken,
+      req.headers['user-agent'],
+    );
+    setRefreshCookie(res, result.tokens.refreshToken);
+    return result;
+  }
+
+  @Public()
+  @Throttle(AUTH_THROTTLE)
+  @Post(AUTH_PATHS.staffApple)
+  @UsePipes(new ZodValidationPipe(appleLoginSchema))
+  async staffAppleLogin(
+    @Body() body: AppleLoginInput,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.authService.staffAppleLogin(
+      body,
       req.headers['user-agent'],
     );
     setRefreshCookie(res, result.tokens.refreshToken);
@@ -456,7 +505,39 @@ export class AuthController {
     );
   }
 
-  /** Customer-only deletion. No target user id is accepted: the JWT subject is authoritative. */
+  /** Current caller's role-aware deletion status; no target user id is accepted. */
+  @Get(AUTH_PATHS.accountDeletionRequest)
+  accountDeletionRequestStatus(@CurrentUser() user: AuthenticatedUser) {
+    return this.authService.getAccountDeletionRequest(user.id);
+  }
+
+  /**
+   * Starts a non-destructive request for staff, owners, administrators, and mixed-role accounts.
+   * It records only the authenticated JWT subject and never closes a shop or deletes records.
+   */
+  @Post(AUTH_PATHS.accountDeletionRequest)
+  @Throttle(AUTH_THROTTLE)
+  @HttpCode(HttpStatus.OK)
+  @UsePipes(new ZodValidationPipe(accountDeletionRequestSchema))
+  requestAccountDeletion(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() body: AccountDeletionRequestInput,
+  ) {
+    if (body.confirmation !== 'REQUEST_DELETION') {
+      throw new BadRequestException('Invalid account deletion confirmation.');
+    }
+    return this.authService.requestAccountDeletion(user.id);
+  }
+
+  /** Withdraws only the authenticated caller's pending, non-destructive request. */
+  @Delete(AUTH_PATHS.accountDeletionRequest)
+  @Throttle(AUTH_THROTTLE)
+  @HttpCode(HttpStatus.OK)
+  cancelAccountDeletionRequest(@CurrentUser() user: AuthenticatedUser) {
+    return this.authService.cancelAccountDeletionRequest(user.id);
+  }
+
+  /** Customer-only immediate deletion. No target user id is accepted: the JWT subject is authoritative. */
   @Delete(AUTH_PATHS.accountDeletion)
   @HttpCode(HttpStatus.OK)
   @Roles(Role.CUSTOMER)
@@ -466,9 +547,12 @@ export class AuthController {
     @Body() _body: DeleteAccountInput,
     @Res({ passthrough: true }) res: Response,
   ) {
-    await this.authService.deleteCustomerAccount(user.id, user.audience);
+    const result = await this.authService.deleteCustomerAccount(
+      user.id,
+      user.audience,
+    );
     clearRefreshCookie(res);
-    return { success: true };
+    return result;
   }
 
   @Get(AUTH_PATHS.me)

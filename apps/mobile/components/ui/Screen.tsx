@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { KeyboardAvoidingView, Platform, RefreshControl, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { color, space } from '../../lib/theme';
 
@@ -28,7 +28,10 @@ export function Screen({ children, scroll = true, refreshing, onRefresh, content
   };
 
   if (!scroll) {
-    return <View style={[styles.root, padding, contentStyle]}>{children}</View>;
+    const content = <View style={[styles.root, padding, contentStyle]}>{children}</View>;
+    return Platform.OS === 'ios' ? (
+      <KeyboardAvoidingView style={styles.root} behavior="padding">{content}</KeyboardAvoidingView>
+    ) : content;
   }
 
   return (
@@ -36,6 +39,7 @@ export function Screen({ children, scroll = true, refreshing, onRefresh, content
       style={styles.root}
       contentContainerStyle={[styles.scrollContent, padding, contentStyle]}
       keyboardShouldPersistTaps="handled"
+      automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
       refreshControl={
         onRefresh ? (
           <RefreshControl refreshing={Boolean(refreshing)} onRefresh={onRefresh} tintColor={color.accent} colors={[color.accent]} />

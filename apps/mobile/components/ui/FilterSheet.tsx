@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { fastQue, font, fontSize, radius, space } from '../../lib/theme';
 
 interface FilterSheetProps {
@@ -18,20 +18,28 @@ interface FilterSheetProps {
  * the full-screen Pressable backdrop gives tap-outside dismissal.
  */
 export function FilterSheet({ visible, title, onClose, closeLabel, children }: FilterSheetProps) {
+  const sheet = (
+    <>
+      <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel={closeLabel} />
+      <View style={styles.card}>
+        <View style={styles.header}>
+          <Text style={styles.title}>{title}</Text>
+          <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel={closeLabel} hitSlop={10} style={styles.closeButton}>
+            <Text style={styles.closeGlyph}>✕</Text>
+          </Pressable>
+        </View>
+        {children}
+      </View>
+    </>
+  );
+
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
-      <View style={styles.root}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel={closeLabel} />
-        <View style={styles.card}>
-          <View style={styles.header}>
-            <Text style={styles.title}>{title}</Text>
-            <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel={closeLabel} hitSlop={10} style={styles.closeButton}>
-              <Text style={styles.closeGlyph}>✕</Text>
-            </Pressable>
-          </View>
-          {children}
-        </View>
-      </View>
+      {Platform.OS === 'ios' ? (
+        <KeyboardAvoidingView style={styles.root} behavior="padding">{sheet}</KeyboardAvoidingView>
+      ) : (
+        <View style={styles.root}>{sheet}</View>
+      )}
     </Modal>
   );
 }

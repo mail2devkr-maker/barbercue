@@ -77,6 +77,17 @@ describe('ReservationService', () => {
   describe('isStaffFreeForInterval', () => {
     const at = (hhmm: string) => new Date(`2026-09-24T${hhmm}:00.000Z`);
 
+    beforeEach(() => {
+      // The active-session overrun rule compares against wall-clock time. Freeze the historical
+      // fixture day so these reservation assertions remain deterministic as the calendar advances.
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date('2026-09-24T09:00:00.000Z'));
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
     it('CASE A — a CONFIRMED 09:00-09:30 reservation blocks an overlapping 09:00-09:30 candidate', async () => {
       const mockDb = db({ booking: { count: jest.fn().mockResolvedValue(1), findFirst: jest.fn().mockResolvedValue({ slotEnd: at('09:30') }) } });
       const result = await service.isStaffFreeForInterval(mockDb, SALON, RAMESH, at('09:00'), at('09:30'));
