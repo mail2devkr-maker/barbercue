@@ -264,3 +264,67 @@ describe('ActionAssistant drawer', () => {
     expect(speechErrorText('anything')).toMatch(/type instead/);
   });
 });
+
+describe('mandatory confirmation UI (#372)', () => {
+  beforeEach(() => {
+    apiFetch.mockReset();
+    globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+    globalThis.window = { dispatchEvent: () => {}, addEventListener: jest.fn(), removeEventListener: jest.fn(), localStorage: { getItem: () => null, setItem: () => {} } };
+    globalThis.CustomEvent = class { constructor(type, init) { this.type = type; this.detail = init?.detail; } };
+  });
+  afterEach(() => { delete globalThis.window; });
+  async function openAndAsk(reply) {
+    route([reply]);
+    let tree;
+    await act(async () => { tree = TestRenderer.create(<ActionAssistant salonId="s1" />); });
+    await act(async () => byText(tree, 'button', '✦ Assistant').props.onClick());
+    const input = tree.root.findByProps({ 'aria-label': 'Message to the assistant' });
+    await act(async () => input.props.onChange({ target: { value: 'Chair 2 band karo' } }));
+    await act(async () => tree.root.findByType('form').props.onSubmit({ preventDefault() {} }));
+    return tree;
+  }
+  const question = 'Kya aap sach mein Chair 2 ko hatana (Off) chahte hain?';
+  const highRisk = {
+    ...preview,
+    action: { id: 'chairs.setStatus', title: 'Change chair status', kind: 'WRITE' },
+    message: `${question} Neeche Before → After dekhiye aur screen par Confirm ya Cancel dabaiye. Abhi kuch bhi change nahi hua hai.`,
+    preview: { rows: [{ label: 'Chair 2', before: 'In use', after: 'Off' }], question, risk: 'high', warning: 'Shop ki available chairs kam ho jayengi. (not a permanent delete)' },
+  };
+
+  it('shows the plain question, the Before → After and the consequence; Confirm stays off until "I understand" is ticked', async () => {
+    const tree = await openAndAsk(highRisk);
+    expect(textOf(tree.root)).toContain(question);
+    expect(textOf(tree.root)).toContain('not a permanent delete');
+    const confirm = () => byText(tree, 'button', 'Confirm');
+    expect(confirm().props.disabled).toBe(true);
+    const ackBox = tree.root.find((n) => n.type === 'label' && textOf(n).includes('samajhta')).findByType('input');
+    await act(async () => ackBox.props.onChange({ target: { checked: true } }));
+    expect(confirm().props.disabled).toBe(false);
+    route([{ ...applied, message: 'Chair 2 is now off.' }]);
+    await act(async () => confirm().props.onClick());
+    const body = JSON.parse(callsTo('assistant/confirmations')[0][1].body);
+    expect(body).toEqual({ token: highRisk.confirmation.token, decision: 'confirm', acknowledged: true });
+  });
+
+  it('a normal (not high-risk) change confirms without the extra box and sends no acknowledgement', async () => {
+    const tree = await openAndAsk({ ...preview, preview: { ...preview.preview, question: 'Kya aap sach mein ...?' } });
+    expect(tree.root.findAll((n) => n.type === 'label' && textOf(n).includes('samajhta'))).toHaveLength(0);
+    route([applied]);
+    await act(async () => byText(tree, 'button', 'Confirm').props.onClick());
+    expect(JSON.parse(callsTo('assistant/confirmations')[0][1].body)).toEqual({ token: preview.confirmation.token, decision: 'confirm' });
+  });
+
+  it('Cancel says nothing was changed', async () => {
+    const tree = await openAndAsk(highRisk);
+    route([{ requestId: 'c', status: 'CANCELLED', action: highRisk.action, message: 'Cancelled, kuch bhi change nahi hua. (Nothing was changed.)', completedAt: highRisk.completedAt }]);
+    await act(async () => byText(tree, 'button', 'Cancel').props.onClick());
+    expect(textOf(tree.root)).toContain('Cancelled, kuch bhi change nahi hua.');
+  });
+
+  it('if the server asks for the acknowledgement, the same preview stays usable', async () => {
+    const tree = await openAndAsk({ ...highRisk, preview: { ...highRisk.preview, risk: undefined } });
+    route([{ requestId: 'a', status: 'NEEDS_CONFIRMATION', action: highRisk.action, message: 'Pehle box tick kijiye.', completedAt: highRisk.completedAt }]);
+    await act(async () => byText(tree, 'button', 'Confirm').props.onClick());
+    expect(tree.root.findAll((n) => n.type === 'button' && textOf(n) === 'Confirm')).toHaveLength(1);
+  });
+});
