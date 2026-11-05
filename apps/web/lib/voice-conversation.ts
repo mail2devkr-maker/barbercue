@@ -106,6 +106,8 @@ export const VOICE_LIMITS = {
   duplicateWindowMs: 2_000,
   endOfPhraseMs: 900, // silence after the last final words that completes a phrase
   maxAlternatives: 5,
+  networkRetries: 2, // a dropped connection reconnects this many times on its own before pausing
+  networkRetryMs: 1_500, // first reconnect delay; doubles each retry
 } as const;
 
 const FATAL: Record<string, string> = {
@@ -152,6 +154,7 @@ export class VoiceConversation {
   private silentSessions = 0;
   private lastPhraseAt = 0;
   private restarts: number[] = [];
+  private networkRetries = 0;
   private lastFinal = { text: "", at: 0 };
   private timer: unknown = null;
   private phraseTimer: unknown = null;
@@ -189,6 +192,7 @@ export class VoiceConversation {
     this.lang = lang;
     this.silentSessions = 0;
     this.restarts = [];
+    this.networkRetries = 0;
     this.lastPhraseAt = this.deps.now();
     this.listen();
   }
@@ -306,7 +310,16 @@ export class VoiceConversation {
         this.set({ state: "error", interim: "", ready: false, note: fatal });
       } else if (event.error === "network") {
         this.release();
-        this.set({ state: "paused", interim: "", ready: false, note: "Voice needs an internet connection in this browser. Press Resume to try again, or type." });
+        // A brief connection drop should not end the conversation: reconnect on its own a couple of
+        // times (with a growing delay, mic closed meanwhile), then pause and ask as before.
+        if (this.networkRetries < VOICE_LIMITS.networkRetries) {
+          const delay = VOICE_LIMITS.networkRetryMs * 2 ** this.networkRetries;
+          this.networkRetries += 1;
+          this.set({ state: "paused", interim: "", ready: false, note: "Connection dropped. Reconnecting voice…" });
+          this.later(() => this.listen(), delay);
+        } else {
+          this.set({ state: "paused", interim: "", ready: false, note: "Voice needs an internet connection in this browser. Press Resume to try again, or type." });
+        }
       }
       // "no-speech" and "aborted" end the session; onend decides what happens next.
     };
@@ -348,6 +361,7 @@ export class VoiceConversation {
     this.lastFinal = { text, at: now };
     this.heardThisSession = true;
     this.silentSessions = 0;
+    this.networkRetries = 0;
     this.lastPhraseAt = now;
     // Close the mic before anything is sent or spoken.
     this.release();
