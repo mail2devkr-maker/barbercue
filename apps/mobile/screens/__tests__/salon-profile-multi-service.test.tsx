@@ -139,3 +139,17 @@ it('CASE 13c: Continue is disabled with no services selected and becomes enabled
   await act(async () => findButtonByText('Haircut')!.props.onPress());
   expect(findButtonByText('Continue')!.props.disabled).toBe(true);
 });
+
+it('keeps the selected public offer identity attached when the customer enters booking', async () => {
+  const offerProps = {
+    ...props,
+    route: { params: { countryCode: 'IN', citySlug: 'city', salonSlug: 'shop', offerId: 'offer-123', offerTitle: 'Weekday offer' } },
+  };
+  await act(async () => {
+    tree = TestRenderer.create(createElement(SalonProfileScreen, offerProps as never));
+  });
+  await act(async () => findButtonByText('Haircut')!.props.onPress());
+  await act(async () => findButtonByText('Continue')!.props.onPress());
+
+  expect(navigate).toHaveBeenCalledWith('StaffSelect', expect.objectContaining({ offerId: 'offer-123', offerTitle: 'Weekday offer' }));
+});
