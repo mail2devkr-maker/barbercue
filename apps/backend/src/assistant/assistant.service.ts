@@ -9,6 +9,7 @@ import {
 import { randomUUID } from 'crypto';
 import {
   AssistantActionId,
+  Role,
   SessionAudience,
   type AssistantCapabilitiesDto,
   type AssistantConfirmationInput,
@@ -276,7 +277,7 @@ export class AssistantService {
               !ASSISTANT_HANDLERS[id] ||
               (def.kind === 'WRITE' && !this.rollout.writesFor(user))
                 ? 'UNAVAILABLE'
-                : def.roles.some((r) => user.roles.includes(r))
+                : def.roles.some((r) => effectiveRoles(user).includes(r))
                   ? 'SUPPORTED'
                   : 'DENIED',
             examples: def.examples,
@@ -719,7 +720,7 @@ export class AssistantService {
     salonId: string | null,
   ) {
     const def = ASSISTANT_ACTIONS[actionId];
-    if (!def.roles.some((r) => user.roles.includes(r)))
+    if (!def.roles.some((r) => effectiveRoles(user).includes(r)))
       throw new ForbiddenException('role');
     if (def.access === 'ANY_SIGNED_IN' || def.access === 'SELF') return;
     // Platform figures: a platform role is not enough on its own - it must come from an
@@ -741,11 +742,23 @@ export class AssistantService {
         message: 'Open the shop you want to work on first, then ask again.',
       });
     }
-    if (def.access === 'OWNER_ONLY')
+    if (def.access === 'OWNER_ONLY') {
       await this.access.assertOwnerAccess(user.id, salonId);
-    else if (def.access === 'OWNER_OR_ADMIN')
-      await this.access.assertOwnerOrAdminAccess(user.id, salonId);
-    else await this.access.assertAccessOrAdminAccess(user.id, salonId);
+      return;
+    }
+    const via =
+      def.access === 'OWNER_OR_ADMIN'
+        ? await this.access.assertOwnerOrAdminAccess(user.id, salonId)
+        : await this.access.assertAccessOrAdminAccess(user.id, salonId);
+    // Access to a shop the caller does not own or work at comes only from a platform role, which
+    // counts only in an ADMIN-audience (TOTP) session - the same rule RolesGuard applies to the
+    // dashboard routes. Without it, a Super Admin / Co-Founder who also owns another shop could
+    // reach this shop from an ordinary staff session.
+    if (
+      (via === 'PLATFORM_ADMIN' || via === 'CO_FOUNDER') &&
+      user.audience !== SessionAudience.ADMIN
+    )
+      throw new ForbiddenException('audience');
   }
 
   // ---------------------------------------------------------------- results, failures, audit
@@ -889,4 +902,26 @@ export class AssistantService {
       );
     }
   }
+}
+
+const PLATFORM_ROLES: ReadonlySet<Role> = new Set([
+  Role.PLATFORM_ADMIN,
+  Role.CO_FOUNDER,
+  Role.HR_ADMIN,
+  Role.SALES_ADMIN,
+  Role.PLATFORM_VIEWER,
+]);
+
+/**
+ * The roles that actually count for this session, exactly as RolesGuard counts them: platform roles
+ * only in an ADMIN-audience (TOTP) session, FIELD_EXECUTIVE only in an EMPLOYEE-audience session.
+ */
+export function effectiveRoles(user: Pick<AuthenticatedUser, 'roles' | 'audience'>): Role[] {
+  return user.roles.filter((r) =>
+    PLATFORM_ROLES.has(r)
+      ? user.audience === SessionAudience.ADMIN
+      : r === Role.FIELD_EXECUTIVE
+        ? user.audience === SessionAudience.EMPLOYEE
+        : true,
+  );
 }
