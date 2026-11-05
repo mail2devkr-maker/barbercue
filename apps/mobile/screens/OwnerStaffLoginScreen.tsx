@@ -7,6 +7,7 @@ import { useAuth } from '../lib/auth-context';
 import { getGoogleIdToken } from '../lib/google-signin';
 import { beginShopRegistrationAuthentication } from '../lib/shop-registration-intent';
 import { useLanguage } from '../lib/language-context';
+import { AppleSignInButton } from '../components/auth/AppleSignInButton';
 import { fastQue, font, fontSize, radius, space } from '../lib/theme';
 import { BrandLockup, InlineError, PremiumButton, PremiumScreen, PremiumSectionHeader } from '../components/ui';
 import type { UiStrings } from '@barbercue/shared';
@@ -15,9 +16,7 @@ import type { AuthStackParamList } from '../navigation/AuthStack';
 type Props = NativeStackScreenProps<AuthStackParamList, 'OwnerStaffLogin'>;
 
 function copyFor(t: UiStrings, role: 'OWNER' | 'STAFF'): { eyebrow: string; title: string } {
-  return role === 'OWNER'
-    ? { eyebrow: t.roleOwner, title: t.signInToYourShop }
-    : { eyebrow: t.roleStaff, title: t.signInToWorkToday };
+  return role === 'OWNER' ? { eyebrow: t.roleOwner, title: t.signInToYourShop } : { eyebrow: t.roleStaff, title: t.signInToWorkToday };
 }
 
 // Same POST auth/staff/login web's own /owner/login and /staff/login pages call — the account's
@@ -88,20 +87,15 @@ export default function OwnerStaffLoginScreen({ route, navigation }: Props) {
 
       <>
         <Pressable style={styles.googleButton} onPress={() => void handleGoogleSignIn()} disabled={googleSubmitting}>
-          {googleSubmitting ? (
-            <ActivityIndicator color={fastQue.text} />
-          ) : (
-            <Text style={styles.googleButtonText}>{t.continueWithGoogle}</Text>
-          )}
+          {googleSubmitting ? <ActivityIndicator color={fastQue.text} /> : <Text style={styles.googleButtonText}>{t.continueWithGoogle}</Text>}
         </Pressable>
-        <Text style={styles.googleNote}>
-          {role === 'OWNER' ? t.onlyWorksIfRegisteredOwner : t.onlyWorksIfRegisteredStaff}
-        </Text>
+        <Text style={styles.googleNote}>{role === 'OWNER' ? t.onlyWorksIfRegisteredOwner : t.onlyWorksIfRegisteredStaff}</Text>
         <View style={styles.dividerRow}>
           <View style={styles.dividerLine} />
           <Text style={styles.dividerText}>{t.orDivider}</Text>
           <View style={styles.dividerLine} />
         </View>
+        <AppleSignInButton audience="staff" />
       </>
 
       <View style={styles.field}>
@@ -129,7 +123,11 @@ export default function OwnerStaffLoginScreen({ route, navigation }: Props) {
         />
         <Pressable
           style={styles.recoveryLink}
-          onPress={() => navigation.navigate('PasswordRecovery', { audience: role === 'OWNER' ? 'owner' : 'staff' })}
+          onPress={() =>
+            navigation.navigate('PasswordRecovery', {
+              audience: role === 'OWNER' ? 'owner' : 'staff',
+            })
+          }
           accessibilityRole="button"
           accessibilityLabel={t.forgotPasswordQuestion}
         >
@@ -157,9 +155,23 @@ const styles = StyleSheet.create({
   screenContent: { padding: space[5] },
   brandLockup: { alignSelf: 'center', marginBottom: space[5] },
   field: { marginBottom: space[4] },
-  recoveryLink: { alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center', marginTop: space[1] },
-  recoveryLinkText: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: fastQue.pink },
-  label: { fontFamily: font.bodySemiBold, fontSize: fontSize.xs, color: fastQue.text, marginBottom: space[2] },
+  recoveryLink: {
+    alignSelf: 'flex-start',
+    minHeight: 44,
+    justifyContent: 'center',
+    marginTop: space[1],
+  },
+  recoveryLinkText: {
+    fontFamily: font.bodySemiBold,
+    fontSize: fontSize.sm,
+    color: fastQue.pink,
+  },
+  label: {
+    fontFamily: font.bodySemiBold,
+    fontSize: fontSize.xs,
+    color: fastQue.text,
+    marginBottom: space[2],
+  },
   input: {
     minHeight: 50,
     backgroundColor: fastQue.input,
@@ -172,8 +184,17 @@ const styles = StyleSheet.create({
     fontSize: fontSize.base,
   },
   submitButton: { marginTop: space[2] },
-  registerShopLink: { alignSelf: 'center', minHeight: 44, justifyContent: 'center', marginTop: space[4] },
-  registerShopLinkText: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: fastQue.pink },
+  registerShopLink: {
+    alignSelf: 'center',
+    minHeight: 44,
+    justifyContent: 'center',
+    marginTop: space[4],
+  },
+  registerShopLinkText: {
+    fontFamily: font.bodySemiBold,
+    fontSize: fontSize.sm,
+    color: fastQue.pink,
+  },
   googleButton: {
     minHeight: 50,
     backgroundColor: fastQue.card,
@@ -184,9 +205,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: space[3],
   },
-  googleButtonText: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: fastQue.text },
-  googleNote: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: fastQue.textSecondary, marginTop: space[2], textAlign: 'center' },
-  dividerRow: { flexDirection: 'row', alignItems: 'center', marginVertical: space[4] },
+  googleButtonText: {
+    fontFamily: font.bodySemiBold,
+    fontSize: fontSize.sm,
+    color: fastQue.text,
+  },
+  googleNote: {
+    fontFamily: font.bodyRegular,
+    fontSize: fontSize.xs,
+    color: fastQue.textSecondary,
+    marginTop: space[2],
+    textAlign: 'center',
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: space[4],
+  },
   dividerLine: { flex: 1, height: 1, backgroundColor: fastQue.border },
   dividerText: {
     fontFamily: font.bodyBold,
