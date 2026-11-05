@@ -88,6 +88,7 @@ import { QueueAutoAssignService } from '../owner-ops/queue-auto-assign.service';
 import { SalonShareLinksService } from '../owner-ops/salon-share-links.service';
 import { BATCH14_HANDLERS } from './actions/batch14.actions';
 import { BATCH15_HANDLERS } from './actions/batch15.actions';
+import { REPORT_HANDLERS } from './actions/reports.actions';
 import { helpTurn, notUnderstoodTurn } from './assistant-help';
 import {
   ACK_REQUIRED_MESSAGE,
@@ -113,6 +114,9 @@ import { EmployeeService } from '../employee/employee.service';
 import { SalonProfileService } from '../salon-setup/salon-profile.service';
 import { ReviewsService } from '../reviews/reviews.service';
 import { AuthService } from '../auth/auth.service';
+import { normalizeText, type ParsedIntent } from './assistant-parser';
+import { romanize } from './assistant-transliterate';
+import { parseReportFollowUp, type ReportIntent } from './assistant-parser-report';
 
 export { ASSISTANT_ACTIONS };
 
@@ -134,6 +138,7 @@ export const ASSISTANT_HANDLERS: HandlerMap = {
   ...BATCH13_HANDLERS,
   ...BATCH14_HANDLERS,
   ...BATCH15_HANDLERS,
+  ...REPORT_HANDLERS,
 };
 
 const UNRELEASED: Record<'inventory' | 'onboarding', string> = {
@@ -299,7 +304,7 @@ export class AssistantService {
     const out = await this.turnFor(
       user,
       reading.usedAlternative ? { ...input, text: reading.text } : input,
-      reading.parsed,
+      followUpReport(input, reading.parsed) ?? reading.parsed,
     );
     if (reading.usedAlternative) return { ...out, understoodAs: reading.text };
     // A change heard only in an alternative is never run: it is offered as a choice to tap.
@@ -865,6 +870,7 @@ export class AssistantService {
       ...(turn.result ? { result: turn.result } : {}),
       ...(turn.refresh ? { refresh: turn.refresh } : {}),
       ...(turn.navigateTo ? { navigateTo: turn.navigateTo } : {}),
+      ...(turn.reportContext ? { reportContext: turn.reportContext } : {}),
       completedAt: new Date().toISOString(),
     };
   }
@@ -923,5 +929,32 @@ export function effectiveRoles(user: Pick<AuthenticatedUser, 'roles' | 'audience
       : r === Role.FIELD_EXECUTIVE
         ? user.audience === SessionAudience.EMPLOYEE
         : true,
+  );
+}
+
+/**
+ * "aur last month?" / "pichhle hafte ka?" / "aur dikhao" right after a period report: the same report
+ * with only the period or page changed. Applies only when the sentence was not understood on its own
+ * (or was read as today's schedule, which is how a bare period used to be read), and only to the two
+ * READ report actions accepted by the request schema.
+ */
+function followUpReport(
+  input: AssistantTurnInput,
+  parsed: ParsedIntent | null,
+): ParsedIntent | null {
+  const ctx = input.context;
+  if (!ctx || (input.surface ?? 'shop') !== 'shop') return null;
+  if (parsed && parsed.action !== AssistantActionId.SCHEDULE_VIEW) return null;
+  const previous = {
+    action: ctx.action,
+    period: ctx.period,
+    status: ctx.status ?? null,
+    page: ctx.page,
+  } as ReportIntent;
+  const year = new Date().getUTCFullYear();
+  const text = normalizeText(input.text);
+  return (
+    parseReportFollowUp(text, previous, ctx.page, year) ??
+    parseReportFollowUp(romanize(text), previous, ctx.page, year)
   );
 }

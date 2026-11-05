@@ -5,6 +5,7 @@ import { parsePhase4, type Phase4Intent } from './assistant-parser-phase4';
 import { parsePhase5, type Phase5Intent } from './assistant-parser-phase5';
 import { parsePhase7, type Phase7Intent } from './assistant-parser-phase7';
 import { parsePhase8, type Phase8Intent } from './assistant-parser-phase8';
+import { parseReport, type ReportIntent } from './assistant-parser-report';
 import { romanize } from './assistant-transliterate';
 import {
   parseAdminReads,
@@ -65,7 +66,8 @@ export type ParsedIntent =
   | Phase6Intent
   | AdminReadIntent
   | Phase7Intent
-  | Phase8Intent;
+  | Phase8Intent
+  | ReportIntent;
 
 export function normalizeText(text: string): string {
   return (
@@ -180,6 +182,12 @@ export function parseAssistantText(
     parsePhase8(text, surface) ??
     (roman !== text ? parsePhase8(roman, surface) : null);
   if (basics) return basics;
+  // Period reports (bookings / queue history for "this week", "pichhle 7 din", ...): before the older
+  // phases, which read any booking sentence as today's schedule.
+  if (surface === 'shop') {
+    const report = parseReport(text, year) ?? (roman !== text ? parseReport(roman, year) : null);
+    if (report) return report;
+  }
   return (
     parseNormalized(text, raw, surface, year) ??
     (roman !== text ? parseNormalized(roman, roman, surface, year) : null)

@@ -260,6 +260,8 @@ function AssistantDrawer({ salonId, surface = "shop", onRevoked }: { salonId?: s
   // The options of the last unanswered question ("Which staff member?"): a short reply such as
   // "Ramesh" or "doosra" answers it with that option's full command (multi-turn follow-up).
   const openOptions = useRef<FollowUpOption[] | null>(null);
+  // The last period report ("this week's bookings"): sent back so "aur last month?" / "aur dikhao" follow it.
+  const lastReport = useRef<AssistantTurnDto["reportContext"] | null>(null);
 
   /** One turn to the server. Shared by typing, push-to-talk and the voice conversation. */
   const runTurn = useCallback(
@@ -282,10 +284,13 @@ function AssistantDrawer({ salonId, surface = "shop", onRevoked }: { salonId?: s
             ...(salonId ? { salonId } : {}),
             ...(heard?.alternatives.length ? { alternatives: heard.alternatives } : {}),
             ...(heard?.confidence != null ? { confidence: heard.confidence } : {}),
+            ...(lastReport.current ? { context: lastReport.current } : {}),
           }),
         });
         turn = applyToScreen(turn);
         openOptions.current = turn.status === "NEEDS_INPUT" && turn.options?.length ? turn.options : null;
+        // A new report replaces the context; any other answered question ends the follow-up.
+        lastReport.current = turn.reportContext ?? (turn.status === "DONE" ? null : lastReport.current);
       } catch (err) {
         openOptions.current = null;
         // 404: the assistant was switched off for this account (cohort removed); 401: signed out.
