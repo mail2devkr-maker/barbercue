@@ -109,7 +109,7 @@ export class StaffWorkingHoursService {
       ),
     );
 
-    if (actor === 'PLATFORM_ADMIN') {
+    if (actor !== 'OWNER') {
       await this.prisma.auditLog.create({
         data: {
           actorUserId: userId,

@@ -48,6 +48,8 @@ export type AssistantTurnInput = z.infer<typeof assistantTurnSchema>;
 export const assistantConfirmationSchema = z.object({
   token: z.string().min(16).max(4096),
   decision: z.enum(["confirm", "cancel"]),
+  // Issue #372: a HIGH-RISK change also needs this explicit on-screen acknowledgement.
+  acknowledged: z.boolean().optional(),
 });
 export type AssistantConfirmationInput = z.infer<typeof assistantConfirmationSchema>;
 
@@ -182,7 +184,9 @@ export interface AssistantTurnDto {
   status: AssistantTurnStatus;
   action: { id: AssistantActionId; title: string; kind: "READ" | "WRITE" } | null;
   message: string;
-  preview?: { rows: AssistantPreviewRow[]; warning?: string };
+  // Issue #372: `question` is the plain "Kya aap sach mein ...?" question; `risk: "high"` means the
+  // Confirm button also needs the "I understand" acknowledgement.
+  preview?: { rows: AssistantPreviewRow[]; warning?: string; question?: string; risk?: "high" };
   confirmation?: { token: string; expiresAt: string };
   // Suggested follow-up texts (e.g. "which service?" choices), sent back as a new turn when tapped.
   options?: Array<{ label: string; text: string }>;

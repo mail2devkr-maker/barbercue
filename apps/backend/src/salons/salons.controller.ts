@@ -76,13 +76,13 @@ export class SalonsController {
   // owners: this is the only route by which a barber can discover the salon they work at —
   // listMine above is keyed on ownership and returns nothing for them. Read-only identity; it
   // grants no operational permission of its own.
-  @Roles(Role.SALON_OWNER, Role.SALON_STAFF)
+  @Roles(Role.SALON_OWNER, Role.SALON_STAFF, Role.CO_FOUNDER)
   @Get(DISCOVERY_PATHS.workplaces)
   listWorkplaces(@CurrentUser() user: AuthenticatedUser) {
     return this.salonsService.listWorkplaces(user.id);
   }
 
-  @Roles(Role.SALON_OWNER, Role.SALON_STAFF, Role.PLATFORM_ADMIN)
+  @Roles(Role.SALON_OWNER, Role.SALON_STAFF, Role.PLATFORM_ADMIN, Role.CO_FOUNDER)
   @Get(`${DISCOVERY_PATHS.mine}/:salonId`)
   getMine(
     @CurrentUser() user: AuthenticatedUser,

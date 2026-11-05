@@ -19,10 +19,10 @@ import styles from "./dashboard.module.css";
  */
 export function AdminManagingBanner() {
   const { user } = useAuth();
-  if (!user?.roles.includes(Role.PLATFORM_ADMIN)) return null;
+  if (!user?.roles.includes(Role.PLATFORM_ADMIN) && !user?.roles.includes(Role.CO_FOUNDER)) return null;
   return (
     <div className={`${styles.banner} ${styles.bannerNotice}`} role="status">
-      <strong>Managing this shop as FastQue Admin.</strong> Changes you make here are recorded
+      <strong>{user?.roles.includes(Role.PLATFORM_ADMIN) ? 'Managing this shop as FastQue Admin.' : 'Managing this shop as FastQue Co-Founder.'}</strong> Changes you make here are recorded
       against your admin account, not the shop owner&apos;s.
     </div>
   );

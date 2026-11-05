@@ -24,7 +24,7 @@ import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { BookingAttributionService } from './booking-attribution.service';
 
 @Controller('dashboard/salons/:salonId/booking-attribution')
-@Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN)
+@Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN, Role.CO_FOUNDER)
 export class BookingAttributionController {
   constructor(private readonly attribution: BookingAttributionService) {}
 

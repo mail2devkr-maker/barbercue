@@ -52,7 +52,7 @@ maybe('Action Assistant batch 13 (e2e, disposable local database)', () => {
     request(app.getHttpServer())
       .post('/api/v1/assistant/confirmations')
       .set('Authorization', `Bearer ${tok[who]}`)
-      .send({ token: t, decision: 'confirm' })
+      .send({ token: t, decision: 'confirm', acknowledged: true }) // "I understand" ticked (#372)
       .expect(200)
       .then((r) => r.body as AssistantTurnDto);
   async function user(label: string, role: Role, audience: SessionAudience, salonId: string | null = null, phone?: string) {
@@ -68,6 +68,9 @@ maybe('Action Assistant batch 13 (e2e, disposable local database)', () => {
     // These suites exercise the assistant itself, so the release gate is opened for everyone here.
     process.env.ASSISTANT_MODE = 'all';
     process.env.ASSISTANT_WRITES = 'all';
+    // Disposable test database only: every shop and every action may be edited here (#372).
+    process.env.ASSISTANT_WRITE_SALON_IDS = '*';
+    process.env.ASSISTANT_WRITE_ACTIONS = '*';
     const moduleFixture: TestingModule = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(ThrottlerStorage)
       .useValue({ increment: () => Promise.resolve({ totalHits: 1, timeToExpire: 60, isBlocked: false, timeToBlockExpire: 0 }) })

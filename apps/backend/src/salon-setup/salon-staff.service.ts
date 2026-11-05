@@ -235,7 +235,7 @@ export class SalonStaffService {
     // bearer credential — see hashResetToken's own comment on why only its hash is ever stored —
     // and must not persist anywhere else, including here, even though it is already returned to
     // the caller outside production, exactly as it already is for an owner's own staff creation).
-    if (actor === 'PLATFORM_ADMIN') {
+    if (actor !== 'OWNER') {
       await this.prisma.auditLog.create({
         data: {
           actorUserId: userId,
@@ -313,7 +313,7 @@ export class SalonStaffService {
 
     const dto = await this.getDtoOrThrow(salonId, staffId);
     // Part 2 — same never-log-the-token rule as create() above.
-    if (actor === 'PLATFORM_ADMIN') {
+    if (actor !== 'OWNER') {
       await this.prisma.auditLog.create({
         data: {
           actorUserId: userId,
@@ -381,7 +381,7 @@ export class SalonStaffService {
     // Part 2 — every delegated admin mutation gets an AuditLog row with the real admin actor. A
     // status-only (or status-plus-other-fields) change gets its own, more specific action name so
     // "activated/deactivated a barber" is distinguishable from a routine profile edit in the log.
-    if (actor === 'PLATFORM_ADMIN') {
+    if (actor !== 'OWNER') {
       await this.prisma.auditLog.create({
         data: {
           actorUserId: userId,

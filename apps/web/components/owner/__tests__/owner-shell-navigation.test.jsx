@@ -174,6 +174,19 @@ describe("owner shell navigation", () => {
     expect(replace).not.toHaveBeenCalled();
   });
 
+  it("a Co-Founder with a valid Admin session opens any selected shop's owner dashboard, not the login or picker", async () => {
+    const tree = await renderShell({
+      workplaces: [],
+      roles: [Role.CO_FOUNDER],
+      user: { id: "founder-1", email: "founder@example.test", roles: [Role.CO_FOUNDER] },
+    });
+    expect(replace).not.toHaveBeenCalled();
+    expect(JSON.stringify(tree.toJSON())).toContain("Managing as Co-Founder");
+    expect(hrefs(tree)).toContain("/dashboard/salons/s1");
+    expect(hrefs(tree)).toContain("/dashboard/salons/s1/settings");
+    expect(hrefs(tree)).not.toContain("/staff/login");
+  });
+
   it("a barber gets 'My day' as the home entry and the barber menu only", async () => {
     const tree = await renderShell({ workplaces: [shop("s1", "Alpha", false)], roles: [Role.SALON_STAFF], user: { id: "b1", email: "barber@example.test", roles: [Role.SALON_STAFF] } });
     expect(JSON.stringify(tree.toJSON())).toContain("My day");

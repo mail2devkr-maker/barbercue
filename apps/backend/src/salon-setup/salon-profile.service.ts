@@ -116,7 +116,7 @@ export class SalonProfileService {
 
     // Part 2 — every delegated admin mutation gets an AuditLog row with the real admin actor; an
     // owner editing their own shop is unchanged (no new logging for that path).
-    if (actor === 'PLATFORM_ADMIN') {
+    if (actor !== 'OWNER') {
       const before: Record<string, unknown> = {};
       const after: Record<string, unknown> = {};
       for (const field of Object.keys(data) as (keyof typeof data)[]) {

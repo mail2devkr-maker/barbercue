@@ -11,7 +11,7 @@ import { RequireRole } from "../auth/RequireRole";
  */
 export function OwnerOnly({ children }: { children: ReactNode }) {
   return (
-    <RequireRole roles={[Role.SALON_OWNER, Role.PLATFORM_ADMIN]} redirectTo="/dashboard/salons">
+    <RequireRole roles={[Role.SALON_OWNER, Role.PLATFORM_ADMIN, Role.CO_FOUNDER]} redirectTo="/dashboard/salons">
       {children}
     </RequireRole>
   );

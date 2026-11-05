@@ -556,6 +556,26 @@
   }
 }
 
+/* ---- issue #372: confirmation question and high-risk acknowledgement ---- */
+.question {
+  margin: 0 0 6px;
+  font-size: 16px;
+  font-weight: 700;
+}
+.ack {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+.ack input {
+  margin-top: 2px;
+  min-width: 18px;
+  min-height: 18px;
+}
+
 /* ---- issue #371: voice settings, speaker test, voice accuracy check ---- */
 .voiceSettings,
 .voiceCheck {

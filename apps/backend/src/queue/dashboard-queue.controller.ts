@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import {
   DASHBOARD_PATHS,
   Role,
@@ -24,7 +32,7 @@ import { ArrivalAlertsService } from '../bookings/arrival-alerts.service';
 // global-admin, and each mutation writes an AuditLog row under the real admin actor
 // (QueueService.logAdminQueueAction) — a no-op for the ordinary staff/owner path.
 @Controller(DASHBOARD_PATHS.dashboard)
-@Roles(Role.SALON_STAFF, Role.SALON_OWNER, Role.PLATFORM_ADMIN)
+@Roles(Role.SALON_STAFF, Role.SALON_OWNER, Role.PLATFORM_ADMIN, Role.CO_FOUNDER)
 export class DashboardQueueController {
   constructor(
     private readonly queueService: QueueService,
@@ -41,7 +49,6 @@ export class DashboardQueueController {
     return this.queueService.getDashboardQueue(user.id, salonId);
   }
 
-
   // Bookings combines appointment records with standalone Live Queue visits. The queue's normal
   // dashboard endpoint is a *today-only* snapshot, so historical visits require this read-only list.
   @Get(`${DASHBOARD_PATHS.salons}/:salonId/${DASHBOARD_PATHS.queue}/visits`)
@@ -52,7 +59,13 @@ export class DashboardQueueController {
     @Query('cursor') cursor?: string,
     @Query('limit') limit?: string,
   ) {
-    return this.queueService.getStandaloneQueueVisits(user.id, salonId, filter, cursor, limit);
+    return this.queueService.getStandaloneQueueVisits(
+      user.id,
+      salonId,
+      filter,
+      cursor,
+      limit,
+    );
   }
 
   // P0 arrival-alert mission — requirement 15's "reconstruct eligibility from backend truth" read,

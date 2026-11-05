@@ -44,7 +44,7 @@ export class ServiceUsageController {
   constructor(private readonly usage: ServiceUsageService) {}
 
   @Get(`${ROOT}/${SERVICE_USAGE_PATHS.recipes}`)
-  @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN)
+  @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN, Role.CO_FOUNDER)
   listRecipes(
     @CurrentUser() user: AuthenticatedUser,
     @Param('salonId', ParseUUIDPipe) salonId: string,
@@ -53,7 +53,7 @@ export class ServiceUsageController {
   }
 
   @Put(`${ROOT}/${SERVICE_USAGE_PATHS.recipes}/:serviceId`)
-  @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN)
+  @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN, Role.CO_FOUNDER)
   putRecipe(
     @CurrentUser() user: AuthenticatedUser,
     @Param('salonId', ParseUUIDPipe) salonId: string,
@@ -65,7 +65,7 @@ export class ServiceUsageController {
   }
 
   @Get(`${ROOT}/${SERVICE_USAGE_PATHS.visits}`)
-  @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN)
+  @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN, Role.CO_FOUNDER)
   listVisits(
     @CurrentUser() user: AuthenticatedUser,
     @Param('salonId', ParseUUIDPipe) salonId: string,
@@ -78,7 +78,7 @@ export class ServiceUsageController {
   @Post(
     `${ROOT}/${SERVICE_USAGE_PATHS.usage}/:usageId/${SERVICE_USAGE_PATHS.reverse}`,
   )
-  @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN)
+  @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN, Role.CO_FOUNDER)
   @HttpCode(HttpStatus.OK)
   reverse(
     @CurrentUser() user: AuthenticatedUser,
@@ -91,7 +91,7 @@ export class ServiceUsageController {
   }
 
   @Get(`${ROOT}/${SERVICE_USAGE_PATHS.dashboard}`)
-  @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN)
+  @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN, Role.CO_FOUNDER)
   dashboard(
     @CurrentUser() user: AuthenticatedUser,
     @Param('salonId', ParseUUIDPipe) salonId: string,
@@ -102,7 +102,12 @@ export class ServiceUsageController {
   }
 
   @Get(VISIT)
-  @Roles(Role.SALON_STAFF, Role.SALON_OWNER, Role.PLATFORM_ADMIN)
+  @Roles(
+    Role.SALON_STAFF,
+    Role.SALON_OWNER,
+    Role.PLATFORM_ADMIN,
+    Role.CO_FOUNDER,
+  )
   visitOptions(
     @CurrentUser() user: AuthenticatedUser,
     @Param('queueEntryId', ParseUUIDPipe) queueEntryId: string,
@@ -111,7 +116,12 @@ export class ServiceUsageController {
   }
 
   @Post(VISIT)
-  @Roles(Role.SALON_STAFF, Role.SALON_OWNER, Role.PLATFORM_ADMIN)
+  @Roles(
+    Role.SALON_STAFF,
+    Role.SALON_OWNER,
+    Role.PLATFORM_ADMIN,
+    Role.CO_FOUNDER,
+  )
   @HttpCode(HttpStatus.OK)
   record(
     @CurrentUser() user: AuthenticatedUser,

@@ -26,7 +26,7 @@ import { CustomerDirectoryQueryService } from './customer-directory-query.servic
 // actor unconditionally (real actorUserId, whoever that is), so no extra admin-only branch is
 // needed to keep the waive/restore actions attributable.
 @Controller(DASHBOARD_PATHS.dashboard)
-@Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN)
+@Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN, Role.CO_FOUNDER)
 export class DashboardCustomersController {
   constructor(
     private readonly customers: DashboardCustomersService,

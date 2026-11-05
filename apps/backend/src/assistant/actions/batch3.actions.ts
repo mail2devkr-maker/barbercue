@@ -159,7 +159,7 @@ export const BATCH3_HANDLERS: HandlerMap = {
         };
       return c.seal(
         { chairId: target.id, status },
-        { id: target.id, status: target.status },
+        { id: target.id, label: target.label, status: target.status },
         [
           {
             label: target.label,
@@ -177,7 +177,7 @@ export const BATCH3_HANDLERS: HandlerMap = {
         (r) => r.id === c.payload.chairId,
       );
       if (!row) throw staleReply();
-      c.assertUnchanged({ id: row.id, status: row.status });
+      c.assertUnchanged({ id: row.id, label: row.label, status: row.status });
       const updated = await c.deps.chairs.update(c.user.id, c.salonId, row.id, {
         status: c.payload.status as 'ACTIVE',
       });

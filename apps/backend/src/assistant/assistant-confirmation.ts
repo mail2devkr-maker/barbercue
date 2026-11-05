@@ -49,10 +49,15 @@ export class ConfirmationLedger {
     return { token: `${body}.${sig}`, expiresAt: new Date(exp).toISOString() };
   }
 
-  /** Verifies signature, owner, expiry and single use. Marks the nonce used. */
+  /**
+   * Verifies signature, owner, expiry and single use. Marks the nonce used unless `consume` is
+   * false (issue #372: a high-risk confirmation without the acknowledgement is refused WITHOUT
+   * burning the token, so the user can tick the box and confirm the same preview).
+   */
   open(
     token: string,
     userId: string,
+    consume = true,
   ): SealedWrite | 'INVALID' | 'EXPIRED' | 'USED' | 'WRONG_USER' {
     const [body, sig] = token.split('.');
     if (!body || !sig) return 'INVALID';
@@ -73,8 +78,13 @@ export class ConfirmationLedger {
     if (now > sealed.exp) return 'EXPIRED';
     this.prune(now);
     if (this.used.has(sealed.nonce)) return 'USED';
-    this.used.set(sealed.nonce, now);
+    if (consume) this.used.set(sealed.nonce, now);
     return sealed;
+  }
+
+  /** Put back a nonce that was opened but must stay usable (a refused high-risk confirm). */
+  release(nonce: string) {
+    this.used.delete(nonce);
   }
 
   private prune(now: number) {

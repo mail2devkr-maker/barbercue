@@ -74,7 +74,7 @@ export class SalonOperatingHoursService {
     input: SetOperatingHoursInput,
   ): Promise<OperatingHoursDto[]> {
     const actor = await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
-    const before = actor === 'PLATFORM_ADMIN' ? await this.list(userId, salonId) : null;
+    const before = actor !== 'OWNER' ? await this.list(userId, salonId) : null;
 
     await this.prisma.$transaction(
       input.days.map((day) =>
@@ -100,7 +100,7 @@ export class SalonOperatingHoursService {
 
     const after = await this.list(userId, salonId);
     // Part 2 — every delegated admin mutation gets an AuditLog row with the real admin actor.
-    if (actor === 'PLATFORM_ADMIN') {
+    if (actor !== 'OWNER') {
       await this.prisma.auditLog.create({
         data: {
           actorUserId: userId,

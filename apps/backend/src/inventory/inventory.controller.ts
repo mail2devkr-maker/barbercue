@@ -43,7 +43,7 @@ const ROOT = `dashboard/salons/:salonId/${INVENTORY_PATHS.root}`;
 
 /** Inventory is owner/admin-only, salon scoped, and backed by immutable stock movements. */
 @Controller()
-@Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN)
+@Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN, Role.CO_FOUNDER)
 export class InventoryController {
   constructor(private readonly inventory: InventoryService) {}
 
