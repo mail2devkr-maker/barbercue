@@ -65,6 +65,7 @@ import { AdminLiveQueueService } from './admin-live-queue.service';
 import { AdminBookingsService } from './admin-bookings.service';
 import { z } from 'zod';
 import { BookingStatus } from '@barbercue/shared';
+import { AdminOnboardingService } from './admin-onboarding.service';
 import { AdminExecutiveOverviewService } from './analytics/admin-executive-overview.service';
 import { AdminShopStatusService } from './analytics/admin-shop-status.service';
 import { AdminTimeseriesService } from './analytics/admin-timeseries.service';
@@ -88,6 +89,15 @@ const adminBookingsQuerySchema = z.object({
   to: isoDay.optional(),
   shop: z.string().trim().max(120).optional(),
 });
+
+const adminOnboardingQuerySchema = z.object({
+  days: z.coerce
+    .number()
+    .int()
+    .refine((d) => [30, 90, 365].includes(d), 'Use 30, 90 or 365 days.')
+    .default(90),
+});
+
 @Controller(ADMIN_PATHS.admin)
 @Roles(Role.PLATFORM_ADMIN)
 export class AdminController {
@@ -109,6 +119,7 @@ export class AdminController {
     private readonly dataExports: AdminDataExportService,
     private readonly liveQueue?: AdminLiveQueueService,
     private readonly allBookings?: AdminBookingsService,
+    private readonly onboarding?: AdminOnboardingService,
   ) {}
 
   @Get(ADMIN_PATHS.overview)
@@ -167,6 +178,23 @@ export class AdminController {
     query: z.infer<typeof adminBookingsQuerySchema>,
   ) {
     return this.allBookings!.list(query);
+  }
+
+  // New Shop Onboarding funnel: shop names and setup counts only (no owner contact). Leadership,
+  // Sales (onboarding is their pipeline) and the read-only viewer.
+  @Get(ADMIN_PATHS.onboarding)
+  @Roles(
+    Role.PLATFORM_ADMIN,
+    Role.CO_FOUNDER,
+    Role.SALES_ADMIN,
+    Role.PLATFORM_VIEWER,
+  )
+  @Header('Cache-Control', 'private, no-store')
+  onboardingReport(
+    @Query(new ZodValidationPipe(adminOnboardingQuerySchema))
+    query: z.infer<typeof adminOnboardingQuerySchema>,
+  ) {
+    return this.onboarding!.getOnboarding(query.days);
   }
 
   // Executive Command Center: company-wide business figures (service value included), so the
