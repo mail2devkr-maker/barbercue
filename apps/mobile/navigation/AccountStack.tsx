@@ -4,6 +4,7 @@ import StyleAdvisorScreen from '../screens/StyleAdvisorScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
 import CreditsHistoryScreen from '../screens/CreditsHistoryScreen';
 import RegisterShopScreen from '../screens/RegisterShopScreen';
+import AssistantScreen from '../screens/AssistantScreen';
 import { lightStackOptions, styleAdvisorHeaderOptions } from './screenOptions';
 import { HomeHeaderButton } from './HomeHeaderButton';
 import { useLanguage } from '../lib/language-context';
@@ -17,6 +18,7 @@ export default function AccountStack() {
   return (
     <Stack.Navigator>
       <Stack.Screen name="Account" component={AccountScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="Assistant" component={AssistantScreen} options={{ title: 'FastQue Assistant' }} />
       <Stack.Screen
         name="StyleAdvisor"
         component={StyleAdvisorScreen}

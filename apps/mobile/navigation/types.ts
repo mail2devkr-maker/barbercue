@@ -104,6 +104,7 @@ export type QueueStackParamList = {
 
 export type AccountStackParamList = {
   Account: undefined;
+  Assistant: { salonId?: string } | undefined;
   StyleAdvisor: undefined;
   Notifications: undefined;
   CreditsHistory: undefined;

@@ -1,10 +1,12 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import DashboardAccountScreen from '../screens/dashboard/DashboardAccountScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
+import AssistantScreen from '../screens/AssistantScreen';
 import { useLanguage } from '../lib/language-context';
 
 export type DashboardAccountStackParamList = {
   DashboardAccount: undefined;
+  Assistant: { salonId?: string } | undefined;
   Notifications: undefined;
 };
 
@@ -20,6 +22,7 @@ export default function DashboardAccountStack() {
   return (
     <Stack.Navigator>
       <Stack.Screen name="DashboardAccount" component={DashboardAccountScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="Assistant" component={AssistantScreen} options={{ title: 'FastQue Assistant' }} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ title: t.notifications }} />
     </Stack.Navigator>
   );
