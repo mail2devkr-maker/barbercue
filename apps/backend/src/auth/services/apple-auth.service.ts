@@ -87,6 +87,11 @@ export interface VerifiedAppleIdentity {
   email: string | null;
 }
 
+export interface ExchangedAppleAuthorization {
+  identity: VerifiedAppleIdentity;
+  refreshToken: string;
+}
+
 /**
  * Apple ID-token verifier and one-use challenge manager. Apple identities are keyed by `sub`,
  * never by a client-asserted email. JWKS are fetched only from Apple's fixed HTTPS endpoint and
@@ -188,13 +193,21 @@ export class AppleAuthService {
     };
   }
 
-  /** Exchange Apple's short-lived authorization code; only the encrypted refresh token is stored. */
-  async exchangeAuthorizationCode(authorizationCode: string): Promise<string> {
+  /** Exchange Apple's short-lived authorization code and verify the identity Apple bound to it. */
+  async exchangeAuthorizationCode(
+    authorizationCode: string,
+    expectedNonce: string,
+  ): Promise<ExchangedAppleAuthorization> {
     const config = getAppleServerConfig();
     if (!config || !process.env.TOTP_ENCRYPTION_KEY) {
       throw this.providerUnavailable();
     }
-    if (!authorizationCode || authorizationCode.length > 4096) {
+    if (
+      !authorizationCode ||
+      authorizationCode.length > 4096 ||
+      expectedNonce.length < 32 ||
+      expectedNonce.length > 128
+    ) {
       throw this.invalidToken();
     }
     const clientSecret = await this.createClientSecret(config);
@@ -207,7 +220,31 @@ export class AppleAuthService {
     if (typeof payload.refresh_token !== 'string' || !payload.refresh_token) {
       throw this.providerUnavailable();
     }
-    return payload.refresh_token;
+    if (typeof payload.id_token !== 'string' || !payload.id_token) {
+      await this.revokeUnclaimedRefreshToken(payload.refresh_token);
+      throw this.providerUnavailable();
+    }
+    try {
+      return {
+        identity: await this.verifyIdToken(payload.id_token, expectedNonce),
+        refreshToken: payload.refresh_token,
+      };
+    } catch {
+      // The code exchange has already minted a provider credential. Revoke it if Apple returned
+      // an unusable or unbound identity token; never persist an unverified refresh token.
+      await this.revokeUnclaimedRefreshToken(payload.refresh_token);
+      throw this.invalidToken();
+    }
+  }
+
+  private async revokeUnclaimedRefreshToken(
+    refreshToken: string,
+  ): Promise<void> {
+    try {
+      await this.revokeRefreshToken(refreshToken);
+    } catch {
+      // Fail closed even if Apple's revocation endpoint is temporarily unavailable.
+    }
   }
 
   /** Revoke the retained Apple refresh token before local account deletion commits. */

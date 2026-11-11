@@ -197,9 +197,7 @@ describe('AuthService', () => {
         expiresAt: '2030-01-01T00:00:00.000Z',
       }),
       verifyIdToken: jest.fn(),
-      exchangeAuthorizationCode: jest
-        .fn()
-        .mockResolvedValue('apple-refresh-token'),
+      exchangeAuthorizationCode: jest.fn(),
       revokeRefreshToken: jest.fn().mockResolvedValue(undefined),
       consumeLoginNonce: jest.fn().mockResolvedValue(undefined),
     };
@@ -833,6 +831,13 @@ describe('AuthService', () => {
         sub: 'apple-sub-1',
         email: 'customer@privaterelay.appleid.com',
       });
+      appleAuthService.exchangeAuthorizationCode.mockResolvedValue({
+        identity: {
+          sub: 'apple-sub-1',
+          email: 'customer@privaterelay.appleid.com',
+        },
+        refreshToken: 'apple-refresh-token',
+      });
       prisma.authIdentity.findUnique.mockResolvedValue(null);
       prisma.user.findUnique.mockResolvedValue(null);
       prisma.user.create.mockResolvedValue({
@@ -860,6 +865,7 @@ describe('AuthService', () => {
       );
       expect(appleAuthService.exchangeAuthorizationCode).toHaveBeenCalledWith(
         'short-lived-code',
+        'a'.repeat(43),
       );
       expect(appleAuthService.consumeLoginNonce).toHaveBeenCalledWith(
         prisma,
@@ -888,6 +894,10 @@ describe('AuthService', () => {
         sub: 'apple-customer',
         email: 'same@example.com',
       });
+      appleAuthService.exchangeAuthorizationCode.mockResolvedValue({
+        identity: { sub: 'apple-customer', email: 'same@example.com' },
+        refreshToken: 'apple-refresh-token',
+      });
       prisma.authIdentity.findUnique.mockResolvedValue(null);
       prisma.user.findUnique.mockResolvedValue({
         id: 'customer-only',
@@ -912,6 +922,10 @@ describe('AuthService', () => {
         sub: 'apple-owner',
         email: 'owner@example.com',
       });
+      appleAuthService.exchangeAuthorizationCode.mockResolvedValue({
+        identity: { sub: 'apple-owner', email: 'owner@example.com' },
+        refreshToken: 'apple-refresh-token',
+      });
       prisma.authIdentity.findUnique.mockResolvedValue({
         id: 'apple-identity',
         user: {
@@ -935,6 +949,68 @@ describe('AuthService', () => {
       expect(result.user.roles).toEqual([Role.SALON_OWNER]);
       expect(prisma.userRole.create).not.toHaveBeenCalled();
       expect(prisma.user.create).not.toHaveBeenCalled();
+    });
+
+    it('does not refresh an existing customer Apple identity through the staff route', async () => {
+      appleAuthService.verifyIdToken.mockResolvedValue({
+        sub: 'apple-customer-only',
+        email: 'customer@example.com',
+      });
+      appleAuthService.exchangeAuthorizationCode.mockResolvedValue({
+        identity: {
+          sub: 'apple-customer-only',
+          email: 'customer@example.com',
+        },
+        refreshToken: 'unclaimed-customer-refresh-token',
+      });
+      prisma.authIdentity.findUnique.mockResolvedValue({
+        id: 'customer-apple-identity',
+        user: {
+          id: 'customer-only',
+          status: UserStatus.ACTIVE,
+          roles: [{ role: Role.CUSTOMER }],
+        },
+      });
+
+      await expect(
+        service.staffAppleLogin({
+          identityToken: 'signed-apple-token',
+          nonce: 'e'.repeat(43),
+          authorizationCode: 'short-lived-code',
+        }),
+      ).rejects.toMatchObject({ code: AuthErrorCode.APPLE_ACCOUNT_NOT_STAFF });
+
+      expect(prisma.authIdentity.update).not.toHaveBeenCalled();
+      expect(appleAuthService.revokeRefreshToken).toHaveBeenCalledWith(
+        'unclaimed-customer-refresh-token',
+      );
+      expect(tokenService.issueTokenPair).not.toHaveBeenCalled();
+    });
+
+    it('rejects an authorization code bound to a different Apple subject and revokes its refresh token', async () => {
+      appleAuthService.verifyIdToken.mockResolvedValue({
+        sub: 'client-apple-sub',
+        email: 'client@example.com',
+      });
+      appleAuthService.exchangeAuthorizationCode.mockResolvedValue({
+        identity: { sub: 'code-apple-sub', email: 'code@example.com' },
+        refreshToken: 'mismatched-apple-refresh-token',
+      });
+
+      await expect(
+        service.appleLogin({
+          identityToken: 'signed-apple-token',
+          nonce: 'd'.repeat(43),
+          authorizationCode: 'short-lived-code',
+        }),
+      ).rejects.toMatchObject({ code: AuthErrorCode.APPLE_TOKEN_INVALID });
+
+      expect(appleAuthService.revokeRefreshToken).toHaveBeenCalledWith(
+        'mismatched-apple-refresh-token',
+      );
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(prisma.user.create).not.toHaveBeenCalled();
+      expect(tokenService.issueTokenPair).not.toHaveBeenCalled();
     });
   });
 

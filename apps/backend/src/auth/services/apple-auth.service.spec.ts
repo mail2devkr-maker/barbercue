@@ -1,5 +1,5 @@
 import { generateKeyPairSync, createHash } from 'node:crypto';
-import { JwtService } from '@nestjs/jwt';
+import { JwtService, type JwtSignOptions } from '@nestjs/jwt';
 import { AuthErrorCode } from '@barbercue/shared';
 import { AppleAuthService, isAppleAuthConfigured } from './apple-auth.service';
 
@@ -59,7 +59,11 @@ describe('AppleAuthService', () => {
     }
   });
 
-  async function signedToken(overrides: Record<string, unknown> = {}) {
+  async function signedToken(
+    overrides: Record<string, unknown> = {},
+    expiresIn: JwtSignOptions['expiresIn'] = '5m',
+    tokenOptions: Partial<Pick<JwtSignOptions, 'issuer' | 'audience'>> = {},
+  ) {
     return jwtService.signAsync(
       {
         sub: 'apple-subject',
@@ -71,10 +75,10 @@ describe('AppleAuthService', () => {
       {
         secret: privateKeyPem,
         algorithm: 'RS256',
-        issuer: 'https://appleid.apple.com',
-        audience: 'com.dcw.fastque',
+        issuer: tokenOptions.issuer ?? 'https://appleid.apple.com',
+        audience: tokenOptions.audience ?? 'com.dcw.fastque',
         keyid: 'apple-test-key',
-        expiresIn: '5m',
+        expiresIn,
       },
     );
   }
@@ -100,6 +104,16 @@ describe('AppleAuthService', () => {
     const token = await signedToken();
     await expect(
       service.verifyIdToken(token, 'different-challenge-value-123456789012345'),
+    ).rejects.toMatchObject({ code: AuthErrorCode.APPLE_TOKEN_INVALID });
+  });
+
+  it('rejects an expired Apple identity token', async () => {
+    const token = await signedToken({}, '-1m');
+    await expect(
+      service.verifyIdToken(
+        token,
+        'challenge-value-that-is-long-enough-1234567890',
+      ),
     ).rejects.toMatchObject({ code: AuthErrorCode.APPLE_TOKEN_INVALID });
   });
 
@@ -192,10 +206,19 @@ describe('AppleAuthService', () => {
       .export({ format: 'pem', type: 'pkcs8' })
       .toString();
     process.env.TOTP_ENCRYPTION_KEY = 'test-only-encryption-key';
+    const nonce = 'challenge-value-that-is-long-enough-1234567890';
+    const idToken = await signedToken({ sub: 'apple-code-subject', nonce });
     fetchSpy
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ refresh_token: 'provider-refresh-token' }),
+        json: async () => ({
+          refresh_token: 'provider-refresh-token',
+          id_token: idToken,
+        }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ keys: [jwk] }),
       } as Response)
       .mockResolvedValueOnce({
         ok: true,
@@ -205,8 +228,17 @@ describe('AppleAuthService', () => {
       } as unknown as Response);
 
     await expect(
-      service.exchangeAuthorizationCode('short-lived-authorization-code'),
-    ).resolves.toBe('provider-refresh-token');
+      service.exchangeAuthorizationCode(
+        'short-lived-authorization-code',
+        nonce,
+      ),
+    ).resolves.toEqual({
+      identity: {
+        sub: 'apple-code-subject',
+        email: 'private@privaterelay.appleid.com',
+      },
+      refreshToken: 'provider-refresh-token',
+    });
     await expect(
       service.revokeRefreshToken('provider-refresh-token'),
     ).resolves.toBeUndefined();
@@ -218,15 +250,66 @@ describe('AppleAuthService', () => {
     );
     expect(fetchSpy).toHaveBeenNthCalledWith(
       2,
+      'https://appleid.apple.com/auth/keys',
+      expect.objectContaining({ method: 'GET' }),
+    );
+    expect(fetchSpy).toHaveBeenNthCalledWith(
+      3,
       'https://appleid.apple.com/auth/revoke',
       expect.objectContaining({ method: 'POST' }),
     );
   });
 
+  it('rejects an exchanged Apple token with a wrong audience and revokes its unclaimed refresh token', async () => {
+    const { privateKey: signingKey } = generateKeyPairSync('ec', {
+      namedCurve: 'prime256v1',
+    });
+    process.env.APPLE_TEAM_ID = 'ABCDE12345';
+    process.env.APPLE_KEY_ID = 'FGHIJ67890';
+    process.env.APPLE_PRIVATE_KEY = signingKey
+      .export({ format: 'pem', type: 'pkcs8' })
+      .toString();
+    process.env.TOTP_ENCRYPTION_KEY = 'test-only-encryption-key';
+    const nonce = 'challenge-value-that-is-long-enough-1234567890';
+    const invalidIdToken = await signedToken({}, '5m', {
+      audience: 'other.application',
+    });
+    fetchSpy
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          refresh_token: 'unclaimed-refresh-token',
+          id_token: invalidIdToken,
+        }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ keys: [jwk] }),
+      } as Response)
+      .mockResolvedValueOnce({ ok: true } as Response);
+
+    await expect(
+      service.exchangeAuthorizationCode('short-lived-code', nonce),
+    ).rejects.toMatchObject({ code: AuthErrorCode.APPLE_TOKEN_INVALID });
+
+    expect(fetchSpy).toHaveBeenNthCalledWith(
+      3,
+      'https://appleid.apple.com/auth/revoke',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    const revokeBody = new URLSearchParams(
+      (fetchSpy.mock.calls[2][1] as RequestInit).body as string,
+    );
+    expect(revokeBody.get('token')).toBe('unclaimed-refresh-token');
+  });
+
   it('does not advertise or call Apple when token revocation credentials are incomplete', async () => {
     expect(isAppleAuthConfigured()).toBe(false);
     await expect(
-      service.exchangeAuthorizationCode('short-lived-authorization-code'),
+      service.exchangeAuthorizationCode(
+        'short-lived-authorization-code',
+        'x'.repeat(43),
+      ),
     ).rejects.toMatchObject({
       code: AuthErrorCode.APPLE_PROVIDER_UNAVAILABLE,
     });

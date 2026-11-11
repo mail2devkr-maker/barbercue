@@ -750,22 +750,64 @@ export class AuthService {
     return this.appleAuthService.createLoginNonce();
   }
 
+  /**
+   * Apple identity tokens and authorization codes must describe the same Apple subject. The
+   * client-supplied token is verified first, then the token returned by Apple's code exchange is
+   * independently verified against the same one-use nonce and used as the persisted identity.
+   */
+  private async exchangeAppleAuthorizationCode(
+    input: AppleLoginInput,
+    clientIdentity: { sub: string; email: string | null },
+  ): Promise<{
+    identity: { sub: string; email: string | null };
+    refreshToken: string;
+    encryptedRefreshToken: string;
+  }> {
+    const exchanged = await this.appleAuthService.exchangeAuthorizationCode(
+      input.authorizationCode,
+      input.nonce,
+    );
+    if (exchanged.identity.sub !== clientIdentity.sub) {
+      await this.revokeUnclaimedAppleRefreshToken(exchanged.refreshToken);
+      throw new AppException(
+        AuthErrorCode.APPLE_TOKEN_INVALID,
+        'Could not verify your Apple sign-in. Please try again.',
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
+    return {
+      identity: exchanged.identity,
+      refreshToken: exchanged.refreshToken,
+      encryptedRefreshToken: this.cryptoService.encrypt(exchanged.refreshToken),
+    };
+  }
+
+  private async revokeUnclaimedAppleRefreshToken(
+    refreshToken: string,
+  ): Promise<void> {
+    try {
+      await this.appleAuthService.revokeRefreshToken(refreshToken);
+    } catch {
+      // Fail closed and do not persist a provider credential without a committed identity.
+    }
+  }
+
   /** Customer Apple login mirrors customer Google semantics but keys by Apple's stable `sub`. */
   async appleLogin(
     input: AppleLoginInput,
     deviceInfo?: string,
   ): Promise<{ user: MeResponse; tokens: AuthTokens }> {
-    const identity = await this.appleAuthService.verifyIdToken(
+    const clientIdentity = await this.appleAuthService.verifyIdToken(
       input.identityToken,
       input.nonce,
     );
-    const appleRefreshToken =
-      await this.appleAuthService.exchangeAuthorizationCode(
-        input.authorizationCode,
-      );
-    const encryptedAppleRefreshToken =
-      this.cryptoService.encrypt(appleRefreshToken);
-    const user = await this.prisma.$transaction(async (tx) => {
+    const appleAuthorization = await this.exchangeAppleAuthorizationCode(
+      input,
+      clientIdentity,
+    );
+    const { identity, encryptedRefreshToken: encryptedAppleRefreshToken } =
+      appleAuthorization;
+    const userTransaction = this.prisma.$transaction(async (tx) => {
       await this.appleAuthService.consumeLoginNonce(tx, input.nonce);
 
       const existingIdentity = await tx.authIdentity.findUnique({
@@ -778,6 +820,7 @@ export class AuthService {
         include: { user: { include: { roles: true } } },
       });
       if (existingIdentity) {
+        this.assertActive(existingIdentity.user.status);
         await tx.authIdentity.update({
           where: {
             provider_providerSub: {
@@ -796,6 +839,7 @@ export class AuthService {
           include: { roles: true },
         });
         if (existingUser) {
+          this.assertActive(existingUser.status);
           await tx.authIdentity.create({
             data: {
               userId: existingUser.id,
@@ -826,6 +870,12 @@ export class AuthService {
         },
         include: { roles: true },
       });
+    });
+    const user = await userTransaction.catch(async (error) => {
+      await this.revokeUnclaimedAppleRefreshToken(
+        appleAuthorization.refreshToken,
+      );
+      throw error;
     });
 
     this.assertActive(user.status);
@@ -1263,17 +1313,17 @@ export class AuthService {
     input: AppleLoginInput,
     deviceInfo?: string,
   ): Promise<{ user: MeResponse; tokens: AuthTokens }> {
-    const identity = await this.appleAuthService.verifyIdToken(
+    const clientIdentity = await this.appleAuthService.verifyIdToken(
       input.identityToken,
       input.nonce,
     );
-    const appleRefreshToken =
-      await this.appleAuthService.exchangeAuthorizationCode(
-        input.authorizationCode,
-      );
-    const encryptedAppleRefreshToken =
-      this.cryptoService.encrypt(appleRefreshToken);
-    const user = await this.prisma.$transaction(async (tx) => {
+    const appleAuthorization = await this.exchangeAppleAuthorizationCode(
+      input,
+      clientIdentity,
+    );
+    const { identity, encryptedRefreshToken: encryptedAppleRefreshToken } =
+      appleAuthorization;
+    const userTransaction = this.prisma.$transaction(async (tx) => {
       await this.appleAuthService.consumeLoginNonce(tx, input.nonce);
 
       const repairMissingOwnerRole = async <
@@ -1315,6 +1365,16 @@ export class AuthService {
         include: { user: { include: { roles: true } } },
       });
       if (existingIdentity) {
+        const existingUser = await repairMissingOwnerRole(
+          existingIdentity.user,
+        );
+        const existingRoles = existingUser.roles.map(({ role }) => role);
+        const existingUserCanAccessStaff = existingRoles.some(
+          (role) => role === Role.SALON_OWNER || role === Role.SALON_STAFF,
+        );
+        // A customer-only identity cannot refresh an Apple credential through the staff route.
+        if (!existingUserCanAccessStaff) return null;
+        this.assertActive(existingUser.status);
         await tx.authIdentity.update({
           where: {
             provider_providerSub: {
@@ -1324,7 +1384,7 @@ export class AuthService {
           },
           data: { providerRefreshTokenEncrypted: encryptedAppleRefreshToken },
         });
-        return repairMissingOwnerRole(existingIdentity.user);
+        return existingUser;
       }
       if (!identity.email) return null;
 
@@ -1341,6 +1401,7 @@ export class AuthService {
       // The role gate happens before identity linking. A customer-only Apple account with the same
       // email cannot be elevated into the owner/staff surface.
       if (!canAccessStaff) return null;
+      this.assertActive(repairedCandidate.status);
 
       await tx.authIdentity.create({
         data: {
@@ -1353,12 +1414,21 @@ export class AuthService {
       });
       return repairedCandidate;
     });
+    const user = await userTransaction.catch(async (error) => {
+      await this.revokeUnclaimedAppleRefreshToken(
+        appleAuthorization.refreshToken,
+      );
+      throw error;
+    });
 
     const roles = user?.roles.map((role) => role.role) ?? [];
     const canAccessStaff = roles.some(
       (role) => role === Role.SALON_OWNER || role === Role.SALON_STAFF,
     );
     if (!user || !canAccessStaff) {
+      await this.revokeUnclaimedAppleRefreshToken(
+        appleAuthorization.refreshToken,
+      );
       throw new AppException(
         AuthErrorCode.APPLE_ACCOUNT_NOT_STAFF,
         'This Apple account is not registered as a shop owner or staff member.',

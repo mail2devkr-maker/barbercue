@@ -134,7 +134,7 @@ jobs:
         run: |
           export JWT_ACCESS_SECRET="$(node -e "process.stdout.write(require('crypto').randomBytes(32).toString('hex'))")"
           export TOTP_ENCRYPTION_KEY="$(node -e "process.stdout.write(require('crypto').randomBytes(32).toString('hex'))")"
-          npx jest --config ./test/jest-e2e.json --runInBand --ci test/auth-phone-otp.e2e-spec.ts
+          npx jest --config ./test/jest-e2e.json --runInBand --ci test/auth-phone-otp.e2e-spec.ts test/auth-apple.e2e-spec.ts
       - name: Admin unique customers served E2E - known dataset, role limits, masking and audit
         working-directory: apps/backend
         env:
