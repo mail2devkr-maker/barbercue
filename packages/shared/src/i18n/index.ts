@@ -28,13 +28,7 @@ export interface VoiceAnnouncements {
    * customer chose "Any staff" and no one has been assigned yet — callers must never invent a
    * name for that null case (see formatVoiceBarberDate below for how `date`/`time` are produced).
    */
-  newBookingReceived(
-    serviceName: string | null,
-    barberName: string | null,
-    salonName: string | null,
-    date: string | null,
-    time: string | null,
-  ): string;
+  newBookingReceived(serviceName: string | null, barberName: string | null, salonName: string | null, date: string | null, time: string | null): string;
   /** Owner/staff: a booking on this salon was moved to a new slot. */
   bookingRescheduled(date: string | null, time: string | null): string;
   /** Owner/staff: a booking on this salon was just cancelled. */
@@ -70,8 +64,7 @@ const en: VoiceAnnouncements = {
     return when ? `Booking rescheduled ${when}.` : 'Booking rescheduled.';
   },
   bookingCancelled: () => 'Booking cancelled.',
-  newCustomerJoined: (tokenNumber, serviceName) =>
-    `New customer joined the queue. Queue number ${tokenNumber}${serviceName ? `, ${serviceName}` : ''}.`,
+  newCustomerJoined: (tokenNumber, serviceName) => `New customer joined the queue. Queue number ${tokenNumber}${serviceName ? `, ${serviceName}` : ''}.`,
   voiceAnnouncementsOn: () => 'Voice announcements on.',
   arrivalCheck: (serviceName, time) => {
     const service = serviceName ? `${serviceName} customer` : 'customer';
@@ -104,8 +97,7 @@ const hi: VoiceAnnouncements = {
     return when ? `बुकिंग पुनर्निर्धारित की गई है। नया समय ${when}।` : 'बुकिंग पुनर्निर्धारित की गई है।';
   },
   bookingCancelled: () => 'बुकिंग रद्द कर दी गई है।',
-  newCustomerJoined: (tokenNumber, serviceName) =>
-    `कतार में नया ग्राहक जुड़ा। कतार नंबर ${tokenNumber}${serviceName ? `, ${serviceName}` : ''}।`,
+  newCustomerJoined: (tokenNumber, serviceName) => `कतार में नया ग्राहक जुड़ा। कतार नंबर ${tokenNumber}${serviceName ? `, ${serviceName}` : ''}।`,
   voiceAnnouncementsOn: () => 'आवाज़ में सूचनाएं चालू हैं।',
   arrivalCheck: (serviceName, time) => {
     const service = serviceName ? `${serviceName} ग्राहक` : 'अपॉइंटमेंट के ग्राहक';
@@ -113,7 +105,6 @@ const hi: VoiceAnnouncements = {
     return `अपॉइंटमेंट रिमाइंडर। क्या ${when}${service} पहुंच चुका है? कृपया पुष्टि करें, आया या नहीं आया।`;
   },
 };
-
 
 /**
  * Owner-facing voice can be independent of the app UI language. This is deliberately a speech
@@ -168,8 +159,7 @@ const hiBihar: VoiceAnnouncements = {
     return when ? `बुकिंग का समय बदल गया है। नया समय ${when} है।` : 'बुकिंग का समय बदल गया है।';
   },
   bookingCancelled: () => 'बुकिंग रद्द हो गई है।',
-  newCustomerJoined: (tokenNumber, serviceName) =>
-    `कतार में नया ग्राहक आया है। कतार नंबर ${tokenNumber}${serviceName ? `, ${serviceName}` : ''}। कृपया देख लीजिए।`,
+  newCustomerJoined: (tokenNumber, serviceName) => `कतार में नया ग्राहक आया है। कतार नंबर ${tokenNumber}${serviceName ? `, ${serviceName}` : ''}। कृपया देख लीजिए।`,
   voiceAnnouncementsOn: () => 'आवाज़ वाली सूचना चालू हो गई है।',
   arrivalCheck: (serviceName, time) => {
     const service = serviceName ? `${serviceName} वाले ग्राहक` : 'अपॉइंटमेंट वाले ग्राहक';
@@ -178,20 +168,14 @@ const hiBihar: VoiceAnnouncements = {
   },
 };
 
-export function voiceAnnouncementsForStyle(
-  style: OwnerVoiceStyle,
-  accountLanguage: Language | null | undefined,
-): VoiceAnnouncements {
+export function voiceAnnouncementsForStyle(style: OwnerVoiceStyle, accountLanguage: Language | null | undefined): VoiceAnnouncements {
   if (style === 'HINDI') return hi;
   if (style === 'ENGLISH') return en;
   if (style === 'HINDI_BIHAR') return hiBihar;
   return voiceAnnouncementsFor(accountLanguage);
 }
 
-export function speechLocaleForVoiceStyle(
-  style: OwnerVoiceStyle,
-  accountLanguage: Language | null | undefined,
-): string {
+export function speechLocaleForVoiceStyle(style: OwnerVoiceStyle, accountLanguage: Language | null | undefined): string {
   if (style === 'HINDI' || style === 'HINDI_BIHAR') return 'hi-IN';
   if (style === 'ENGLISH') return 'en-IN';
   return accountLanguage ? SPEECH_LOCALE[accountLanguage] : SPEECH_LOCALE[Language.EN];
@@ -602,6 +586,8 @@ export interface UiStrings {
   couldNotLoadSessions: string;
   couldNotSignOutSession: string;
   couldNotSignOutOtherSessions: string;
+  appleRevocationReminderTitle: string;
+  appleRevocationReminderMessage: string;
   voiceHint: string;
   premiumActive: string;
   premiumInactive: string;
@@ -612,6 +598,31 @@ export interface UiStrings {
   roleOwnerLabel: string;
   roleAdminLabel: string;
   premiumLabel: string;
+  accountDeletionRequestTitle: string;
+  accountDeletionRequestReceived: string;
+  accountDeletionStaffGuidance: string;
+  accountDeletionOwnerGuidance: string;
+  accountDeletionAdminGuidance: string;
+  accountDeletionMixedGuidance: string;
+  accountDeletionReviewGuidance: string;
+  accountDeletionCustomerGuidance: string;
+  accountDeletionDefaultGuidance: string;
+  accountDeletionPendingNotice: string;
+  accountDeletionStatusUpdated: string;
+  accountDeletionRequestWithdrawn: string;
+  accountDeletionWithdraw: string;
+  accountDeletionWithdrawing: string;
+  accountDeletionWithdrawError: string;
+  accountDeletionRequestNotice: string;
+  accountDeletionConfirmPrompt: string;
+  accountDeletionStart: string;
+  accountDeletionConfirm: string;
+  accountDeletionSubmitting: string;
+  accountDeletionCancelSetup: string;
+  accountDeletionLoadError: string;
+  accountDeletionSubmitError: string;
+  accountDeletionOneShop: string;
+  accountDeletionManyShops: string;
 
   // Core booking flow: DateSelect, SlotSelect, StaffSelect, ConfirmBooking, BookingDetail,
   // MyBookings, WalkInJoin, QueueScreen, QueueStatusPanel, SalonSearch, SalonProfile.
@@ -793,6 +804,7 @@ export interface UiStrings {
   // PhoneOtpLoginScreen (customer sign-in).
   continueWithGoogle: string;
   couldNotSignInWithGoogle: string;
+  couldNotCompleteAppleSignIn: string;
   signInUnavailableNotice: string;
   orDivider: string;
   invalidPhoneNumber: string;
@@ -1134,7 +1146,7 @@ const enUi: UiStrings = {
   statusNoShow: 'No-show',
   statusExpired: 'Expired',
   genericError: 'Something went wrong. Please try again.',
-  offline: "You appear to be offline.",
+  offline: 'You appear to be offline.',
 
   tabHome: 'Home',
   tabSearch: 'Search',
@@ -1267,8 +1279,7 @@ const enUi: UiStrings = {
   bookingsTitle: 'Bookings',
   newBookingReceivedBanner: 'New booking received',
   bookingCancelledBanner: 'Booking cancelled',
-  hindiVoiceUnavailableWarning:
-    "Hindi voice isn't installed on this device, so voice announcements are silent. Install a Hindi text-to-speech voice in your phone's Settings, then reopen FastQue to try again.",
+  hindiVoiceUnavailableWarning: "Hindi voice isn't installed on this device, so voice announcements are silent. Install a Hindi text-to-speech voice in your phone's Settings, then reopen FastQue to try again.",
   noShopSelected: 'No shop selected',
   selectShopHint: 'Select a shop from the Dashboard tab to see its bookings.',
   noBookingsTitle: 'No bookings',
@@ -1320,7 +1331,7 @@ const enUi: UiStrings = {
   useCurrentLocationAction: 'Use my current location',
   detectingLocationEllipsis: 'Detecting location…',
   locationDetectedLabel: 'Location detected',
-  locationSkippedHint: "No problem — your address and city are enough to register.",
+  locationSkippedHint: 'No problem — your address and city are enough to register.',
   chooseCountryFirstError: 'Please choose the country your shop is in.',
   chooseCityFirstError: "Please search for and select your shop's city.",
   registerShopAction: 'Register shop',
@@ -1374,6 +1385,8 @@ const enUi: UiStrings = {
   couldNotLoadSessions: 'Could not load your sessions.',
   couldNotSignOutSession: 'Could not sign out that session.',
   couldNotSignOutOtherSessions: 'Could not sign out other sessions.',
+  appleRevocationReminderTitle: 'Revoke FastQue in Apple settings',
+  appleRevocationReminderMessage: 'Your FastQue account was deleted. To revoke Apple access, open Settings, tap your name, then Sign-In & Security → Sign in with Apple → FastQue → Stop Using Apple ID.',
   voiceHint: 'Also controls voice announcements read aloud on this device.',
   premiumActive: 'Active',
   premiumInactive: 'Not subscribed — manage on web',
@@ -1384,6 +1397,31 @@ const enUi: UiStrings = {
   roleOwnerLabel: 'Salon Owner',
   roleAdminLabel: 'Platform Admin',
   premiumLabel: 'Premium',
+  accountDeletionRequestTitle: 'Request account deletion',
+  accountDeletionRequestReceived: 'Request received',
+  accountDeletionStaffGuidance: 'Employment and staff permissions need review with the affected shop owner(s) ({shops}) before this account can be closed.',
+  accountDeletionOwnerGuidance: 'Review ownership of {shops} before closing this account. FastQue will not close or transfer a shop automatically.',
+  accountDeletionAdminGuidance: 'Platform administrator succession and recovery access must be reviewed before this account can be closed.',
+  accountDeletionMixedGuidance: 'This account has multiple role relationships. Resolve each affected employment, shop ownership, or platform-admin relationship ({shops}) before closure.',
+  accountDeletionReviewGuidance: 'FastQue must review this account’s role and linked operational records before closure.',
+  accountDeletionCustomerGuidance: 'Use the customer delete-account action for a customer-only account.',
+  accountDeletionDefaultGuidance: 'FastQue will review the account relationships and required operational transitions.',
+  accountDeletionPendingNotice: 'This request is recorded but is not completed deletion. This release does not yet provide a reviewer or completion workflow. No shop, staff permission, administrator access, or business record has changed; your account remains active.',
+  accountDeletionStatusUpdated: 'Last updated {date}',
+  accountDeletionRequestWithdrawn: 'Request withdrawn on {date}. No account access or business data was changed.',
+  accountDeletionWithdraw: 'Withdraw request',
+  accountDeletionWithdrawing: 'Withdrawing…',
+  accountDeletionWithdrawError: 'Could not withdraw the request. Please try again.',
+  accountDeletionRequestNotice: 'Submitting records a request for this signed-in account only. It does not close a shop, remove employment records, revoke access, or delete operational or financial data. No reviewer or completion workflow is available in this release.',
+  accountDeletionConfirmPrompt: 'Confirm that you want to record a deletion request for this account. The request itself does not perform deletion.',
+  accountDeletionStart: 'Start deletion request',
+  accountDeletionConfirm: 'Confirm deletion request',
+  accountDeletionSubmitting: 'Submitting request…',
+  accountDeletionCancelSetup: 'Cancel request setup',
+  accountDeletionLoadError: 'Could not load account deletion status.',
+  accountDeletionSubmitError: 'Could not submit the deletion request. Please try again.',
+  accountDeletionOneShop: '1 linked shop',
+  accountDeletionManyShops: '{count} linked shops',
 
   anyStaffOption: 'Any Staff',
   staffSelectHint: 'This is a preference, not a guarantee — the salon assigns the actual barber and chair when you check in.',
@@ -1545,6 +1583,7 @@ const enUi: UiStrings = {
 
   continueWithGoogle: 'Continue with Google',
   couldNotSignInWithGoogle: 'Could not sign in with Google. Please try again.',
+  couldNotCompleteAppleSignIn: 'Could not complete Sign in with Apple. Please try again.',
   signInUnavailableNotice: 'Sign-in is temporarily unavailable. Please try again shortly.',
   orDivider: 'or',
   invalidPhoneNumber: 'Invalid phone number.',
@@ -2093,6 +2132,8 @@ const hiUi: UiStrings = {
   couldNotLoadSessions: 'आपके सत्र लोड नहीं हो सके।',
   couldNotSignOutSession: 'उस सत्र से साइन आउट नहीं हो सका।',
   couldNotSignOutOtherSessions: 'अन्य सत्रों से साइन आउट नहीं हो सका।',
+  appleRevocationReminderTitle: 'Apple सेटिंग्स में FastQue का एक्सेस हटाएँ',
+  appleRevocationReminderMessage: 'आपका FastQue खाता हटा दिया गया है। Apple एक्सेस हटाने के लिए Settings खोलें, अपना नाम चुनें, फिर Sign-In & Security → Sign in with Apple → FastQue → Stop Using Apple ID चुनें।',
   voiceHint: 'यह डिवाइस पर बोली जाने वाली आवाज़ सूचनाओं को भी नियंत्रित करता है।',
   premiumActive: 'सक्रिय',
   premiumInactive: 'सदस्यता नहीं है — वेब पर प्रबंधित करें',
@@ -2103,6 +2144,31 @@ const hiUi: UiStrings = {
   roleOwnerLabel: 'सैलून मालिक',
   roleAdminLabel: 'प्लेटफ़ॉर्म एडमिन',
   premiumLabel: 'प्रीमियम',
+  accountDeletionRequestTitle: 'खाता हटाने का अनुरोध करें',
+  accountDeletionRequestReceived: 'अनुरोध प्राप्त हुआ',
+  accountDeletionStaffGuidance: 'खाता बंद करने से पहले संबंधित सैलून मालिक को रोजगार और स्टाफ अनुमतियों की समीक्षा करनी होगी ({shops})।',
+  accountDeletionOwnerGuidance: 'खाता बंद करने से पहले {shops} के स्वामित्व की समीक्षा करें। FastQue अपने-आप कोई सैलून बंद या स्थानांतरित नहीं करेगा।',
+  accountDeletionAdminGuidance: 'खाता बंद करने से पहले प्लेटफ़ॉर्म एडमिन उत्तराधिकार और रिकवरी एक्सेस की समीक्षा करनी होगी।',
+  accountDeletionMixedGuidance: 'इस खाते में कई भूमिकाएँ जुड़ी हैं। बंद करने से पहले सभी संबंधित रोजगार, सैलून स्वामित्व या प्लेटफ़ॉर्म एडमिन संबंधों का समाधान करें ({shops})।',
+  accountDeletionReviewGuidance: 'खाता बंद करने से पहले FastQue को इस खाते की भूमिका और जुड़े परिचालन रिकॉर्ड की समीक्षा करनी होगी।',
+  accountDeletionCustomerGuidance: 'केवल ग्राहक खाते के लिए ग्राहक वाला खाता हटाने का विकल्प इस्तेमाल करें।',
+  accountDeletionDefaultGuidance: 'FastQue खाते के संबंधों और आवश्यक परिचालन बदलावों की समीक्षा करेगा।',
+  accountDeletionPendingNotice: 'यह दर्ज किया गया अनुरोध है, पूरा हुआ खाता हटाना नहीं। इस रिलीज़ में अभी समीक्षक या पूरा करने की प्रक्रिया उपलब्ध नहीं है। कोई सैलून, स्टाफ अनुमति, एडमिन एक्सेस या व्यावसायिक रिकॉर्ड नहीं बदला है; आपका खाता सक्रिय रहेगा।',
+  accountDeletionStatusUpdated: 'अंतिम अपडेट {date}',
+  accountDeletionRequestWithdrawn: '{date} को अनुरोध वापस लिया गया। खाता एक्सेस या व्यावसायिक डेटा नहीं बदला गया।',
+  accountDeletionWithdraw: 'अनुरोध वापस लें',
+  accountDeletionWithdrawing: 'वापस लिया जा रहा है…',
+  accountDeletionWithdrawError: 'अनुरोध वापस नहीं लिया जा सका। कृपया फिर कोशिश करें।',
+  accountDeletionRequestNotice: 'यह अनुरोध केवल इस साइन-इन खाते के लिए दर्ज होता है। इससे कोई सैलून बंद नहीं होता, रोजगार रिकॉर्ड या एक्सेस नहीं हटता और परिचालन या वित्तीय डेटा नहीं मिटता। इस रिलीज़ में समीक्षक या पूरा करने की प्रक्रिया उपलब्ध नहीं है।',
+  accountDeletionConfirmPrompt: 'पुष्टि करें कि आप इस खाते के लिए हटाने का अनुरोध दर्ज करना चाहते हैं। अनुरोध स्वयं खाता नहीं हटाता।',
+  accountDeletionStart: 'खाता हटाने का अनुरोध शुरू करें',
+  accountDeletionConfirm: 'खाता हटाने के अनुरोध की पुष्टि करें',
+  accountDeletionSubmitting: 'अनुरोध भेजा जा रहा है…',
+  accountDeletionCancelSetup: 'अनुरोध सेटअप रद्द करें',
+  accountDeletionLoadError: 'खाता हटाने की स्थिति लोड नहीं हो सकी।',
+  accountDeletionSubmitError: 'खाता हटाने का अनुरोध नहीं भेजा जा सका। कृपया फिर कोशिश करें।',
+  accountDeletionOneShop: '1 जुड़ा हुआ सैलून',
+  accountDeletionManyShops: '{count} जुड़े हुए सैलून',
 
   anyStaffOption: 'कोई भी स्टाफ',
   staffSelectHint: 'यह एक पसंद है, गारंटी नहीं — चेक-इन के समय सैलून ही असली बार्बर और कुर्सी तय करता है।',
@@ -2264,6 +2330,7 @@ const hiUi: UiStrings = {
 
   continueWithGoogle: 'Google से जारी रखें',
   couldNotSignInWithGoogle: 'Google से साइन इन नहीं हो सका। कृपया फिर कोशिश करें।',
+  couldNotCompleteAppleSignIn: 'Apple से साइन इन पूरा नहीं हो सका। कृपया फिर कोशिश करें।',
   signInUnavailableNotice: 'साइन-इन अस्थायी रूप से उपलब्ध नहीं है। कृपया थोड़ी देर बाद फिर कोशिश करें।',
   orDivider: 'या',
   invalidPhoneNumber: 'अमान्य फ़ोन नंबर।',
@@ -2612,10 +2679,7 @@ export const NOTIFICATION_TYPE_LABELS: Readonly<Record<Language, NotificationTyp
 /** Never throws on an unrecognised type/language — falls back to English labels, then to the raw
  * type string itself, so a future NotificationType added to the enum without a translation entry
  * degrades to something readable rather than crashing the list. */
-export function notificationTypeLabel(
-  language: Language | null | undefined,
-  type: NotificationType,
-): string {
+export function notificationTypeLabel(language: Language | null | undefined, type: NotificationType): string {
   const table = (language && NOTIFICATION_TYPE_LABELS[language]) || NOTIFICATION_TYPE_LABELS[Language.EN];
   return table[type] ?? enNotificationTypeLabels[type] ?? type;
 }
@@ -2630,7 +2694,10 @@ export function notificationTypeLabel(
  */
 export interface PushCopy {
   newBooking(serviceName: string | null): { title: string; body: string };
-  bookingRescheduled(serviceName: string | null): { title: string; body: string };
+  bookingRescheduled(serviceName: string | null): {
+    title: string;
+    body: string;
+  };
   bookingCancelled(serviceName: string | null): { title: string; body: string };
   bookingReminder(serviceName: string | null): { title: string; body: string };
   /** P0 arrival-alert mission — the one-shot T-5-minute push. Never a customer name (see
@@ -2669,9 +2736,7 @@ const enPush: PushCopy = {
   }),
   arrivalCheck: (serviceName) => ({
     title: 'Appointment in 5 minutes',
-    body: serviceName
-      ? `Has the ${serviceName} customer arrived? Open FastQue to confirm.`
-      : 'Has the customer arrived for their appointment? Open FastQue to confirm.',
+    body: serviceName ? `Has the ${serviceName} customer arrived? Open FastQue to confirm.` : 'Has the customer arrived for their appointment? Open FastQue to confirm.',
   }),
   shopCancelledBooking: ({ shopName, serviceName, whenText }) => ({
     title: 'Appointment cancelled by the shop',
@@ -2708,16 +2773,11 @@ const hiPush: PushCopy = {
   }),
   arrivalCheck: (serviceName) => ({
     title: 'अपॉइंटमेंट 5 मिनट में',
-    body: serviceName
-      ? `क्या ${serviceName} ग्राहक पहुंच चुका है? पुष्टि के लिए FastQue खोलें।`
-      : 'क्या ग्राहक अपने अपॉइंटमेंट के लिए पहुंच चुका है? पुष्टि के लिए FastQue खोलें।',
+    body: serviceName ? `क्या ${serviceName} ग्राहक पहुंच चुका है? पुष्टि के लिए FastQue खोलें।` : 'क्या ग्राहक अपने अपॉइंटमेंट के लिए पहुंच चुका है? पुष्टि के लिए FastQue खोलें।',
   }),
   shopCancelledBooking: ({ shopName, serviceName, whenText }) => ({
     title: 'दुकान ने अपॉइंटमेंट रद्द की',
-    body:
-      `${shopName} पर ${serviceName ? `${serviceName} की ` : ''}आपकी अपॉइंटमेंट` +
-      `${whenText ? ` (${whenText})` : ''} दुकान द्वारा रद्द कर दी गई है। ` +
-      'विवरण देखने या दुकान से संपर्क करने के लिए FastQue खोलें।',
+    body: `${shopName} पर ${serviceName ? `${serviceName} की ` : ''}आपकी अपॉइंटमेंट` + `${whenText ? ` (${whenText})` : ''} दुकान द्वारा रद्द कर दी गई है। ` + 'विवरण देखने या दुकान से संपर्क करने के लिए FastQue खोलें।',
   }),
   shopRescheduledBooking: ({ shopName, serviceName, whenText }) => ({
     title: 'दुकान ने अपॉइंटमेंट का समय बदला',
