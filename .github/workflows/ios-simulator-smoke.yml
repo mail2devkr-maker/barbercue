@@ -317,10 +317,16 @@ jobs:
               timeout: 30000
           - tapOn: "Search services…"
           - inputText: "FastQue Demo Studio"
-          - pressKey: Enter
+          - tapOn: "Search"
+          - hideKeyboard
           - extendedWaitUntil:
-              visible: "FastQue Demo Studio"
+              visible:
+                text: "FastQue Demo Studio"
+                index: 1
               timeout: 45000
+          - assertVisible:
+              text: "FastQue Demo Studio"
+              index: 1
           - takeScreenshot: iphone-salon-search
           - tapOn: "FastQue Demo Studio"
           - extendedWaitUntil:
@@ -393,10 +399,16 @@ jobs:
               timeout: 30000
           - tapOn: "Search services…"
           - inputText: "FastQue Demo Studio"
-          - pressKey: Enter
+          - tapOn: "Search"
+          - hideKeyboard
           - extendedWaitUntil:
-              visible: "FastQue Demo Studio"
+              visible:
+                text: "FastQue Demo Studio"
+                index: 1
               timeout: 45000
+          - assertVisible:
+              text: "FastQue Demo Studio"
+              index: 1
           - takeScreenshot: ipad-13-salon-search
           YAML
           cd "$RUNNER_TEMP/fastque-maestro/ipad"
