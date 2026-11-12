@@ -35,6 +35,7 @@ import {
 import { StaffWorkingHoursEditor } from '../../components/owner/StaffWorkingHoursEditor';
 import { canPermanentlyDelete, StaffManageActions } from '../../components/owner/StaffAdmin';
 import { ChairBulkRemoval, ChairDeleteAction } from '../../components/owner/ChairTools';
+import { ShopLocationPanel } from '../../components/owner/ShopLocationPanel';
 import { useAuth } from '../../lib/auth-context';
 import type { OwnerShopStackParamList } from '../../navigation/OwnerShopStack';
 
@@ -56,6 +57,7 @@ export default function OwnerShopScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [staffNotice, setStaffNotice] = useState<string | null>(null);
+  const [showLocation, setShowLocation] = useState(false);
   const { user } = useAuth();
   const mayDelete = canPermanentlyDelete(user?.roles);
 
@@ -197,6 +199,10 @@ export default function OwnerShopScreen() {
       </Card>
 
       <PhotosSection salonId={selectedSalonId} photos={photos} onChanged={() => void load()} />
+
+      <Text style={sectionStyles.sectionTitle}>{language === Language.HI ? 'नक्शे पर दुकान का स्थान' : 'Shop location on the map'}</Text>
+      <Button title={showLocation ? (language === Language.HI ? 'छिपाएँ' : 'Hide') : (language === Language.HI ? 'स्थान देखें / प्रस्तावित करें' : 'View or propose location')} variant="outline" onPress={() => setShowLocation(!showLocation)} style={sectionStyles.addButton} />
+      {showLocation && <ShopLocationPanel salonId={selectedSalonId} language={language} />}
 
       <Text style={sectionStyles.sectionTitle}>{language === Language.HI ? 'दुकान का QR पोस्टर' : 'Public shop QR poster'}</Text>
       <Text style={sectionStyles.hint}>
