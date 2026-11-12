@@ -13,7 +13,7 @@ export type OwnerShopStackParamList = {
   OwnerCustomers: undefined;
   OwnerCustomerDetail: { customerId: string };
   OwnerInventory: undefined;
-  OwnerBusiness: { initialPanel?: 'analytics' | 'report' | 'sources' | 'team' | 'cancellations' | 'invoices' | 'payments' | 'reviews' | 'offers' | 'verification'; openInvoiceId?: string } | undefined;
+  OwnerBusiness: { initialPanel?: 'analytics' | 'report' | 'sources' | 'team' | 'contacts' | 'cancellations' | 'invoices' | 'payments' | 'reviews' | 'offers' | 'verification'; openInvoiceId?: string } | undefined;
   OwnerSettings: undefined;
   OwnerQrPoster: undefined;
 };

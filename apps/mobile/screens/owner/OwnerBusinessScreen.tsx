@@ -27,18 +27,19 @@ import { BillingProfileEditor, InvoiceDetailActions } from '../../components/own
 import { RevenueReportPanel } from '../../components/owner/RevenueReportPanel';
 import { BookingSourcesPanel } from '../../components/owner/BookingSourcesPanel';
 import { TeamOverview } from '../../components/owner/TeamOverview';
+import { ContactsCheckPanel } from '../../components/owner/ContactsCheckPanel';
 import { useLanguage } from '../../lib/language-context';
 import { useSalon } from '../../lib/salon-context';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 import { Button, Card, EmptyState, InlineError, Screen, SectionHeader } from '../../components/ui';
 
-type Panel = 'analytics' | 'report' | 'sources' | 'team' | 'cancellations' | 'invoices' | 'payments' | 'reviews' | 'offers' | 'verification';
+type Panel = 'analytics' | 'report' | 'sources' | 'team' | 'contacts' | 'cancellations' | 'invoices' | 'payments' | 'reviews' | 'offers' | 'verification';
 type OfferPage = { items: OfferDto[]; nextCursor: string | null };
 
 const COPY = {
   en: {
     title: 'Business center', subtitle: 'Reports and shop workflows, scoped to your selected shop.',
-    analytics: 'Analytics', report: 'Revenue report', sources: 'Booking sources', team: 'Team', cancellations: 'Cancellations', invoices: 'Invoices', payments: 'Payments', reviews: 'Reviews', offers: 'Offers', verification: 'Verification',
+    analytics: 'Analytics', report: 'Revenue report', sources: 'Booking sources', team: 'Team', contacts: 'Contacts', cancellations: 'Cancellations', invoices: 'Invoices', payments: 'Payments', reviews: 'Reviews', offers: 'Offers', verification: 'Verification',
     retry: 'Try again', loading: 'Loading…', noShop: 'Select a shop to view its business data.',
     appointments: 'Appointments', completed: 'Completed', collected: 'Recorded collections', estimate: 'Estimated service value', noPayments: 'No payments have been recorded yet.',
     cancellationsInPeriod: 'Cancellations in period', cancellationRate: 'Cancellation rate', liveQueueSeparate: 'Live Queue (separate)', noCancellations: 'No cancellations in this period.',
@@ -53,7 +54,7 @@ const COPY = {
   },
   hi: {
     title: 'व्यवसाय केंद्र', subtitle: 'चुनी गई दुकान की रिपोर्ट और कार्य।',
-    analytics: 'विश्लेषण', report: 'राजस्व रिपोर्ट', sources: 'बुकिंग स्रोत', team: 'टीम', cancellations: 'रद्दीकरण', invoices: 'इनवॉइस', payments: 'भुगतान', reviews: 'समीक्षाएँ', offers: 'ऑफ़र', verification: 'सत्यापन',
+    analytics: 'विश्लेषण', report: 'राजस्व रिपोर्ट', sources: 'बुकिंग स्रोत', team: 'टीम', contacts: 'संपर्क', cancellations: 'रद्दीकरण', invoices: 'इनवॉइस', payments: 'भुगतान', reviews: 'समीक्षाएँ', offers: 'ऑफ़र', verification: 'सत्यापन',
     retry: 'फिर कोशिश करें', loading: 'लोड हो रहा है…', noShop: 'दुकान का डेटा देखने के लिए दुकान चुनें।',
     appointments: 'अपॉइंटमेंट', completed: 'पूरे हुए', collected: 'दर्ज की गई प्राप्तियाँ', estimate: 'अनुमानित सेवा मूल्य', noPayments: 'अभी तक कोई भुगतान दर्ज नहीं है।',
     cancellationsInPeriod: 'इस अवधि के रद्दीकरण', cancellationRate: 'रद्दीकरण दर', liveQueueSeparate: 'लाइव कतार (अलग)', noCancellations: 'इस अवधि में कोई रद्दीकरण नहीं।',
@@ -141,7 +142,7 @@ export default function OwnerBusinessScreen({ route }: { route?: { params?: { in
     if (!selectedSalonId) return;
     const requestId = ++requestSeq.current;
     const base = basePath(selectedSalonId);
-    if (panel === 'report' || panel === 'sources' || panel === 'team') { setError(null); setLoading(false); return; } // these panels load themselves
+    if (panel === 'report' || panel === 'sources' || panel === 'team' || panel === 'contacts') { setError(null); setLoading(false); return; } // these panels load themselves
     setLoading(true);
     setError(null);
     // A shop switch must never leave the previously selected shop's records visible while the
@@ -345,7 +346,7 @@ export default function OwnerBusinessScreen({ route }: { route?: { params?: { in
     <Screen refreshing={loading} onRefresh={() => void load()} contentStyle={styles.screen}>
       <SectionHeader eyebrow={selectedSalon?.name ?? 'FastQue'} title={c.title} subtitle={c.subtitle} />
       <View style={styles.tabs}>
-        {(['analytics', 'report', 'sources', 'team', 'cancellations', 'invoices', 'payments', 'reviews', 'offers', 'verification'] as Panel[]).map((item) => (
+        {(['analytics', 'report', 'sources', 'team', 'contacts', 'cancellations', 'invoices', 'payments', 'reviews', 'offers', 'verification'] as Panel[]).map((item) => (
           <Pressable key={item} onPress={() => { setPanel(item); setInvoice(null); setNotice(null); if (item === 'analytics' && range === '90d') setRange('30d'); }} accessibilityRole="button" accessibilityState={{ selected: panel === item }} style={[styles.tab, panel === item && styles.tabSelected]}>
             <Text style={[styles.tabText, panel === item && styles.tabTextSelected]}>{c[item]}</Text>
           </Pressable>
@@ -367,6 +368,7 @@ export default function OwnerBusinessScreen({ route }: { route?: { params?: { in
           {panel === 'report' && <RevenueReportPanel salonId={selectedSalonId} language={language} />}
           {panel === 'sources' && <BookingSourcesPanel salonId={selectedSalonId} language={language} />}
           {panel === 'team' && <TeamOverview salonId={selectedSalonId} language={language} />}
+          {panel === 'contacts' && <ContactsCheckPanel salonId={selectedSalonId} />}
           {panel === 'cancellations' && cancellations && <CancellationPanel data={cancellations} c={c} />}
           {panel === 'invoices' && (
             <>
