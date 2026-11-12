@@ -78,11 +78,46 @@ jobs:
           printf 'DIRECT_DATABASE_URL=postgresql://%s@127.0.0.1:5432/fastque_screenshots?schema=public\n' "$PGUSER" >> "$GITHUB_ENV"
 
       - name: Apply migrations and seed synthetic salon data
+        working-directory: apps/backend
         run: |
           set -euo pipefail
           export ADMIN_SEED_EMAIL='screenshot-admin@example.invalid'
           export ADMIN_SEED_PASSWORD="$(openssl rand -hex 24)"
           export TOTP_ENCRYPTION_KEY="$(openssl rand -hex 32)"
+          BOOTSTRAP_PRISMA_DIR="$RUNNER_TEMP/prisma-before-primary-admin"
+          mkdir -p "$BOOTSTRAP_PRISMA_DIR/migrations"
+          cp prisma/schema.prisma "$BOOTSTRAP_PRISMA_DIR/schema.prisma"
+          cp prisma/migrations/migration_lock.toml "$BOOTSTRAP_PRISMA_DIR/migrations/migration_lock.toml"
+          python3 - "$BOOTSTRAP_PRISMA_DIR/migrations" <<'PY'
+          import pathlib, shutil, sys
+          source = pathlib.Path("prisma/migrations")
+          target = pathlib.Path(sys.argv[1])
+          cutoff = "20260830215000_ensure_primary_platform_admin"
+          copied = []
+          for migration in sorted(p for p in source.iterdir() if p.is_dir() and p.name < cutoff):
+              shutil.copytree(migration, target / migration.name)
+              copied.append(migration.name)
+          if not copied or not (target / "20260801060723_init").is_dir():
+              raise SystemExit("Could not prepare the verified migration prefix.")
+          print(f"Applying {len(copied)} prerequisite migrations before the admin-guard migration.")
+          PY
+          npx prisma migrate deploy --schema "$BOOTSTRAP_PRISMA_DIR/schema.prisma"
+          PRIMARY_ADMIN_EMAIL="$(python3 - <<'PY'
+          import pathlib, re
+          sql = pathlib.Path("prisma/migrations/20260830215000_ensure_primary_platform_admin/migration.sql").read_text()
+          match = re.search(r'WHERE lower\("email"\) = lower\(\'([^\']+)\'\)', sql)
+          if not match:
+              raise SystemExit("Unable to identify the required migration fixture identity.")
+          print(match.group(1))
+          PY
+          )"
+          echo "::add-mask::$PRIMARY_ADMIN_EMAIL"
+          SYNTHETIC_ADMIN_ID="$(uuidgen | tr '[:upper:]' '[:lower:]')"
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -v admin_id="$SYNTHETIC_ADMIN_ID" -v admin_email="$PRIMARY_ADMIN_EMAIL" <<'SQL'
+          INSERT INTO "users" ("id", "email", "updatedAt")
+          VALUES (:'admin_id', :'admin_email', CURRENT_TIMESTAMP);
+          SQL
+          unset PRIMARY_ADMIN_EMAIL SYNTHETIC_ADMIN_ID
           npm run prisma:migrate:deploy --workspace=@barbercue/backend
           if ! npm run db:seed --workspace=@barbercue/backend > "$RUNNER_TEMP/seed-output-private.txt" 2>&1; then
             echo "Synthetic seed failed. Seed output is intentionally not printed or uploaded."
@@ -125,7 +160,6 @@ jobs:
           printf 'SCREENSHOT_OWNER_PASSWORD=%s\n' "$SCREENSHOT_OWNER_PASSWORD" >> "$GITHUB_ENV"
           unset SCREENSHOT_OWNER_PASSWORD
           echo "Synthetic data is isolated to the runner-local database."
-
       - name: Start backend bound to the local synthetic database
         run: |
           set -euo pipefail
@@ -370,8 +404,18 @@ jobs:
         if: always()
         run: |
           set -euo pipefail
-          for udid in "$IPHONE_UDID" "$IPAD_UDID"; do
-            xcrun simctl spawn "$udid" log show --last 20m --style compact --predicate 'process == "FastQue"' 2>/dev/null |
-              grep -E -i 'No script URL provided|Could not connect to development server|Unhandled JS Exception|RCTFatal|terminating app due to uncaught exception|EXC_CRASH|SIGABRT' &&
-              exit 1 || true
+          iphone_udid="${IPHONE_UDID:-}"
+          ipad_udid="${IPAD_UDID:-}"
+          if [ -z "$iphone_udid" ] && [ -z "$ipad_udid" ]; then
+            echo "Simulator selection did not complete; the earlier failing step remains the job failure."
+            exit 0
+          fi
+          for udid in "$iphone_udid" "$ipad_udid"; do
+            [ -n "$udid" ] || continue
+            log_file="$RUNNER_TEMP/fastque-fatal-scan-$udid.log"
+            xcrun simctl spawn "$udid" log show --last 20m --style compact --predicate 'process == "FastQue"' > "$log_file" 2>&1 || true
+            if grep -E -i 'No script URL provided|Could not connect to development server|Unhandled JS Exception|RCTFatal|terminating app due to uncaught exception|EXC_CRASH|SIGABRT' "$log_file"; then
+              echo "Fatal simulator log signature detected."
+              exit 1
+            fi
           done
