@@ -14,6 +14,7 @@ import {
   type PremiumEntitlementDto,
 } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
+import { CustomerInvoicesCard, NotificationPreferencesCard, PhoneLinkCard, PremiumPlansCard } from '../components/account/CustomerAccountExtras';
 import { dateLocaleFor } from '../lib/date-locale';
 import { useAuth } from '../lib/auth-context';
 import { useLanguage } from '../lib/language-context';
@@ -276,6 +277,12 @@ export default function AccountScreen() {
           <Text style={styles.revokeText}>Open Privacy Policy</Text>
         </Pressable>
       </Card>
+
+      {isCustomerOnly && <CustomerInvoicesCard language={language} />}
+      {isCustomerOnly && <PhoneLinkCard language={language} />}
+      <NotificationPreferencesCard language={language} />
+      {/* Google Play release gate: paid digital plans are only listed where they may be sold (lib/feature-flags.ts). */}
+      {isCreditsEnabled() && <PremiumPlansCard language={language} />}
 
       {isCustomerOnly && (
         <Card style={styles.deleteCard}>
