@@ -17,6 +17,7 @@ import { buildMovement } from '../../lib/inventory-shared';
 import { useInventoryLookups } from '../../lib/use-inventory-lookups';
 import { CategoriesPanel, ProductEditor, SuppliersPanel } from '../../components/owner/InventoryLookups';
 import { ProductUsagePanel, RecipesPanel } from '../../components/owner/InventoryUsagePanels';
+import { PredictionsPanel } from '../../components/owner/InventoryPredictions';
 import { useSalon } from '../../lib/salon-context';
 import { useLanguage } from '../../lib/language-context';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
@@ -30,7 +31,7 @@ const COPY = {
     search: 'Search products', searchHint: 'Name, SKU or barcode', searchAction: 'Search',
     lowStock: 'Show low stock', allStock: 'Show all stock', low: 'Low stock', stock: 'On hand',
     value: 'Estimated stock value', itemCount: 'Products', lowCount: 'Low-stock products',
-    purchase: 'Purchase', opening: 'Opening stock', adjustment: 'Adjustment', consumption: 'Used in shop', supplier: 'Supplier (optional)', noSupplier: 'No supplier', reference: 'Bill or invoice number (optional)', note: 'Note (optional)', consumptionHint: 'The server refuses this if there is not enough stock, and then nothing is recorded.', edit: 'Edit', stockTab: 'Stock', categoriesTab: 'Categories', suppliersTab: 'Suppliers', recipesTab: 'Service recipes', usageTab: 'Product usage', quantity: 'Quantity',
+    purchase: 'Purchase', opening: 'Opening stock', adjustment: 'Adjustment', consumption: 'Used in shop', supplier: 'Supplier (optional)', noSupplier: 'No supplier', reference: 'Bill or invoice number (optional)', note: 'Note (optional)', consumptionHint: 'The server refuses this if there is not enough stock, and then nothing is recorded.', edit: 'Edit', stockTab: 'Stock', categoriesTab: 'Categories', suppliersTab: 'Suppliers', recipesTab: 'Service recipes', usageTab: 'Product usage', predictionsTab: 'Predictions', quantity: 'Quantity',
     unitCost: 'Unit cost', direction: 'Increase or decrease', increase: 'Increase', decrease: 'Decrease',
     reason: 'Reason (required for adjustment)', saveMovement: 'Record stock movement',
     add: 'Save product', more: 'Load more', history: 'Movement history', hideHistory: 'Hide history',
@@ -49,7 +50,7 @@ const COPY = {
     search: 'उत्पाद खोजें', searchHint: 'नाम, SKU या बारकोड', searchAction: 'खोजें',
     lowStock: 'कम स्टॉक दिखाएँ', allStock: 'सभी स्टॉक दिखाएँ', low: 'कम स्टॉक', stock: 'मौजूद',
     value: 'अनुमानित स्टॉक मूल्य', itemCount: 'उत्पाद', lowCount: 'कम स्टॉक वाले उत्पाद',
-    purchase: 'खरीद', opening: 'शुरुआती स्टॉक', adjustment: 'समायोजन', consumption: 'दुकान में उपयोग', supplier: 'सप्लायर (वैकल्पिक)', noSupplier: 'कोई सप्लायर नहीं', reference: 'बिल या इनवॉइस नंबर (वैकल्पिक)', note: 'नोट (वैकल्पिक)', consumptionHint: 'स्टॉक कम हो तो सर्वर इसे मना करता है और कुछ दर्ज नहीं होता।', edit: 'संपादित करें', stockTab: 'स्टॉक', categoriesTab: 'श्रेणियाँ', suppliersTab: 'सप्लायर', recipesTab: 'सेवा रेसिपी', usageTab: 'उत्पाद उपयोग', quantity: 'मात्रा',
+    purchase: 'खरीद', opening: 'शुरुआती स्टॉक', adjustment: 'समायोजन', consumption: 'दुकान में उपयोग', supplier: 'सप्लायर (वैकल्पिक)', noSupplier: 'कोई सप्लायर नहीं', reference: 'बिल या इनवॉइस नंबर (वैकल्पिक)', note: 'नोट (वैकल्पिक)', consumptionHint: 'स्टॉक कम हो तो सर्वर इसे मना करता है और कुछ दर्ज नहीं होता।', edit: 'संपादित करें', stockTab: 'स्टॉक', categoriesTab: 'श्रेणियाँ', suppliersTab: 'सप्लायर', recipesTab: 'सेवा रेसिपी', usageTab: 'उत्पाद उपयोग', predictionsTab: 'अनुमान', quantity: 'मात्रा',
     unitCost: 'प्रति इकाई लागत', direction: 'बढ़ाएँ या घटाएँ', increase: 'बढ़ाएँ', decrease: 'घटाएँ',
     reason: 'कारण (समायोजन के लिए ज़रूरी)', saveMovement: 'स्टॉक मूवमेंट दर्ज करें',
     add: 'उत्पाद सहेजें', more: 'और लोड करें', history: 'मूवमेंट इतिहास', hideHistory: 'इतिहास छिपाएँ',
@@ -75,7 +76,7 @@ export default function OwnerInventoryScreen() {
   const { language } = useLanguage();
   const copy = COPY[language === Language.HI ? 'hi' : 'en'];
   const requestSequence = useRef(0);
-  const [tab, setTab] = useState<'stock' | 'categories' | 'suppliers' | 'recipes' | 'usage'>('stock');
+  const [tab, setTab] = useState<'stock' | 'categories' | 'suppliers' | 'recipes' | 'usage' | 'predictions'>('stock');
   const [editing, setEditing] = useState<string | null>(null);
   const [supplierId, setSupplierId] = useState('');
   const [reference, setReference] = useState('');
@@ -283,14 +284,15 @@ export default function OwnerInventoryScreen() {
     <Screen contentStyle={styles.content} refreshing={loading} onRefresh={() => void load()}>
       <SectionHeader eyebrow="OWNER" title={copy.title} subtitle={copy.subtitle} />
       <View style={styles.filterRow}>
-        {(['stock', 'categories', 'suppliers', 'recipes', 'usage'] as const).map((id) => (
-          <Button key={id} title={id === 'stock' ? copy.stockTab : id === 'categories' ? copy.categoriesTab : id === 'suppliers' ? copy.suppliersTab : id === 'recipes' ? copy.recipesTab : copy.usageTab} variant={tab === id ? 'secondary' : 'outline'} onPress={() => setTab(id)} style={styles.filterButton} />
+        {(['stock', 'categories', 'suppliers', 'recipes', 'usage', 'predictions'] as const).map((id) => (
+          <Button key={id} title={id === 'stock' ? copy.stockTab : id === 'categories' ? copy.categoriesTab : id === 'suppliers' ? copy.suppliersTab : id === 'recipes' ? copy.recipesTab : id === 'usage' ? copy.usageTab : copy.predictionsTab} variant={tab === id ? 'secondary' : 'outline'} onPress={() => setTab(id)} style={styles.filterButton} />
         ))}
       </View>
       {tab === 'categories' && <CategoriesPanel salonId={selectedSalonId} />}
       {tab === 'suppliers' && <SuppliersPanel salonId={selectedSalonId} />}
       {tab === 'recipes' && <RecipesPanel salonId={selectedSalonId} />}
       {tab === 'usage' && <ProductUsagePanel salonId={selectedSalonId} />}
+      {tab === 'predictions' && <PredictionsPanel salonId={selectedSalonId} />}
       {tab === 'stock' && (<>
       {error ? <InlineError message={error} /> : null}
       {report ? (
