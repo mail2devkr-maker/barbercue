@@ -1,9 +1,10 @@
-name: FastQue iOS Simulator Smoke
+name: FastQue iOS App Store Screenshot QA
 
 on:
   pull_request:
+    branches:
+      - codex/fastque-ios-assistant-master-9835067-20261105
     paths:
-      - "apps/mobile/**"
       - ".github/workflows/ios-simulator-smoke.yml"
   workflow_dispatch:
 
@@ -11,71 +12,162 @@ permissions:
   contents: read
 
 jobs:
-  ios-simulator:
-    name: macOS iPhone Simulator build and cold launch
+  ios-synthetic-screenshots:
+    name: Synthetic backend, Dynamic Island iPhone and 13-inch iPad screenshots
     runs-on: macos-26
-    timeout-minutes: 60
+    timeout-minutes: 120
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.4.1.app/Contents/Developer
       CI: "1"
       EXPO_NO_TELEMETRY: "1"
-      EXPO_PUBLIC_API_BASE_URL: https://barbercuebackend-production.up.railway.app/api/v1
+      FASTQUE_IOS_BUILD: "true"
+      APP_SOURCE_SHA: 1353420f737ad70191cab46ecad023f817fe1848
+      EXPO_PUBLIC_API_BASE_URL: http://127.0.0.1:3000/api/v1
+      EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID: 123456789012-test_client.apps.googleusercontent.com
+      NODE_ENV: test
+      PORT: "3000"
 
     steps:
-      - name: Checkout candidate
+      - name: Checkout isolated screenshot candidate
         uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 0
 
-      - name: Verify Apple toolchain
+      - name: Prove app/backend source is the requested SHA
         run: |
-          set -euxo pipefail
+          set -euo pipefail
+          git cat-file -e "$APP_SOURCE_SHA^{commit}"
+          for path in apps/mobile apps/backend packages/shared package-lock.json; do
+            expected="$(git rev-parse "$APP_SOURCE_SHA:$path")"
+            actual="$(git rev-parse "HEAD:$path")"
+            if [ "$expected" != "$actual" ]; then
+              echo "Source mismatch at $path; refusing screenshots."
+              exit 1
+            fi
+          done
+          echo "FastQue app, backend, shared contracts, and lockfile match $APP_SOURCE_SHA."
+
+      - name: Verify Xcode and install locked dependencies
+        run: |
+          set -euo pipefail
           test -d "$DEVELOPER_DIR"
           xcodebuild -version
           xcrun --sdk iphoneos --show-sdk-version
           node --version
           npm --version
           pod --version
+          npm ci
 
-      - name: Install locked dependencies
-        run: npm ci
-
-      - name: Build shared package
-        run: npm run build:shared
-
-      - name: Typecheck and test mobile workspace
-        id: mobile-quality
-        continue-on-error: true
+      - name: Build shared and backend packages
         run: |
+          set -euo pipefail
+          npm run build:shared
+          npm run build --workspace=@barbercue/backend
+
+      - name: Create disposable local PostgreSQL
+        run: |
+          set -euo pipefail
+          brew install postgresql@17
+          PG_BIN="$(brew --prefix postgresql@17)/bin"
+          PGDATA="$RUNNER_TEMP/fastque-synthetic-pg"
+          PGUSER="$(id -un)"
+          "$PG_BIN/initdb" -D "$PGDATA" --username="$PGUSER" --auth-local=trust --auth-host=trust --no-locale --encoding=UTF8 >/dev/null
+          "$PG_BIN/pg_ctl" -D "$PGDATA" -l "$RUNNER_TEMP/fastque-synthetic-postgres.log" -o "-h 127.0.0.1 -p 5432" start
+          "$PG_BIN/createdb" -h 127.0.0.1 -p 5432 --username="$PGUSER" fastque_screenshots
+          printf 'DATABASE_URL=postgresql://%s@127.0.0.1:5432/fastque_screenshots?schema=public\n' "$PGUSER" >> "$GITHUB_ENV"
+          printf 'DIRECT_DATABASE_URL=postgresql://%s@127.0.0.1:5432/fastque_screenshots?schema=public\n' "$PGUSER" >> "$GITHUB_ENV"
+
+      - name: Apply migrations and seed synthetic salon data
+        env:
+          ADMIN_SEED_EMAIL: screenshot-admin@example.invalid
+          ADMIN_SEED_PASSWORD: synthetic-admin-password-never-used-outside-this-run
+          TOTP_ENCRYPTION_KEY: ephemeral-screenshot-test-key-only
+        run: |
+          set -euo pipefail
+          npm run prisma:migrate:deploy --workspace=@barbercue/backend
+          if ! npm run db:seed --workspace=@barbercue/backend > "$RUNNER_TEMP/seed-output-private.txt" 2>&1; then
+            echo "Synthetic seed failed. Seed output is intentionally not printed or uploaded."
+            exit 1
+          fi
+          rm -f "$RUNNER_TEMP/seed-output-private.txt"
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q <<'SQL'
+          UPDATE "salons"
+             SET "name" = 'FastQue Demo Studio',
+                 "phone" = NULL
+           WHERE "slug" = 'barbercue-demo';
+          UPDATE "users"
+             SET "email" = regexp_replace("email", '@barbercue-demo[.]com$', '@fastque.demo.invalid'),
+                 "phone" = NULL,
+                 "phoneVerifiedAt" = NULL
+           WHERE "email" LIKE '%@barbercue-demo.com';
+          SQL
+          SCREENSHOT_OWNER_PASSWORD="$(openssl rand -hex 24)"
+          echo "::add-mask::$SCREENSHOT_OWNER_PASSWORD"
+          export SCREENSHOT_OWNER_PASSWORD
+          if ! node <<'NODE' >/dev/null 2>&1
+          const { PrismaClient } = require('@prisma/client');
+          const bcrypt = require('bcrypt');
+          (async () => {
+            const prisma = new PrismaClient();
+            try {
+              await prisma.user.update({
+                where: { email: 'owner@fastque.demo.invalid' },
+                data: { passwordHash: await bcrypt.hash(process.env.SCREENSHOT_OWNER_PASSWORD, 12) },
+              });
+            } finally {
+              await prisma.$disconnect();
+            }
+          })().catch(() => process.exit(1));
+          NODE
+          then
+            echo "Could not set an ephemeral synthetic owner login."
+            exit 1
+          fi
+          printf 'SCREENSHOT_OWNER_PASSWORD=%s\n' "$SCREENSHOT_OWNER_PASSWORD" >> "$GITHUB_ENV"
+          unset SCREENSHOT_OWNER_PASSWORD
+          echo "Synthetic data is isolated to the runner-local database."
+
+      - name: Start backend bound to the local synthetic database
+        env:
+          JWT_ACCESS_SECRET: local-screenshot-only-access-secret
+          TOTP_ENCRYPTION_KEY: ephemeral-screenshot-test-key-only
+          OTP_HASH_SECRET: local-screenshot-only-otp-hash-secret
+        run: |
+          set -euo pipefail
+          npm run start:prod --workspace=@barbercue/backend > "$RUNNER_TEMP/fastque-backend-private.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/fastque-backend.pid"
+          ready=0
+          for attempt in $(seq 1 60); do
+            if curl --silent --fail http://127.0.0.1:3000/api/v1/health >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          if [ "$ready" != 1 ]; then
+            echo "Local synthetic backend did not become healthy; backend logs are not uploaded."
+            exit 1
+          fi
+          echo "Local synthetic backend health check passed."
+
+      - name: Run mobile typecheck and complete Jest suite
+        run: |
+          set -euo pipefail
           npm run typecheck --workspace=@barbercue/mobile
           npm run test --workspace=@barbercue/mobile -- --runInBand
 
-      - name: Generate the iOS native project
+      - name: Generate standalone iOS simulator project
         working-directory: apps/mobile
-        env:
-          FASTQUE_IOS_BUILD: "true"
-          # Only native iOS config generation needs a synthetic public OAuth ID.
-          # It cannot authenticate and is deliberately absent from Jest and Android jobs.
-          EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID: 123456789012-test_client.apps.googleusercontent.com
         run: npx expo prebuild --platform ios --clean
 
-      - name: Disable OTA for this standalone simulator smoke
+      - name: Disable OTA and build the Release simulator app
         working-directory: apps/mobile
         run: |
-          set -euxo pipefail
+          set -euo pipefail
           EXPO_PLIST="$(find ios -name Expo.plist -type f -print -quit)"
           test -n "$EXPO_PLIST"
           /usr/libexec/PlistBuddy -c 'Set :EXUpdatesEnabled false' "$EXPO_PLIST" \
             || /usr/libexec/PlistBuddy -c 'Add :EXUpdatesEnabled bool false' "$EXPO_PLIST"
-          /usr/libexec/PlistBuddy -c 'Print :EXUpdatesEnabled' "$EXPO_PLIST"
-
-      - name: Build standalone Release simulator app
-        working-directory: apps/mobile
-        env:
-          FASTQUE_IOS_BUILD: "true"
-          # Expo inlines EXPO_PUBLIC_* values into this iOS simulator bundle only.
-          EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID: 123456789012-test_client.apps.googleusercontent.com
-        run: |
           set -o pipefail
           xcodebuild \
             -workspace ios/FastQue.xcworkspace \
@@ -87,54 +179,200 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             build | tee "$RUNNER_TEMP/xcodebuild-simulator.log"
 
-      - name: Verify bundle and launch on an iPhone Simulator
-        id: simulator
+      - name: Install Maestro and select eligible simulators
         run: |
-          set -euxo pipefail
+          set -euo pipefail
+          brew install mobile-dev/inc/tap/maestro
+          python3 <<'PY' >> "$GITHUB_ENV"
+          import json, subprocess
+          devices = json.loads(subprocess.check_output(
+              ["xcrun", "simctl", "list", "devices", "available", "--json"], text=True
+          ))["devices"]
+          rows = [d for group in devices.values() for d in group if d.get("isAvailable")]
+          iphones = [d for d in rows if d.get("name", "").startswith(("iPhone 16 Pro", "iPhone 17 Pro", "iPhone 15 Pro"))]
+          ipads = [d for d in rows if d.get("name", "").startswith("iPad Pro 13-inch")]
+          if not iphones:
+              raise SystemExit("No supported Dynamic Island iPhone Pro simulator is available.")
+          if not ipads:
+              raise SystemExit("No 13-inch iPad Pro simulator is available.")
+          preferred_iphone = next((d for prefix in ("iPhone 16 Pro", "iPhone 17 Pro", "iPhone 15 Pro") for d in iphones if d["name"].startswith(prefix)), iphones[0])
+          preferred_ipad = next((d for d in ipads if "(M4)" in d["name"] or "(M5)" in d["name"]), ipads[0])
+          print(f"IPHONE_UDID={preferred_iphone['udid']}")
+          print(f"IPHONE_MODEL={preferred_iphone['name']}")
+          print(f"IPAD_UDID={preferred_ipad['udid']}")
+          print(f"IPAD_MODEL={preferred_ipad['name']}")
+          PY
           APP_PATH="$RUNNER_TEMP/DerivedData/Build/Products/Release-iphonesimulator/FastQue.app"
           test -d "$APP_PATH"
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist" | grep -Fx com.dcw.fastque
-          /usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$APP_PATH/Info.plist"
-          find "$APP_PATH" -type f \( -name main.jsbundle -o -name '*.jsbundle' \) -size +0c -print -quit | grep .
-          DEVICE_UDID="$(xcrun simctl list devices available --json | python3 -c 'import json,sys; d=json.load(sys.stdin)["devices"]; rows=[x for runtime in d.values() for x in runtime if x.get("isAvailable") and x.get("name","").startswith("iPhone")]; print(rows[0]["udid"] if rows else "")')"
-          test -n "$DEVICE_UDID"
-          echo "udid=$DEVICE_UDID" >> "$GITHUB_OUTPUT"
-          echo "app_path=$APP_PATH" >> "$GITHUB_OUTPUT"
-          xcrun simctl boot "$DEVICE_UDID" || true
-          xcrun simctl bootstatus "$DEVICE_UDID" -b
-          xcrun simctl install "$DEVICE_UDID" "$APP_PATH"
-          xcrun simctl terminate "$DEVICE_UDID" com.dcw.fastque || true
-          xcrun simctl launch "$DEVICE_UDID" com.dcw.fastque
-          sleep 15
-          xcrun simctl get_app_container "$DEVICE_UDID" com.dcw.fastque app
-          xcrun simctl io "$DEVICE_UDID" screenshot "$RUNNER_TEMP/fastque-ios-simulator.png"
+          echo "app path is valid."
 
-      - name: Scan simulator logs for fatal launch errors
-        if: always() && steps.simulator.outputs.udid != ''
+      - name: Build genuine iPhone and iPad App Store screenshots
         run: |
-          set -euxo pipefail
-          xcrun simctl spawn "${{ steps.simulator.outputs.udid }}" log show \
-            --last 10m --style compact --predicate 'process == "FastQue"' \
-            > "$RUNNER_TEMP/fastque-simulator.log" 2>&1 || true
-          grep -E -i 'No script URL provided|Could not connect to development server|Unhandled JS Exception|RCTFatal|terminating app due to uncaught exception|EXC_CRASH|SIGABRT' \
-            "$RUNNER_TEMP/fastque-simulator.log" > "$RUNNER_TEMP/fatal-scan.txt" || true
-          test -f "$RUNNER_TEMP/fastque-ios-simulator.png"
-          test ! -s "$RUNNER_TEMP/fatal-scan.txt"
+          set -euo pipefail
+          APP_PATH="$RUNNER_TEMP/DerivedData/Build/Products/Release-iphonesimulator/FastQue.app"
+          mkdir -p "$RUNNER_TEMP/fastque-maestro" "$RUNNER_TEMP/maestro-captures" screenshot-artifact
+          xcrun simctl boot "$IPHONE_UDID" 2>/dev/null || true
+          xcrun simctl bootstatus "$IPHONE_UDID" -b
+          xcrun simctl status_bar "$IPHONE_UDID" override --time "9:41" --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularBars 4
+          xcrun simctl install "$IPHONE_UDID" "$APP_PATH"
+          mkdir -p "$RUNNER_TEMP/fastque-maestro/iphone"
+          cat > "$RUNNER_TEMP/fastque-maestro/iphone/release-screens.yaml" <<'YAML'
+          appId: com.dcw.fastque
+          ---
+          - launchApp:
+              clearState: true
+          - extendedWaitUntil:
+              visible: "Search"
+              timeout: 90000
+          - assertVisible: "Find a barber"
+          - takeScreenshot: iphone-customer-home
+          - tapOn: "Search"
+          - extendedWaitUntil:
+              visible: "Find a salon"
+              timeout: 30000
+          - tapOn: "Search services…"
+          - inputText: "FastQue Demo Studio"
+          - pressKey: Enter
+          - extendedWaitUntil:
+              visible: "FastQue Demo Studio"
+              timeout: 45000
+          - takeScreenshot: iphone-salon-search
+          - tapOn: "FastQue Demo Studio"
+          - extendedWaitUntil:
+              visible: "Services"
+              timeout: 30000
+          - takeScreenshot: iphone-salon-profile
+          - tapOn: "Haircut"
+          - tapOn: "Continue"
+          - extendedWaitUntil:
+              visible: "Choose a barber"
+              timeout: 30000
+          - takeScreenshot: iphone-booking-staff-selection
+          - back
+          - tapOn: "Join queue now"
+          - extendedWaitUntil:
+              visible: "Join the queue"
+              timeout: 30000
+          - takeScreenshot: iphone-live-queue-join
+          - launchApp:
+              clearState: true
+          - extendedWaitUntil:
+              visible: "Search"
+              timeout: 90000
+          - tapOn:
+              id: "Menu"
+          - tapOn: "Shop Owner"
+          - extendedWaitUntil:
+              visible: "you@example.com"
+              timeout: 30000
+          - tapOn: "you@example.com"
+          - inputText: "owner@fastque.demo.invalid"
+          - tapOn: "••••••••"
+          - inputText: "\${SCREENSHOT_OWNER_PASSWORD}"
+          - tapOn: "Sign in"
+          - extendedWaitUntil:
+              visible: "FastQue Demo Studio"
+              timeout: 60000
+          - takeScreenshot: iphone-owner-dashboard
+          - tapOn: "Bookings"
+          - extendedWaitUntil:
+              visible: "Bookings"
+              timeout: 30000
+          - takeScreenshot: iphone-owner-bookings
+          - tapOn: "Queue"
+          - extendedWaitUntil:
+              visible: "Queue"
+              timeout: 30000
+          - takeScreenshot: iphone-owner-live-queue
+          - tapOn: "Dashboard"
+          - tapOn: "Business analytics"
+          - extendedWaitUntil:
+              visible: "Analytics"
+              timeout: 30000
+          - takeScreenshot: iphone-owner-analytics
+          YAML
+          cd "$RUNNER_TEMP/fastque-maestro/iphone"
+          maestro --device "$IPHONE_UDID" test --test-output-dir "$RUNNER_TEMP/maestro-captures" release-screens.yaml
+          mkdir -p "$RUNNER_TEMP/fastque-maestro/ipad"
+          cat > "$RUNNER_TEMP/fastque-maestro/ipad/release-screens.yaml" <<'YAML'
+          appId: com.dcw.fastque
+          ---
+          - launchApp:
+              clearState: true
+          - extendedWaitUntil:
+              visible: "Search"
+              timeout: 90000
+          - assertVisible: "Find a barber"
+          - takeScreenshot: ipad-13-customer-home
+          - tapOn: "Search"
+          - extendedWaitUntil:
+              visible: "Find a salon"
+              timeout: 30000
+          - tapOn: "Search services…"
+          - inputText: "FastQue Demo Studio"
+          - pressKey: Enter
+          - extendedWaitUntil:
+              visible: "FastQue Demo Studio"
+              timeout: 45000
+          - takeScreenshot: ipad-13-salon-search
+          YAML
+          cd "$RUNNER_TEMP/fastque-maestro/ipad"
+          xcrun simctl boot "$IPAD_UDID" 2>/dev/null || true
+          xcrun simctl bootstatus "$IPAD_UDID" -b
+          xcrun simctl status_bar "$IPAD_UDID" override --time "9:41" --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularBars 4
+          xcrun simctl install "$IPAD_UDID" "$APP_PATH"
+          maestro --device "$IPAD_UDID" test --test-output-dir "$RUNNER_TEMP/maestro-captures" release-screens.yaml
+          find "$RUNNER_TEMP/maestro-captures" -type f -name '*.png' -print
+          screenshot_count="$(find "$RUNNER_TEMP/maestro-captures" -type f -name '*.png' | wc -l | tr -d ' ')"
+          test "$screenshot_count" -ge 10
+          while IFS= read -r image; do
+            name="$(basename "$image" .png)"
+            sips -s format jpeg -s formatOptions 92 "$image" --out "screenshot-artifact/$name.jpg" >/dev/null
+          done < <(find "$RUNNER_TEMP/maestro-captures" -type f -name '*.png' -print)
+          python3 <<'PY'
+          import os, subprocess, sys
+          files = sorted(f for f in os.listdir("screenshot-artifact") if f.lower().endswith(".jpg"))
+          if len(files) < 10:
+              raise SystemExit(f"Expected at least 10 JPEG screenshots, found {len(files)}")
+          for name in files:
+              path = os.path.join("screenshot-artifact", name)
+              result = subprocess.check_output(["sips", "-g", "pixelWidth", "-g", "pixelHeight", "-g", "format", path], text=True)
+              values = {}
+              for line in result.splitlines():
+                  if ":" in line:
+                      key, value = line.strip().split(":", 1)
+                      values[key.strip()] = value.strip()
+              if values.get("format") != "jpeg":
+                  raise SystemExit(f"{name} is not a JPEG.")
+              width, height = int(values["pixelWidth"]), int(values["pixelHeight"])
+              if name.startswith("iphone-") and (width, height) not in {(1179, 2556), (1206, 2622), (1260, 2736)}:
+                  raise SystemExit(f"Unsupported iPhone screenshot dimensions for {name}: {width}x{height}")
+              if name.startswith("ipad-13-") and (width, height) != (2064, 2752):
+                  raise SystemExit(f"Unsupported 13-inch iPad screenshot dimensions for {name}: {width}x{height}")
+              print(f"{name}: {width}x{height} JPEG (opaque; JPEG has no alpha channel)")
+          with open("screenshot-artifact/capture-manifest.txt", "w", encoding="utf-8") as out:
+              out.write(f"Application source SHA: {os.environ['APP_SOURCE_SHA']}\n")
+              out.write(f"iPhone Simulator: {os.environ['IPHONE_MODEL']}\n")
+              out.write(f"iPad Simulator: {os.environ['IPAD_MODEL']}\n")
+              out.write("Backend: runner-local disposable PostgreSQL; synthetic salon/users only\n")
+              out.write("JPEG screenshots are opaque and contain no alpha channel.\n")
+          PY
 
-      - name: Upload non-sensitive simulator evidence
-        if: always()
+      - name: Upload only validated App Store screenshot candidates
         uses: actions/upload-artifact@v4
         with:
-          name: fastque-ios-simulator-evidence
+          name: fastque-appstore-genuine-screenshots
           retention-days: 7
-          if-no-files-found: warn
-          path: |
-            ${{ runner.temp }}/xcodebuild-simulator.log
-            ${{ runner.temp }}/fastque-ios-simulator.png
-            ${{ runner.temp }}/fatal-scan.txt
+          if-no-files-found: error
+          path: screenshot-artifact/*
 
-      - name: Keep mobile test failures blocking
-        if: always() && steps.mobile-quality.outcome == 'failure'
+      - name: Scan simulator logs for fatal launch errors
+        if: always()
         run: |
-          echo "The mobile typecheck or full Jest suite failed; see the earlier step for details."
-          exit 1
+          set -euo pipefail
+          for udid in "$IPHONE_UDID" "$IPAD_UDID"; do
+            xcrun simctl spawn "$udid" log show --last 20m --style compact --predicate 'process == "FastQue"' 2>/dev/null |
+              grep -E -i 'No script URL provided|Could not connect to development server|Unhandled JS Exception|RCTFatal|terminating app due to uncaught exception|EXC_CRASH|SIGABRT' &&
+              exit 1 || true
+          done
