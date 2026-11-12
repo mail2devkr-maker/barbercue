@@ -292,7 +292,7 @@ jobs:
           - extendedWaitUntil:
               visible: "Search"
               timeout: 90000
-          - assertVisible: "Find a barber"
+          - assertVisible: "Find barber"
           - takeScreenshot: iphone-customer-home
           - tapOn: "Search"
           - extendedWaitUntil:
