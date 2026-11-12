@@ -78,12 +78,11 @@ jobs:
           printf 'DIRECT_DATABASE_URL=postgresql://%s@127.0.0.1:5432/fastque_screenshots?schema=public\n' "$PGUSER" >> "$GITHUB_ENV"
 
       - name: Apply migrations and seed synthetic salon data
-        env:
-          ADMIN_SEED_EMAIL: screenshot-admin@example.invalid
-          ADMIN_SEED_PASSWORD: synthetic-admin-password-never-used-outside-this-run
-          TOTP_ENCRYPTION_KEY: ephemeral-screenshot-test-key-only
         run: |
           set -euo pipefail
+          export ADMIN_SEED_EMAIL='screenshot-admin@example.invalid'
+          export ADMIN_SEED_PASSWORD="$(openssl rand -hex 24)"
+          export TOTP_ENCRYPTION_KEY="$(openssl rand -hex 32)"
           npm run prisma:migrate:deploy --workspace=@barbercue/backend
           if ! npm run db:seed --workspace=@barbercue/backend > "$RUNNER_TEMP/seed-output-private.txt" 2>&1; then
             echo "Synthetic seed failed. Seed output is intentionally not printed or uploaded."
@@ -128,12 +127,11 @@ jobs:
           echo "Synthetic data is isolated to the runner-local database."
 
       - name: Start backend bound to the local synthetic database
-        env:
-          JWT_ACCESS_SECRET: local-screenshot-only-access-secret
-          TOTP_ENCRYPTION_KEY: ephemeral-screenshot-test-key-only
-          OTP_HASH_SECRET: local-screenshot-only-otp-hash-secret
         run: |
           set -euo pipefail
+          export JWT_ACCESS_SECRET="$(openssl rand -hex 32)"
+          export TOTP_ENCRYPTION_KEY="$(openssl rand -hex 32)"
+          export OTP_HASH_SECRET="$(openssl rand -hex 32)"
           npm run start:prod --workspace=@barbercue/backend > "$RUNNER_TEMP/fastque-backend-private.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/fastque-backend.pid"
           ready=0
@@ -205,7 +203,10 @@ jobs:
           APP_PATH="$RUNNER_TEMP/DerivedData/Build/Products/Release-iphonesimulator/FastQue.app"
           test -d "$APP_PATH"
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist" | grep -Fx com.dcw.fastque
-          echo "app path is valid."
+          /usr/libexec/PlistBuddy -c 'Add :NSAppTransportSecurity dict' "$APP_PATH/Info.plist" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c 'Set :NSAppTransportSecurity:NSAllowsLocalNetworking true' "$APP_PATH/Info.plist" 2>/dev/null             || /usr/libexec/PlistBuddy -c 'Add :NSAppTransportSecurity:NSAllowsLocalNetworking bool true' "$APP_PATH/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :NSAppTransportSecurity:NSAllowsLocalNetworking' "$APP_PATH/Info.plist" | grep -Fx true
+          echo "Simulator-only local HTTP exception applied; release source is unchanged."
 
       - name: Build genuine iPhone and iPad App Store screenshots
         run: |
@@ -260,8 +261,7 @@ jobs:
           - extendedWaitUntil:
               visible: "Search"
               timeout: 90000
-          - tapOn:
-              id: "Menu"
+          - tapOn: "Menu"
           - tapOn: "Shop Owner"
           - extendedWaitUntil:
               visible: "you@example.com"
@@ -285,12 +285,11 @@ jobs:
               visible: "Queue"
               timeout: 30000
           - takeScreenshot: iphone-owner-live-queue
-          - tapOn: "Dashboard"
-          - tapOn: "Business analytics"
+          - tapOn: "Shop"
           - extendedWaitUntil:
-              visible: "Analytics"
+              visible: "Services"
               timeout: 30000
-          - takeScreenshot: iphone-owner-analytics
+          - takeScreenshot: iphone-owner-shop
           YAML
           cd "$RUNNER_TEMP/fastque-maestro/iphone"
           maestro --device "$IPHONE_UDID" test --test-output-dir "$RUNNER_TEMP/maestro-captures" release-screens.yaml
@@ -325,7 +324,7 @@ jobs:
           maestro --device "$IPAD_UDID" test --test-output-dir "$RUNNER_TEMP/maestro-captures" release-screens.yaml
           find "$RUNNER_TEMP/maestro-captures" -type f -name '*.png' -print
           screenshot_count="$(find "$RUNNER_TEMP/maestro-captures" -type f -name '*.png' | wc -l | tr -d ' ')"
-          test "$screenshot_count" -ge 10
+          test "$screenshot_count" -ge 12
           while IFS= read -r image; do
             name="$(basename "$image" .png)"
             sips -s format jpeg -s formatOptions 92 "$image" --out "screenshot-artifact/$name.jpg" >/dev/null
