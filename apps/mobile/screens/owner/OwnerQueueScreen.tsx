@@ -27,7 +27,7 @@ export default function OwnerQueueScreen() {
   return (
     <Screen refreshing={refreshing} onRefresh={() => void handleRefresh()}>
       <SectionHeader eyebrow={t.liveQueue} title={selectedSalon?.name ?? t.queueTitle} />
-      <LiveQueuePanel ref={panelRef} salonId={selectedSalonId} />
+      <LiveQueuePanel ref={panelRef} salonId={selectedSalonId} ownerTools />
     </Screen>
   );
 }

@@ -22,7 +22,8 @@ import { speakBooking } from '../../lib/voice-announce';
 import { claimBookingVoiceEvent } from '../../lib/booking-voice-dedupe';
 import InShopAppointmentPanel from './InShopAppointmentPanel';
 import { BookingActions } from '../../components/owner/BookingActions';
-import { navigationRef } from '../../navigation/navigation-ref';
+import { QueueVisitsList } from '../../components/owner/QueueVisitsList';
+import { openOwnerInvoice } from '../../lib/owner-invoice-link';
 import type { InvoiceDetailDto } from '@barbercue/shared';
 import { color, font, fontSize, lineHeightFor, radius, space } from '../../lib/theme';
 import { Screen, SectionHeader, Card, Button, EmptyState, Skeleton, InlineError } from '../../components/ui';
@@ -58,8 +59,7 @@ function statusLabel(t: UiStrings, status: string): string {
 
 /** "Invoice INV-12" on a completed booking opens that invoice in the Business center. */
 function openInvoice(invoice: InvoiceDetailDto): void {
-  if (!navigationRef.isReady()) return;
-  navigationRef.navigate('OwnerShopTab', { screen: 'OwnerBusiness', params: { initialPanel: 'invoices', openInvoiceId: invoice.id } });
+  openOwnerInvoice(invoice.id);
 }
 
 function bookingsPath(salonId: string): string {
@@ -441,6 +441,7 @@ export default function OwnerBookingsScreen({ route }: Props) {
               style={styles.loadMoreButton}
             />
           )}
+          {filter !== 'upcoming' && <QueueVisitsList salonId={selectedSalonId} filter={filter} language={language} />}
         </ScrollView>
       )}
     </Screen>

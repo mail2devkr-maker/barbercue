@@ -1,6 +1,6 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import { Alert, Linking, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Linking, Modal, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import {
   DASHBOARD_PATHS,
   Language,
@@ -17,6 +17,8 @@ import { friendlyQueueActionError, liveQueuePaths, type LiveQueueAction } from '
 import { useLanguage } from '../../lib/language-context';
 import { color, font, fontSize, lineHeightFor, radius, space } from '../../lib/theme';
 import { Card, Button, EmptyState, Skeleton, InlineError } from '../ui';
+import { CreateInvoiceButton } from '../owner/InvoiceTools';
+import { openOwnerInvoice } from '../../lib/owner-invoice-link';
 import type { UiStrings } from '@barbercue/shared';
 
 function dashboardBase(salonId: string): string {
@@ -282,12 +284,15 @@ export interface LiveQueuePanelHandle {
  * tabs exist around this one (Owner also gets Dashboard/Shop; Staff does not) — enforced by each
  * navigator's own tab set, not by anything in this component.
  */
-export const LiveQueuePanel = forwardRef<LiveQueuePanelHandle, { salonId: string }>(function LiveQueuePanel(
-  { salonId },
+export const LiveQueuePanel = forwardRef<LiveQueuePanelHandle, { salonId: string; ownerTools?: boolean }>(function LiveQueuePanel(
+  { salonId, ownerTools = false },
   ref,
 ) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const hi = language === Language.HI;
   const [data, setData] = useState<DashboardQueueDto | null>(null);
+  const [view, setView] = useState<QueueView>('active');
+  const [autoBusy, setAutoBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [chairBusyId, setChairBusyId] = useState<string | null>(null);
@@ -433,12 +438,94 @@ export const LiveQueuePanel = forwardRef<LiveQueuePanelHandle, { salonId: string
     </Card>
   );
 
+  // Website parity (LiveQueueConsole): Completed today / No-show / History views from the server's
+  // own sections, an invoice on every completed visit, and the automatic-assignment switch.
+  const completed = data.sections?.completedToday ?? [];
+  const historyToday = data.sections?.historyToday ?? [];
+  const noShows = historyToday.filter((e) => e.status === 'NO_SHOW');
+  const history = historyToday.filter((e) => e.status !== 'NO_SHOW');
+  const base = `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}`;
+
+  async function toggleAutoAssign(next: boolean) {
+    setAutoBusy(true);
+    setError(null);
+    try {
+      await apiFetch(`${base}/queue/settings`, { method: 'PATCH', body: JSON.stringify({ autoAssignEnabled: next }) });
+      await load(true);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t.couldNotCompleteAction);
+    } finally {
+      setAutoBusy(false);
+    }
+  }
+
+  const tabs = (
+    <View style={styles.tabRow}>
+      {([
+        ['active', hi ? 'कतार' : 'Queue', activeEntries.length],
+        ['completed', hi ? 'आज पूरे' : 'Completed today', completed.length],
+        ['noShow', hi ? 'नहीं आए' : 'No-show', noShows.length],
+        ['history', hi ? 'इतिहास' : 'History', history.length],
+      ] as const).map(([id, label, count]) => (
+        <Pressable key={id} accessibilityRole="button" accessibilityState={{ selected: view === id }} onPress={() => setView(id)} style={[styles.chip, view === id && styles.chipActive]}>
+          <Text style={[styles.chipText, view === id && styles.chipTextActive]}>{`${label} (${count})`}</Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+
+  const autoAssign = !ownerTools || data.autoAssignEnabled === undefined ? null : (
+    <Card style={styles.entryCard}>
+      <View style={styles.chairRow}>
+        <View style={styles.chairText}>
+          <Text style={styles.assignLabel}>{hi ? 'स्वचालित असाइनमेंट' : 'Automatic assignment'}</Text>
+          <Text style={styles.meta}>{data.autoAssignEnabled
+            ? (hi ? 'खाली कर्मचारी को अगला ग्राहक अपने-आप मिलता है। सेवा शुरू आप करते हैं।' : 'The next customer is assigned to free staff automatically. You still start the service.')
+            : (hi ? 'बंद: ग्राहक को आप स्वयं असाइन करते हैं।' : 'Off: you assign each customer yourself.')}</Text>
+        </View>
+        <Switch accessibilityLabel={hi ? 'स्वचालित असाइनमेंट' : 'Automatic assignment'} value={data.autoAssignEnabled === true} disabled={autoBusy} onValueChange={(next) => void toggleAutoAssign(next)} />
+      </View>
+    </Card>
+  );
+
+  if (view !== 'active') {
+    const list = view === 'completed' ? completed : view === 'noShow' ? noShows : history;
+    return (
+      <>
+        {tabs}
+        {list.length === 0 ? <EmptyState title={view === 'completed' ? (hi ? 'आज अभी कुछ पूरा नहीं हुआ' : 'Nothing completed yet today') : (hi ? 'कुछ नहीं' : 'Nothing here yet today')} /> : list.map((entry) => (
+          <Card key={entry.id} style={styles.entryCard}>
+            <View style={styles.entryHeaderRow}>
+              <Text style={styles.token}>#{entry.tokenNumber}</Text>
+              <Text style={styles.statusBadge}>{statusLabel(t, entry.status)}</Text>
+            </View>
+            <Text style={styles.customerName}>{entry.customerName?.trim() || `${hi ? 'ग्राहक' : 'Customer'} #${entry.tokenNumber}`}</Text>
+            <Text style={styles.meta}>{[entry.serviceName, entry.assignedStaffName].filter(Boolean).join(' · ')}</Text>
+            {ownerTools && entry.status === 'COMPLETED' && (
+              <View style={styles.fullButton}>
+                <CreateInvoiceButton
+                  base={base}
+                  bookingId={entry.bookingId ?? null}
+                  queueEntryId={entry.bookingId ? null : entry.id}
+                  language={language}
+                  onOpen={(invoice) => openOwnerInvoice(invoice.id)}
+                />
+              </View>
+            )}
+          </Card>
+        ))}
+      </>
+    );
+  }
+
   if (activeEntries.length === 0) {
-    return <>{chairStatus}<EmptyState title={t.queueIsEmptyTitle} message={t.queueIsEmptyHint} /></>;
+    return <>{tabs}{autoAssign}{chairStatus}<EmptyState title={t.queueIsEmptyTitle} message={t.queueIsEmptyHint} /></>;
   }
 
   return (
     <>
+      {tabs}
+      {autoAssign}
       {chairStatus}
       <Modal transparent animationType="fade" visible={Boolean(arrivalEntry)}
         onRequestClose={() => undefined}>
@@ -469,7 +556,10 @@ export const LiveQueuePanel = forwardRef<LiveQueuePanelHandle, { salonId: string
   );
 });
 
+type QueueView = 'active' | 'completed' | 'noShow' | 'history';
+
 const styles = StyleSheet.create({
+  tabRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2], marginBottom: space[3] },
   skeleton: { height: 100, borderRadius: radius.lg, marginBottom: space[3] },
   entryCard: { marginBottom: space[3] },
   entryHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
