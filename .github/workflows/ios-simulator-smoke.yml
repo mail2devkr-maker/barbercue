@@ -113,7 +113,7 @@ jobs:
           )"
           echo "::add-mask::$PRIMARY_ADMIN_EMAIL"
           SYNTHETIC_ADMIN_ID="$(uuidgen | tr '[:upper:]' '[:lower:]')"
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -v admin_id="$SYNTHETIC_ADMIN_ID" -v admin_email="$PRIMARY_ADMIN_EMAIL" <<'SQL'
+          psql -h 127.0.0.1 -p 5432 --username "$(id -un)" --dbname fastque_screenshots -v ON_ERROR_STOP=1 -q -v admin_id="$SYNTHETIC_ADMIN_ID" -v admin_email="$PRIMARY_ADMIN_EMAIL" <<'SQL'
           INSERT INTO "users" ("id", "email", "updatedAt")
           VALUES (:'admin_id', :'admin_email', CURRENT_TIMESTAMP);
           SQL
@@ -124,7 +124,7 @@ jobs:
             exit 1
           fi
           rm -f "$RUNNER_TEMP/seed-output-private.txt"
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q <<'SQL'
+          psql -h 127.0.0.1 -p 5432 --username "$(id -un)" --dbname fastque_screenshots -v ON_ERROR_STOP=1 -q <<'SQL'
           UPDATE "salons"
              SET "name" = 'FastQue Demo Studio',
                  "phone" = NULL
