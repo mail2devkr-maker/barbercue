@@ -36,6 +36,7 @@ import { StaffWorkingHoursEditor } from '../../components/owner/StaffWorkingHour
 import { canPermanentlyDelete, StaffManageActions } from '../../components/owner/StaffAdmin';
 import { ChairBulkRemoval, ChairDeleteAction } from '../../components/owner/ChairTools';
 import { ShopLocationPanel } from '../../components/owner/ShopLocationPanel';
+import { ServiceCategoryManager } from '../../components/owner/ServiceCategoryManager';
 import { useAuth } from '../../lib/auth-context';
 import type { OwnerShopStackParamList } from '../../navigation/OwnerShopStack';
 
@@ -58,6 +59,7 @@ export default function OwnerShopScreen() {
   const [error, setError] = useState<string | null>(null);
   const [staffNotice, setStaffNotice] = useState<string | null>(null);
   const [showLocation, setShowLocation] = useState(false);
+  const [showCategories, setShowCategories] = useState(false);
   const { user } = useAuth();
   const mayDelete = canPermanentlyDelete(user?.roles);
 
@@ -150,6 +152,8 @@ export default function OwnerShopScreen() {
         )}
       </Card>
       <AddServiceForm salonId={selectedSalonId} categories={serviceCategories} onAdded={() => void load()} />
+      <Button title={showCategories ? (language === Language.HI ? 'श्रेणियाँ छिपाएँ' : 'Hide categories') : (language === Language.HI ? 'सेवा श्रेणियाँ प्रबंधित करें' : 'Manage service categories')} variant="outline" onPress={() => setShowCategories(!showCategories)} style={sectionStyles.addButton} />
+      {showCategories && <Card style={sectionStyles.card}><ServiceCategoryManager salonId={selectedSalonId} onChanged={() => void load()} /></Card>}
 
       <Text style={sectionStyles.sectionTitle}>{t.chairsLabel}</Text>
       <Card style={sectionStyles.card}>
