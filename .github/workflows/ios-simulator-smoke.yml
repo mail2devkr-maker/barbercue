@@ -239,8 +239,25 @@ jobs:
             -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath "$RUNNER_TEMP/DerivedData" \
-            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=YES CODE_SIGN_IDENTITY=- \
             build | tee "$RUNNER_TEMP/xcodebuild-simulator.log"
+
+          APP_PATH="$RUNNER_TEMP/DerivedData/Build/Products/Release-iphonesimulator/FastQue.app"
+          SIGNATURE_INFO="$RUNNER_TEMP/fastque-simulator-signature.txt"
+          codesign -dv --verbose=2 "$APP_PATH" 2> "$SIGNATURE_INFO"
+          grep -F 'Identifier=com.dcw.fastque' "$SIGNATURE_INFO"
+          grep -F 'Signature=adhoc' "$SIGNATURE_INFO"
+          codesign -d --entitlements :- "$APP_PATH" > "$RUNNER_TEMP/fastque-simulator-entitlements.plist" 2>/dev/null || true
+          python3 - "$RUNNER_TEMP/fastque-simulator-entitlements.plist" <<'PY'
+          import pathlib, plistlib, sys
+          path = pathlib.Path(sys.argv[1])
+          try:
+              entitlements = plistlib.loads(path.read_bytes())
+          except Exception:
+              entitlements = {}
+          keys = sorted(entitlements)
+          print("Ad-hoc simulator entitlements: " + (", ".join(keys) if keys else "(none embedded)"))
+          PY
 
       - name: Install Maestro and select eligible simulators
         run: |
