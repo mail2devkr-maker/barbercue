@@ -19,6 +19,7 @@ import { color, font, fontSize, lineHeightFor, radius, space } from '../../lib/t
 import { Card, Button, EmptyState, Skeleton, InlineError } from '../ui';
 import { CreateInvoiceButton } from '../owner/InvoiceTools';
 import { openOwnerInvoice } from '../../lib/owner-invoice-link';
+import { ServiceUsageSheet } from '../owner/ServiceUsageSheet';
 import type { UiStrings } from '@barbercue/shared';
 
 function dashboardBase(salonId: string): string {
@@ -70,6 +71,8 @@ function EntryRow({
   const [chairId, setChairId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Website parity: "which products did you use?" before completing (skipped when no recipe applies).
+  const [usageOpen, setUsageOpen] = useState(false);
   const staffOptions = entry.preferredStaffId
     ? activeStaff.filter((s) => s.id === entry.preferredStaffId)
     : activeStaff;
@@ -260,11 +263,12 @@ function EntryRow({
       {entry.status === 'IN_SERVICE' && (
         <Button
           title={t.completeAction}
-          onPress={() => confirmThen(t.confirmCompleteServiceTitle, t.confirmCompleteServiceBody, t.completeAction, () => void complete())}
+          onPress={() => confirmThen(t.confirmCompleteServiceTitle, t.confirmCompleteServiceBody, t.completeAction, () => setUsageOpen(true))}
           loading={submitting === 'complete'}
           style={styles.fullButton}
         />
       )}
+      {usageOpen && <ServiceUsageSheet queueEntryId={entry.id} mode="complete" onClose={() => setUsageOpen(false)} onComplete={() => complete()} />}
     </Card>
   );
 }
