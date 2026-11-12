@@ -14,8 +14,12 @@ import {
   type PhotoDto,
   type SalonChairDto,
   type SalonPaymentQrDto,
+  type SalonServiceCategoryDto,
+  type SalonStaffDto,
+  updateSalonStaffSchema,
 } from '@barbercue/shared';
 import { apiFetch, apiUploadImage, ApiError, NativeUploadError } from '../../lib/api';
+import { serviceTaxonomyFields, serviceTaxonomySelection, type ServiceTaxonomySelection } from '../../lib/service-taxonomy';
 import {
   IMAGE_UPLOAD_PREPARATION_MESSAGE,
   ImageUploadPreparationError,
@@ -47,14 +51,19 @@ export interface ServiceDtoLike {
   price: number;
   durationMinutes: number;
   isActive: boolean;
+  category?: string | null;
+  subcategory?: string | null;
+  categoryId?: string | null;
+  subcategoryId?: string | null;
 }
 
-export function ServiceRow({ salonId, service, onChanged }: { salonId: string; service: ServiceDtoLike; onChanged: () => void }) {
-  const { t } = useLanguage();
+export function ServiceRow({ salonId, service, categories = [], onChanged }: { salonId: string; service: ServiceDtoLike; categories?: SalonServiceCategoryDto[]; onChanged: () => void }) {
+  const { t, language } = useLanguage();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(service.name);
   const [price, setPrice] = useState(String(service.price));
   const [duration, setDuration] = useState(String(service.durationMinutes));
+  const [taxonomy, setTaxonomy] = useState<ServiceTaxonomySelection>(() => serviceTaxonomySelection(service, categories));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -64,7 +73,7 @@ export function ServiceRow({ salonId, service, onChanged }: { salonId: string; s
     try {
       await apiFetch(`${scope(salonId, DASHBOARD_PATHS.services)}/${service.id}`, {
         method: 'PATCH',
-        body: JSON.stringify({ name, price: Number(price), durationMinutes: Number(duration) }),
+        body: JSON.stringify({ name, price: Number(price), durationMinutes: Number(duration), ...serviceTaxonomyFields(taxonomy, 'update') }),
       });
       setEditing(false);
       onChanged();
@@ -99,6 +108,7 @@ export function ServiceRow({ salonId, service, onChanged }: { salonId: string; s
           <Text style={styles.rowMeta}>
             {formatMoney(service.price, null)} · {service.durationMinutes} {t.minutesAbbrev} {service.isActive ? '' : t.inactiveSuffix}
           </Text>
+          {(service.category || service.subcategory) ? <Text style={styles.rowMeta}>{[service.category, service.subcategory].filter(Boolean).join(' › ')}</Text> : null}
         </View>
         <Pressable onPress={() => setEditing(true)}>
           <Text style={styles.rowAction}>{t.editAction}</Text>
@@ -118,6 +128,7 @@ export function ServiceRow({ salonId, service, onChanged }: { salonId: string; s
         <TextInput style={[styles.input, styles.inputHalf]} value={price} onChangeText={setPrice} keyboardType="numeric" placeholder={t.pricePlaceholder} placeholderTextColor={color.muted} />
         <TextInput style={[styles.input, styles.inputHalf]} value={duration} onChangeText={setDuration} keyboardType="numeric" placeholder={t.minutesPlaceholder} placeholderTextColor={color.muted} />
       </View>
+      <ServiceTaxonomyFields categories={categories} value={taxonomy} onChange={setTaxonomy} language={language} />
       <View style={styles.actionRow}>
         <Button title={t.saveAction} onPress={() => void save()} loading={saving} style={styles.actionButton} />
         <Button title={t.cancelAction} variant="outline" onPress={() => setEditing(false)} style={styles.actionButton} />
@@ -126,12 +137,13 @@ export function ServiceRow({ salonId, service, onChanged }: { salonId: string; s
   );
 }
 
-export function AddServiceForm({ salonId, onAdded }: { salonId: string; onAdded: () => void }) {
-  const { t } = useLanguage();
+export function AddServiceForm({ salonId, categories = [], onAdded }: { salonId: string; categories?: SalonServiceCategoryDto[]; onAdded: () => void }) {
+  const { t, language } = useLanguage();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [price, setPrice] = useState('');
   const [duration, setDuration] = useState('');
+  const [taxonomy, setTaxonomy] = useState<ServiceTaxonomySelection>(() => serviceTaxonomySelection(null, categories));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -141,11 +153,12 @@ export function AddServiceForm({ salonId, onAdded }: { salonId: string; onAdded:
     try {
       await apiFetch(scope(salonId, DASHBOARD_PATHS.services), {
         method: 'POST',
-        body: JSON.stringify({ name, price: Number(price), durationMinutes: Number(duration) }),
+        body: JSON.stringify({ name, price: Number(price), durationMinutes: Number(duration), ...serviceTaxonomyFields(taxonomy, 'create') }),
       });
       setName('');
       setPrice('');
       setDuration('');
+      setTaxonomy(serviceTaxonomySelection(null, categories));
       setOpen(false);
       onAdded();
     } catch (err) {
@@ -165,12 +178,69 @@ export function AddServiceForm({ salonId, onAdded }: { salonId: string; onAdded:
         <TextInput style={[styles.input, styles.inputHalf]} value={price} onChangeText={setPrice} keyboardType="numeric" placeholder={t.pricePlaceholder} placeholderTextColor={color.muted} />
         <TextInput style={[styles.input, styles.inputHalf]} value={duration} onChangeText={setDuration} keyboardType="numeric" placeholder={t.minutesPlaceholder} placeholderTextColor={color.muted} />
       </View>
+      <ServiceTaxonomyFields categories={categories} value={taxonomy} onChange={setTaxonomy} language={language} />
       <View style={styles.actionRow}>
         <Button title={t.addAction} onPress={() => void submit()} loading={saving} disabled={!name || !price || !duration} style={styles.actionButton} />
         <Button title={t.cancelAction} variant="outline" onPress={() => setOpen(false)} style={styles.actionButton} />
       </View>
     </View>
   );
+}
+
+function ServiceTaxonomyFields({ categories, value, onChange, language }: {
+  categories: SalonServiceCategoryDto[];
+  value: ServiceTaxonomySelection;
+  onChange: (next: ServiceTaxonomySelection) => void;
+  language: string;
+}) {
+  const hi = language === 'HI';
+  const selectedCategory = categories.find((item) => item.id === value.categoryId);
+  const categoryMode = selectedCategory ? 'tree' : value.category.trim() ? 'text' : 'none';
+  const selectedSubcategory = selectedCategory?.subcategories.find((item) => item.id === value.subcategoryId);
+  const subcategoryMode = selectedSubcategory ? 'tree' : value.subcategory.trim() ? 'text' : 'none';
+  const copy = hi
+    ? { category: 'श्रेणी (वैकल्पिक)', subcategory: 'उपश्रेणी (वैकल्पिक)', none: 'कोई नहीं', other: 'अन्य लिखें', custom: 'कस्टम श्रेणी', customSub: 'कस्टम उपश्रेणी' }
+    : { category: 'Category (optional)', subcategory: 'Subcategory (optional)', none: 'None', other: 'Enter another', custom: 'Custom category', customSub: 'Custom subcategory' };
+  const chooseCategory = (id: string | null) => {
+    const item = categories.find((entry) => entry.id === id);
+    onChange({ categoryId: item?.id ?? null, category: '', subcategoryId: null, subcategory: '' });
+  };
+  const chooseSubcategory = (id: string | null) => {
+    const item = selectedCategory?.subcategories.find((entry) => entry.id === id);
+    onChange({ ...value, subcategoryId: item?.id ?? null, subcategory: '' });
+  };
+  const choice = (label: string, selected: boolean, onPress: () => void) => (
+    <Pressable key={label} accessibilityRole="button" accessibilityState={{ selected }} onPress={onPress} style={[styles.taxonomyChoice, selected && styles.taxonomyChoiceSelected]}>
+      <Text style={[styles.taxonomyChoiceText, selected && styles.taxonomyChoiceTextSelected]}>{label}</Text>
+    </Pressable>
+  );
+
+  if (categories.length === 0) return <View>
+    <TextInput accessibilityLabel={copy.category} style={styles.input} value={value.category} onChangeText={(category) => onChange({ ...value, categoryId: null, category })} placeholder={copy.category} maxLength={60} />
+    <TextInput accessibilityLabel={copy.subcategory} style={styles.input} value={value.subcategory} onChangeText={(subcategory) => onChange({ ...value, subcategoryId: null, subcategory })} placeholder={copy.subcategory} maxLength={60} editable={!!value.category.trim()} />
+  </View>;
+
+  return <View style={styles.taxonomyFields}>
+    <Text style={styles.rowMeta}>{copy.category}</Text>
+    <View style={styles.taxonomyChoices}>
+      {choice(copy.none, categoryMode === 'none', () => chooseCategory(null))}
+      {categories.map((item) => choice(item.name, categoryMode === 'tree' && value.categoryId === item.id, () => chooseCategory(item.id)))}
+      {choice(copy.other, categoryMode === 'text', () => onChange({ categoryId: null, category: '', subcategoryId: null, subcategory: '' }))}
+    </View>
+    {categoryMode === 'text' && <>
+      <TextInput accessibilityLabel={copy.custom} style={styles.input} value={value.category} onChangeText={(category) => onChange({ ...value, category })} placeholder={copy.custom} maxLength={60} />
+      <TextInput accessibilityLabel={copy.customSub} style={styles.input} value={value.subcategory} onChangeText={(subcategory) => onChange({ ...value, subcategory })} placeholder={copy.customSub} maxLength={60} />
+    </>}
+    {selectedCategory && <>
+      <Text style={styles.rowMeta}>{copy.subcategory}</Text>
+      <View style={styles.taxonomyChoices}>
+        {choice(copy.none, subcategoryMode === 'none', () => chooseSubcategory(null))}
+        {selectedCategory.subcategories.map((item) => choice(item.name, subcategoryMode === 'tree' && value.subcategoryId === item.id, () => chooseSubcategory(item.id)))}
+        {choice(copy.other, subcategoryMode === 'text', () => onChange({ ...value, subcategoryId: null, subcategory: '' }))}
+      </View>
+      {subcategoryMode === 'text' && <TextInput accessibilityLabel={copy.customSub} style={styles.input} value={value.subcategory} onChangeText={(subcategory) => onChange({ ...value, subcategory })} placeholder={copy.customSub} maxLength={60} />}
+    </>}
+  </View>;
 }
 
 // ---------- Chairs ----------
@@ -638,6 +708,59 @@ export function AddStaffForm({ salonId, onAdded }: { salonId: string; onAdded: (
   );
 }
 
+/** Owner-scoped edit form for the staff profile fields supported by the deployed API. */
+export function EditStaffProfile({ salonId, staff, onSaved }: { salonId: string; staff: SalonStaffDto; onSaved: () => void }) {
+  const { language } = useLanguage();
+  const [open, setOpen] = useState(false);
+  const [displayName, setDisplayName] = useState(staff.displayName);
+  const [bio, setBio] = useState(staff.bio ?? '');
+  const [yearsExperience, setYearsExperience] = useState(staff.yearsExperience == null ? '' : String(staff.yearsExperience));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const hi = language === 'HI';
+
+  async function save() {
+    setError(null);
+    const years = yearsExperience.trim() === '' ? undefined : Number(yearsExperience);
+    const parsed = updateSalonStaffSchema.safeParse({
+      displayName: displayName.trim(),
+      bio: bio.trim(),
+      ...(years === undefined ? {} : { yearsExperience: years }),
+    });
+    if (!parsed.success) {
+      setError(hi ? 'कर्मचारी की जानकारी जाँचें।' : 'Check the staff profile details.');
+      return;
+    }
+    setSaving(true);
+    try {
+      await apiFetch(`${scope(salonId, DASHBOARD_PATHS.staff)}/${staff.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(parsed.data),
+      });
+      setOpen(false);
+      onSaved();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : (hi ? 'कर्मचारी की जानकारी सहेजी नहीं जा सकी।' : 'Could not save the staff profile.'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!open) return <Button title={hi ? 'प्रोफ़ाइल संपादित करें' : 'Edit profile'} variant="outline" onPress={() => setOpen(true)} style={styles.addButton} />;
+  return (
+    <View style={styles.editPanel}>
+      {error && <InlineError message={error} />}
+      <TextInput accessibilityLabel={hi ? 'कर्मचारी का नाम' : 'Staff name'} style={styles.input} value={displayName} onChangeText={setDisplayName} placeholder={hi ? 'कर्मचारी का नाम' : 'Staff name'} maxLength={120} />
+      <TextInput accessibilityLabel={hi ? 'जीवनी' : 'Bio'} style={styles.input} value={bio} onChangeText={setBio} placeholder={hi ? 'जीवनी (वैकल्पिक)' : 'Bio (optional)'} multiline maxLength={500} />
+      <TextInput accessibilityLabel={hi ? 'अनुभव के वर्ष' : 'Years of experience'} style={styles.input} value={yearsExperience} onChangeText={setYearsExperience} placeholder={hi ? 'अनुभव के वर्ष (वैकल्पिक)' : 'Years of experience (optional)'} keyboardType="number-pad" />
+      <View style={styles.actionRow}>
+        <Button title={hi ? 'सहेजें' : 'Save profile'} onPress={() => void save()} loading={saving} disabled={!displayName.trim()} style={styles.actionButton} />
+        <Button title={hi ? 'रद्द करें' : 'Cancel'} variant="outline" onPress={() => setOpen(false)} style={styles.actionButton} />
+      </View>
+    </View>
+  );
+}
+
 export const styles = StyleSheet.create({
   sectionTitle: { fontFamily: font.displaySemiBold, fontSize: fontSize.base, color: color.ink, marginTop: space[5], marginBottom: space[3] },
   card: { marginBottom: space[2] },
@@ -647,6 +770,12 @@ export const styles = StyleSheet.create({
   rowTitle: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: color.ink },
   rowTitleInactive: { color: color.muted, textDecorationLine: 'line-through' },
   rowMeta: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted, marginTop: 2 },
+  taxonomyFields: { marginTop: space[2] },
+  taxonomyChoices: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2], marginTop: space[1] },
+  taxonomyChoice: { borderWidth: 1, borderColor: color.border, borderRadius: radius.sm, paddingHorizontal: space[3], paddingVertical: space[2] },
+  taxonomyChoiceSelected: { borderColor: color.accent, backgroundColor: color.accentSoft },
+  taxonomyChoiceText: { color: color.ink, fontFamily: font.bodyRegular, fontSize: fontSize.xs },
+  taxonomyChoiceTextSelected: { color: color.accent, fontFamily: font.bodyBold },
   rowAction: { fontFamily: font.bodySemiBold, fontSize: fontSize.xs, color: color.accent, marginLeft: space[3] },
   editPanel: { paddingVertical: space[2] },
   input: {
@@ -694,3 +823,4 @@ export const styles = StyleSheet.create({
   photoTileFoot: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: space[1] },
   photoTypeLabel: { fontFamily: font.bodyBold, fontSize: 10, letterSpacing: 0.5, textTransform: 'uppercase', color: color.muted },
 });
+
