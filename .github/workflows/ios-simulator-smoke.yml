@@ -316,7 +316,7 @@ jobs:
               visible: "Find a salon"
               timeout: 30000
           - tapOn: "Search services…"
-          - inputText: "FastQue Demo Studio"
+          - inputText: "Haircut"
           - tapOn:
               text: "Continue"
               optional: true
@@ -324,11 +324,9 @@ jobs:
           - extendedWaitUntil:
               visible:
                 text: "FastQue Demo Studio"
-                index: 1
               timeout: 45000
           - assertVisible:
               text: "FastQue Demo Studio"
-              index: 1
           - takeScreenshot: iphone-salon-search
           - tapOn: "FastQue Demo Studio"
           - extendedWaitUntil:
@@ -439,7 +437,7 @@ jobs:
               visible: "Find a salon"
               timeout: 30000
           - tapOn: "Search services…"
-          - inputText: "FastQue Demo Studio"
+          - inputText: "Haircut"
           - tapOn:
               text: "Continue"
               optional: true
@@ -447,11 +445,9 @@ jobs:
           - extendedWaitUntil:
               visible:
                 text: "FastQue Demo Studio"
-                index: 1
               timeout: 45000
           - assertVisible:
               text: "FastQue Demo Studio"
-              index: 1
           - takeScreenshot: ipad-13-salon-search
           YAML
           cd "$RUNNER_TEMP/fastque-maestro/ipad"
