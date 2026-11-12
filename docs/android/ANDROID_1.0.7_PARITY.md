@@ -6,6 +6,33 @@ Exact-head CI for the feature-source SHA `f631df8568bc8e9844192832fcef6334fc65b4
 
 Statuses: **SOURCE** means a native path and current API usage exist; **PARTIAL** means part of the web workflow is present but a material function remains; **GAP** means no equivalent native workflow was found; **PHYSICAL_REQUIRED** means source is present but real-device behavior is not yet verified; **WEB_ONLY** means privileged scope is intentionally excluded pending an explicit mobile authorization.
 
+## Parity closure — Draft PR #411 (12 Nov 2026, Claude)
+
+Built on #398 head `4656dfb4` (contains master `ce2ee60d`). Mobile-only; no backend, web or database change. Every row below now has a native workflow on the same owner-scoped endpoints and shared schemas as the website, with focused Jest coverage (mobile Jest 393/393, `tsc` clean at `519992c8`).
+
+| Website area | Android 1.0.7 (PR #411) |
+|---|---|
+| Invoices / billing | PDF download & share, record payment & refund (idempotent), void with confirmation, billing profile, Create/View invoice from completed bookings and Live Queue visits |
+| Bookings / schedule | Call, Reschedule (customer availability engine), Cancel with reason, cancellation actor, Live Queue visits list, Day schedule by barber in shop time |
+| Live Queue | Completed today / No-show / History, automatic-assignment switch (owner only), "which products did you use?" on Complete |
+| Analytics / revenue | Revenue report for any range (day/week/month, source filter, breakdowns) with CSV + Excel export |
+| Booking sources / marketing | Source summary, campaign links (one-time code, link, QR, turn off), editable share message, QR PNG save/share |
+| Staff / team | Working switch, resend invite, remove/restore access, staff verification, permanent delete (#378 protocol), Team performance + weekly schedule |
+| Chairs | Server-reviewed bulk removal, permanent delete |
+| Services | Category/subcategory add, rename, delete-when-empty |
+| Shop location | Proposal from phone GPS or typed coordinates (review-gated) |
+| Contacts | List check (masked results) and SANDBOX-gated agreement records |
+| Demo data | Add, read-only view under DEMO banner, delete with token + typed phrase (capability-gated) |
+| Inventory | Overview dashboard, Scan/add stock (camera or typed barcode, receive, link, write-off, new catalog product), categories, suppliers, product editing, all movement kinds, service recipes, product usage, predictions & alerts, consumption analytics CSV |
+| Customer | My invoices (PDF), notification preferences, verified sign-in phone, Premium plans (behind the existing Play release gate) |
+| Verification | Website also uses notes + hosted HTTPS links (no file upload) — already at parity |
+
+Intentional differences: privileged admin roles stay web-only; the website's in-browser contact-file import is paste-only on the phone; paid Premium plan prices stay behind the Play gate.
+
+Native: adds `expo-sharing` and `expo-camera` (no microphone). The resolved Android permission list is unchanged by this PR (CAMERA and RECORD_AUDIO were already declared by `expo-image-picker`).
+
+Still required before release: EAS store build, Play internal testing, physical device acceptance.
+
 ## Shop Owner — 16 website sections
 
 | # | Website section | Android candidate surface and API | Status / remaining evidence |
