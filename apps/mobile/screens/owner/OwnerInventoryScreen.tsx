@@ -13,6 +13,9 @@ import {
 import { apiFetch, ApiError } from '../../lib/api';
 import { newIdempotencyKey } from '../../lib/idempotency';
 import { buildInventoryMovementInput, inventoryProductPath, inventoryProductsCollectionPath, inventoryProductsPath, inventoryReportPath, inventoryMovementsPath, parseInventoryNumber } from '../../lib/inventory';
+import { buildMovement } from '../../lib/inventory-shared';
+import { useInventoryLookups } from '../../lib/use-inventory-lookups';
+import { CategoriesPanel, ProductEditor, SuppliersPanel } from '../../components/owner/InventoryLookups';
 import { useSalon } from '../../lib/salon-context';
 import { useLanguage } from '../../lib/language-context';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
@@ -26,7 +29,7 @@ const COPY = {
     search: 'Search products', searchHint: 'Name, SKU or barcode', searchAction: 'Search',
     lowStock: 'Show low stock', allStock: 'Show all stock', low: 'Low stock', stock: 'On hand',
     value: 'Estimated stock value', itemCount: 'Products', lowCount: 'Low-stock products',
-    purchase: 'Purchase', opening: 'Opening stock', adjustment: 'Adjustment', quantity: 'Quantity',
+    purchase: 'Purchase', opening: 'Opening stock', adjustment: 'Adjustment', consumption: 'Used in shop', supplier: 'Supplier (optional)', noSupplier: 'No supplier', reference: 'Bill or invoice number (optional)', note: 'Note (optional)', consumptionHint: 'The server refuses this if there is not enough stock, and then nothing is recorded.', edit: 'Edit', stockTab: 'Stock', categoriesTab: 'Categories', suppliersTab: 'Suppliers', quantity: 'Quantity',
     unitCost: 'Unit cost', direction: 'Increase or decrease', increase: 'Increase', decrease: 'Decrease',
     reason: 'Reason (required for adjustment)', saveMovement: 'Record stock movement',
     add: 'Save product', more: 'Load more', history: 'Movement history', hideHistory: 'Hide history',
@@ -45,7 +48,7 @@ const COPY = {
     search: 'उत्पाद खोजें', searchHint: 'नाम, SKU या बारकोड', searchAction: 'खोजें',
     lowStock: 'कम स्टॉक दिखाएँ', allStock: 'सभी स्टॉक दिखाएँ', low: 'कम स्टॉक', stock: 'मौजूद',
     value: 'अनुमानित स्टॉक मूल्य', itemCount: 'उत्पाद', lowCount: 'कम स्टॉक वाले उत्पाद',
-    purchase: 'खरीद', opening: 'शुरुआती स्टॉक', adjustment: 'समायोजन', quantity: 'मात्रा',
+    purchase: 'खरीद', opening: 'शुरुआती स्टॉक', adjustment: 'समायोजन', consumption: 'दुकान में उपयोग', supplier: 'सप्लायर (वैकल्पिक)', noSupplier: 'कोई सप्लायर नहीं', reference: 'बिल या इनवॉइस नंबर (वैकल्पिक)', note: 'नोट (वैकल्पिक)', consumptionHint: 'स्टॉक कम हो तो सर्वर इसे मना करता है और कुछ दर्ज नहीं होता।', edit: 'संपादित करें', stockTab: 'स्टॉक', categoriesTab: 'श्रेणियाँ', suppliersTab: 'सप्लायर', quantity: 'मात्रा',
     unitCost: 'प्रति इकाई लागत', direction: 'बढ़ाएँ या घटाएँ', increase: 'बढ़ाएँ', decrease: 'घटाएँ',
     reason: 'कारण (समायोजन के लिए ज़रूरी)', saveMovement: 'स्टॉक मूवमेंट दर्ज करें',
     add: 'उत्पाद सहेजें', more: 'और लोड करें', history: 'मूवमेंट इतिहास', hideHistory: 'इतिहास छिपाएँ',
@@ -59,7 +62,7 @@ const COPY = {
   },
 } as const;
 
-type MovementKind = 'OPENING' | 'PURCHASE' | 'ADJUSTMENT';
+type MovementKind = 'OPENING' | 'PURCHASE' | 'CONSUMPTION' | 'ADJUSTMENT';
 type Direction = 'INCREASE' | 'DECREASE';
 
 function errorMessage(error: unknown, fallback: string): string {
@@ -71,6 +74,11 @@ export default function OwnerInventoryScreen() {
   const { language } = useLanguage();
   const copy = COPY[language === Language.HI ? 'hi' : 'en'];
   const requestSequence = useRef(0);
+  const [tab, setTab] = useState<'stock' | 'categories' | 'suppliers'>('stock');
+  const [editing, setEditing] = useState<string | null>(null);
+  const [supplierId, setSupplierId] = useState('');
+  const [reference, setReference] = useState('');
+  const lookups = useInventoryLookups(selectedSalonId ?? '');
   const [report, setReport] = useState<InventoryReportDto | null>(null);
   const [products, setProducts] = useState<InventoryProductDto[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -222,11 +230,13 @@ export default function OwnerInventoryScreen() {
   const saveMovement = useCallback(async () => {
     if (!selectedSalonId || !movementProductId) return;
     setFormError(null);
-    const input = buildInventoryMovementInput(movementKind, quantity, unitCost, adjustmentDirection, reason);
+    // Website rules (lib/inventory-shared buildMovement): every kind the website records, with the
+    // optional supplier and bill number on a purchase and a note/reference on consumption.
+    const { body: input, errors: found } = buildMovement(movementKind, { quantity, unitCost, supplierId, direction: movementKind === 'ADJUSTMENT' ? adjustmentDirection : '', reason, reference });
     if (!input) {
-      if (!parseInventoryNumber(quantity, false)) return setFormError(copy.invalidQuantity);
-      if (movementKind !== 'ADJUSTMENT' && parseInventoryNumber(unitCost, true) === null) return setFormError(copy.invalidCost);
-      return setFormError(copy.invalidReason);
+      if (found.quantity) return setFormError(copy.invalidQuantity);
+      if (found.unitCost) return setFormError(copy.invalidCost);
+      return setFormError(found.reason ?? found.reference ?? found.direction ?? copy.invalidReason);
     }
     setSavingMovement(true);
     try {
@@ -241,6 +251,8 @@ export default function OwnerInventoryScreen() {
       setQuantity('');
       setUnitCost('');
       setReason('');
+      setReference('');
+      setSupplierId('');
       setMovementKey(newIdempotencyKey());
       await load();
       if (historyFor === movementProductId) await loadHistory(movementProductId);
@@ -252,7 +264,7 @@ export default function OwnerInventoryScreen() {
     } finally {
       setSavingMovement(false);
     }
-  }, [selectedSalonId, movementProductId, movementKind, quantity, unitCost, adjustmentDirection, reason, movementKey, copy, load, historyFor, loadHistory]);
+  }, [selectedSalonId, movementProductId, movementKind, quantity, unitCost, adjustmentDirection, reason, reference, supplierId, movementKey, copy, load, historyFor, loadHistory]);
 
   if (!selectedSalonId) {
     return <Screen scroll={false}><EmptyState title={copy.title} message="Select an owner shop to manage stock." /></Screen>;
@@ -269,6 +281,14 @@ export default function OwnerInventoryScreen() {
   return (
     <Screen contentStyle={styles.content} refreshing={loading} onRefresh={() => void load()}>
       <SectionHeader eyebrow="OWNER" title={copy.title} subtitle={copy.subtitle} />
+      <View style={styles.filterRow}>
+        {(['stock', 'categories', 'suppliers'] as const).map((id) => (
+          <Button key={id} title={id === 'stock' ? copy.stockTab : id === 'categories' ? copy.categoriesTab : copy.suppliersTab} variant={tab === id ? 'secondary' : 'outline'} onPress={() => setTab(id)} style={styles.filterButton} />
+        ))}
+      </View>
+      {tab === 'categories' && <CategoriesPanel salonId={selectedSalonId} />}
+      {tab === 'suppliers' && <SuppliersPanel salonId={selectedSalonId} />}
+      {tab === 'stock' && (<>
       {error ? <InlineError message={error} /> : null}
       {report ? (
         <View style={styles.metrics}>
@@ -312,17 +332,36 @@ export default function OwnerInventoryScreen() {
             <View style={styles.filterRow}>
               <Button title={copy.purchase} variant="outline" onPress={() => openMovement(product.id)} style={styles.filterButton} />
               <Button title={historyFor === product.id ? copy.hideHistory : copy.history} variant="outline" onPress={() => historyFor === product.id ? setHistoryFor(null) : void loadHistory(product.id)} style={styles.filterButton} />
+              <Button title={copy.edit} variant="outline" onPress={() => setEditing(editing === product.id ? null : product.id)} style={styles.filterButton} />
             </View>
+            {editing === product.id ? <ProductEditor salonId={selectedSalonId} product={product} onCancel={() => setEditing(null)} onSaved={() => { setEditing(null); void load(); }} /> : null}
             {movementProductId === product.id ? (
               <View style={styles.movementForm}>
                 <Text style={styles.label}>{copy.adjustment}: {movementKind}</Text>
                 <View style={styles.wrap}>
-                  {(['OPENING', 'PURCHASE', 'ADJUSTMENT'] as const).map((kind) => (
-                    <Button key={kind} title={kind === 'OPENING' ? copy.opening : kind === 'PURCHASE' ? copy.purchase : copy.adjustment} variant={movementKind === kind ? 'secondary' : 'outline'} onPress={() => setMovementKind(kind)} style={styles.choice} />
+                  {(['OPENING', 'PURCHASE', 'CONSUMPTION', 'ADJUSTMENT'] as const).map((kind) => (
+                    <Button key={kind} title={kind === 'OPENING' ? copy.opening : kind === 'PURCHASE' ? copy.purchase : kind === 'CONSUMPTION' ? copy.consumption : copy.adjustment} variant={movementKind === kind ? 'secondary' : 'outline'} onPress={() => setMovementKind(kind)} style={styles.choice} />
                   ))}
                 </View>
                 <TextInput testID="inventory-movement-quantity" accessibilityLabel={copy.quantity} value={quantity} onChangeText={setQuantity} placeholder={copy.quantity} keyboardType="decimal-pad" style={styles.input} />
-                {movementKind !== 'ADJUSTMENT' ? <TextInput testID="inventory-movement-cost" accessibilityLabel={copy.unitCost} value={unitCost} onChangeText={setUnitCost} placeholder={copy.unitCost} keyboardType="decimal-pad" style={styles.input} /> : (
+                {movementKind === 'PURCHASE' ? (
+                  <>
+                    <Text style={styles.label}>{copy.supplier}</Text>
+                    <View style={styles.wrap}>
+                      {[{ id: '', name: copy.noSupplier }, ...lookups.suppliers].map((s) => (
+                        <Button key={s.id || 'none'} title={s.name} variant={supplierId === s.id ? 'secondary' : 'outline'} onPress={() => setSupplierId(s.id)} style={styles.choice} />
+                      ))}
+                    </View>
+                  </>
+                ) : null}
+                {movementKind === 'PURCHASE' || movementKind === 'CONSUMPTION' ? (
+                  <>
+                    <TextInput accessibilityLabel={copy.note} value={reason} onChangeText={setReason} placeholder={copy.note} style={styles.input} maxLength={300} />
+                    <TextInput accessibilityLabel={copy.reference} value={reference} onChangeText={setReference} placeholder={copy.reference} style={styles.input} maxLength={120} />
+                  </>
+                ) : null}
+                {movementKind === 'CONSUMPTION' ? <Text style={styles.meta}>{copy.consumptionHint}</Text> : null}
+                {movementKind === 'CONSUMPTION' ? null : movementKind !== 'ADJUSTMENT' ? <TextInput testID="inventory-movement-cost" accessibilityLabel={copy.unitCost} value={unitCost} onChangeText={setUnitCost} placeholder={copy.unitCost} keyboardType="decimal-pad" style={styles.input} /> : (
                   <>
                     <Text style={styles.label}>{copy.direction}</Text>
                     <View style={styles.filterRow}>
@@ -351,6 +390,7 @@ export default function OwnerInventoryScreen() {
         ))}
         {nextCursor ? <Button title={copy.more} onPress={() => void loadMore()} loading={loadingMore} variant="outline" style={styles.action} /> : null}
       </Card>
+      </>)}
     </Screen>
   );
 }
