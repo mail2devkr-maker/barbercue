@@ -320,8 +320,7 @@ jobs:
           - tapOn:
               text: "Continue"
               optional: true
-          - tapOn: "Search"
-          - hideKeyboard
+          - pressKey: Enter
           - extendedWaitUntil:
               visible:
                 text: "FastQue Demo Studio"
@@ -444,8 +443,7 @@ jobs:
           - tapOn:
               text: "Continue"
               optional: true
-          - tapOn: "Search"
-          - hideKeyboard
+          - pressKey: Enter
           - extendedWaitUntil:
               visible:
                 text: "FastQue Demo Studio"
