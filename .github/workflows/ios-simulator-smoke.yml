@@ -424,22 +424,58 @@ jobs:
               out.write("JPEG screenshots are opaque and contain no alpha channel.\n")
           PY
 
-      - name: Capture simulator screen for failed UI diagnosis
+      - name: Capture simulator screen and startup diagnostics for failed UI diagnosis
         if: failure() && env.IPHONE_UDID != ''
         run: |
           set -euo pipefail
-          mkdir -p "fastque-simulator-failure"
-          xcrun simctl io "$IPHONE_UDID" screenshot "fastque-simulator-failure/iphone-failure-screen.png"
-          sips -g pixelWidth -g pixelHeight -g format "fastque-simulator-failure/iphone-failure-screen.png"
+          mkdir -p fastque-simulator-failure
+          screenshot="fastque-simulator-failure/iphone-failure-screen.png"
+          xcrun simctl io "$IPHONE_UDID" screenshot "$screenshot"
+          sips -g pixelWidth -g pixelHeight -g format "$screenshot"
 
-      - name: Upload failure-only simulator screenshot
+          cat > "$RUNNER_TEMP/fastque-screen-ocr.swift" <<'SWIFT'
+          import Foundation
+          import Vision
+          let request = VNRecognizeTextRequest()
+          request.recognitionLevel = .accurate
+          try VNImageRequestHandler(url: URL(fileURLWithPath: CommandLine.arguments[1]), options: [:]).perform([request])
+          for observation in request.results ?? [] {
+            if let text = observation.topCandidates(1).first?.string { print(text) }
+          }
+          SWIFT
+          swift "$RUNNER_TEMP/fastque-screen-ocr.swift" "$screenshot" > fastque-simulator-failure/visible-ui-text.txt 2>&1 || echo "Simulator screenshot OCR failed." > fastque-simulator-failure/visible-ui-text.txt
+
+          xcrun simctl spawn "$IPHONE_UDID" log show --last 15m --style compact \
+            --predicate 'process == "FastQue" AND (messageType == "error" OR messageType == "fault" OR eventMessage CONTAINS[c] "font" OR eventMessage CONTAINS[c] "SecureStore" OR eventMessage CONTAINS[c] "Unhandled" OR eventMessage CONTAINS[c] "ReactNative")' \
+            > "$RUNNER_TEMP/fastque-focused-app-log.txt" 2>&1 || true
+          python3 - "$RUNNER_TEMP/fastque-focused-app-log.txt" <<'PY'
+          import pathlib, re, sys
+          source = pathlib.Path(sys.argv[1])
+          text = source.read_text(errors="replace") if source.exists() else ""
+          lines = text.splitlines()
+          redact = [
+              (re.compile(r"(?i)\\b[\\w.+-]+@[\\w.-]+\\.[a-z]{2,}\\b"), "[email]"),
+              (re.compile(r"(?i)bearer\\s+[a-z0-9._~-]+"), "Bearer [redacted]"),
+              (re.compile(r"\\b[0-9a-f]{32,}\\b", re.I), "[long-hex-redacted]"),
+              (re.compile(r"\\b\\+?[0-9][0-9 ()-]{7,}[0-9]\\b"), "[phone]"),
+          ]
+          selected = lines[-100:]
+          with open("fastque-simulator-failure/focused-runtime-diagnostics.txt", "w", encoding="utf-8") as out:
+              out.write(f"Filtered app log lines: {len(lines)}; showing at most {len(selected)}.\n")
+              for line in selected:
+                  for pattern, replacement in redact:
+                      line = pattern.sub(replacement, line)
+                  out.write(line[:500] + "\n")
+          PY
+
+      - name: Upload failure-only simulator diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: fastque-simulator-failure-diagnostic
           retention-days: 2
           if-no-files-found: ignore
-          path: fastque-simulator-failure/iphone-failure-screen.png
+          path: fastque-simulator-failure/**
 
       - name: Upload only validated App Store screenshot candidates
         uses: actions/upload-artifact@v4
