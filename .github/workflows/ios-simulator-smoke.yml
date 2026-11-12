@@ -424,6 +424,23 @@ jobs:
               out.write("JPEG screenshots are opaque and contain no alpha channel.\n")
           PY
 
+      - name: Capture simulator screen for failed UI diagnosis
+        if: failure() && env.IPHONE_UDID != ''
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/fastque-simulator-failure"
+          xcrun simctl io "$IPHONE_UDID" screenshot "$RUNNER_TEMP/fastque-simulator-failure/iphone-failure-screen.png"
+          sips -g pixelWidth -g pixelHeight -g format "$RUNNER_TEMP/fastque-simulator-failure/iphone-failure-screen.png"
+
+      - name: Upload failure-only simulator screenshot
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fastque-simulator-failure-diagnostic
+          retention-days: 2
+          if-no-files-found: ignore
+          path: "$RUNNER_TEMP/fastque-simulator-failure/iphone-failure-screen.png"
+
       - name: Upload only validated App Store screenshot candidates
         uses: actions/upload-artifact@v4
         with:
