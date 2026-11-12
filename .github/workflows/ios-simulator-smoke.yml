@@ -381,7 +381,44 @@ jobs:
           - takeScreenshot: iphone-owner-shop
           YAML
           cd "$RUNNER_TEMP/fastque-maestro/iphone"
-          maestro --device "$IPHONE_UDID" test --test-output-dir "$RUNNER_TEMP/maestro-captures" release-screens.yaml
+          run_maestro_flow() {
+            local device_name="$1"
+            local device_udid="$2"
+            local flow_path="$3"
+            local output_dir="$4"
+            local log_path="$RUNNER_TEMP/maestro-$device_name.log"
+          
+            mkdir -p "$output_dir" fastque-simulator-failure
+            set +e
+            maestro --device "$device_udid" test --test-output-dir "$output_dir" "$flow_path" 2>&1 | tee "$log_path"
+            local status=$?
+            set -e
+            if [ "$status" -ne 0 ]; then
+              printf '%s\n' "$device_name" > "$RUNNER_TEMP/fastque-maestro-failed-device"
+              python3 - "$log_path" "$device_name" <<'PY' > fastque-simulator-failure/maestro-failure-summary.txt
+          import os, pathlib, re, sys
+          source = pathlib.Path(sys.argv[1])
+          lines = source.read_text(errors="replace").splitlines() if source.exists() else []
+          text = "\n".join(lines[-100:])
+          password = os.environ.get("SCREENSHOT_OWNER_PASSWORD", "")
+          if password:
+              text = text.replace(password, "[synthetic password redacted]")
+          patterns = [
+              (re.compile(r"(?i)\b[\w.+-]+@[\w.-]+\.[a-z]{2,}\b"), "[email redacted]"),
+              (re.compile(r"(?i)\bbearer\s+[a-z0-9._~-]+"), "Bearer [redacted]"),
+              (re.compile(r"(?i)\b[0-9a-f]{32,}\b"), "[long token redacted]"),
+              (re.compile(r"\b\+?[0-9][0-9 ()-]{7,}[0-9]\b"), "[phone redacted]"),
+          ]
+          for pattern, replacement in patterns:
+              text = pattern.sub(replacement, text)
+          print(f"Failed simulator flow: {sys.argv[2]}")
+          print("Sanitized final Maestro output (maximum 100 lines):")
+          print(text)
+          PY
+              exit "$status"
+            fi
+          }
+          run_maestro_flow iphone "$IPHONE_UDID" "$RUNNER_TEMP/fastque-maestro/iphone/release-screens.yaml" "$RUNNER_TEMP/maestro-captures/iphone"
           mkdir -p "$RUNNER_TEMP/fastque-maestro/ipad"
           cat > "$RUNNER_TEMP/fastque-maestro/ipad/release-screens.yaml" <<'YAML'
           appId: com.dcw.fastque
@@ -416,7 +453,7 @@ jobs:
           xcrun simctl bootstatus "$IPAD_UDID" -b
           xcrun simctl status_bar "$IPAD_UDID" override --time "9:41" --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularBars 4
           xcrun simctl install "$IPAD_UDID" "$APP_PATH"
-          maestro --device "$IPAD_UDID" test --test-output-dir "$RUNNER_TEMP/maestro-captures" release-screens.yaml
+          run_maestro_flow ipad "$IPAD_UDID" "$RUNNER_TEMP/fastque-maestro/ipad/release-screens.yaml" "$RUNNER_TEMP/maestro-captures/ipad"
           find "$RUNNER_TEMP/maestro-captures" -type f -name '*.png' -print
           screenshot_count="$(find "$RUNNER_TEMP/maestro-captures" -type f -name '*.png' | wc -l | tr -d ' ')"
           test "$screenshot_count" -ge 11
@@ -458,8 +495,16 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p fastque-simulator-failure
-          screenshot="fastque-simulator-failure/iphone-failure-screen.png"
-          xcrun simctl io "$IPHONE_UDID" screenshot "$screenshot"
+          device_name="iphone"
+          device_udid="$IPHONE_UDID"
+          if [ -f "$RUNNER_TEMP/fastque-maestro-failed-device" ]; then
+            device_name="$(cat "$RUNNER_TEMP/fastque-maestro-failed-device")"
+            if [ "$device_name" = "ipad" ] && [ -n "$IPAD_UDID" ]; then
+              device_udid="$IPAD_UDID"
+            fi
+          fi
+          screenshot="fastque-simulator-failure/$device_name-failure-screen.png"
+          xcrun simctl io "$device_udid" screenshot "$screenshot"
           sips -g pixelWidth -g pixelHeight -g format "$screenshot"
 
           cat > "$RUNNER_TEMP/fastque-screen-ocr.swift" <<'SWIFT'
@@ -472,9 +517,9 @@ jobs:
             if let text = observation.topCandidates(1).first?.string { print(text) }
           }
           SWIFT
-          swift "$RUNNER_TEMP/fastque-screen-ocr.swift" "$screenshot" > fastque-simulator-failure/visible-ui-text.txt 2>&1 || echo "Simulator screenshot OCR failed." > fastque-simulator-failure/visible-ui-text.txt
+          swift "$RUNNER_TEMP/fastque-screen-ocr.swift" "$screenshot" > "fastque-simulator-failure/$device_name-visible-ui-text.txt" 2>&1 || echo "Simulator screenshot OCR failed." > "fastque-simulator-failure/$device_name-visible-ui-text.txt"
 
-          xcrun simctl spawn "$IPHONE_UDID" log show --last 15m --style compact \
+          xcrun simctl spawn "$device_udid" log show --last 15m --style compact \
             --predicate 'process == "FastQue" AND (messageType == "error" OR messageType == "fault" OR eventMessage CONTAINS[c] "font" OR eventMessage CONTAINS[c] "SecureStore" OR eventMessage CONTAINS[c] "Unhandled" OR eventMessage CONTAINS[c] "ReactNative")' \
             > "$RUNNER_TEMP/fastque-focused-app-log.txt" 2>&1 || true
           python3 - "$RUNNER_TEMP/fastque-focused-app-log.txt" <<'PY'
@@ -483,10 +528,10 @@ jobs:
           text = source.read_text(errors="replace") if source.exists() else ""
           lines = text.splitlines()
           redact = [
-              (re.compile(r"(?i)\\b[\\w.+-]+@[\\w.-]+\\.[a-z]{2,}\\b"), "[email]"),
-              (re.compile(r"(?i)bearer\\s+[a-z0-9._~-]+"), "Bearer [redacted]"),
-              (re.compile(r"\\b[0-9a-f]{32,}\\b", re.I), "[long-hex-redacted]"),
-              (re.compile(r"\\b\\+?[0-9][0-9 ()-]{7,}[0-9]\\b"), "[phone]"),
+              (re.compile(r"(?i)\b[\w.+-]+@[\w.-]+\.[a-z]{2,}\b"), "[email redacted]"),
+              (re.compile(r"(?i)bearer\s+[a-z0-9._~-]+"), "Bearer [redacted]"),
+              (re.compile(r"(?i)\b[0-9a-f]{32,}\b"), "[long token redacted]"),
+              (re.compile(r"\b\+?[0-9][0-9 ()-]{7,}[0-9]\b"), "[phone redacted]"),
           ]
           selected = lines[-100:]
           with open("fastque-simulator-failure/focused-runtime-diagnostics.txt", "w", encoding="utf-8") as out:
