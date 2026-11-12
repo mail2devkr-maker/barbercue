@@ -33,6 +33,9 @@ import {
   styles as sectionStyles,
 } from '../../components/owner/ShopSetupSections';
 import { StaffWorkingHoursEditor } from '../../components/owner/StaffWorkingHoursEditor';
+import { canPermanentlyDelete, StaffManageActions } from '../../components/owner/StaffAdmin';
+import { ChairBulkRemoval, ChairDeleteAction } from '../../components/owner/ChairTools';
+import { useAuth } from '../../lib/auth-context';
 import type { OwnerShopStackParamList } from '../../navigation/OwnerShopStack';
 
 // Owner's day-to-day shop management (post-onboarding). Every form here is shared with
@@ -52,6 +55,9 @@ export default function OwnerShopScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [staffNotice, setStaffNotice] = useState<string | null>(null);
+  const { user } = useAuth();
+  const mayDelete = canPermanentlyDelete(user?.roles);
 
   const load = useCallback((isRefresh = false) => {
     if (!selectedSalonId) return Promise.resolve();
@@ -148,12 +154,19 @@ export default function OwnerShopScreen() {
         {chairs.length === 0 ? (
           <Text style={sectionStyles.emptyText}>{t.noChairsYet}</Text>
         ) : (
-          chairs.map((c) => <ChairRow key={c.id} salonId={selectedSalonId} chair={c} onChanged={() => void load()} />)
+          chairs.map((c) => (
+            <View key={c.id}>
+              <ChairRow salonId={selectedSalonId} chair={c} onChanged={() => void load()} />
+              {mayDelete && <ChairDeleteAction salonId={selectedSalonId} chair={c} language={language} onDeleted={() => { setStaffNotice(language === Language.HI ? `${c.label} स्थायी रूप से हटाई गई।` : `${c.label} was permanently deleted.`); void load(); }} />}
+            </View>
+          ))
         )}
+        <ChairBulkRemoval salonId={selectedSalonId} chairs={chairs} language={language} onChanged={() => void load()} />
       </Card>
       <AddChairForm salonId={selectedSalonId} onAdded={() => void load()} />
 
       <Text style={sectionStyles.sectionTitle}>{t.staffLabel}</Text>
+      {staffNotice && <Text style={sectionStyles.hint}>{staffNotice}</Text>}
       <Card style={sectionStyles.card}>
         {staff.length === 0 ? (
           <Text style={sectionStyles.emptyText}>{t.noBarbersYet}</Text>
@@ -169,6 +182,7 @@ export default function OwnerShopScreen() {
                   {member.bio ? <Text style={sectionStyles.rowMeta}>{member.bio}</Text> : null}
                 </View>
               </View>
+              <StaffManageActions salonId={selectedSalonId} member={member} language={language} canDelete={mayDelete} onChanged={(m) => { setStaffNotice(m); void load(); }} />
               <EditStaffProfile salonId={selectedSalonId} staff={member} onSaved={() => void load()} />
               <StaffWorkingHoursEditor salonId={selectedSalonId} staffId={member.id} />
             </View>
