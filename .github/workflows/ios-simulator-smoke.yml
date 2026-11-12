@@ -118,6 +118,37 @@ jobs:
           VALUES (:'admin_id', :'admin_email', CURRENT_TIMESTAMP);
           SQL
           unset PRIMARY_ADMIN_EMAIL SYNTHETIC_ADMIN_ID
+          GEO_PRISMA_DIR="$RUNNER_TEMP/prisma-before-geo-master-data"
+          mkdir -p "$GEO_PRISMA_DIR/migrations"
+          cp prisma/schema.prisma "$GEO_PRISMA_DIR/schema.prisma"
+          cp prisma/migrations/migration_lock.toml "$GEO_PRISMA_DIR/migrations/migration_lock.toml"
+          python3 - "$GEO_PRISMA_DIR/migrations" <<'PY'
+          import pathlib, shutil, sys
+          source = pathlib.Path("prisma/migrations")
+          target = pathlib.Path(sys.argv[1])
+          cutoff = "20260930163000_backfill_ghaziabad_city"
+          copied = []
+          for migration in sorted(p for p in source.iterdir() if p.is_dir() and p.name < cutoff):
+              shutil.copytree(migration, target / migration.name)
+              copied.append(migration.name)
+          if "20260830215000_ensure_primary_platform_admin" not in copied:
+              raise SystemExit("Geo fixture prefix must include the primary-admin migration.")
+          print(f"Applying {len(copied)} migrations before the geo master-data repair.")
+          PY
+          npx prisma migrate deploy --schema "$GEO_PRISMA_DIR/schema.prisma"
+          SYNTHETIC_COUNTRY_ID="$(uuidgen | tr '[:upper:]' '[:lower:]')"
+          SYNTHETIC_REGION_ID="$(uuidgen | tr '[:upper:]' '[:lower:]')"
+          psql -h 127.0.0.1 -p 5432 --username "$(id -un)" --dbname fastque_screenshots -v ON_ERROR_STOP=1 -q -v country_id="$SYNTHETIC_COUNTRY_ID" -v region_id="$SYNTHETIC_REGION_ID" <<'SQL'
+          INSERT INTO "Country" ("id", "isoCode2", "isoCode3", "name", "slug", "hasSubdivisions")
+          VALUES (:'country_id', 'IN', 'IND', 'India', 'india', true)
+          ON CONFLICT ("isoCode2") DO NOTHING;
+          INSERT INTO "Region" ("id", "countryId", "code", "name", "slug")
+          SELECT :'region_id', c."id", 'IN-UP', 'Uttar Pradesh', 'uttar-pradesh'
+            FROM "Country" c
+           WHERE c."isoCode2" = 'IN'
+          ON CONFLICT ("countryId", "slug") DO NOTHING;
+          SQL
+          unset SYNTHETIC_COUNTRY_ID SYNTHETIC_REGION_ID
           npm run prisma:migrate:deploy --workspace=@barbercue/backend
           if ! npm run db:seed --workspace=@barbercue/backend > "$RUNNER_TEMP/seed-output-private.txt" 2>&1; then
             echo "Synthetic seed failed. Seed output is intentionally not printed or uploaded."
