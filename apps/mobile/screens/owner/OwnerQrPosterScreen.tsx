@@ -1,11 +1,15 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import { Share, StyleSheet, Text } from 'react-native';
+import { Share, StyleSheet, Text, TextInput } from 'react-native';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
+import { qrMatrixToPng, toBase64 } from '../../lib/qr-png';
+import { safeFileName } from '../../lib/api';
 import { DASHBOARD_PATHS, type SalonShareLinksDto } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../../lib/api';
 import { useSalon } from '../../lib/salon-context';
 import { useLanguage } from '../../lib/language-context';
-import { classifySalonShareLinks, type SalonShareResult } from '../../lib/qr-poster';
+import { classifySalonShareLinks, createQrMatrix, type SalonShareResult } from '../../lib/qr-poster';
 import { QrMatrixView } from '../../components/owner/QrMatrixView';
 import { Button, Card, InlineError, Screen, SectionHeader } from '../../components/ui';
 import { color, font, fontSize, space } from '../../lib/theme';
@@ -15,7 +19,8 @@ type LoadState =
   | { kind: 'error'; salonId: string; message: string }
   | ({ salonId: string } & SalonShareResult);
 
-type PosterAction = 'share' | null;
+type PosterAction = 'share' | 'image' | null;
+const MESSAGE_MAX = 300;
 
 export default function OwnerQrPosterScreen() {
   const { selectedSalonId, selectedSalon } = useSalon();
@@ -25,6 +30,7 @@ export default function OwnerQrPosterScreen() {
   const [action, setAction] = useState<PosterAction>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
   const hindi = language === 'HI';
 
   useFocusEffect(
@@ -58,13 +64,37 @@ export default function OwnerQrPosterScreen() {
   const ready = load?.kind === 'ready' && load.salonId === selectedSalonId ? load : null;
   const name = ready?.salonName || selectedSalon?.name || (hindi ? 'आपकी दुकान' : 'Your shop');
 
+  // Website parity (ShopSharePanel): the owner can edit the message sent with the link; the link
+  // itself always comes from the server and is appended unchanged.
+  const defaultMessage = ready ? (hindi ? `${ready.salonName} पर FastQue से बुक करें या लाइव क्यू में जुड़ें:` : `Book at ${ready.salonName} or join the Live Queue on FastQue:`) : '';
+  const text = (message ?? defaultMessage).slice(0, MESSAGE_MAX);
+
+  async function shareImage() {
+    if (!ready) return;
+    setAction('image');
+    setActionError(null);
+    setNotice(null);
+    try {
+      // Website parity: "Download QR (PNG)", encoded on the phone from the same canonical link.
+      const uri = `${FileSystem.cacheDirectory ?? ''}fastque-${safeFileName(ready.salonName.toLowerCase())}-qr.png`;
+      await FileSystem.writeAsStringAsync(uri, toBase64(qrMatrixToPng(createQrMatrix(ready.publicUrl), 12)), { encoding: FileSystem.EncodingType.Base64 });
+      if (!(await Sharing.isAvailableAsync())) throw new Error('sharing unavailable');
+      await Sharing.shareAsync(uri, { mimeType: 'image/png', dialogTitle: ready.salonName });
+      setNotice(hindi ? 'QR चित्र सहेजने या भेजने के लिए तैयार है।' : 'QR image ready to save, print or send.');
+    } catch {
+      setActionError(hindi ? 'QR चित्र नहीं बन सका।' : 'Could not prepare the QR image.');
+    } finally {
+      setAction(null);
+    }
+  }
+
   async function shareLink() {
     if (!ready) return;
     setAction('share');
     setActionError(null);
     setNotice(null);
     try {
-      await Share.share({ message: `${ready.salonName} on FastQue\n${ready.publicUrl}`, url: ready.publicUrl });
+      await Share.share({ message: `${text.trim()}\n${ready.publicUrl}`, url: ready.publicUrl });
       setNotice(hindi ? 'शेयर शीट खुल गई है।' : 'The share sheet opened.');
     } catch {
       setActionError(hindi ? 'दुकान का लिंक साझा नहीं हो सका।' : 'Could not open the shop link share sheet.');
@@ -111,7 +141,10 @@ export default function OwnerQrPosterScreen() {
           </Card>
           <Card>
             <Text style={styles.body}>{load.publicUrl}</Text>
+            <Text style={styles.note}>{hindi ? `लिंक के साथ भेजा जाने वाला संदेश (${text.length}/${MESSAGE_MAX})` : `Message to send with the link (${text.length} of ${MESSAGE_MAX} characters)`}</Text>
+            <TextInput accessibilityLabel="Message to send with the link" value={text} onChangeText={(v) => setMessage(v.slice(0, MESSAGE_MAX))} multiline maxLength={MESSAGE_MAX} style={styles.input} />
             <Button title={hindi ? 'दुकान QR लिंक साझा करें' : 'Share shop QR link'} onPress={() => void shareLink()} loading={action === 'share'} disabled={action !== null} style={styles.button} />
+            <Button title={hindi ? 'QR चित्र सहेजें / भेजें (PNG)' : 'Save / share QR image (PNG)'} variant="outline" onPress={() => void shareImage()} loading={action === 'image'} disabled={action !== null} style={styles.button} />
             <Text style={styles.note}>{hindi ? 'यह स्क्रीन सार्वजनिक दुकान लिंक का QR पूर्वावलोकन दिखाती है। शेयर से कोई संदेश अपने-आप नहीं भेजा जाता।' : 'This screen previews a QR for the public shop link. Sharing does not send messages automatically.'}</Text>
             {actionError ? <InlineError message={actionError} /> : null}
             {notice ? <Text accessibilityLiveRegion="polite" style={styles.notice}>{notice}</Text> : null}
@@ -133,4 +166,5 @@ const styles = StyleSheet.create({
   note: { color: color.muted, fontFamily: font.bodyRegular, fontSize: fontSize.sm, lineHeight: 20, marginTop: space[3] },
   notice: { color: color.ink, fontFamily: font.bodyRegular, fontSize: fontSize.sm, marginTop: space[3] },
   button: { marginTop: space[3] },
+  input: { minHeight: 72, borderWidth: 1, borderColor: color.border, backgroundColor: color.surface, borderRadius: 8, padding: space[3], color: color.ink, fontFamily: font.bodyRegular, marginTop: space[2], textAlignVertical: 'top' },
 });
