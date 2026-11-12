@@ -332,16 +332,31 @@ jobs:
           - takeScreenshot: iphone-salon-search
           - tapOn: ".*FastQue Demo Studio.*"
           - extendedWaitUntil:
-              visible: "Services"
+              visible: "LIVE SHOP SNAPSHOT"
               timeout: 30000
           - takeScreenshot: iphone-salon-profile
+          - scrollUntilVisible:
+              element:
+                text: "Haircut"
+              direction: DOWN
+              timeout: 30000
           - tapOn: "Haircut"
+          - scrollUntilVisible:
+              element:
+                text: "Continue"
+              direction: DOWN
+              timeout: 30000
           - tapOn: "Continue"
           - extendedWaitUntil:
               visible: "Choose a barber"
               timeout: 30000
           - takeScreenshot: iphone-booking-staff-selection
           - back
+          - scrollUntilVisible:
+              element:
+                text: "Join queue now"
+              direction: UP
+              timeout: 30000
           - tapOn: "Join queue now"
           - extendedWaitUntil:
               visible: "Join the queue"
