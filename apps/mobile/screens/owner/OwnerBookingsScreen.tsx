@@ -23,6 +23,7 @@ import { claimBookingVoiceEvent } from '../../lib/booking-voice-dedupe';
 import InShopAppointmentPanel from './InShopAppointmentPanel';
 import { BookingActions } from '../../components/owner/BookingActions';
 import { QueueVisitsList } from '../../components/owner/QueueVisitsList';
+import { DaySchedule } from '../../components/owner/DaySchedule';
 import { openOwnerInvoice } from '../../lib/owner-invoice-link';
 import type { InvoiceDetailDto } from '@barbercue/shared';
 import { color, font, fontSize, lineHeightFor, radius, space } from '../../lib/theme';
@@ -151,15 +152,20 @@ export default function OwnerBookingsScreen({ route }: Props) {
   // launch mission), never the listening device's timezone. Fetched once per salon rather than
   // per announcement — a booking event needs this instantly, not after a network round-trip.
   const salonTimeZoneRef = useRef<string | null>(null);
+  // Day-schedule view (website /schedule): needs the shop's zone in state, not only the voice ref.
+  const [shopZone, setShopZone] = useState<string | null>(null);
+  const [view, setView] = useState<'list' | 'day'>('list');
 
   useEffect(() => {
     salonTimeZoneRef.current = null;
+    setShopZone(null);
     if (!selectedSalonId) return;
     apiFetch<SalonTimezoneResultDto>(
       `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${selectedSalonId}/${DASHBOARD_PATHS.timezone}`,
     )
       .then((result) => {
         salonTimeZoneRef.current = result.timezone ?? null;
+        setShopZone(result.timezone ?? null);
       })
       .catch(() => {
         /* voice announcement degrades to no date/time below rather than blocking on this */
@@ -355,6 +361,17 @@ export default function OwnerBookingsScreen({ route }: Props) {
     <Screen scroll={false}>
       <SectionHeader eyebrow={t.ownerEyebrow} title={t.bookingsTitle} />
       <Button title="New in-shop appointment" variant="secondary" onPress={() => setCreatingInShopAppointment(true)} />
+      <View style={styles.viewToggle}>
+        {(['list', 'day'] as const).map((v) => (
+          <Pressable key={v} accessibilityRole="button" accessibilityState={{ selected: view === v }} onPress={() => setView(v)} style={[styles.filterChip, view === v && styles.filterChipActive]}>
+            <Text style={[styles.filterChipText, view === v && styles.filterChipTextActive]}>{v === 'list' ? (language === 'HI' ? 'सूची' : 'List view') : (language === 'HI' ? 'दिन का शेड्यूल' : 'Day schedule')}</Text>
+          </Pressable>
+        ))}
+      </View>
+      {view === 'day' && (shopZone
+        ? <ScrollView showsVerticalScrollIndicator={false}><DaySchedule salonId={selectedSalonId} timeZone={shopZone} language={language} onOpenInvoice={openInvoice} /></ScrollView>
+        : <InlineError message={language === 'HI' ? 'दिन का शेड्यूल दिखाने के लिए सेटिंग में दुकान का समय क्षेत्र सेट करें।' : 'Set the shop time zone in Settings to see the day schedule.'} />)}
+      {view === 'list' && (<>
 
       {outcome && (
         <Pressable style={styles.noticeBanner} onPress={() => setOutcome(null)}>
@@ -444,11 +461,13 @@ export default function OwnerBookingsScreen({ route }: Props) {
           {filter !== 'upcoming' && <QueueVisitsList salonId={selectedSalonId} filter={filter} language={language} />}
         </ScrollView>
       )}
+      </>)}
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
+  viewToggle: { flexDirection: 'row', gap: space[2], marginTop: space[3] },
   skeleton: { height: 90, borderRadius: radius.lg, marginBottom: space[3] },
   noticeBanner: {
     backgroundColor: color.successSoft,
