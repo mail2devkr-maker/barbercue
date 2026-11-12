@@ -80,7 +80,15 @@
       ],
       "./plugins/withAndroidLargeScreenOrientation",
       "./plugins/withAndroidR8Optimization",
-      "expo-sharing"
+      "expo-sharing",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "FastQue uses the camera only to read product barcodes when you add stock. No photo is saved or uploaded.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ]
     ]
   }
 }
