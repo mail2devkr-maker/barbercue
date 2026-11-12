@@ -105,7 +105,7 @@ jobs:
           PRIMARY_ADMIN_EMAIL="$(python3 - <<'PY'
           import pathlib, re
           sql = pathlib.Path("prisma/migrations/20260830215000_ensure_primary_platform_admin/migration.sql").read_text()
-          match = re.search(r'WHERE lower\("email"\) = lower\(\'([^\']+)\'\)', sql)
+          match = re.search(r"""WHERE lower\("email"\) = lower\('([^']+)'\)""", sql)
           if not match:
               raise SystemExit("Unable to identify the required migration fixture identity.")
           print(match.group(1))
