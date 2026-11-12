@@ -439,7 +439,7 @@ jobs:
           name: fastque-simulator-failure-diagnostic
           retention-days: 2
           if-no-files-found: ignore
-          path: "$RUNNER_TEMP/fastque-simulator-failure/iphone-failure-screen.png"
+          path: fastque-simulator-failure/iphone-failure-screen.png
 
       - name: Upload only validated App Store screenshot candidates
         uses: actions/upload-artifact@v4
