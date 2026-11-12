@@ -245,6 +245,7 @@ jobs:
       - name: Install Maestro and select eligible simulators
         run: |
           set -euo pipefail
+          brew tap mobile-dev/inc
           brew install mobile-dev/inc/tap/maestro
           python3 <<'PY' >> "$GITHUB_ENV"
           import json, subprocess
