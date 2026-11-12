@@ -178,6 +178,50 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
   return parseApiResponse<T>(res);
 }
 
+async function nativeDownload(path: string, target: string): Promise<FileSystem.FileSystemDownloadResult> {
+  const headers: Record<string, string> = {};
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+  try {
+    const result = await FileSystem.downloadAsync(`${API_BASE_URL}/${path}`, target, { headers });
+    reportNetworkSuccess();
+    return result;
+  } catch {
+    if (await probeBackendReachability()) {
+      throw new ApiError(0, { error: { code: 'DOWNLOAD_FAILED', message: 'Could not download the file. Please try again.' } });
+    }
+    throw networkOfflineError();
+  }
+}
+
+/** A file name the device file system accepts (invoice numbers can contain "/"). */
+export function safeFileName(name: string): string {
+  return name.replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'download';
+}
+
+/**
+ * Download an authenticated file (e.g. an invoice PDF) into the app's cache and return its local
+ * URI. Same contract as apiFetch: one silent refresh on 401, then the server's own error message.
+ * The partial file of a failed download is removed; no URI, header or token is ever logged.
+ */
+export async function apiDownloadFile(path: string, fileName: string): Promise<string> {
+  const target = `${FileSystem.cacheDirectory ?? ''}${safeFileName(fileName)}`;
+  let result = await nativeDownload(path, target);
+  if (result.status === 401 && path !== REFRESH_PATH) {
+    const refreshed = await tryRefresh();
+    if (refreshed) result = await nativeDownload(path, target);
+  }
+  if (result.status >= 200 && result.status < 300) return result.uri;
+  let body: ApiErrorBody = { error: { code: 'DOWNLOAD_FAILED', message: 'Could not download the file.' } };
+  try {
+    const parsed = JSON.parse(await FileSystem.readAsStringAsync(result.uri)) as ApiErrorBody;
+    if (parsed?.error?.message) body = parsed;
+  } catch {
+    // Non-JSON error body: keep the generic message.
+  }
+  await FileSystem.deleteAsync(result.uri, { idempotent: true }).catch(() => undefined);
+  throw new ApiError(result.status, body);
+}
+
 async function probeBackendReachability(): Promise<boolean> {
   try {
     // A 2xx/4xx/5xx response all prove transport reachability. auth/me is deliberately used as a

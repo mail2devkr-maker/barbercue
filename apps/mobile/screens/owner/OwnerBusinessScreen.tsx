@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import {
@@ -23,6 +23,7 @@ import { apiFetch, ApiError } from '../../lib/api';
 import { newIdempotencyKey } from '../../lib/idempotency';
 import { buildOfferBody, buildOfferPatch, type OfferErrors, type OfferForm } from '../../lib/offers';
 import { OffersPanel } from '../../components/owner/OffersPanel';
+import { BillingProfileEditor, InvoiceDetailActions } from '../../components/owner/InvoiceTools';
 import { useLanguage } from '../../lib/language-context';
 import { useSalon } from '../../lib/salon-context';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
@@ -38,7 +39,7 @@ const COPY = {
     retry: 'Try again', loading: 'Loading…', noShop: 'Select a shop to view its business data.',
     appointments: 'Appointments', completed: 'Completed', collected: 'Recorded collections', estimate: 'Estimated service value', noPayments: 'No payments have been recorded yet.',
     cancellationsInPeriod: 'Cancellations in period', cancellationRate: 'Cancellation rate', liveQueueSeparate: 'Live Queue (separate)', noCancellations: 'No cancellations in this period.',
-    noInvoices: 'No invoices yet', invoiceDetail: 'Invoice details', amountPaid: 'Recorded paid', balanceDue: 'Balance due', backToInvoices: 'Back to invoices',
+    noInvoices: 'No invoices yet', invoiceList: 'Invoices', billingProfile: 'Billing profile', invoiceDetail: 'Invoice details', amountPaid: 'Recorded paid', balanceDue: 'Balance due', backToInvoices: 'Back to invoices',
     noPaymentsRows: 'No recorded payments in this period.', received: 'Received', refunded: 'Refunded', net: 'Net recorded',
     noReviews: 'No reviews yet', replyPlaceholder: 'Write a response to this review', saveReply: 'Save response', responseSaved: 'Response saved',
     noOffers: 'No offers yet', offerPanelTitle: 'Offers, promotions and daily deals', offerTypeOption: 'Offer', promotionTypeOption: 'Promotion', dailyDealTypeOption: 'Daily deal', percentOption: 'Percent', flatOption: 'Fixed amount', allAudienceOption: 'All', newAudienceOption: 'New', repeatAudienceOption: 'Repeat', inactiveAudienceOption: 'Inactive', previewLimited: 'This preview covers the first 100 of {count} active services.', offersUnavailable: 'Offers are not enabled for this shop on the current backend.', createOffer: 'Create an offer', editOffer: 'Edit', previewPrices: 'Preview prices', saveDraft: 'Save as draft', saveChanges: 'Save changes', checkPrices: 'Check prices', offerTitle: 'Offer name', offerDescription: 'Description (optional)', offerKind: 'Offer type', discountType: 'Discount type', discountValueLabel: 'Discount value', audience: 'Who can use it', inactiveDays: 'Days since last visit', startsAt: 'Starts in shop timezone', endsAt: 'Ends in shop timezone', maxRedemptions: 'Total uses allowed (optional)', perCustomerLimit: 'Uses per customer', services: 'Services', allActiveServices: 'No service selection includes every active service.', offerTimezoneUnavailable: 'Set the shop timezone before creating or editing offers.', pauseBeforeEdit: 'Pause this offer before editing it.', offerSafetyNote: 'Saving only creates or updates a draft. FastQue checks prices; this does not collect payment or message customers.', noActiveServices: 'No active services are available.', publish: 'Publish', pause: 'Pause', publishingTitle: 'Publish this offer?', publishingMessage: 'The offer will become available according to its dates and eligibility rules.', confirm: 'Publish offer', cancel: 'Cancel',
@@ -53,7 +54,7 @@ const COPY = {
     retry: 'फिर कोशिश करें', loading: 'लोड हो रहा है…', noShop: 'दुकान का डेटा देखने के लिए दुकान चुनें।',
     appointments: 'अपॉइंटमेंट', completed: 'पूरे हुए', collected: 'दर्ज की गई प्राप्तियाँ', estimate: 'अनुमानित सेवा मूल्य', noPayments: 'अभी तक कोई भुगतान दर्ज नहीं है।',
     cancellationsInPeriod: 'इस अवधि के रद्दीकरण', cancellationRate: 'रद्दीकरण दर', liveQueueSeparate: 'लाइव कतार (अलग)', noCancellations: 'इस अवधि में कोई रद्दीकरण नहीं।',
-    noInvoices: 'अभी कोई इनवॉइस नहीं', invoiceDetail: 'इनवॉइस विवरण', amountPaid: 'दर्ज भुगतान', balanceDue: 'बाकी राशि', backToInvoices: 'इनवॉइस पर वापस',
+    noInvoices: 'अभी कोई इनवॉइस नहीं', invoiceList: 'इनवॉइस', billingProfile: 'बिलिंग प्रोफ़ाइल', invoiceDetail: 'इनवॉइस विवरण', amountPaid: 'दर्ज भुगतान', balanceDue: 'बाकी राशि', backToInvoices: 'इनवॉइस पर वापस',
     noPaymentsRows: 'इस अवधि में कोई भुगतान दर्ज नहीं।', received: 'प्राप्त', refunded: 'वापस किया', net: 'कुल दर्ज राशि',
     noReviews: 'अभी कोई समीक्षा नहीं', replyPlaceholder: 'इस समीक्षा का उत्तर लिखें', saveReply: 'उत्तर सहेजें', responseSaved: 'उत्तर सहेजा गया',
     noOffers: 'अभी कोई ऑफ़र नहीं', offerPanelTitle: 'ऑफ़र, प्रमोशन और दैनिक डील', offerTypeOption: 'ऑफ़र', promotionTypeOption: 'प्रमोशन', dailyDealTypeOption: 'दैनिक डील', percentOption: 'प्रतिशत', flatOption: 'निश्चित राशि', allAudienceOption: 'सभी', newAudienceOption: 'नए', repeatAudienceOption: 'नियमित', inactiveAudienceOption: 'निष्क्रिय', previewLimited: 'यह पूर्वावलोकन {count} सक्रिय सेवाओं में से पहली 100 को शामिल करता है।', offersUnavailable: 'इस दुकान के लिए वर्तमान बैकएंड पर ऑफ़र उपलब्ध नहीं हैं।', createOffer: 'ऑफ़र बनाएँ', editOffer: 'संपादित करें', previewPrices: 'कीमत देखें', saveDraft: 'ड्राफ़्ट सहेजें', saveChanges: 'बदलाव सहेजें', checkPrices: 'कीमत जाँचें', offerTitle: 'ऑफ़र का नाम', offerDescription: 'विवरण (वैकल्पिक)', offerKind: 'ऑफ़र प्रकार', discountType: 'छूट का प्रकार', discountValueLabel: 'छूट का मूल्य', audience: 'कौन उपयोग कर सकता है', inactiveDays: 'आख़िरी विज़िट के बाद दिन', startsAt: 'दुकान के समय क्षेत्र में शुरू', endsAt: 'दुकान के समय क्षेत्र में समाप्त', maxRedemptions: 'कुल उपयोग सीमा (वैकल्पिक)', perCustomerLimit: 'प्रति ग्राहक उपयोग', services: 'सेवाएँ', allActiveServices: 'कुछ न चुनने पर सभी सक्रिय सेवाएँ शामिल होंगी।', offerTimezoneUnavailable: 'ऑफ़र बनाने या संपादित करने से पहले दुकान का समय क्षेत्र सेट करें।', pauseBeforeEdit: 'संपादन से पहले इस ऑफ़र को रोकें।', offerSafetyNote: 'सहेजने पर केवल ड्राफ़्ट बनेगा या बदलेगा। कीमत FastQue जाँचेगा; भुगतान या ग्राहक संदेश नहीं भेजा जाता।', noActiveServices: 'कोई सक्रिय सेवा उपलब्ध नहीं है।', publish: 'प्रकाशित करें', pause: 'रोकें', publishingTitle: 'यह ऑफ़र प्रकाशित करें?', publishingMessage: 'तारीख और पात्रता नियमों के अनुसार ऑफ़र उपलब्ध हो जाएगा।', confirm: 'ऑफ़र प्रकाशित करें', cancel: 'रद्द करें',
@@ -98,17 +99,19 @@ function shiftDate(date: string, days: number): string {
   return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
 }
 
-export default function OwnerBusinessScreen({ route }: { route?: { params?: { initialPanel?: Panel } } } = {}) {
+export default function OwnerBusinessScreen({ route }: { route?: { params?: { initialPanel?: Panel; openInvoiceId?: string } } } = {}) {
   const { selectedSalonId, selectedSalon } = useSalon();
   const { language } = useLanguage();
   const c: Copy = language === Language.HI ? COPY.hi : COPY.en;
-  const [panel, setPanel] = useState<Panel>(route?.params?.initialPanel ?? 'analytics');
+  const [panel, setPanel] = useState<Panel>(route?.params?.openInvoiceId ? 'invoices' : route?.params?.initialPanel ?? 'analytics');
   const [range, setRange] = useState<'7d' | '30d' | '90d'>('30d');
   const [analytics, setAnalytics] = useState<OwnerAnalyticsDto | null>(null);
   const [revenue, setRevenue] = useState<OwnerRevenueDto | null>(null);
   const [cancellations, setCancellations] = useState<CancellationAnalyticsDto | null>(null);
   const [invoices, setInvoices] = useState<InvoiceSummaryDto[]>([]);
   const [invoice, setInvoice] = useState<InvoiceDetailDto | null>(null);
+  const [invoiceTab, setInvoiceTab] = useState<'list' | 'billing'>('list');
+  const [notice, setNotice] = useState<string | null>(null);
   const [payments, setPayments] = useState<RecordedPaymentListDto | null>(null);
   const [reviews, setReviews] = useState<OwnerReviewsResponseDto | null>(null);
   const [offers, setOffers] = useState<OfferDto[]>([]);
@@ -125,6 +128,7 @@ export default function OwnerBusinessScreen({ route }: { route?: { params?: { in
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const requestSeq = useRef(0);
+  const pendingInvoice = useRef<string | null>(route?.params?.openInvoiceId ?? null);
 
   useEffect(() => {
     if (route?.params?.initialPanel) setPanel(route.params.initialPanel);
@@ -158,6 +162,12 @@ export default function OwnerBusinessScreen({ route }: { route?: { params?: { in
       } else if (panel === 'invoices') {
         const page = await apiFetch<InvoiceListDto>(`${base}/invoices?payment=ALL&limit=30`);
         if (requestId === requestSeq.current) setInvoices(page.items);
+        const wanted = pendingInvoice.current;
+        if (wanted && requestId === requestSeq.current) {
+          pendingInvoice.current = null;
+          const detail = await apiFetch<InvoiceDetailDto>(`${base}/invoices/${wanted}`);
+          if (requestId === requestSeq.current) setInvoice(detail);
+        }
       } else if (panel === 'payments') {
         const timezone = await apiFetch<SalonTimezoneResultDto>(`${base}/${DASHBOARD_PATHS.timezone}`);
         const timeZone = timezone.timezone ?? timezone.suggestion?.timezone ?? (timezone.countryCode === 'IN' ? 'Asia/Kolkata' : null);
@@ -208,6 +218,16 @@ export default function OwnerBusinessScreen({ route }: { route?: { params?: { in
     return () => { requestSeq.current += 1; };
   }, [load]));
 
+  // Opened from a booking's "Invoice …" button: show that invoice once the Invoices panel is up.
+  // The Invoices load below consumes it after the list arrives, so the load cannot clear it again.
+  const deepLinkInvoiceId = route?.params?.openInvoiceId;
+  useEffect(() => {
+    if (!deepLinkInvoiceId) return;
+    pendingInvoice.current = deepLinkInvoiceId;
+    setInvoiceTab('list');
+    setPanel('invoices');
+  }, [deepLinkInvoiceId]);
+
   const openInvoice = async (invoiceId: string) => {
     if (!selectedSalonId) return;
     setBusyId(invoiceId);
@@ -216,6 +236,20 @@ export default function OwnerBusinessScreen({ route }: { route?: { params?: { in
       setInvoice(await apiFetch<InvoiceDetailDto>(`${basePath(selectedSalonId)}/invoices/${invoiceId}`));
     } catch (err) { setError(err instanceof ApiError ? err.message : c.error); }
     finally { setBusyId(null); }
+  };
+
+  // After a payment, refund or void: show the server's fresh invoice, and refresh the list behind it.
+  const invoiceChanged = async (message: string) => {
+    if (!selectedSalonId || !invoice) return;
+    setNotice(message);
+    try {
+      const [fresh, page] = await Promise.all([
+        apiFetch<InvoiceDetailDto>(`${basePath(selectedSalonId)}/invoices/${invoice.id}`),
+        apiFetch<InvoiceListDto>(`${basePath(selectedSalonId)}/invoices?payment=ALL&limit=30`),
+      ]);
+      setInvoice(fresh);
+      setInvoices(page.items);
+    } catch (err) { setError(err instanceof ApiError ? err.message : c.error); }
   };
 
   const respond = async (reviewId: string) => {
@@ -308,7 +342,7 @@ export default function OwnerBusinessScreen({ route }: { route?: { params?: { in
       <SectionHeader eyebrow={selectedSalon?.name ?? 'FastQue'} title={c.title} subtitle={c.subtitle} />
       <View style={styles.tabs}>
         {(['analytics', 'cancellations', 'invoices', 'payments', 'reviews', 'offers', 'verification'] as Panel[]).map((item) => (
-          <Pressable key={item} onPress={() => { setPanel(item); setInvoice(null); if (item === 'analytics' && range === '90d') setRange('30d'); }} accessibilityRole="button" accessibilityState={{ selected: panel === item }} style={[styles.tab, panel === item && styles.tabSelected]}>
+          <Pressable key={item} onPress={() => { setPanel(item); setInvoice(null); setNotice(null); if (item === 'analytics' && range === '90d') setRange('30d'); }} accessibilityRole="button" accessibilityState={{ selected: panel === item }} style={[styles.tab, panel === item && styles.tabSelected]}>
             <Text style={[styles.tabText, panel === item && styles.tabTextSelected]}>{c[item]}</Text>
           </Pressable>
         ))}
@@ -327,7 +361,24 @@ export default function OwnerBusinessScreen({ route }: { route?: { params?: { in
         <>
           {panel === 'analytics' && analytics && <AnalyticsPanel data={analytics} revenue={revenue} c={c} />}
           {panel === 'cancellations' && cancellations && <CancellationPanel data={cancellations} c={c} />}
-          {panel === 'invoices' && <InvoicePanel items={invoices} invoice={invoice} onOpen={openInvoice} onBack={() => setInvoice(null)} busyId={busyId} c={c} />}
+          {panel === 'invoices' && (
+            <>
+              {!invoice && (
+                <View style={styles.rangeRow}>
+                  {(['list', 'billing'] as const).map((t) => (
+                    <Pressable key={t} accessibilityRole="button" accessibilityState={{ selected: invoiceTab === t }} onPress={() => setInvoiceTab(t)} style={[styles.range, invoiceTab === t && styles.rangeSelected]}>
+                      <Text style={[styles.rangeText, invoiceTab === t && styles.rangeTextSelected]}>{t === 'list' ? c.invoiceList : c.billingProfile}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              )}
+              {!!notice && <Text style={styles.response}>{notice}</Text>}
+              {invoiceTab === 'billing' && !invoice
+                ? <BillingProfileEditor base={basePath(selectedSalonId)} language={language} />
+                : <InvoicePanel items={invoices} invoice={invoice} onOpen={(id) => { setNotice(null); void openInvoice(id); }} onBack={() => { setNotice(null); setInvoice(null); }} busyId={busyId} c={c}
+                    actions={invoice ? <InvoiceDetailActions base={basePath(selectedSalonId)} invoice={invoice} language={language} onChanged={(m) => void invoiceChanged(m)} /> : null} />}
+            </>
+          )}
           {panel === 'payments' && payments && <PaymentsPanel data={payments} c={c} />}
           {panel === 'reviews' && <ReviewPanel data={reviews} replies={replies} setReplies={setReplies} onRespond={respond} busyId={busyId} c={c} />}
           {panel === 'offers' && <OffersPanel enabled={offersEnabled} items={offers} busyId={busyId} onAction={changeOfferState} timeZone={offerTimeZone} services={offerServices} editor={offerEditor} base={basePath(selectedSalonId)} onCreate={() => openOfferEditor(null)} onEdit={openOfferEditor} onCancelEdit={() => setOfferEditor(null)} onSave={saveOffer} c={c} />}
@@ -380,10 +431,11 @@ function CancellationPanel({ data, c }: { data: CancellationAnalyticsDto; c: Cop
   </>;
 }
 
-function InvoicePanel({ items, invoice, onOpen, onBack, busyId, c }: { items: InvoiceSummaryDto[]; invoice: InvoiceDetailDto | null; onOpen: (id: string) => void; onBack: () => void; busyId: string | null; c: Copy }) {
+function InvoicePanel({ items, invoice, onOpen, onBack, busyId, c, actions }: { items: InvoiceSummaryDto[]; invoice: InvoiceDetailDto | null; onOpen: (id: string) => void; onBack: () => void; busyId: string | null; c: Copy; actions?: ReactNode }) {
   if (invoice) return <>
     <Button title={c.backToInvoices} variant="outline" onPress={onBack} />
     <Card><Text style={styles.heading}>{invoice.number}</Text><Text style={styles.line}>{invoice.customerName ?? c.anonymous} · {dateLabel(invoice.issuedAt)}</Text><Text style={styles.line}>{invoice.status} / {invoice.paymentStatus}</Text><Text style={styles.line}>{`${c.completed}: ${money(invoice.total, invoice.currency)} · ${c.amountPaid}: ${money(invoice.amountPaid, invoice.currency)} · ${c.balanceDue}: ${money(invoice.balanceDue, invoice.currency)}`}</Text></Card>
+    {actions}
     <Card>{invoice.lines.map((line) => <DataLine key={line.id} title={line.description} value={money(line.lineTotal, invoice.currency)} note={`${line.quantity} × ${money(line.unitPrice, invoice.currency)}`} />)}</Card>
     <Card><Text style={styles.heading}>{c.payments}</Text>{invoice.payments.length ? invoice.payments.map((p) => <DataLine key={p.id} title={`${p.kind} · ${p.method}`} value={money(p.amount, invoice.currency)} note={dateLabel(p.recordedAt)} />) : <Text style={styles.muted}>{c.noPaymentsRows}</Text>}</Card>
   </>;

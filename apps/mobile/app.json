@@ -79,7 +79,8 @@
         }
       ],
       "./plugins/withAndroidLargeScreenOrientation",
-      "./plugins/withAndroidR8Optimization"
+      "./plugins/withAndroidR8Optimization",
+      "expo-sharing"
     ]
   }
 }

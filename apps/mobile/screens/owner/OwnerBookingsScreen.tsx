@@ -21,6 +21,9 @@ import { useSalon } from '../../lib/salon-context';
 import { speakBooking } from '../../lib/voice-announce';
 import { claimBookingVoiceEvent } from '../../lib/booking-voice-dedupe';
 import InShopAppointmentPanel from './InShopAppointmentPanel';
+import { BookingActions } from '../../components/owner/BookingActions';
+import { navigationRef } from '../../navigation/navigation-ref';
+import type { InvoiceDetailDto } from '@barbercue/shared';
 import { color, font, fontSize, lineHeightFor, radius, space } from '../../lib/theme';
 import { Screen, SectionHeader, Card, Button, EmptyState, Skeleton, InlineError } from '../../components/ui';
 import type { OwnerTabParamList } from '../../navigation/OwnerNavigator';
@@ -53,6 +56,12 @@ function statusLabel(t: UiStrings, status: string): string {
   return labels[status] ?? status;
 }
 
+/** "Invoice INV-12" on a completed booking opens that invoice in the Business center. */
+function openInvoice(invoice: InvoiceDetailDto): void {
+  if (!navigationRef.isReady()) return;
+  navigationRef.navigate('OwnerShopTab', { screen: 'OwnerBusiness', params: { initialPanel: 'invoices', openInvoiceId: invoice.id } });
+}
+
 function bookingsPath(salonId: string): string {
   return `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.bookings}`;
 }
@@ -67,7 +76,7 @@ function formatSlot(iso: string, language: Language): string {
   });
 }
 
-function BookingRow({ booking, isNew }: { booking: OwnerBookingDetailDto; isNew: boolean }) {
+function BookingRow({ booking, isNew, onChanged }: { booking: OwnerBookingDetailDto; isNew: boolean; onChanged: (message: string) => void }) {
   const { t, language } = useLanguage();
   return (
     <Card style={styles.card}>
@@ -90,6 +99,7 @@ function BookingRow({ booking, isNew }: { booking: OwnerBookingDetailDto; isNew:
       <Text style={styles.priceText}>
         {booking.currency ?? ''} {booking.servicePrice} · {t.bookingRefPrefix}{booking.id.slice(0, 8)}
       </Text>
+      <BookingActions booking={booking} language={language} onChanged={onChanged} onOpenInvoice={openInvoice} />
     </Card>
   );
 }
@@ -113,6 +123,7 @@ export default function OwnerBookingsScreen({ route }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [newIds, setNewIds] = useState<string[]>([]);
   const [newNotice, setNewNotice] = useState<OwnerBookingDetailDto | null>(null);
+  const [outcome, setOutcome] = useState<string | null>(null);
   const [cancelNotice, setCancelNotice] = useState(false);
   // Build 10 physical-device retest (Hindi TTS blocker) — set (throttled, see voice-announce.ts)
   // when Hindi is the active language but this device has no installed Hindi voice, so
@@ -345,6 +356,11 @@ export default function OwnerBookingsScreen({ route }: Props) {
       <SectionHeader eyebrow={t.ownerEyebrow} title={t.bookingsTitle} />
       <Button title="New in-shop appointment" variant="secondary" onPress={() => setCreatingInShopAppointment(true)} />
 
+      {outcome && (
+        <Pressable style={styles.noticeBanner} onPress={() => setOutcome(null)}>
+          <Text style={styles.noticeBody}>{outcome}</Text>
+        </Pressable>
+      )}
       {newNotice && (
         <Pressable style={styles.noticeBanner} onPress={() => setNewNotice(null)}>
           <Text style={styles.noticeTitle}>{t.newBookingReceivedBanner}</Text>
@@ -413,7 +429,7 @@ export default function OwnerBookingsScreen({ route }: Props) {
             <EmptyState title={t.noBookingsTitle} message={t.noBookingsHint} />
           ) : (
             items.map((booking) => (
-              <BookingRow key={booking.id} booking={booking} isNew={newIds.includes(booking.id)} />
+              <BookingRow key={booking.id} booking={booking} isNew={newIds.includes(booking.id)} onChanged={(message) => { setOutcome(message); void loadPage(filterRef.current, undefined, false); }} />
             ))
           )}
           {nextCursor && (
