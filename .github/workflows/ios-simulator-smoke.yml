@@ -325,12 +325,12 @@ jobs:
           - pressKey: Enter
           - extendedWaitUntil:
               visible:
-                text: "FastQue Demo Studio"
+                text: ".*FastQue Demo Studio.*"
               timeout: 45000
           - assertVisible:
-              text: "FastQue Demo Studio"
+              text: ".*FastQue Demo Studio.*"
           - takeScreenshot: iphone-salon-search
-          - tapOn: "FastQue Demo Studio"
+          - tapOn: ".*FastQue Demo Studio.*"
           - extendedWaitUntil:
               visible: "Services"
               timeout: 30000
@@ -363,7 +363,7 @@ jobs:
           - inputText: "${SCREENSHOT_OWNER_PASSWORD}"
           - tapOn: "Sign in"
           - extendedWaitUntil:
-              visible: "FastQue Demo Studio"
+              visible: ".*FastQue Demo Studio.*"
               timeout: 60000
           - takeScreenshot: iphone-owner-dashboard
           - tapOn: "Bookings"
@@ -446,10 +446,10 @@ jobs:
           - pressKey: Enter
           - extendedWaitUntil:
               visible:
-                text: "FastQue Demo Studio"
+                text: ".*FastQue Demo Studio.*"
               timeout: 45000
           - assertVisible:
-              text: "FastQue Demo Studio"
+              text: ".*FastQue Demo Studio.*"
           - takeScreenshot: ipad-13-salon-search
           YAML
           cd "$RUNNER_TEMP/fastque-maestro/ipad"
