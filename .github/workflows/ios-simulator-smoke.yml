@@ -454,8 +454,27 @@ jobs:
           xcrun simctl status_bar "$IPAD_UDID" override --time "9:41" --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularBars 4
           xcrun simctl install "$IPAD_UDID" "$APP_PATH"
           run_maestro_flow ipad "$IPAD_UDID" "$RUNNER_TEMP/fastque-maestro/ipad/release-screens.yaml" "$RUNNER_TEMP/maestro-captures/ipad"
+          mkdir -p fastque-simulator-failure
+          python3 - "$RUNNER_TEMP/maestro-captures" <<'PY' > fastque-simulator-failure/capture-inventory.txt
+          import pathlib, subprocess, sys
+          root = pathlib.Path(sys.argv[1])
+          files = sorted(root.rglob("*.png")) if root.exists() else []
+          print(f"Captured PNG count: {len(files)}")
+          for path in files:
+              try:
+                  result = subprocess.check_output(["sips", "-g", "pixelWidth", "-g", "pixelHeight", path.as_posix()], text=True)
+                  values = {}
+                  for line in result.splitlines():
+                      if ":" in line:
+                          key, value = line.strip().split(":", 1)
+                          values[key.strip()] = value.strip()
+                  print(f"{path.name}: {values.get('pixelWidth', '?')}x{values.get('pixelHeight', '?')}")
+              except Exception as error:
+                  print(f"{path.name}: dimensions unavailable ({type(error).__name__})")
+          PY
           find "$RUNNER_TEMP/maestro-captures" -type f -name '*.png' -print
           screenshot_count="$(find "$RUNNER_TEMP/maestro-captures" -type f -name '*.png' | wc -l | tr -d ' ')"
+          echo "Validated-flow screenshot count before conversion: $screenshot_count"
           test "$screenshot_count" -ge 11
           while IFS= read -r image; do
             name="$(basename "$image" .png)"
