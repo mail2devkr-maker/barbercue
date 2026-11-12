@@ -335,7 +335,7 @@ jobs:
           - tapOn: "you@example.com"
           - inputText: "owner@fastque.demo.invalid"
           - tapOn: "••••••••"
-          - inputText: "\${SCREENSHOT_OWNER_PASSWORD}"
+          - inputText: "${SCREENSHOT_OWNER_PASSWORD}"
           - tapOn: "Sign in"
           - extendedWaitUntil:
               visible: "FastQue Demo Studio"
