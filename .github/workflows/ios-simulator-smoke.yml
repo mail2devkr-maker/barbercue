@@ -428,9 +428,9 @@ jobs:
         if: failure() && env.IPHONE_UDID != ''
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/fastque-simulator-failure"
-          xcrun simctl io "$IPHONE_UDID" screenshot "$RUNNER_TEMP/fastque-simulator-failure/iphone-failure-screen.png"
-          sips -g pixelWidth -g pixelHeight -g format "$RUNNER_TEMP/fastque-simulator-failure/iphone-failure-screen.png"
+          mkdir -p "fastque-simulator-failure"
+          xcrun simctl io "$IPHONE_UDID" screenshot "fastque-simulator-failure/iphone-failure-screen.png"
+          sips -g pixelWidth -g pixelHeight -g format "fastque-simulator-failure/iphone-failure-screen.png"
 
       - name: Upload failure-only simulator screenshot
         if: failure()
