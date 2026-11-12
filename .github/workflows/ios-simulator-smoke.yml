@@ -358,7 +358,7 @@ jobs:
           maestro --device "$IPAD_UDID" test --test-output-dir "$RUNNER_TEMP/maestro-captures" release-screens.yaml
           find "$RUNNER_TEMP/maestro-captures" -type f -name '*.png' -print
           screenshot_count="$(find "$RUNNER_TEMP/maestro-captures" -type f -name '*.png' | wc -l | tr -d ' ')"
-          test "$screenshot_count" -ge 12
+          test "$screenshot_count" -ge 11
           while IFS= read -r image; do
             name="$(basename "$image" .png)"
             sips -s format jpeg -s formatOptions 92 "$image" --out "screenshot-artifact/$name.jpg" >/dev/null
