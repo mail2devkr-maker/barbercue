@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -31,17 +33,25 @@ export function PremiumScreen({
 }) {
   const insets = useSafeAreaInsets();
   const padding = { paddingTop: insets.top + space[3], paddingBottom: insets.bottom + space[7] };
-  if (!scroll) return <View style={[styles.screen, padding, contentStyle]}>{children}</View>;
-  return (
+  // Android: the whole screen avoids the keyboard (below). iOS: a fixed screen avoids it here and a
+  // scrolling screen adjusts its insets automatically.
+  const fixed = <View style={[styles.screen, padding, contentStyle]}>{children}</View>;
+  const content = !scroll ? (
+    Platform.OS === 'ios' ? <KeyboardAvoidingView style={styles.screen} behavior="padding">{fixed}</KeyboardAvoidingView> : fixed
+  ) : (
     <ScrollView
       style={styles.screen}
       contentContainerStyle={[styles.content, padding, contentStyle]}
       keyboardShouldPersistTaps="handled"
+      automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
       refreshControl={onRefresh ? <RefreshControl refreshing={Boolean(refreshing)} onRefresh={onRefresh} tintColor={fastQue.pink} colors={[fastQue.pink]} /> : undefined}
     >
       {children}
     </ScrollView>
   );
+  return Platform.OS === 'android' ? (
+    <KeyboardAvoidingView style={styles.screen} behavior="padding">{content}</KeyboardAvoidingView>
+  ) : content;
 }
 
 export function PremiumCard({ children, style, strong = false }: { children: ReactNode; style?: StyleProp<ViewStyle>; strong?: boolean }) {

@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import * as Location from 'expo-location';
 import {
   DISCOVERY_PATHS,
   FAVORITES_PATHS,
+  Language,
   MIN_RATING_OPTIONS,
   POPULAR_SERVICES,
   PRICE_FILTER_PRESETS,
@@ -39,6 +39,9 @@ import {
 import { useLanguage } from '../lib/language-context';
 import { useAuth } from '../lib/auth-context';
 import { DEFAULT_DISCOVERY_FILTERS, buildDiscoveryQuery, type DiscoveryFilters } from '../lib/discovery-search';
+import { cityQueryParams, getLocationChoice, locationChoiceLabel, setLocationChoice, useLocationChoice, type LocationChoice } from '../lib/location-choice';
+import { LocationPickerModal } from '../components/location/LocationPickerModal';
+import { findCityForDeviceLocation, buildCityFallbackQuery, appendCityMatchesToNearby, getSearchGpsCoordinates } from '../lib/nearby-city-fallback';
 import type { SearchStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<SearchStackParamList, 'SalonSearch'>;
@@ -275,11 +278,11 @@ function PriceFilterDropdown({
 
 // Public discovery endpoint — no auth required, mirrors apps/web's search page.
 export default function SalonSearchScreen({ navigation, route }: Props) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { width: windowWidth } = useWindowDimensions();
   const stackSearchRow = windowWidth < NARROW_SEARCH_ROW_WIDTH;
   const selectedStyleName = route.params?.selectedStyleName;
-  const { initialQuery, initialLat, initialLng } = route.params ?? {};
+  const { initialQuery, initialLat, initialLng, initialFavoritesOnly } = route.params ?? {};
   const [q, setQ] = useState(initialQuery ?? '');
   const [serviceSuggestions, setServiceSuggestions] = useState<ServiceSuggestionDto[]>([]);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
@@ -288,10 +291,14 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searched, setSearched] = useState(false);
+  const searchSequence = useRef(0);
   const [nearMe, setNearMe] = useState<{ lat: number; lng: number } | null>(
     initialLat !== undefined && initialLng !== undefined ? { lat: initialLat, lng: initialLng } : null,
   );
   const [locating, setLocating] = useState(false);
+  // Website parity: one shared city / current-location choice (also shown on Home).
+  const locationChoice = useLocationChoice();
+  const [locationPickerOpen, setLocationPickerOpen] = useState(false);
   // Part 8/9 (distance + price + service filters).
   const [radiusKm, setRadiusKm] = useState<number | null>(null);
   const [priceMin, setPriceMin] = useState<number | null>(null);
@@ -301,7 +308,7 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
   // prices by, sort, minimum rating, open now and favorites.
   const [discovery, setDiscovery] = useState<
     Pick<DiscoveryFilters, 'salonType' | 'popularService' | 'sort' | 'minRating' | 'openNow' | 'favoritesOnly'>
-  >(DEFAULT_DISCOVERY_FILTERS);
+  >({ ...DEFAULT_DISCOVERY_FILTERS, favoritesOnly: initialFavoritesOnly === true });
   const [notice, setNotice] = useState<string | null>(null);
   const { user, status: authStatus } = useAuth();
   const isCustomer = authStatus === 'authenticated' && !!user?.roles.includes(Role.CUSTOMER);
@@ -355,12 +362,21 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
     queryOverride?: string,
   ) {
     const filters: DiscoveryFilters = { radiusKm, priceMin, priceMax, service, ...discovery, ...overrides };
-    const built = buildDiscoveryQuery({ text: queryOverride ?? q, coords, filters, favoriteIds: isCustomer ? favoriteIds : null });
+    const built = buildDiscoveryQuery({
+      text: queryOverride ?? q,
+      coords,
+      filters,
+      favoriteIds: isCustomer ? favoriteIds : null,
+      city: coords ? null : cityQueryParams(getLocationChoice()),
+    });
+    const requestId = ++searchSequence.current;
     setSearched(true);
     setError(null);
     setNotice(null);
     if (built.kind !== 'search') {
       setResults([]);
+      setLoading(false);
+      setRefreshing(false);
       setNotice(built.kind === 'favorites-sign-in' ? t.favoritesSignInHint : t.favoritesEmptyHint);
       return;
     }
@@ -369,12 +385,42 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
       const result = await apiFetch<PaginatedResult<SalonListItemDto>>(
         `${DISCOVERY_PATHS.salons}?${built.query}`,
       );
+      if (requestId !== searchSequence.current) return;
       setResults(result.items);
+
+      // Older salons without verified map pins are excluded from nearby rankings.
+      // Without a hard radius, supplement with canonical same-city salons,
+      // preserving real distances for pinned shops and null for unpinned ones.
+      if (coords && filters.radiusKm === null) {
+        const city = await findCityForDeviceLocation(coords);
+        if (requestId !== searchSequence.current) return;
+        if (city) {
+          try {
+            const byCity = await apiFetch<PaginatedResult<SalonListItemDto>>(
+              `${DISCOVERY_PATHS.salons}?${buildCityFallbackQuery(built.query, city)}`,
+            );
+            if (requestId !== searchSequence.current) return;
+            const combined = appendCityMatchesToNearby(result.items, byCity.items, coords);
+            if (combined.length > result.items.length) {
+              setResults(combined);
+              setNotice(language === Language.HI
+                ? `${city.name} के अन्य सैलून दिखाए गए हैं। बिना मैप पिन वाले सैलून की दूरी उपलब्ध नहीं है।`
+                : `Showing other ${city.name} shops. Distance is unavailable for shops without map pins.`);
+            }
+          } catch {
+            // Keep actual GPS results if the optional city lookup fails.
+          }
+        }
+      }
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t.couldNotSearchSalons);
+      if (requestId === searchSequence.current) {
+        setError(err instanceof ApiError ? err.message : t.couldNotSearchSalons);
+      }
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (requestId === searchSequence.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }
 
@@ -414,17 +460,16 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
   // picking an actual radius here is itself a location request, applied to the same search in one
   // step, rather than requiring a separate prior tap on "Near me" first.
   async function selectRadius(value: number | null) {
-    if (!nearMe && value !== null) {
+    if (value !== null) {
       setLocating(true);
       setError(null);
       try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-          setError(t.locationDenied);
+        const gps = await getSearchGpsCoordinates(false);
+        if (gps.kind !== 'ok') {
+          setError(gps.kind === 'denied' ? t.locationDenied : t.couldNotGetLocation);
           return;
         }
-        const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-        const coords = { lat: position.coords.latitude, lng: position.coords.longitude };
+        const coords = gps.coords;
         setNearMe(coords);
         setRadiusKm(value);
         await runSearch(false, coords, { radiusKm: value, priceMin, priceMax, service });
@@ -469,11 +514,20 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
   // not on every param change, so returning to this same screen instance later doesn't re-fire a
   // stale search.
   useEffect(() => {
-    if (initialQuery || (initialLat !== undefined && initialLng !== undefined)) {
+    if (initialQuery || (initialLat !== undefined && initialLng !== undefined) || getLocationChoice()?.kind === 'city') {
       void runSearch(false, initialLat !== undefined && initialLng !== undefined ? { lat: initialLat, lng: initialLng } : null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const initialFavoritesSearchStarted = useRef(false);
+  useEffect(() => {
+    if (!initialFavoritesOnly || !isCustomer || favoriteIds === null || initialFavoritesSearchStarted.current) return;
+    initialFavoritesSearchStarted.current = true;
+    void runSearch(false, nearMe, { favoritesOnly: true });
+    // This one-time handoff waits for the authenticated favorites request before building `ids`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialFavoritesOnly, isCustomer, favoriteIds]);
 
   // "Near Me" (Phase 4) — expo-location's foreground permission flow, no paid Maps/geocoding SDK.
   // Denial/unavailability degrades gracefully to the existing text search rather than blocking the
@@ -482,20 +536,34 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
     setLocating(true);
     setError(null);
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        setError(t.locationDenied);
+      const gps = await getSearchGpsCoordinates(true);
+      if (gps.kind !== 'ok') {
+        setError(gps.kind === 'denied' ? t.locationDenied : t.couldNotGetLocation);
         return;
       }
-      const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      const coords = { lat: position.coords.latitude, lng: position.coords.longitude };
+      const coords = gps.coords;
       setNearMe(coords);
+      if (getLocationChoice()?.kind !== 'gps') {
+        setLocationChoice({ kind: 'gps', label: t.nearMeFound, coords });
+      }
       await runSearch(false, coords);
     } catch {
       setError(t.couldNotGetLocation);
     } finally {
       setLocating(false);
     }
+  }
+
+  // A choice made in the picker re-runs the search the way the website's City / location control does.
+  function applyLocationChoice(choice: LocationChoice | null) {
+    if (choice?.kind === 'gps') {
+      setNearMe(choice.coords);
+      void runSearch(false, choice.coords);
+      return;
+    }
+    setNearMe(null);
+    setRadiusKm(null);
+    void runSearch(false, null, { radiusKm: null });
   }
 
   const distanceOptions: FilterDropdownOption[] = DISTANCE_OPTIONS.map((option) => ({
@@ -602,12 +670,35 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
         </ScrollView>
       )}
 
-      <PremiumButton
-        title={locating ? t.locatingAction : nearMe ? t.nearMeFound : t.nearMe}
-        variant="quiet"
-        onPress={() => void handleNearMe()}
-        loading={locating}
-        style={styles.nearMeButton}
+      <View style={styles.locationRow}>
+        <Pressable
+          style={styles.cityButton}
+          onPress={() => setLocationPickerOpen(true)}
+          accessibilityRole="button"
+          accessibilityLabel={language === 'HI' ? 'शहर / लोकेशन बदलें' : 'Change city / location'}
+        >
+          <Text style={styles.cityButtonText} numberOfLines={1}>
+            {`📍 ${locationChoiceLabel(locationChoice) ?? (language === 'HI' ? 'सभी शहर' : 'All cities')} ▾`}
+          </Text>
+        </Pressable>
+        <PremiumButton
+          title={locating ? t.locatingAction : nearMe ? t.nearMeFound : t.nearMe}
+          variant="quiet"
+          onPress={() => void handleNearMe()}
+          loading={locating}
+          style={styles.nearMeButton}
+        />
+      </View>
+      {locationChoice?.kind === 'city' && !nearMe ? (
+        <Text style={styles.filterHint}>
+          {language === 'HI' ? 'दूरी देखने के लिए "पास में" दबाएँ या मौजूदा लोकेशन चुनें।' : 'Tap Near me (or use your current location) to see how far each shop is.'}
+        </Text>
+      ) : null}
+      <LocationPickerModal
+        visible={locationPickerOpen}
+        onClose={() => setLocationPickerOpen(false)}
+        onChosen={applyLocationChoice}
+        hindi={language === 'HI'}
       />
 
       {/* Owner-reported discoverability fix: always visible, not gated behind "Near me" already
@@ -773,6 +864,11 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
                     {item.distanceKm !== null ? `${formatDistance(item.distanceKm, item.countryCode)}${t.awaySuffix}` : ''}
                   </Text>
                 )}
+                {nearMe && (item.lat == null || item.lng == null) && (
+                  <Text style={styles.cardMeta}>
+                    {language === Language.HI ? 'दूरी उपलब्ध नहीं (मैप पिन बाकी)' : 'Distance unavailable (shop pin missing)'}
+                  </Text>
+                )}
               </View>
             </Pressable>
           )}
@@ -873,7 +969,10 @@ const styles = StyleSheet.create({
   },
   suggestionName: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: fastQue.text },
   suggestionCategory: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: fastQue.textMuted, marginTop: 2 },
-  nearMeButton: { marginBottom: space[4] },
+  nearMeButton: { marginBottom: space[4], flexShrink: 0 },
+  locationRow: { flexDirection: 'row', alignItems: 'flex-start', gap: space[2], flexWrap: 'wrap' },
+  cityButton: { flex: 1, minWidth: 140, minHeight: 44, justifyContent: 'center', paddingHorizontal: space[3], borderRadius: 12, borderWidth: 1, borderColor: fastQue.borderStrong, backgroundColor: fastQue.card, marginBottom: space[4] },
+  cityButtonText: { fontFamily: font.bodySemiBold, color: fastQue.text, fontSize: 14 },
   filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2], marginBottom: space[2] },
   toggleRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2], marginBottom: space[2] },
   toggleChip: {

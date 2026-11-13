@@ -4,8 +4,8 @@ import type { CompositeScreenProps } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import {
-  Alert,
   ImageBackground,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -35,6 +35,8 @@ import { useUnreadNotificationCount } from '../lib/notifications';
 import { useLanguage } from '../lib/language-context';
 import { useAuth } from '../lib/auth-context';
 import { resolveHomeLocation } from '../lib/home-location';
+import { getLocationChoice, locationChoiceLabel, setLocationChoice, useLocationChoice } from '../lib/location-choice';
+import { LocationPickerModal } from '../components/location/LocationPickerModal';
 import { createAuthenticatedHeroCommand, type HeroAction } from '../lib/hero-action-commands';
 import { isCreditsEnabled } from '../lib/feature-flags';
 import { color, fastQue, font, fontSize, lineHeightFor, premiumShadow, radius, space } from '../lib/theme';
@@ -97,9 +99,12 @@ export default function HomeScreen({ navigation }: Props) {
   const { t, language } = useLanguage();
   const { status } = useAuth();
 
-  const [locationLabel, setLocationLabel] = useState<string | null>(null);
-  const [locationCoords, setLocationCoords] = useState<{ lat: number; lng: number } | null>(null);
-  const [locating, setLocating] = useState(false);
+  // Website parity: the customer picks a city or uses their current location (shared with Search).
+  const locationChoice = useLocationChoice();
+  const locationLabel = locationChoiceLabel(locationChoice);
+  const locationCoords = locationChoice?.kind === 'gps' ? locationChoice.coords : null;
+  const [locationPickerOpen, setLocationPickerOpen] = useState(false);
+  const locating = false;
 
   const [searchMode, setSearchMode] = useState<'barber' | 'salon'>('barber');
   const [query, setQuery] = useState('');
@@ -191,9 +196,9 @@ export default function HomeScreen({ navigation }: Props) {
     useCallback(() => {
       let cancelled = false;
       resolveHomeLocation(false).then((result) => {
-        if (!cancelled && result) {
-          setLocationLabel(result.label);
-          setLocationCoords(result.coords);
+        // Never overwrite a city the customer picked with a passive GPS read.
+        if (!cancelled && result && !getLocationChoice()) {
+          setLocationChoice({ kind: 'gps', label: result.label, coords: result.coords });
         }
       });
       return () => {
@@ -202,24 +207,10 @@ export default function HomeScreen({ navigation }: Props) {
     }, []),
   );
 
-  async function handleChooseLocation() {
-    setLocating(true);
-    try {
-      // Explicit taps mean "detect/change my location now", so bypass the session cache and prefer
-      // a fresh GPS fix. This prevents both Home location controls from appearing frozen on an old
-      // or unresolved value for the rest of the app session.
-      const result = await resolveHomeLocation(true, true);
-      if (result) {
-        setLocationLabel(result.label);
-        setLocationCoords(result.coords);
-        return;
-      }
-      Alert.alert(t.couldNotGetLocation);
-    } catch {
-      Alert.alert(t.couldNotGetLocation);
-    } finally {
-      setLocating(false);
-    }
+  // Explicit taps open the city / current-location picker (website parity) instead of only
+  // re-detecting GPS, so the customer can change to any city FastQue has shops in.
+  function handleChooseLocation() {
+    setLocationPickerOpen(true);
   }
 
   function goSearch(params?: { initialQuery?: string }) {
@@ -244,7 +235,7 @@ export default function HomeScreen({ navigation }: Props) {
     } else if (command.destination === 'queue') {
       navigation.navigate('QueueTab', { screen: 'QueueHome' });
     } else {
-      navigation.navigate('AccountTab', { screen: 'CreditsHistory' });
+      navigation.navigate('SearchTab', { screen: 'Offers' });
     }
   }
 
@@ -271,6 +262,7 @@ export default function HomeScreen({ navigation }: Props) {
 
   return (
     <View style={styles.root}>
+      <LocationPickerModal visible={locationPickerOpen} onClose={() => setLocationPickerOpen(false)} hindi={language === 'HI'} />
       <View style={[styles.header, { paddingTop: insets.top + space[2] }]}>
         <View style={styles.headerTopRow}>
           <BrandLockup compact={isNarrowHeader} markOnly={isNarrowHeader} style={styles.brandLockup} />
@@ -297,6 +289,7 @@ export default function HomeScreen({ navigation }: Props) {
         contentContainerStyle={{ paddingBottom: insets.bottom + space[6], backgroundColor: fastQue.background }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} tintColor={color.accent} colors={[color.accent]} />}
         keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
       >
         <ImageBackground source={{ uri: EDITORIAL_ASSET_URL.heroBand }} style={styles.hero} imageStyle={styles.heroImage}>
           <View style={[StyleSheet.absoluteFill, styles.heroBaseScrim]} />
@@ -338,22 +331,18 @@ export default function HomeScreen({ navigation }: Props) {
                 </View>
                 <Text style={styles.benefitLabel}>{t.joinLiveKicker}</Text>
               </Pressable>
-              {/* Google Play release gate (see lib/feature-flags.ts) — Great offers is FastQue
-                  Credits' hero entry point; hidden outright, not just disabled, in this build. */}
-              {isCreditsEnabled() && (
-                <Pressable
-                  style={({ pressed }) => [styles.benefitItem, pressed && styles.benefitItemPressed]}
-                  onPress={() => handleHeroAction('greatOffers')}
-                  accessibilityRole="button"
-                  accessibilityLabel={t.trustOffersLabel}
-                  hitSlop={8}
-                >
-                  <View style={styles.benefitIconWrap}>
-                    <TabIcon name="offer" color={color.surface} size={18} />
-                  </View>
-                  <Text style={styles.benefitLabel}>{t.trustOffersLabel}</Text>
-                </Pressable>
-              )}
+              <Pressable
+                style={({ pressed }) => [styles.benefitItem, pressed && styles.benefitItemPressed]}
+                onPress={() => handleHeroAction('greatOffers')}
+                accessibilityRole="button"
+                accessibilityLabel={t.trustOffersLabel}
+                hitSlop={8}
+              >
+                <View style={styles.benefitIconWrap}>
+                  <TabIcon name="offer" color={color.surface} size={18} />
+                </View>
+                <Text style={styles.benefitLabel}>{t.trustOffersLabel}</Text>
+              </Pressable>
             </View>
           </View>
         </ImageBackground>
@@ -557,14 +546,10 @@ export default function HomeScreen({ navigation }: Props) {
             <TabIcon name="today" color={color.gold} size={20} />
             <Text style={styles.trustLabel} numberOfLines={2}>{t.trustRealTimeLabel}</Text>
           </View>
-          {/* Google Play release gate (see lib/feature-flags.ts) — this bullet advertises the same
-              "Great offers" concept as the hero Credits shortcut above; hidden alongside it. */}
-          {isCreditsEnabled() && (
-            <View style={styles.trustItem}>
-              <TabIcon name="offer" color={color.gold} size={20} />
-              <Text style={styles.trustLabel} numberOfLines={2}>{t.trustOffersLabel}</Text>
-            </View>
-          )}
+          <Pressable style={styles.trustItem} onPress={() => handleHeroAction('greatOffers')} accessibilityRole="button" accessibilityLabel={t.trustOffersLabel}>
+            <TabIcon name="offer" color={color.gold} size={20} />
+            <Text style={styles.trustLabel} numberOfLines={2}>{t.trustOffersLabel}</Text>
+          </Pressable>
         </View>
 
         <View style={styles.shortcutRow}>

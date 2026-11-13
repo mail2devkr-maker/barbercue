@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { KeyboardAvoidingView, Platform, RefreshControl, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { color, space } from '../../lib/theme';
 
@@ -27,15 +27,17 @@ export function Screen({ children, scroll = true, refreshing, onRefresh, content
     paddingBottom: edges.includes('bottom') ? insets.bottom : 0,
   };
 
-  if (!scroll) {
-    return <View style={[styles.root, padding, contentStyle]}>{children}</View>;
-  }
-
-  return (
+  // Android: the whole screen avoids the keyboard (below). iOS: a fixed screen avoids it here and a
+  // scrolling screen adjusts its insets automatically.
+  const fixed = <View style={[styles.root, padding, contentStyle]}>{children}</View>;
+  const content = !scroll ? (
+    Platform.OS === 'ios' ? <KeyboardAvoidingView style={styles.root} behavior="padding">{fixed}</KeyboardAvoidingView> : fixed
+  ) : (
     <ScrollView
       style={styles.root}
       contentContainerStyle={[styles.scrollContent, padding, contentStyle]}
       keyboardShouldPersistTaps="handled"
+      automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
       refreshControl={
         onRefresh ? (
           <RefreshControl refreshing={Boolean(refreshing)} onRefresh={onRefresh} tintColor={color.accent} colors={[color.accent]} />
@@ -45,6 +47,9 @@ export function Screen({ children, scroll = true, refreshing, onRefresh, content
       {children}
     </ScrollView>
   );
+  return Platform.OS === 'android' ? (
+    <KeyboardAvoidingView style={styles.root} behavior="padding">{content}</KeyboardAvoidingView>
+  ) : content;
 }
 
 const styles = StyleSheet.create({

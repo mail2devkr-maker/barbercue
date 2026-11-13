@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import {
   ImageBackground,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,11 +13,10 @@ import {
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLanguage } from '../lib/language-context';
-import { resolveHomeLocation } from '../lib/home-location';
+import { locationChoiceLabel, useLocationChoice } from '../lib/location-choice';
+import { LocationPickerModal } from '../components/location/LocationPickerModal';
 import { createSignedOutHeroCommand, type HeroAction } from '../lib/hero-action-commands';
-import { stashPendingCustomerDestination } from '../lib/customer-navigation-intent';
 import { beginShopRegistrationAuthentication } from '../lib/shop-registration-intent';
-import { isCreditsEnabled } from '../lib/feature-flags';
 import { color, fastQue, font, lineHeightFor, radius, space } from '../lib/theme';
 import { BrandLockup, GradientView, LanguageSwitcher, SafeImage } from '../components/ui';
 import { TabIcon } from '../components/ui/TabIcon';
@@ -55,9 +55,12 @@ export default function RoleSelectScreen({ navigation }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchMode, setSearchMode] = useState<'barber' | 'salon'>('barber');
   const [query, setQuery] = useState('');
-  const [locationLabel, setLocationLabel] = useState<string | null>(null);
-  const [locationCoords, setLocationCoords] = useState<{ lat: number; lng: number } | null>(null);
-  const [locating, setLocating] = useState(false);
+  // Website parity: pick a city or use the current location (shared with Home and Search after sign-in).
+  const locationChoice = useLocationChoice();
+  const locationLabel = locationChoiceLabel(locationChoice);
+  const locationCoords = locationChoice?.kind === 'gps' ? locationChoice.coords : null;
+  const [locationPickerOpen, setLocationPickerOpen] = useState(false);
+  const locating = false;
 
   const savedLabel = language === 'HI' ? 'सहेजे गए' : 'Saved';
   const profileLabel = language === 'HI' ? 'प्रोफ़ाइल' : 'Profile';
@@ -73,17 +76,9 @@ export default function RoleSelectScreen({ navigation }: Props) {
       : 'Haircut, fade, beard…'
     : t.shopOrServiceExample;
 
-  async function handleChooseLocation() {
-    setLocating(true);
-    try {
-      const result = await resolveHomeLocation(true);
-      if (result) {
-        setLocationLabel(result.label);
-        setLocationCoords(result.coords);
-      }
-    } finally {
-      setLocating(false);
-    }
+  // Opens the city / current-location picker instead of only re-detecting GPS.
+  function handleChooseLocation() {
+    setLocationPickerOpen(true);
   }
 
   function goSearch(initialQuery?: string) {
@@ -106,12 +101,7 @@ export default function RoleSelectScreen({ navigation }: Props) {
       navigation.navigate('GuestBrowse', { screen: 'SalonSearch', params: command.params });
       return;
     }
-
-    // Google Play release gate (see lib/feature-flags.ts) — the button that reaches this branch
-    // is itself hidden below when disabled; this guard is defense in depth so a disabled build
-    // never stashes a 'credits' destination even if something else calls this handler.
-    if (isCreditsEnabled()) stashPendingCustomerDestination({ kind: 'credits' });
-    navigation.navigate('CustomerLogin');
+    navigation.navigate('GuestBrowse', { screen: 'Offers' });
   }
 
   function choose(role: 'CUSTOMER' | 'OWNER' | 'STAFF') {
@@ -121,6 +111,11 @@ export default function RoleSelectScreen({ navigation }: Props) {
     } else {
       navigation.navigate('OwnerStaffLogin', { role });
     }
+  }
+
+  function employeeLogin() {
+    setMenuOpen(false);
+    navigation.navigate('EmployeeLogin');
   }
 
   // Shop-owner registration has its own email/password account-creation screen. That signup
@@ -133,6 +128,7 @@ export default function RoleSelectScreen({ navigation }: Props) {
 
   return (
     <View style={styles.root}>
+      <LocationPickerModal visible={locationPickerOpen} onClose={() => setLocationPickerOpen(false)} hindi={language === 'HI'} />
       <View style={[styles.header, compactHeader && styles.headerCompact, { paddingTop: insets.top + 8 }]}>
         <BrandLockup compact={compactHeader} markOnly={compactHeader} style={styles.brandLockup} />
 
@@ -173,6 +169,15 @@ export default function RoleSelectScreen({ navigation }: Props) {
             <Text style={styles.menuItemTitle}>{t.roleStaff}</Text>
             <Text style={styles.menuItemSubtitle}>{t.roleStaffSubtitle}</Text>
           </Pressable>
+          <Pressable
+            style={styles.menuItem}
+            onPress={employeeLogin}
+            accessibilityRole="button"
+            accessibilityLabel={t.roleEmployee}
+          >
+            <Text style={styles.menuItemTitle}>{t.roleEmployee}</Text>
+            <Text style={styles.menuItemSubtitle}>{t.roleEmployeeSubtitle}</Text>
+          </Pressable>
           <Pressable style={styles.menuItem} onPress={registerShop}>
             <Text style={styles.menuItemTitle}>{t.registerShopCta}</Text>
             <Text style={styles.menuItemSubtitle}>{t.listYourShopCta}</Text>
@@ -184,6 +189,7 @@ export default function RoleSelectScreen({ navigation }: Props) {
         style={styles.scroll}
         contentContainerStyle={{ paddingBottom: 88 + insets.bottom }}
         keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
       >
         <ImageBackground
           source={{ uri: EDITORIAL_ASSET_URL.heroBand }}
@@ -229,21 +235,18 @@ export default function RoleSelectScreen({ navigation }: Props) {
                 </View>
                 <Text style={styles.benefitLabel}>{t.joinLiveKicker}</Text>
               </Pressable>
-              {/* Google Play release gate (see lib/feature-flags.ts) */}
-              {isCreditsEnabled() && (
-                <Pressable
-                  style={({ pressed }) => [styles.benefitItem, pressed && styles.benefitItemPressed]}
-                  onPress={() => handleHeroAction('greatOffers')}
-                  accessibilityRole="button"
-                  accessibilityLabel={t.trustOffersLabel}
-                  hitSlop={8}
-                >
-                  <View style={[styles.benefitIconWrap, styles.benefitGold]}>
-                    <TabIcon name="offer" color={color.surface} size={15} />
-                  </View>
-                  <Text style={styles.benefitLabel}>{t.trustOffersLabel}</Text>
-                </Pressable>
-              )}
+              <Pressable
+                style={({ pressed }) => [styles.benefitItem, pressed && styles.benefitItemPressed]}
+                onPress={() => handleHeroAction('greatOffers')}
+                accessibilityRole="button"
+                accessibilityLabel={t.trustOffersLabel}
+                hitSlop={8}
+              >
+                <View style={[styles.benefitIconWrap, styles.benefitGold]}>
+                  <TabIcon name="offer" color={color.surface} size={15} />
+                </View>
+                <Text style={styles.benefitLabel}>{t.trustOffersLabel}</Text>
+              </Pressable>
             </View>
           </View>
         </ImageBackground>
@@ -369,13 +372,10 @@ export default function RoleSelectScreen({ navigation }: Props) {
             <TabIcon name="today" color="#2D9CDB" size={20} />
             <Text style={styles.trustLabel} numberOfLines={2}>{t.trustRealTimeLabel}</Text>
           </View>
-          {/* Google Play release gate (see lib/feature-flags.ts) */}
-          {isCreditsEnabled() && (
-            <View style={styles.trustItem}>
-              <TabIcon name="offer" color="#F2994A" size={20} />
-              <Text style={styles.trustLabel} numberOfLines={2}>{t.trustOffersLabel}</Text>
-            </View>
-          )}
+          <Pressable style={styles.trustItem} onPress={() => handleHeroAction('greatOffers')} accessibilityRole="button" accessibilityLabel={t.trustOffersLabel}>
+            <TabIcon name="offer" color="#F2994A" size={20} />
+            <Text style={styles.trustLabel} numberOfLines={2}>{t.trustOffersLabel}</Text>
+          </Pressable>
         </View>
       </ScrollView>
 

@@ -2,7 +2,7 @@
   "expo": {
     "name": "FastQue",
     "slug": "devdutta-kumar-pandey",
-    "version": "1.0.6",
+    "version": "1.0.7",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -15,14 +15,23 @@
       "fallbackToCacheTimeout": 2000
     },
     "ios": {
+      "version": "1.0.6",
+      "runtimeVersion": {
+        "policy": "appVersion"
+      },
       "supportsTablet": true,
       "bundleIdentifier": "com.dcw.fastque",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSPhotoLibraryAddUsageDescription": "FastQue saves your shop QR poster and QR images to your photos when you choose Save Image."
       }
     },
     "android": {
+      "runtimeVersion": {
+        "policy": "appVersion"
+      },
       "package": "com.dcw.fastque",
+      "versionCode": 17,
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#1C1A17",
@@ -71,7 +80,23 @@
         }
       ],
       "./plugins/withAndroidLargeScreenOrientation",
-      "./plugins/withAndroidR8Optimization"
+      "./plugins/withAndroidR8Optimization",
+      "expo-sharing",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "FastQue uses the camera only to read product barcodes when you add stock. No photo is saved or uploaded.",
+          "microphonePermission": "FastQue uses the microphone only when you tap a voice button to talk to the FastQue Assistant. Audio is not recorded or kept.",
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "FastQue uses the microphone only when you tap a voice button to talk to the FastQue Assistant. Audio is not recorded or kept.",
+          "speechRecognitionPermission": "FastQue turns what you say to the FastQue Assistant into text using your phone's speech service. Nothing is stored."
+        }
+      ]
     ]
   }
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import {
   QUEUE_ENTRIES_PATH,
@@ -126,7 +126,7 @@ export default function WalkInJoinScreen({ route }: Props) {
 
   if (loading) {
     return (
-      <Screen scroll={false} contentStyle={styles.screenContent}>
+      <Screen contentStyle={styles.screenContent}>
         <Skeleton style={styles.loadingSkeleton} />
       </Screen>
     );
@@ -134,7 +134,7 @@ export default function WalkInJoinScreen({ route }: Props) {
 
   if (entry && entry.salonId !== salonId) {
     return (
-      <Screen scroll={false} contentStyle={styles.screenContent}>
+      <Screen contentStyle={styles.screenContent}>
         <SectionHeader eyebrow={t.queueTitle} title={t.alreadyInQueueTitle} />
         <Text style={styles.subtitle}>
           {t.alreadyInQueueHint}
@@ -146,7 +146,7 @@ export default function WalkInJoinScreen({ route }: Props) {
 
   if (entry) {
     return (
-      <Screen scroll={false} contentStyle={styles.screenContent}>
+      <Screen contentStyle={styles.screenContent}>
         <SectionHeader eyebrow={t.queueTitle} title={t.youreInLineTitle} />
         <QueueStatusPanel entry={entry} guestAccessToken={guestAccessToken} onEntryChange={setEntry} />
       </Screen>
@@ -154,7 +154,7 @@ export default function WalkInJoinScreen({ route }: Props) {
   }
 
   return (
-    <Screen scroll={false} contentStyle={styles.screenContent}>
+    <Screen contentStyle={styles.screenContent}>
       <SectionHeader eyebrow={t.liveQueue} title={t.joinTheQueueTitle} subtitle={t.serviceOptional} />
       <View style={styles.serviceList}>
         <Pressable

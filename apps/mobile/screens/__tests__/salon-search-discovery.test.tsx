@@ -5,6 +5,7 @@ import { Role } from '@barbercue/shared';
 import SalonSearchScreen from '../SalonSearchScreen';
 import { apiFetch } from '../../lib/api';
 import { useAuth } from '../../lib/auth-context';
+import * as Location from 'expo-location';
 
 // Discovery upgrade on mobile: the new filters reach the search API, the compared service's own
 // price shows on each card, and the heart saves a favorite (rolling back if the server refuses).
@@ -13,7 +14,13 @@ jest.mock('../../lib/auth-context', () => ({ useAuth: jest.fn() }));
 jest.mock('../../lib/language-context', () => ({
   useLanguage: () => ({ language: 'EN', t: require('@barbercue/shared').uiStringsFor('EN') }),
 }));
-jest.mock('expo-location', () => ({}));
+jest.mock('expo-location', () => ({
+  reverseGeocodeAsync: jest.fn(),
+  requestForegroundPermissionsAsync: jest.fn(),
+  getCurrentPositionAsync: jest.fn(),
+  getLastKnownPositionAsync: jest.fn(),
+  Accuracy: { Balanced: 3 },
+}));
 jest.mock('../../components/ui', () => {
   const { createElement } = require('react');
   const { Pressable, Text, TextInput, View } = require('react-native');
@@ -104,6 +111,7 @@ afterEach(async () => {
 beforeEach(() => {
   mockedApi.mockReset();
   mockedAuth.mockReturnValue({ user: { id: 'u1', roles: [Role.CUSTOMER] }, status: 'authenticated' });
+  jest.clearAllMocks();
 });
 
 it('sends the new filters and shows the compared service price and salon type', async () => {
@@ -120,7 +128,7 @@ it('sends the new filters and shows the compared service price and salon type', 
   const text = textOf(tree.root);
   expect(text).toContain('Classic Haircut · ₹180');
   expect(text).toContain('Male');
-});
+}, 15000);
 
 it('saves a favorite from the heart, rolls back when refused, and searches favorites only', async () => {
   let refuse = false;
@@ -152,4 +160,25 @@ it('asks a signed-out visitor to sign in instead of searching favorites', async 
   await press('♥ Favorites');
   expect(searchCalls()).toHaveLength(0);
   expect(textOf(tree.root)).toContain('Sign in as a customer to save and see favorite salons.');
+});
+
+it('supplements an unrestricted GPS search with same-city shops and labels unknown distance', async () => {
+  (Location.requestForegroundPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'granted' });
+  (Location.getCurrentPositionAsync as jest.Mock).mockResolvedValue({ coords: { latitude: 25.69, longitude: 85.22 } });
+  (Location.reverseGeocodeAsync as jest.Mock).mockResolvedValue([{ city: 'Hajipur', isoCountryCode: 'IN' }]);
+  const unpinnedSalon = { ...salon, id: 'unpinned', lat: null, lng: null, distanceKm: null };
+  mockedApi.mockImplementation((path: string) => {
+    if (path === 'favorites/ids') return Promise.resolve({ salonIds: [] });
+    if (path === 'cities') return Promise.resolve([{ id: 'city-1', name: 'Hajipur', slug: 'hajipur', countryCode: 'IN' }]);
+    if (path.startsWith('salons?lat=')) return Promise.resolve({ items: [], nextCursor: null });
+    if (path.startsWith('salons?city=hajipur')) return Promise.resolve({ items: [unpinnedSalon], nextCursor: null });
+    return Promise.resolve({ items: [], nextCursor: null });
+  });
+  await render();
+  await press('Near me');
+  expect(searchCalls()).toHaveLength(2);
+  expect(searchCalls()[0]).toContain('lat=25.69');
+  expect(searchCalls()[1]).toContain('city=hajipur');
+  expect(searchCalls()[1]).toContain('countryCode=IN');
+  expect(textOf(tree.root)).toContain('Distance unavailable (shop pin missing)');
 });

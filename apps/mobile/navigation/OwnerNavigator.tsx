@@ -1,6 +1,7 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import type { NavigatorScreenParams } from '@react-navigation/native';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { AssistantFab } from '../components/assistant/AssistantFab';
 import { SalonStatus, type OwnerBookingFilter } from '@barbercue/shared';
 import OwnerDashboardScreen from '../screens/owner/OwnerDashboardScreen';
 import OwnerQueueScreen from '../screens/owner/OwnerQueueScreen';
@@ -90,10 +91,13 @@ function OwnerNavigatorGate() {
 function OwnerTabs() {
   const unreadCount = useUnreadNotificationCount();
   const { t } = useLanguage();
+  const { selectedSalonId } = useSalon();
   return (
+    <>
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
+        tabBarHideOnKeyboard: true,
         tabBarActiveTintColor: fastQue.pink,
         tabBarInactiveTintColor: fastQue.textMuted,
         tabBarStyle: { backgroundColor: fastQue.glassStrong, borderTopColor: fastQue.border, borderTopWidth: 1, height: 60, paddingBottom: 8, paddingTop: 8 },
@@ -131,6 +135,8 @@ function OwnerTabs() {
         }}
       />
     </Tab.Navigator>
+    <AssistantFab onOpen={() => navigationRef.navigate('OwnerAccountTab', { screen: 'Assistant', params: { salonId: selectedSalonId ?? undefined } })} />
+    </>
   );
 }
 

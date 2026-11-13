@@ -3,6 +3,8 @@ import type { NavigatorScreenParams } from '@react-navigation/native';
 import StaffTodayScreen from '../screens/staff/StaffTodayScreen';
 import DashboardAccountStack, { type DashboardAccountStackParamList } from './DashboardAccountStack';
 import { SalonProvider } from '../lib/salon-context';
+import { AssistantFab } from '../components/assistant/AssistantFab';
+import { navigationRef } from './navigation-ref';
 import { useUnreadNotificationCount } from '../lib/notifications';
 import { useLanguage } from '../lib/language-context';
 import { fastQue, font } from '../lib/theme';
@@ -26,6 +28,7 @@ export default function StaffNavigator() {
       <Tab.Navigator
         screenOptions={{
           headerShown: false,
+        tabBarHideOnKeyboard: true,
           tabBarActiveTintColor: fastQue.pink,
           tabBarInactiveTintColor: fastQue.textMuted,
           tabBarStyle: { backgroundColor: fastQue.glassStrong, borderTopColor: fastQue.border, borderTopWidth: 1, height: 60, paddingBottom: 8, paddingTop: 8 },
@@ -48,6 +51,7 @@ export default function StaffNavigator() {
           }}
         />
       </Tab.Navigator>
+      <AssistantFab onOpen={() => navigationRef.navigate('StaffAccountTab', { screen: 'Assistant' })} />
     </SalonProvider>
   );
 }

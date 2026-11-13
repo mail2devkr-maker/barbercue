@@ -164,18 +164,67 @@ function parseApiResponse<T>(res: Response): Promise<T> {
  * once. This is "handle expired access tokens via refresh token" for mobile.
  */
 export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
+  return parseApiResponse<T>(await apiFetchResponse(path, options));
+}
+
+/** Authenticated response for owner-scoped file exports, with the same one-refresh contract as apiFetch. */
+export async function apiFetchResponse(path: string, options: RequestInit = {}): Promise<Response> {
   let res = await fetchOrOffline(path, options);
 
   if (res.status === 401 && path !== REFRESH_PATH) {
     const refreshed = await tryRefresh();
-    if (refreshed) {
-      res = await fetchOrOffline(path, options);
-    }
+    if (refreshed) res = await fetchOrOffline(path, options);
   }
 
-  // A controller returning null sends a genuinely empty body (not the literal text "null") —
-  // parseApiResponse preserves that existing behavior while also being shared by multipart calls.
-  return parseApiResponse<T>(res);
+  if (!res.ok) {
+    // Reuse the standard API error mapping without logging or retaining the response body.
+    parseApiPayload(res.status, await res.text());
+  }
+  return res;
+}
+
+async function nativeDownload(path: string, target: string): Promise<FileSystem.FileSystemDownloadResult> {
+  const headers: Record<string, string> = {};
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+  try {
+    const result = await FileSystem.downloadAsync(`${API_BASE_URL}/${path}`, target, { headers });
+    reportNetworkSuccess();
+    return result;
+  } catch {
+    if (await probeBackendReachability()) {
+      throw new ApiError(0, { error: { code: 'DOWNLOAD_FAILED', message: 'Could not download the file. Please try again.' } });
+    }
+    throw networkOfflineError();
+  }
+}
+
+/** A file name the device file system accepts (invoice numbers can contain "/"). */
+export function safeFileName(name: string): string {
+  return name.replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'download';
+}
+
+/**
+ * Download an authenticated file (e.g. an invoice PDF) into the app's cache and return its local
+ * URI. Same contract as apiFetch: one silent refresh on 401, then the server's own error message.
+ * The partial file of a failed download is removed; no URI, header or token is ever logged.
+ */
+export async function apiDownloadFile(path: string, fileName: string): Promise<string> {
+  const target = `${FileSystem.cacheDirectory ?? ''}${safeFileName(fileName)}`;
+  let result = await nativeDownload(path, target);
+  if (result.status === 401 && path !== REFRESH_PATH) {
+    const refreshed = await tryRefresh();
+    if (refreshed) result = await nativeDownload(path, target);
+  }
+  if (result.status >= 200 && result.status < 300) return result.uri;
+  let body: ApiErrorBody = { error: { code: 'DOWNLOAD_FAILED', message: 'Could not download the file.' } };
+  try {
+    const parsed = JSON.parse(await FileSystem.readAsStringAsync(result.uri)) as ApiErrorBody;
+    if (parsed?.error?.message) body = parsed;
+  } catch {
+    // Non-JSON error body: keep the generic message.
+  }
+  await FileSystem.deleteAsync(result.uri, { idempotent: true }).catch(() => undefined);
+  throw new ApiError(result.status, body);
 }
 
 async function probeBackendReachability(): Promise<boolean> {

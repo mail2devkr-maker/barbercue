@@ -134,7 +134,7 @@ jobs:
         run: |
           export JWT_ACCESS_SECRET="$(node -e "process.stdout.write(require('crypto').randomBytes(32).toString('hex'))")"
           export TOTP_ENCRYPTION_KEY="$(node -e "process.stdout.write(require('crypto').randomBytes(32).toString('hex'))")"
-          npx jest --config ./test/jest-e2e.json --runInBand --ci test/auth-phone-otp.e2e-spec.ts
+          npx jest --config ./test/jest-e2e.json --runInBand --ci test/auth-phone-otp.e2e-spec.ts test/auth-apple.e2e-spec.ts
       - name: Admin unique customers served E2E - known dataset, role limits, masking and audit
         working-directory: apps/backend
         env:
@@ -263,6 +263,8 @@ jobs:
         run: npm ci
       - name: Build shared DTOs
         run: npm run build:shared
+      - name: Verify effective Android and iOS release configuration
+        run: npm run verify:android-1.0.7-config --workspace=@barbercue/mobile
       - name: Typecheck mobile
         run: npm run typecheck --workspace=@barbercue/mobile
       - name: Mobile Jest - owner navigation, queue assignment, start/complete, session restoration, Hindi (regressions vs the recorded baseline)

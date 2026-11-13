@@ -16,6 +16,7 @@ import { subscribeQueueArrivalNavigation } from '../lib/queue-push-navigation';
 import { isCreditsEnabled } from '../lib/feature-flags';
 import { fastQue, font } from '../lib/theme';
 import { TabIcon, type TabIconName } from '../components/ui/TabIcon';
+import { AssistantFab } from '../components/assistant/AssistantFab';
 import type { TabParamList } from './types';
 
 const Tab = createBottomTabNavigator<TabParamList>();
@@ -116,6 +117,7 @@ export default function RootNavigator() {
       <Tab.Navigator
         screenOptions={{
         headerShown: false,
+        tabBarHideOnKeyboard: true,
         // FastQue brand accent on the active tab (visual-fidelity checkpoint) — was plain ink,
         // indistinguishable from a default/unbranded tab bar; every tab (Home included) now reads
         // clearly as "selected" via the same brand accent the rest of Home's redesign uses.
@@ -165,6 +167,11 @@ export default function RootNavigator() {
         }}
         />
       </Tab.Navigator>
+      <AssistantFab
+        tabBarHeight={60 + insets.bottom}
+        includeBottomInset
+        onOpen={() => navigationRef.navigate('AccountTab', { screen: 'Assistant' })}
+      />
     </>
   );
 }

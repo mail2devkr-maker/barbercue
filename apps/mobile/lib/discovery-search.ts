@@ -40,8 +40,10 @@ export function buildDiscoveryQuery(input: {
   coords: { lat: number; lng: number } | null;
   filters: DiscoveryFilters;
   favoriteIds: ReadonlySet<string> | null;
+  /** A picked city (website parity: `city` + `countryCode`). Ignored when GPS coordinates are used. */
+  city?: { city: string; countryCode: string } | null;
 }): DiscoveryQuery {
-  const { text, coords, filters, favoriteIds } = input;
+  const { text, coords, filters, favoriteIds, city } = input;
   if (filters.favoritesOnly) {
     if (!favoriteIds) return { kind: 'favorites-sign-in' };
     if (favoriteIds.size === 0) return { kind: 'favorites-empty' };
@@ -55,6 +57,9 @@ export function buildDiscoveryQuery(input: {
     params.set('lng', String(coords.lng));
     // radiusKm is meaningless without a query point, so it only ever gets sent alongside one.
     if (filters.radiusKm !== null) params.set('radiusKm', String(filters.radiusKm));
+  } else if (city) {
+    params.set('city', city.city);
+    params.set('countryCode', city.countryCode);
   }
   if (filters.priceMin !== null) params.set('priceMin', String(filters.priceMin));
   if (filters.priceMax !== null) params.set('priceMax', String(filters.priceMax));

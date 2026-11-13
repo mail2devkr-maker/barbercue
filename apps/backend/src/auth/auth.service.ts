@@ -4,12 +4,16 @@ import { createHash, randomBytes } from 'crypto';
 import {
   AuthErrorCode,
   AuthProvider,
+  AccountDeletionRequestStatus,
+  AccountDeletionResolution,
   Role,
   OtpPurpose,
   SessionAudience,
   UserStatus,
   type AuthSession,
   type AuthTokens,
+  type AppleLoginInput,
+  type AccountDeletionRequestDto,
   Language,
   type MeResponse,
   type PasswordAudience,
@@ -22,6 +26,7 @@ import { OtpService } from './services/otp.service';
 import { TotpService } from './services/totp.service';
 import { CryptoService } from './services/crypto.service';
 import { GoogleAuthService } from './services/google-auth.service';
+import { AppleAuthService } from './services/apple-auth.service';
 import { EMAIL_SENDER, type EmailSender } from './services/email-sender';
 import {
   buildPasswordLink,
@@ -36,6 +41,70 @@ const GLOBAL_ADMIN_DASHBOARD_ROLES = new Set<Role>([
   Role.SALES_ADMIN,
   Role.PLATFORM_VIEWER,
 ]);
+
+const ACCOUNT_DELETION_ADMIN_ROLES = new Set<Role>([
+  Role.PLATFORM_ADMIN,
+  Role.CO_FOUNDER,
+  Role.HR_ADMIN,
+  Role.SALES_ADMIN,
+  Role.PLATFORM_VIEWER,
+]);
+
+type AccountDeletionSubject = {
+  id: string;
+  status: UserStatus;
+  deletedAt: Date | null;
+  roles: Array<{ role: Role }>;
+  ownedSalons: Array<{ id: string }>;
+  staffMemberships: Array<{ salonId: string }>;
+  employeeProfile: { id: string } | null;
+};
+
+function accountDeletionResolution(
+  user: AccountDeletionSubject,
+): AccountDeletionRequestDto['resolution'] {
+  const roles = new Set(user.roles.map(({ role }) => role));
+  const hasAdminRole = user.roles.some(({ role }) =>
+    ACCOUNT_DELETION_ADMIN_ROLES.has(role),
+  );
+  const hasOwnerRole =
+    roles.has(Role.SALON_OWNER) || user.ownedSalons.length > 0;
+  const hasEmploymentRole =
+    roles.has(Role.SALON_STAFF) ||
+    roles.has(Role.FIELD_EXECUTIVE) ||
+    user.staffMemberships.length > 0 ||
+    user.employeeProfile !== null;
+  const hasCustomerRole = roles.has(Role.CUSTOMER);
+  const scopeCount =
+    Number(hasCustomerRole) +
+    Number(hasEmploymentRole) +
+    Number(hasOwnerRole) +
+    Number(hasAdminRole);
+
+  if (scopeCount > 1) {
+    return AccountDeletionResolution.MIXED_ROLE_RESOLUTION_REQUIRED;
+  }
+  if (hasAdminRole) {
+    return AccountDeletionResolution.ADMIN_GOVERNANCE_REVIEW_REQUIRED;
+  }
+  if (hasOwnerRole) {
+    return AccountDeletionResolution.OWNER_TRANSFER_REQUIRED;
+  }
+  if (hasEmploymentRole) {
+    return AccountDeletionResolution.EMPLOYMENT_RESOLUTION_REQUIRED;
+  }
+  if (hasCustomerRole) {
+    return AccountDeletionResolution.CUSTOMER_DIRECT_DELETE;
+  }
+  return AccountDeletionResolution.ACCOUNT_ROLE_REVIEW_REQUIRED;
+}
+
+function relatedDeletionShopCount(user: AccountDeletionSubject): number {
+  return new Set([
+    ...user.ownedSalons.map(({ id }) => id),
+    ...user.staffMemberships.map(({ salonId }) => salonId),
+  ]).size;
+}
 
 function hasGlobalAdminDashboardRole(
   roles: Array<{ role: Role; salonId: string | null }>,
@@ -60,6 +129,7 @@ export class AuthService {
     private readonly totpService: TotpService,
     private readonly cryptoService: CryptoService,
     private readonly googleAuthService: GoogleAuthService,
+    private readonly appleAuthService: AppleAuthService,
     @Inject(EMAIL_SENDER) private readonly emailSender: EmailSender,
   ) {}
 
@@ -676,6 +746,172 @@ export class AuthService {
     };
   }
 
+  createAppleLoginNonce() {
+    return this.appleAuthService.createLoginNonce();
+  }
+
+  /**
+   * Apple identity tokens and authorization codes must describe the same Apple subject. The
+   * client-supplied token is verified first, then the token returned by Apple's code exchange is
+   * independently verified against the same one-use nonce and used as the persisted identity.
+   */
+  private async exchangeAppleAuthorizationCode(
+    input: AppleLoginInput,
+    clientIdentity: { sub: string; email: string | null },
+  ): Promise<{
+    identity: { sub: string; email: string | null };
+    refreshToken: string;
+    encryptedRefreshToken: string;
+  }> {
+    const exchanged = await this.appleAuthService.exchangeAuthorizationCode(
+      input.authorizationCode,
+      input.nonce,
+    );
+    if (exchanged.identity.sub !== clientIdentity.sub) {
+      await this.revokeUnclaimedAppleRefreshToken(exchanged.refreshToken);
+      throw new AppException(
+        AuthErrorCode.APPLE_TOKEN_INVALID,
+        'Could not verify your Apple sign-in. Please try again.',
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
+    return {
+      identity: exchanged.identity,
+      refreshToken: exchanged.refreshToken,
+      encryptedRefreshToken: this.cryptoService.encrypt(exchanged.refreshToken),
+    };
+  }
+
+  private async revokeUnclaimedAppleRefreshToken(
+    refreshToken: string,
+  ): Promise<void> {
+    try {
+      await this.appleAuthService.revokeRefreshToken(refreshToken);
+    } catch {
+      // Fail closed and do not persist a provider credential without a committed identity.
+    }
+  }
+
+  /** Customer Apple login mirrors customer Google semantics but keys by Apple's stable `sub`. */
+  async appleLogin(
+    input: AppleLoginInput,
+    deviceInfo?: string,
+  ): Promise<{ user: MeResponse; tokens: AuthTokens }> {
+    const clientIdentity = await this.appleAuthService.verifyIdToken(
+      input.identityToken,
+      input.nonce,
+    );
+    const appleAuthorization = await this.exchangeAppleAuthorizationCode(
+      input,
+      clientIdentity,
+    );
+    const { identity, encryptedRefreshToken: encryptedAppleRefreshToken } =
+      appleAuthorization;
+    const userTransaction = this.prisma.$transaction(async (tx) => {
+      await this.appleAuthService.consumeLoginNonce(tx, input.nonce);
+
+      const existingIdentity = await tx.authIdentity.findUnique({
+        where: {
+          provider_providerSub: {
+            provider: AuthProvider.APPLE,
+            providerSub: identity.sub,
+          },
+        },
+        include: { user: { include: { roles: true } } },
+      });
+      if (existingIdentity) {
+        this.assertActive(existingIdentity.user.status);
+        await tx.authIdentity.update({
+          where: {
+            provider_providerSub: {
+              provider: AuthProvider.APPLE,
+              providerSub: identity.sub,
+            },
+          },
+          data: { providerRefreshTokenEncrypted: encryptedAppleRefreshToken },
+        });
+        return existingIdentity.user;
+      }
+
+      if (identity.email) {
+        const existingUser = await tx.user.findUnique({
+          where: { email: identity.email },
+          include: { roles: true },
+        });
+        if (existingUser) {
+          this.assertActive(existingUser.status);
+          await tx.authIdentity.create({
+            data: {
+              userId: existingUser.id,
+              provider: AuthProvider.APPLE,
+              providerSub: identity.sub,
+              email: identity.email,
+              providerRefreshTokenEncrypted: encryptedAppleRefreshToken,
+            },
+          });
+          return existingUser;
+        }
+      }
+
+      return tx.user.create({
+        data: {
+          email: identity.email,
+          emailVerifiedAt: identity.email ? new Date() : null,
+          status: UserStatus.ACTIVE,
+          roles: { create: { role: Role.CUSTOMER } },
+          authIdentities: {
+            create: {
+              provider: AuthProvider.APPLE,
+              providerSub: identity.sub,
+              email: identity.email,
+              providerRefreshTokenEncrypted: encryptedAppleRefreshToken,
+            },
+          },
+        },
+        include: { roles: true },
+      });
+    });
+    const user = await userTransaction.catch(async (error) => {
+      await this.revokeUnclaimedAppleRefreshToken(
+        appleAuthorization.refreshToken,
+      );
+      throw error;
+    });
+
+    this.assertActive(user.status);
+    let roles = user.roles.map((r) => r.role);
+    if (!roles.includes(Role.CUSTOMER)) {
+      await this.prisma.userRole.createMany({
+        data: [{ userId: user.id, role: Role.CUSTOMER }],
+        skipDuplicates: true,
+      });
+      roles = [...roles, Role.CUSTOMER];
+    }
+
+    const sessionRoles = this.tokenService.scopeRolesToAudience(
+      roles,
+      SessionAudience.CUSTOMER,
+    );
+    const tokens = await this.tokenService.issueTokenPair(
+      user.id,
+      sessionRoles,
+      SessionAudience.CUSTOMER,
+      deviceInfo,
+    );
+    return {
+      user: this.toMeResponse(
+        user.id,
+        sessionRoles,
+        SessionAudience.CUSTOMER,
+        user.phone,
+        user.email,
+        user.preferredLanguage,
+        user.passwordHash,
+      ),
+      tokens,
+    };
+  }
+
   // ---------- Prospective shop owner: self-service email + password ----------
 
   /**
@@ -1072,6 +1308,159 @@ export class AuthService {
     };
   }
 
+  /** Apple owner/staff login never creates an account or grants a role. */
+  async staffAppleLogin(
+    input: AppleLoginInput,
+    deviceInfo?: string,
+  ): Promise<{ user: MeResponse; tokens: AuthTokens }> {
+    const clientIdentity = await this.appleAuthService.verifyIdToken(
+      input.identityToken,
+      input.nonce,
+    );
+    const appleAuthorization = await this.exchangeAppleAuthorizationCode(
+      input,
+      clientIdentity,
+    );
+    const { identity, encryptedRefreshToken: encryptedAppleRefreshToken } =
+      appleAuthorization;
+    const userTransaction = this.prisma.$transaction(async (tx) => {
+      await this.appleAuthService.consumeLoginNonce(tx, input.nonce);
+
+      const repairMissingOwnerRole = async <
+        T extends { id: string; roles: Array<{ role: Role }> },
+      >(
+        candidate: T,
+      ): Promise<T> => {
+        const alreadyOperator = candidate.roles.some(
+          ({ role }) => role === Role.SALON_OWNER || role === Role.SALON_STAFF,
+        );
+        if (alreadyOperator) return candidate;
+        const ownedSalons = await tx.salon.findMany({
+          where: { ownerUserId: candidate.id },
+          select: { id: true },
+        });
+        if (ownedSalons.length === 0) return candidate;
+        await tx.userRole.createMany({
+          data: ownedSalons.map(({ id: salonId }) => ({
+            userId: candidate.id,
+            role: Role.SALON_OWNER,
+            salonId,
+          })),
+          skipDuplicates: true,
+        });
+        const refreshed = await tx.user.findUnique({
+          where: { id: candidate.id },
+          include: { roles: true },
+        });
+        return (refreshed ?? candidate) as T;
+      };
+
+      const existingIdentity = await tx.authIdentity.findUnique({
+        where: {
+          provider_providerSub: {
+            provider: AuthProvider.APPLE,
+            providerSub: identity.sub,
+          },
+        },
+        include: { user: { include: { roles: true } } },
+      });
+      if (existingIdentity) {
+        const existingUser = await repairMissingOwnerRole(
+          existingIdentity.user,
+        );
+        const existingRoles = existingUser.roles.map(({ role }) => role);
+        const existingUserCanAccessStaff = existingRoles.some(
+          (role) => role === Role.SALON_OWNER || role === Role.SALON_STAFF,
+        );
+        // A customer-only identity cannot refresh an Apple credential through the staff route.
+        if (!existingUserCanAccessStaff) return null;
+        this.assertActive(existingUser.status);
+        await tx.authIdentity.update({
+          where: {
+            provider_providerSub: {
+              provider: AuthProvider.APPLE,
+              providerSub: identity.sub,
+            },
+          },
+          data: { providerRefreshTokenEncrypted: encryptedAppleRefreshToken },
+        });
+        return existingUser;
+      }
+      if (!identity.email) return null;
+
+      const candidate = await tx.user.findUnique({
+        where: { email: identity.email },
+        include: { roles: true },
+      });
+      if (!candidate) return null;
+
+      const repairedCandidate = await repairMissingOwnerRole(candidate);
+      const canAccessStaff = repairedCandidate.roles.some(
+        ({ role }) => role === Role.SALON_OWNER || role === Role.SALON_STAFF,
+      );
+      // The role gate happens before identity linking. A customer-only Apple account with the same
+      // email cannot be elevated into the owner/staff surface.
+      if (!canAccessStaff) return null;
+      this.assertActive(repairedCandidate.status);
+
+      await tx.authIdentity.create({
+        data: {
+          userId: repairedCandidate.id,
+          provider: AuthProvider.APPLE,
+          providerSub: identity.sub,
+          email: identity.email,
+          providerRefreshTokenEncrypted: encryptedAppleRefreshToken,
+        },
+      });
+      return repairedCandidate;
+    });
+    const user = await userTransaction.catch(async (error) => {
+      await this.revokeUnclaimedAppleRefreshToken(
+        appleAuthorization.refreshToken,
+      );
+      throw error;
+    });
+
+    const roles = user?.roles.map((role) => role.role) ?? [];
+    const canAccessStaff = roles.some(
+      (role) => role === Role.SALON_OWNER || role === Role.SALON_STAFF,
+    );
+    if (!user || !canAccessStaff) {
+      await this.revokeUnclaimedAppleRefreshToken(
+        appleAuthorization.refreshToken,
+      );
+      throw new AppException(
+        AuthErrorCode.APPLE_ACCOUNT_NOT_STAFF,
+        'This Apple account is not registered as a shop owner or staff member.',
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
+    this.assertActive(user.status);
+
+    const sessionRoles = this.tokenService.scopeRolesToAudience(
+      roles,
+      SessionAudience.STAFF,
+    );
+    const tokens = await this.tokenService.issueTokenPair(
+      user.id,
+      sessionRoles,
+      SessionAudience.STAFF,
+      deviceInfo,
+    );
+    return {
+      user: this.toMeResponse(
+        user.id,
+        sessionRoles,
+        SessionAudience.STAFF,
+        user.phone,
+        user.email,
+        user.preferredLanguage,
+        user.passwordHash,
+      ),
+      tokens,
+    };
+  }
+
   // ---------- Platform admin: Google + mandatory TOTP ----------
 
   async adminGoogleLogin(
@@ -1234,6 +1623,270 @@ export class AuthService {
   }
 
   /**
+   * Returns the caller's deletion-request state and a live resolution classification. The user id
+   * is always sourced from the authenticated controller context; the DTO intentionally exposes no
+   * salon ids, employee ids, or other account identifiers.
+   */
+  async getAccountDeletionRequest(
+    userId: string,
+  ): Promise<AccountDeletionRequestDto> {
+    const user = await this.loadAccountDeletionSubject(userId);
+    this.assertAccountDeletionSubjectActive(user);
+    const request = await this.prisma.accountDeletionRequest.findUnique({
+      where: { userId },
+      select: { id: true, status: true, createdAt: true, updatedAt: true },
+    });
+    return this.toAccountDeletionRequestDto(user, request);
+  }
+
+  /**
+   * Records a non-destructive, account-bound request. A unique userId constraint and a transaction
+   * make retries/concurrent taps idempotent. It does not disable access, transfer a shop, erase
+   * operational records, or claim that deletion is complete; those actions require an approved
+   * retention policy and a role-specific resolution workflow.
+   */
+  async requestAccountDeletion(
+    userId: string,
+  ): Promise<AccountDeletionRequestDto> {
+    const currentUser = await this.loadAccountDeletionSubject(userId);
+    this.assertAccountDeletionSubjectActive(currentUser);
+    const currentResolution = accountDeletionResolution(currentUser);
+    if (
+      currentResolution === AccountDeletionResolution.CUSTOMER_DIRECT_DELETE
+    ) {
+      throw new AppException(
+        AuthErrorCode.ACCOUNT_DELETION_CUSTOMER_FLOW_REQUIRED,
+        'Use the customer account deletion flow for this account.',
+        HttpStatus.CONFLICT,
+      );
+    }
+
+    const existing = await this.prisma.accountDeletionRequest.findUnique({
+      where: { userId },
+      select: { id: true, status: true, createdAt: true, updatedAt: true },
+    });
+    if (existing?.status === AccountDeletionRequestStatus.REQUESTED) {
+      return this.toAccountDeletionRequestDto(currentUser, existing);
+    }
+
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        // Re-read roles and relationships inside the write transaction so a stale mobile session
+        // can never turn a mixed/owner/admin account into the customer deletion path.
+        const user = await tx.user.findUnique({
+          where: { id: userId },
+          include: {
+            roles: { select: { role: true } },
+            ownedSalons: { select: { id: true } },
+            staffMemberships: { select: { salonId: true } },
+            employeeProfile: { select: { id: true } },
+          },
+        });
+        this.assertAccountDeletionSubjectActive(user);
+        const resolution = accountDeletionResolution(user);
+        if (resolution === AccountDeletionResolution.CUSTOMER_DIRECT_DELETE) {
+          throw new AppException(
+            AuthErrorCode.ACCOUNT_DELETION_CUSTOMER_FLOW_REQUIRED,
+            'Use the customer account deletion flow for this account.',
+            HttpStatus.CONFLICT,
+          );
+        }
+
+        const alreadyRequested = await tx.accountDeletionRequest.findUnique({
+          where: { userId },
+          select: { id: true, status: true, createdAt: true, updatedAt: true },
+        });
+        if (
+          alreadyRequested?.status === AccountDeletionRequestStatus.REQUESTED
+        ) {
+          return this.toAccountDeletionRequestDto(user, alreadyRequested);
+        }
+
+        if (
+          alreadyRequested?.status === AccountDeletionRequestStatus.CANCELLED
+        ) {
+          const reopened = await tx.accountDeletionRequest.updateMany({
+            where: {
+              id: alreadyRequested.id,
+              userId,
+              status: AccountDeletionRequestStatus.CANCELLED,
+            },
+            data: { status: AccountDeletionRequestStatus.REQUESTED },
+          });
+          const latest = await tx.accountDeletionRequest.findUnique({
+            where: { userId },
+            select: {
+              id: true,
+              status: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+          });
+          if (reopened.count > 0) {
+            if (!latest) {
+              throw new Error(
+                'Account deletion request disappeared during reopen.',
+              );
+            }
+            await tx.auditLog.create({
+              data: {
+                actorUserId: userId,
+                action: 'ACCOUNT_DELETION_REQUEST_REOPENED',
+                entityType: 'AccountDeletionRequest',
+                entityId: latest.id,
+                metadata: {
+                  resolution,
+                  relatedShopCount: relatedDeletionShopCount(user),
+                },
+              },
+            });
+          }
+          return this.toAccountDeletionRequestDto(user, latest);
+        }
+
+        const request = await tx.accountDeletionRequest.create({
+          data: {
+            userId,
+            status: AccountDeletionRequestStatus.REQUESTED,
+          },
+          select: { id: true, status: true, createdAt: true, updatedAt: true },
+        });
+        await tx.auditLog.create({
+          data: {
+            actorUserId: userId,
+            action: 'ACCOUNT_DELETION_REQUESTED',
+            entityType: 'AccountDeletionRequest',
+            entityId: request.id,
+            metadata: {
+              resolution,
+              relatedShopCount: relatedDeletionShopCount(user),
+            },
+          },
+        });
+        return this.toAccountDeletionRequestDto(user, request);
+      });
+    } catch (error) {
+      // Concurrent requests race only on the unique account binding. If the winning request is
+      // now visible, return that same request; do not create a second audit event or mutate roles.
+      if ((error as { code?: string })?.code === 'P2002') {
+        const retry = await this.getAccountDeletionRequest(userId);
+        if (retry.request) return retry;
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Lets only the signed-in requester withdraw their still-pending request. This is reversible,
+   * idempotent and deliberately does not revoke access or alter business data. A later POST can
+   * reopen the same request while the audit log retains each transition.
+   */
+  async cancelAccountDeletionRequest(
+    userId: string,
+  ): Promise<AccountDeletionRequestDto> {
+    const initialUser = await this.loadAccountDeletionSubject(userId);
+    this.assertAccountDeletionSubjectActive(initialUser);
+
+    return this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.findUnique({
+        where: { id: userId },
+        include: {
+          roles: { select: { role: true } },
+          ownedSalons: { select: { id: true } },
+          staffMemberships: { select: { salonId: true } },
+          employeeProfile: { select: { id: true } },
+        },
+      });
+      this.assertAccountDeletionSubjectActive(user);
+
+      const request = await tx.accountDeletionRequest.findUnique({
+        where: { userId },
+        select: { id: true, status: true, createdAt: true, updatedAt: true },
+      });
+      if (
+        !request ||
+        request.status === AccountDeletionRequestStatus.CANCELLED
+      ) {
+        return this.toAccountDeletionRequestDto(user, request);
+      }
+
+      const cancelled = await tx.accountDeletionRequest.updateMany({
+        where: {
+          id: request.id,
+          userId,
+          status: AccountDeletionRequestStatus.REQUESTED,
+        },
+        data: { status: AccountDeletionRequestStatus.CANCELLED },
+      });
+      const latest = await tx.accountDeletionRequest.findUnique({
+        where: { userId },
+        select: { id: true, status: true, createdAt: true, updatedAt: true },
+      });
+      if (cancelled.count > 0 && latest) {
+        await tx.auditLog.create({
+          data: {
+            actorUserId: userId,
+            action: 'ACCOUNT_DELETION_REQUEST_CANCELLED',
+            entityType: 'AccountDeletionRequest',
+            entityId: latest.id,
+            metadata: { status: AccountDeletionRequestStatus.CANCELLED },
+          },
+        });
+      }
+      return this.toAccountDeletionRequestDto(user, latest);
+    });
+  }
+
+  private async loadAccountDeletionSubject(
+    userId: string,
+  ): Promise<AccountDeletionSubject | null> {
+    return this.prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        roles: { select: { role: true } },
+        ownedSalons: { select: { id: true } },
+        staffMemberships: { select: { salonId: true } },
+        employeeProfile: { select: { id: true } },
+      },
+    });
+  }
+
+  private assertAccountDeletionSubjectActive(
+    user: AccountDeletionSubject | null,
+  ): asserts user is AccountDeletionSubject {
+    if (!user || user.status !== UserStatus.ACTIVE || user.deletedAt) {
+      throw new AppException(
+        AuthErrorCode.UNAUTHENTICATED,
+        'This account is no longer active.',
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
+  }
+
+  private toAccountDeletionRequestDto(
+    user: AccountDeletionSubject,
+    request: {
+      id: string;
+      status: AccountDeletionRequestStatus;
+      createdAt: Date;
+      updatedAt: Date;
+    } | null,
+  ): AccountDeletionRequestDto {
+    return {
+      request: request
+        ? {
+            id: request.id,
+            status: request.status,
+            createdAt: request.createdAt.toISOString(),
+            updatedAt: request.updatedAt.toISOString(),
+          }
+        : null,
+      resolution: accountDeletionResolution(user),
+      relatedShopCount: relatedDeletionShopCount(user),
+    };
+  }
+
+  /**
    * Irreversibly removes a customer account's direct identity and login surface while retaining
    * only de-identified operational/accounting records that cannot safely lose referential
    * integrity (bookings, credit/subscription and security records). Customer reviews are deleted
@@ -1245,13 +1898,53 @@ export class AuthService {
   async deleteCustomerAccount(
     userId: string,
     audience: SessionAudience,
-  ): Promise<{ success: true }> {
+  ): Promise<{
+    success: true;
+    appleRevocation: 'not_applicable' | 'completed' | 'manual_required';
+  }> {
     if (audience !== SessionAudience.CUSTOMER) {
       throw new AppException(
         AuthErrorCode.FORBIDDEN_ROLE,
         'Only a customer account can be deleted here.',
         HttpStatus.FORBIDDEN,
       );
+    }
+
+    // Apple requires its authorization to be revoked when the account is deleted. Do this before
+    // local erasure, outside the DB transaction (never hold row locks during provider I/O), then
+    // revalidate the account inside the deletion transaction to close the role-change race.
+    const preflightUser = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        roles: true,
+        ownedSalons: { select: { id: true } },
+        staffMemberships: { select: { id: true } },
+      },
+    });
+    this.assertCustomerAccountCanBeDeleted(preflightUser);
+    const appleIdentities = await this.prisma.authIdentity.findMany({
+      where: { userId, provider: AuthProvider.APPLE },
+      select: { providerRefreshTokenEncrypted: true },
+    });
+    let appleRevocation: 'not_applicable' | 'completed' | 'manual_required' =
+      appleIdentities.length === 0 ? 'not_applicable' : 'completed';
+    for (const appleIdentity of appleIdentities) {
+      if (!appleIdentity.providerRefreshTokenEncrypted) {
+        appleRevocation = 'manual_required';
+        continue;
+      }
+      try {
+        await this.appleAuthService.revokeRefreshToken(
+          this.cryptoService.decrypt(
+            appleIdentity.providerRefreshTokenEncrypted,
+          ),
+        );
+      } catch {
+        // Account deletion must remain available even during an Apple outage. The encrypted
+        // provider credential is removed with the identity row; the response tells the client to
+        // guide the user through Apple's manual revocation path.
+        appleRevocation = 'manual_required';
+      }
     }
 
     await this.prisma.$transaction(async (tx) => {
@@ -1263,28 +1956,7 @@ export class AuthService {
           staffMemberships: { select: { id: true } },
         },
       });
-      if (!user || user.status !== UserStatus.ACTIVE || user.deletedAt) {
-        throw new AppException(
-          AuthErrorCode.UNAUTHENTICATED,
-          'This account is no longer active.',
-          HttpStatus.UNAUTHORIZED,
-        );
-      }
-
-      const hasOnlyCustomerRoles =
-        user.roles.length > 0 &&
-        user.roles.every(({ role }) => role === Role.CUSTOMER);
-      if (
-        !hasOnlyCustomerRoles ||
-        user.ownedSalons.length > 0 ||
-        user.staffMemberships.length > 0
-      ) {
-        throw new AppException(
-          AuthErrorCode.FORBIDDEN_ROLE,
-          'This account cannot be deleted through the customer account flow.',
-          HttpStatus.FORBIDDEN,
-        );
-      }
+      this.assertCustomerAccountCanBeDeleted(user);
 
       // Capture the stored value before identity fields are cleared. OtpRequest deliberately has
       // no User relation, so its phone key must be explicitly removed in this same transaction.
@@ -1335,12 +2007,44 @@ export class AuthService {
           action: 'CUSTOMER_ACCOUNT_DELETED',
           entityType: 'User',
           entityId: userId,
-          metadata: { accountDeleted: true },
+          metadata: { accountDeleted: true, appleRevocation },
         },
       });
     });
 
-    return { success: true };
+    return { success: true, appleRevocation };
+  }
+
+  private assertCustomerAccountCanBeDeleted(
+    user: {
+      status: UserStatus;
+      deletedAt: Date | null;
+      roles: Array<{ role: Role }>;
+      ownedSalons: Array<{ id: string }>;
+      staffMemberships: Array<{ id: string }>;
+    } | null,
+  ): asserts user is NonNullable<typeof user> {
+    if (!user || user.status !== UserStatus.ACTIVE || user.deletedAt) {
+      throw new AppException(
+        AuthErrorCode.UNAUTHENTICATED,
+        'This account is no longer active.',
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
+    const hasOnlyCustomerRoles =
+      user.roles.length > 0 &&
+      user.roles.every(({ role }) => role === Role.CUSTOMER);
+    if (
+      !hasOnlyCustomerRoles ||
+      user.ownedSalons.length > 0 ||
+      user.staffMemberships.length > 0
+    ) {
+      throw new AppException(
+        AuthErrorCode.FORBIDDEN_ROLE,
+        'This account cannot be deleted through the customer account flow.',
+        HttpStatus.FORBIDDEN,
+      );
+    }
   }
 
   listSessions(

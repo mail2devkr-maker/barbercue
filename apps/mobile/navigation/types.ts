@@ -21,12 +21,16 @@ export type SearchStackParamList = {
   // a query (and, when the customer's location is already known, coordinates) into this screen's
   // own search state without duplicating the search engine itself — SalonSearchScreen still owns
   // `q`/`nearMe` and the one real request to DISCOVERY_PATHS.salons.
-  SalonSearch: { selectedStyleName?: string; initialQuery?: string; initialLat?: number; initialLng?: number } | undefined;
+  SalonSearch: { selectedStyleName?: string; initialQuery?: string; initialLat?: number; initialLng?: number; initialFavoritesOnly?: boolean } | undefined;
+  Offers: undefined;
   SalonProfile: {
     countryCode: string;
     citySlug: string;
     salonSlug: string;
     selectedStyleName?: string;
+    /** Public promotion selected from Offers; the server remains authoritative at booking. */
+    offerId?: string;
+    offerTitle?: string;
   };
   StaffSelect: {
     salonId: string;
@@ -39,6 +43,8 @@ export type SearchStackParamList = {
     // rather than the device's. Null degrades to the device zone, same convention as elsewhere.
     salonTimezone: string | null;
     selectedStyleName?: string;
+    offerId?: string;
+    offerTitle?: string;
   };
   DateSelect: {
     salonId: string;
@@ -49,6 +55,8 @@ export type SearchStackParamList = {
     preferredStaffId: string | null;
     preferredStaffName: string | null;
     selectedStyleName?: string;
+    offerId?: string;
+    offerTitle?: string;
   };
   SlotSelect: {
     salonId: string;
@@ -59,6 +67,8 @@ export type SearchStackParamList = {
     preferredStaffName: string | null;
     date: string;
     selectedStyleName?: string;
+    offerId?: string;
+    offerTitle?: string;
   };
   ConfirmBooking: {
     salonId: string;
@@ -70,6 +80,8 @@ export type SearchStackParamList = {
     slotStart: string;
     slotEnd: string;
     selectedStyleName?: string;
+    offerId?: string;
+    offerTitle?: string;
   };
   WalkInJoin: { salonId: string; salonName: string; services: ServiceDto[] };
 };
@@ -82,6 +94,8 @@ export type HomeStackParamList = {
 export type BookingsStackParamList = {
   MyBookings: undefined;
   BookingDetail: { bookingId: string };
+  MyInvoices: undefined;
+  InvoiceDetail: { invoiceId: string };
 };
 
 export type QueueStackParamList = {
@@ -90,6 +104,7 @@ export type QueueStackParamList = {
 
 export type AccountStackParamList = {
   Account: undefined;
+  Assistant: { salonId?: string } | undefined;
   StyleAdvisor: undefined;
   Notifications: undefined;
   CreditsHistory: undefined;
