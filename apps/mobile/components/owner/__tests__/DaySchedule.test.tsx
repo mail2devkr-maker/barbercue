@@ -37,11 +37,11 @@ it('lays out one day by barber in shop time, pages to the end, and never shows a
   await render(<DaySchedule salonId="s1" timeZone="Asia/Kolkata" language={'EN' as never} onOpenInvoice={jest.fn()} />);
   expect(await screen.findByText('Staff 1 (2)')).toBeTruthy();
   expect(screen.getByText('No preference (1)')).toBeTruthy();
-  expect(screen.getByText('10:00 am – 10:30 am')).toBeTruthy(); // 04:30Z in Asia/Kolkata
+  expect(screen.getByText(/^10:00\s?am\s–\s10:30\s?am$/i)).toBeTruthy(); // 04:30Z in Asia/Kolkata
   expect(screen.getByText(/Confirmed · preference/)).toBeTruthy();
   const bookingCalls = fetchMock.mock.calls.map(([p]) => String(p)).filter((p) => p.includes('/bookings?'));
   expect(bookingCalls).toHaveLength(2);
-  await fireEvent.press(screen.getByLabelText('10:00 am Service b1'));
+  await fireEvent.press(screen.getByLabelText(/^10:00\s?am Service b1$/i));
   expect(screen.getByText('actions:b1')).toBeTruthy();
   await fireEvent.press(screen.getByLabelText('Next →'));
   await waitFor(() => expect(fetchMock.mock.calls.map(([p]) => String(p)).some((p) => /date=\d{4}-\d{2}-\d{2}/.test(p) && !p.includes('cursor'))).toBe(true));
