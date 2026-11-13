@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { AppState, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { readResults, VoiceConversation, type Heard, type RecognizerLike, type TurnOutcome, type VoiceSnapshot } from '../lib/voice-conversation';
+import { createNativeRecognizer, ensureVoicePermission, VOICE_LANGS, voiceRecognitionAvailable, type VoiceLang } from '../lib/native-voice';
+import { createNativeSpeaker, SPEAK_FAILURE_TEXT } from '../lib/speech-output';
 import * as Speech from 'expo-speech';
 import {
   ASSISTANT_PATHS,
@@ -34,9 +37,33 @@ export interface AssistantScreenParams {
   salonId?: string;
 }
 
+/** Same rule as the website: long replies are shortened when spoken; the full reply stays on screen. */
+export function spokenReply(turn: AssistantTurnDto): string {
+  const m = turn.message.replace(/\s+/g, ' ').trim();
+  return m.length > 320 ? `${m.slice(0, 300)}… The rest is on screen.` : m;
+}
+
+const PUSH_ERROR: Record<string, string> = {
+  'not-allowed': 'Microphone permission is off for FastQue. Allow it in the phone settings to talk, or type instead.',
+  'service-not-allowed': 'This phone does not allow speech recognition here. Type instead.',
+  'audio-capture': 'No microphone was found. You can type instead.',
+  'language-not-supported': 'This phone cannot recognize the chosen language. Switch language or type.',
+  network: 'Voice needs an internet connection. Check it, or type instead.',
+};
+
+const VOICE_STATE_TEXT: Record<VoiceSnapshot['state'], string> = {
+  off: '',
+  listening: 'Listening…',
+  understanding: 'Understanding…',
+  replying: 'Speaking the reply…',
+  paused: 'Paused',
+  error: 'Voice stopped',
+};
+
 interface ConversationTurn {
   id: string;
   text: string;
+  voice?: boolean;
   assistant?: AssistantDisplayTurn;
   destination?: AssistantDestination | null;
   canConfirm?: boolean;
@@ -63,6 +90,26 @@ export default function AssistantScreen({ route }: { route?: { params?: Assistan
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [confirmationDialogId, setConfirmationDialogId] = useState<string | null>(null);
   const [acknowledged, setAcknowledged] = useState(false);
+  const busyRef = useRef(false);
+  const [voiceLang, setVoiceLang] = useState<VoiceLang>(user?.preferredLanguage === Language.EN ? 'en-IN' : 'hi-IN');
+  const [speakReplies, setSpeakReplies] = useState(true);
+  const speaker = useMemo(() => createNativeSpeaker(), []);
+  const conversation = useMemo(() => new VoiceConversation({
+    createRecognizer: () => createNativeRecognizer(),
+    speaker,
+    send: async () => ({ say: '', end: true }),
+    setTimer: (fn, ms) => setTimeout(fn, ms),
+    clearTimer: (h) => clearTimeout(h as ReturnType<typeof setTimeout>),
+    now: () => Date.now(),
+  }), [speaker]);
+  const [voice, setVoice] = useState<VoiceSnapshot>(conversation.snapshot);
+  const [listeningOnce, setListeningOnce] = useState(false);
+  const [pushInterim, setPushInterim] = useState('');
+  const [pushSpeechError, setPushSpeechError] = useState<string | null>(null);
+  const [speakerChecked, setSpeakerChecked] = useState<boolean | null>(null);
+  const [voiceSettingsOpen, setVoiceSettingsOpen] = useState(false);
+  const pushRecognizer = useRef<RecognizerLike | null>(null);
+  const inConversation = voice.state !== 'off' && voice.state !== 'error';
   const confirmationContext = useRef({ surface, salonId: selectedSalonId });
   confirmationContext.current = { surface, salonId: selectedSalonId };
 
@@ -123,16 +170,18 @@ export default function AssistantScreen({ route }: { route?: { params?: Assistan
       .slice(0, 4);
   }, [capabilities]);
 
-  const send = useCallback(async (text: string) => {
+  /** One turn to the server. Shared by typing, push-to-talk and the voice conversation (website parity). */
+  const send = useCallback(async (text: string, viaVoice = false, heard?: Heard): Promise<AssistantTurnDto | null> => {
     const clean = text.trim();
-    if (!clean || sending || !surface || !access?.enabled) return;
+    if (!clean || busyRef.current || !surface || !access?.enabled) return null;
     if (surface === 'shop' && !selectedSalonId) {
       setError('Select an authorized shop in the Owner or Staff area before asking shop questions.');
-      return;
+      return null;
     }
+    busyRef.current = true;
     setSending(true);
     setError(null);
-    const userTurn: ConversationTurn = { id: `user-${Date.now()}`, text: clean };
+    const userTurn: ConversationTurn = { id: `user-${Date.now()}`, text: clean, voice: viaVoice };
     setTurns((previous) => [...previous, userTurn]);
     setDraft('');
     const followUpContext = assistantReportContextForScope(reportSession.current, { surface, salonId: selectedSalonId });
@@ -142,8 +191,10 @@ export default function AssistantScreen({ route }: { route?: { params?: Assistan
         body: JSON.stringify({
           text: clean,
           surface,
-          inputMode: 'text',
+          inputMode: viaVoice ? 'voice' : 'text',
           ...(surface === 'shop' && selectedSalonId ? { salonId: selectedSalonId } : {}),
+          ...(heard?.alternatives.length ? { alternatives: heard.alternatives } : {}),
+          ...(heard?.confidence != null ? { confidence: heard.confidence } : {}),
           ...(followUpContext ? { context: followUpContext } : {}),
         }),
       });
@@ -175,14 +226,95 @@ export default function AssistantScreen({ route }: { route?: { params?: Assistan
         destination,
         canConfirm: pendingConfirmation !== null,
       }]);
+      return response;
     } catch (cause) {
-      setDraft(clean);
+      if (!viaVoice) setDraft(clean);
+      // 404: the assistant was switched off for this account; 401: signed out — end any conversation.
+      if (cause instanceof ApiError && (cause.status === 404 || cause.status === 401)) conversation.end('The assistant is not available for this account.');
       setError(cause instanceof ApiError ? cause.message : 'Assistant could not connect. Try again.');
+      return null;
     } finally {
+      busyRef.current = false;
       setSending(false);
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
     }
-  }, [access?.enabled, access?.writes, isOwner, selectedSalonId, sending, surface]);
+  }, [access?.enabled, access?.writes, conversation, isOwner, selectedSalonId, surface]);
+
+  // ---- voice (website parity): push-to-talk, hands-free conversation, spoken replies
+  useEffect(() => conversation.setSend(async (heard: Heard): Promise<TurnOutcome> => {
+    const turn = await send(heard.text, true, heard);
+    if (!turn) return { say: '', end: true };
+    return { say: spokenReply(turn), hold: turn.status === 'NEEDS_CONFIRMATION' };
+  }), [conversation, send]);
+  useEffect(() => conversation.setLang(voiceLang), [conversation, voiceLang]);
+  useEffect(() => conversation.subscribe(setVoice), [conversation]);
+  // Never leave a microphone running: leaving the screen or backgrounding the app releases it.
+  useEffect(() => () => conversation.end(), [conversation]);
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') conversation.pause('Paused while FastQue was in the background. Tap Resume to continue.');
+    });
+    return () => sub.remove();
+  }, [conversation]);
+
+  async function withVoicePermission(): Promise<boolean> {
+    if (!voiceRecognitionAvailable()) {
+      setError('Speech recognition is not available on this phone. You can type instead.');
+      return false;
+    }
+    const ok = await ensureVoicePermission();
+    if (!ok) setError('Microphone permission is off for FastQue. Allow it in the phone settings to talk, or type instead.');
+    return ok;
+  }
+
+  async function startConversation() {
+    if (!(await withVoicePermission())) return;
+    speaker.cancel();
+    conversation.start(voiceLang);
+  }
+
+  /** Push-to-talk: one phrase per tap, sent once, then (optionally) the reply is spoken. */
+  async function pushToTalk() {
+    if (listeningOnce) { pushRecognizer.current?.stop(); return; }
+    if (!(await withVoicePermission())) return;
+    const recognizer = createNativeRecognizer();
+    pushRecognizer.current = recognizer;
+    recognizer.lang = voiceLang;
+    recognizer.continuous = false;
+    let heard: Heard | null = null;
+    recognizer.onresult = (event) => {
+      const read = readResults(event.results);
+      setPushInterim(read.interim);
+      if (read.final) heard = read.final;
+    };
+    recognizer.onerror = (event) => {
+      if (event.error !== 'no-speech' && event.error !== 'aborted') setError(PUSH_ERROR[event.error] ?? 'Voice did not work this time. Try again or type.');
+    };
+    recognizer.onend = () => {
+      setListeningOnce(false);
+      setPushInterim('');
+      pushRecognizer.current = null;
+      const said = heard;
+      if (!said) return;
+      void (async () => {
+        const turn = await send(said.text, true, said);
+        if (turn && speakReplies) {
+          const r = await speaker.speak(spokenReply(turn), voiceLang);
+          setPushSpeechError(r.ok || r.reason === 'interrupted' ? null : SPEAK_FAILURE_TEXT[r.reason ?? 'engine-error']);
+        }
+      })();
+    };
+    setError(null);
+    setListeningOnce(true);
+    recognizer.start();
+  }
+
+  async function testSpeaker() {
+    const sample = voiceLang === 'hi-IN' ? 'नमस्ते, मैं FastQue असिस्टेंट हूँ।' : 'Hello, I am the FastQue Assistant.';
+    const r = await speaker.speak(sample, voiceLang);
+    setPushSpeechError(r.ok ? null : SPEAK_FAILURE_TEXT[r.reason ?? 'engine-error']);
+    setSpeakerChecked(r.ok);
+  }
 
   const decide = useCallback(async (entryId: string, decision: 'confirm' | 'cancel') => {
     const pending = confirmationTokens.current.get(entryId);
@@ -299,6 +431,48 @@ export default function AssistantScreen({ route }: { route?: { params?: Assistan
                 ))}
               </View>
             ) : null}
+            <View style={styles.voicePanel}>
+              {!inConversation ? (
+                <PremiumButton title="🎤  Start voice conversation" onPress={() => void startConversation()} disabled={sending || listeningOnce} />
+              ) : (
+                <View style={styles.voiceLive} accessibilityLiveRegion="polite">
+                  <Text style={styles.voiceState}>{voice.state === 'listening' && voice.ready ? 'Speak now' : VOICE_STATE_TEXT[voice.state]}</Text>
+                  {voice.interim ? <Text style={styles.voiceInterim}>{voice.interim}</Text> : null}
+                  {voice.note ? <Text style={styles.muted}>{voice.note}</Text> : null}
+                  <View style={styles.voiceRow}>
+                    {voice.state === 'paused' ? <PremiumButton title="Resume" variant="secondary" onPress={() => conversation.resume()} style={styles.flex} /> : null}
+                    {voice.state === 'replying' ? <PremiumButton title="Stop reply, listen" variant="secondary" onPress={() => conversation.interrupt()} style={styles.flex} /> : null}
+                    <PremiumButton title={voice.muted ? 'Unmute replies' : 'Mute replies'} variant="quiet" onPress={() => conversation.setMuted(!voice.muted)} style={styles.flex} />
+                    <PremiumButton title="End" variant="secondary" onPress={() => conversation.end()} style={styles.flex} />
+                  </View>
+                </View>
+              )}
+              {voice.state === 'error' && voice.note ? <Text accessibilityRole="alert" style={styles.error}>{voice.note}</Text> : null}
+              {voice.speechError ? <Text accessibilityRole="alert" style={styles.error}>{voice.speechError}</Text> : null}
+              {pushSpeechError ? <Text accessibilityRole="alert" style={styles.error}>{pushSpeechError}</Text> : null}
+              <Pressable accessibilityRole="button" onPress={() => setVoiceSettingsOpen((v) => !v)} style={styles.voiceLink}>
+                <Text style={styles.listenText}>{voiceSettingsOpen ? 'Hide voice settings' : 'Voice settings & speaker test'}</Text>
+              </Pressable>
+              {voiceSettingsOpen ? (
+                <View style={styles.voiceSettings}>
+                  <Text style={styles.muted}>Language you will speak</Text>
+                  <View style={styles.voiceRow}>
+                    {VOICE_LANGS.map((l) => (
+                      <Pressable key={l.id} accessibilityRole="radio" accessibilityState={{ checked: voiceLang === l.id }} onPress={() => setVoiceLang(l.id)} style={[styles.langChip, voiceLang === l.id && styles.langChipOn]}>
+                        <Text style={styles.exampleText}>{l.label}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                  <View style={styles.switchRow}>
+                    <Text style={styles.body}>Speak replies to voice questions</Text>
+                    <Switch accessibilityLabel="Speak replies to voice questions" value={speakReplies} onValueChange={setSpeakReplies} />
+                  </View>
+                  <PremiumButton title="Test speaker" variant="secondary" onPress={() => void testSpeaker()} />
+                  {speakerChecked ? <Text style={styles.muted}>Speaker works. Replies will be spoken.</Text> : null}
+                  <Text style={styles.muted}>Voice uses your phone’s own speech service to turn speech into text. FastQue does not record or keep your audio. Changes are never confirmed by voice — you always confirm on screen.</Text>
+                </View>
+              ) : null}
+            </View>
             <ScrollView ref={listRef} style={styles.transcript} contentContainerStyle={styles.transcriptContent} keyboardShouldPersistTaps="handled" onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}>
               {turns.map((turn) => (
                 <View key={turn.id}>
@@ -340,8 +514,18 @@ export default function AssistantScreen({ route }: { route?: { params?: Assistan
                 editable={!sending}
                 style={styles.input}
               />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={listeningOnce ? 'Stop listening' : 'Speak a question'}
+                onPress={() => void pushToTalk()}
+                disabled={sending || inConversation}
+                style={[styles.mic, listeningOnce && styles.micOn, (sending || inConversation) && styles.disabled]}
+              >
+                <Text style={styles.micText}>{listeningOnce ? '■' : '🎤'}</Text>
+              </Pressable>
               <PremiumButton title={sending ? 'Sending…' : 'Send'} onPress={() => void send(draft)} disabled={!draft.trim() || sending} style={styles.send} />
             </View>
+            {listeningOnce ? <Text style={styles.voiceInterim}>{pushInterim || 'Listening… speak now'}</Text> : null}
             <Text style={styles.footnote}>{access.writes ? 'Changes are previewed first and require your explicit confirmation.' : 'Read and navigation access only. Changes are disabled.'}</Text>
           </>
         ) : null}
@@ -407,6 +591,21 @@ export default function AssistantScreen({ route }: { route?: { params?: Assistan
 }
 
 const styles = StyleSheet.create({
+  voicePanel: { gap: space[2], marginBottom: space[2] },
+  voiceLive: { gap: space[2], padding: space[3], borderRadius: radius.md, borderWidth: 1, borderColor: fastQue.borderStrong, backgroundColor: fastQue.card },
+  voiceState: { color: fastQue.text, fontFamily: font.bodyBold, fontSize: fontSize.base },
+  voiceInterim: { color: fastQue.textSecondary, fontFamily: font.bodyRegular, fontSize: fontSize.sm, fontStyle: 'italic' },
+  voiceRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2] },
+  voiceLink: { alignSelf: 'flex-start', paddingVertical: space[1] },
+  voiceSettings: { gap: space[2], padding: space[3], borderRadius: radius.md, borderWidth: 1, borderColor: fastQue.border, backgroundColor: fastQue.card },
+  langChip: { minHeight: 40, justifyContent: 'center', paddingHorizontal: space[3], borderRadius: radius.pill, borderWidth: 1, borderColor: fastQue.border },
+  langChipOn: { borderColor: fastQue.pink, backgroundColor: fastQue.glassStrong },
+  switchRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space[2] },
+  flex: { flexGrow: 1 },
+  mic: { width: 52, minHeight: 52, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, borderWidth: 1, borderColor: fastQue.borderStrong, backgroundColor: fastQue.card },
+  micOn: { borderColor: fastQue.pink, backgroundColor: fastQue.glassStrong },
+  micText: { fontSize: 20, color: fastQue.text },
+  disabled: { opacity: 0.5 },
   keyboard: { flex: 1, backgroundColor: fastQue.background },
   screen: { flex: 1, paddingBottom: space[2] },
   transcript: { flex: 1, marginTop: space[3] },
