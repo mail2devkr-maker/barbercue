@@ -556,6 +556,9 @@ jobs:
           screenshot_count="$(find "$RUNNER_TEMP/maestro-captures" -type f -name '*.png' | wc -l | tr -d ' ')"
           echo "Validated-flow screenshot count before conversion: $screenshot_count"
           test "$screenshot_count" -ge 11
+          # The iPad flow left the shell in $RUNNER_TEMP/fastque-maestro/ipad; screenshot-artifact
+          # lives in the workspace (run 43522996712 failed writing the JPEGs there).
+          cd "$GITHUB_WORKSPACE"
           while IFS= read -r image; do
             name="$(basename "$image" .png)"
             sips -s format jpeg -s formatOptions 92 "$image" --out "screenshot-artifact/$name.jpg" >/dev/null
