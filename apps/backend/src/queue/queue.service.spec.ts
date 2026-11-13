@@ -1601,6 +1601,48 @@ describe('QueueService', () => {
     });
   });
 
+  describe('listHistoryForCustomer (owner report 14 Nov)', () => {
+    it("returns only the customer's own walk-in joins, newest first, without contact details", async () => {
+      prisma.queueEntry.findMany.mockResolvedValueOnce([
+        {
+          id: 'q2',
+          salonId: 's1',
+          tokenNumber: 7,
+          status: QueueEntryStatus.COMPLETED,
+          joinedAt: new Date('2026-11-13T10:00:00.000Z'),
+          serviceCompletedAt: new Date('2026-11-13T10:40:00.000Z'),
+          contactPhone: '+919999999999',
+          service: { name: 'Haircut' },
+          salon: { name: 'Demo Studio', slug: 'demo', timezone: 'Asia/Kolkata', city: { slug: 'noida', countryCode: 'IN' } },
+        },
+      ]);
+      const items = await service.listHistoryForCustomer('c1', 500);
+      expect(prisma.queueEntry.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { customerId: 'c1', bookingId: null },
+          orderBy: [{ joinedAt: 'desc' }, { id: 'desc' }],
+          take: 50,
+        }),
+      );
+      expect(items).toEqual([
+        {
+          id: 'q2',
+          salonId: 's1',
+          salonName: 'Demo Studio',
+          salonSlug: 'demo',
+          citySlug: 'noida',
+          countryCode: 'IN',
+          salonTimezone: 'Asia/Kolkata',
+          tokenNumber: 7,
+          status: QueueEntryStatus.COMPLETED,
+          serviceName: 'Haircut',
+          joinedAt: '2026-11-13T10:00:00.000Z',
+          serviceCompletedAt: '2026-11-13T10:40:00.000Z',
+        },
+      ]);
+    });
+  });
+
   describe('getActiveForCustomer (Phase 5 — recompute on read)', () => {
     it('returns null when the customer has no active entry', async () => {
       prisma.queueEntry.findFirst.mockResolvedValueOnce(null);

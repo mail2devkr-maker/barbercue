@@ -22,6 +22,7 @@ import { color, fastQue, font, lineHeightFor, radius, space } from '../lib/theme
 import { BrandLockup, GradientView, LanguageSwitcher, SafeImage } from '../components/ui';
 import { TabIcon } from '../components/ui/TabIcon';
 import { EDITORIAL_ASSET_URL } from '../lib/editorial';
+import { AllServicesModal } from '../components/AllServicesModal';
 import type { AuthStackParamList } from '../navigation/AuthStack';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'RoleSelect'>;
@@ -54,6 +55,7 @@ export default function RoleSelectScreen({ navigation }: Props) {
   const keyboardAware = useKeyboardAwareScroll();
   const { width: windowWidth } = useWindowDimensions();
   const { t, language } = useLanguage();
+  const [allServicesOpen, setAllServicesOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchMode, setSearchMode] = useState<'barber' | 'salon'>('barber');
   const [query, setQuery] = useState('');
@@ -337,7 +339,7 @@ export default function RoleSelectScreen({ navigation }: Props) {
 
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionTitle}>{t.popularServicesTitle}</Text>
-          <Pressable onPress={() => goSearch()}>
+          <Pressable onPress={() => setAllServicesOpen(true)} accessibilityRole="button" testID="popular-services-view-all">
             <Text style={styles.viewAllText}>{t.viewAllAction} →</Text>
           </Pressable>
         </View>
@@ -404,6 +406,15 @@ export default function RoleSelectScreen({ navigation }: Props) {
           <Text style={styles.bottomLabel}>{profileLabel}</Text>
         </Pressable>
       </View>
+      <AllServicesModal
+        visible={allServicesOpen}
+        hindi={language === 'HI'}
+        onClose={() => setAllServicesOpen(false)}
+        onPick={(value) => {
+          setAllServicesOpen(false);
+          goSearch(value);
+        }}
+      />
     </View>
   );
 }

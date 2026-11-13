@@ -2,8 +2,8 @@ import { useCallback, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { BOOKING_PATHS, formatBookingArrivalTime, formatMoney, formatZonedDateTime } from '@barbercue/shared';
-import type { BookingDetailDto, PaginatedResult } from '@barbercue/shared';
+import { BOOKING_PATHS, Language, QUEUE_ENTRIES_HISTORY_PATH, QUEUE_ENTRIES_PATH, formatBookingArrivalTime, formatMoney, formatZonedDateTime } from '@barbercue/shared';
+import type { BookingDetailDto, CustomerQueueHistoryItemDto, PaginatedResult } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
 import { openDirections } from '../lib/booking-actions';
 import { dateLocaleFor } from '../lib/date-locale';
@@ -44,6 +44,57 @@ function statusBg(status: string): string {
   if (status === 'PENDING_PAYMENT') return color.goldSoft;
   if (status === 'CANCELLED') return color.border;
   return color.goldSoft;
+}
+
+type HistoryView = 'bookings' | 'queue';
+
+function queueStatusLabel(status: string, hi: boolean): string {
+  const labels: Record<string, [string, string]> = {
+    WAITING: ['Waiting', 'इंतज़ार में'],
+    CALLED: ['Called', 'बुलाया गया'],
+    IN_SERVICE: ['In service', 'सेवा जारी'],
+    COMPLETED: ['Completed', 'पूरा हुआ'],
+    CANCELLED: ['Left queue', 'कतार छोड़ी'],
+    NO_SHOW: ['Missed', 'नहीं पहुंचे'],
+    EXPIRED: ['Expired', 'समय समाप्त'],
+  };
+  const pair = labels[status];
+  return pair ? pair[hi ? 1 : 0] : status;
+}
+
+function queueStatusColors(status: string): { fg: string; bg: string } {
+  if (status === 'WAITING' || status === 'CALLED' || status === 'IN_SERVICE') return { fg: color.success, bg: color.successSoft };
+  if (status === 'COMPLETED') return { fg: color.ink, bg: color.goldSoft };
+  return { fg: color.muted, bg: color.border };
+}
+
+/** One Live Queue visit (owner report 14 Nov: customers had no Live Queue history). */
+function QueueVisitCard({ visit }: { visit: CustomerQueueHistoryItemDto }) {
+  const { language } = useLanguage();
+  const hi = language === Language.HI;
+  const colors = queueStatusColors(visit.status);
+  const joined = formatZonedDateTime(visit.joinedAt, visit.salonTimezone ?? 'Asia/Kolkata', dateLocaleFor(language), {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+  return (
+    <View style={styles.card} testID="queue-history-item">
+      <View style={styles.cardRow}>
+        <Text style={styles.cardTitle} numberOfLines={1}>
+          {(hi ? 'टोकन #' : 'Token #') + visit.tokenNumber}
+        </Text>
+        <View style={[styles.statusPill, { backgroundColor: colors.bg }]}>
+          <Text style={[styles.statusPillText, { color: colors.fg }]}>{queueStatusLabel(visit.status, hi)}</Text>
+        </View>
+      </View>
+      <Text style={styles.cardSalon}>{visit.salonName}</Text>
+      {visit.serviceName ? <Text style={styles.cardMeta}>{visit.serviceName}</Text> : null}
+      <Text style={styles.cardMeta}>{(hi ? 'कतार में जुड़े: ' : 'Joined: ') + joined}</Text>
+    </View>
+  );
 }
 
 function BookingCard({
@@ -131,8 +182,13 @@ function BookingCard({
 }
 
 export default function MyBookingsScreen({ navigation }: Props) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const hi = language === Language.HI;
   const { rebook, rebookingId, rebookError } = useRebook();
+  const [view, setView] = useState<HistoryView>('bookings');
+  const [visits, setVisits] = useState<CustomerQueueHistoryItemDto[]>([]);
+  const [visitsLoading, setVisitsLoading] = useState(false);
+  const [visitsError, setVisitsError] = useState<string | null>(null);
   const [bookings, setBookings] = useState<BookingDetailDto[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -154,10 +210,25 @@ export default function MyBookingsScreen({ navigation }: Props) {
       });
   }, []);
 
+  const loadVisits = useCallback((isRefresh: boolean) => {
+    isRefresh ? setRefreshing(true) : setVisitsLoading(true);
+    setVisitsError(null);
+    return apiFetch<CustomerQueueHistoryItemDto[]>(`${QUEUE_ENTRIES_PATH}/${QUEUE_ENTRIES_HISTORY_PATH}?limit=50`)
+      .then((items) => setVisits(Array.isArray(items) ? items : []))
+      .catch((err: unknown) =>
+        setVisitsError(err instanceof ApiError ? err.message : hi ? 'Live Queue इतिहास लोड नहीं हो सका।' : 'Could not load your Live Queue history.'),
+      )
+      .finally(() => {
+        setVisitsLoading(false);
+        setRefreshing(false);
+      });
+  }, [hi]);
+
   useFocusEffect(
     useCallback(() => {
-      void load(false);
-    }, [load]),
+      if (view === 'queue') void loadVisits(false);
+      else void load(false);
+    }, [load, loadVisits, view]),
   );
 
   async function handleLoadMore() {
@@ -170,7 +241,45 @@ export default function MyBookingsScreen({ navigation }: Props) {
   return (
     <Screen scroll={false} contentStyle={styles.screenContent}>
       <SectionHeader eyebrow={t.tabBookings} title={t.myBookingsTitle} />
-      {loading ? (
+      <View style={styles.segment} accessibilityRole="tablist">
+        {(['bookings', 'queue'] as const).map((option) => (
+          <Pressable
+            key={option}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: view === option }}
+            onPress={() => setView(option)}
+            style={[styles.segmentItem, view === option && styles.segmentItemActive]}
+            testID={`history-tab-${option}`}
+          >
+            <Text style={[styles.segmentText, view === option && styles.segmentTextActive]}>
+              {option === 'bookings' ? (hi ? 'बुकिंग' : 'Bookings') : 'Live Queue'}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+      {view === 'queue' ? (
+        visitsLoading ? (
+          <View style={styles.skeletonStack}>
+            <Skeleton style={styles.skeletonCard} />
+            <Skeleton style={styles.skeletonCard} />
+          </View>
+        ) : visitsError ? (
+          <InlineError message={visitsError} />
+        ) : visits.length === 0 ? (
+          <EmptyState
+            title={hi ? 'अभी कोई Live Queue इतिहास नहीं' : 'No Live Queue visits yet'}
+            message={hi ? 'जब आप किसी दुकान की Live Queue में जुड़ेंगे, वह यहां दिखेगा।' : 'When you join a shop’s Live Queue, it will show here.'}
+          />
+        ) : (
+          <FlatList
+            data={visits}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.listContent}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void loadVisits(true)} tintColor={color.accent} />}
+            renderItem={({ item }) => <QueueVisitCard visit={item} />}
+          />
+        )
+      ) : loading ? (
         <View style={styles.skeletonStack}>
           <Skeleton style={styles.skeletonCard} />
           <Skeleton style={styles.skeletonCard} />
@@ -245,4 +354,16 @@ const styles = StyleSheet.create({
   detailsText: { fontFamily: font.bodySemiBold, fontSize: fontSize.xs, color: color.accent },
   chevron: { fontFamily: font.bodyBold, fontSize: fontSize.base, color: color.accent, marginLeft: 4 },
   loadMore: { marginTop: space[2] },
+  segment: { flexDirection: 'row', gap: space[2], marginBottom: space[3] },
+  segmentItem: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: space[2],
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: color.border,
+  },
+  segmentItemActive: { backgroundColor: color.accent, borderColor: color.accent },
+  segmentText: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: color.ink },
+  segmentTextActive: { color: '#ffffff' },
 });

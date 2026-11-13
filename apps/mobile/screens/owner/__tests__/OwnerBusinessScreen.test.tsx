@@ -145,6 +145,21 @@ describe('OwnerBusinessScreen', () => {
     expect(screen.queryByText(/₹900\.00/)).toBeNull();
   }, 15000);
 
+  it('lets an Indian shop with no saved timezone create an offer (owner report 14 Nov)', async () => {
+    fetchMock.mockImplementation((path: string, options?: { method?: string; body?: string }) =>
+      String(path).endsWith('/timezone')
+        ? Promise.resolve({ id: 'salon-owned-by-session', timezone: null, countryCode: 'IN', timezoneAutoDetected: false, timezoneManuallyOverridden: false, suggestion: null })
+        : defaultApiResponse(path, options));
+    await render(<OwnerBusinessScreen />);
+    await waitFor(() => expect(screen.getAllByText('Recorded collections').length).toBeGreaterThan(0));
+    await act(async () => { fireEvent.press(screen.getByRole('button', { name: 'Offers' })); });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Create an offer' })).toBeTruthy());
+    expect(screen.getByRole('button', { name: 'Create an offer' }).props.accessibilityState?.disabled).not.toBe(true);
+    await act(async () => { fireEvent.press(screen.getByRole('button', { name: 'Create an offer' })); });
+    expect(screen.getByLabelText('Offer name')).toBeTruthy();
+    expect(screen.getAllByText(/Asia\/Kolkata/).length).toBeGreaterThan(0);
+  }, 15000);
+
   it('creates a server-validated draft and checks prices through the owner API', async () => {
     await render(<OwnerBusinessScreen />);
     await waitFor(() => expect(screen.getAllByText('Recorded collections').length).toBeGreaterThan(0));

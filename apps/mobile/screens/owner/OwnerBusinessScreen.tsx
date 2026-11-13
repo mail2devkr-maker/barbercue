@@ -202,7 +202,9 @@ export default function OwnerBusinessScreen({ route }: { route?: { params?: { in
             apiFetch<SalonServiceDto[]>(base + '/' + DASHBOARD_PATHS.services),
           ]);
           if (requestId === requestSeq.current) {
-            setOfferTimeZone(timezone.timezone ?? null);
+            // Owner report (14 Nov): "Create offer" stayed disabled for shops with no saved timezone.
+            // Same fallback as the Payments panel: suggested zone, else India's single zone.
+            setOfferTimeZone(timezone.timezone ?? timezone.suggestion?.timezone ?? (timezone.countryCode === 'IN' ? 'Asia/Kolkata' : null));
             setOfferServices(Array.isArray(services) ? services.filter((service) => service.isActive !== false) : []);
           }
         } catch {

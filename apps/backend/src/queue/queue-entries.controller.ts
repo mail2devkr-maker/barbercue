@@ -1,5 +1,6 @@
-import { BadRequestException, Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import {
+  QUEUE_ENTRIES_HISTORY_PATH,
   QUEUE_ENTRIES_PATH,
   Role,
   type AuthenticatedUser,
@@ -16,6 +17,18 @@ export class QueueEntriesController {
   @Get('mine/active')
   getMyActiveEntry(@CurrentUser() user: AuthenticatedUser) {
     return this.queueService.getActiveForCustomer(user.id);
+  }
+
+  @Get(QUEUE_ENTRIES_HISTORY_PATH)
+  getMyHistory(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query('limit') limit?: string,
+  ) {
+    const parsed = limit === undefined ? undefined : Number(limit);
+    if (parsed !== undefined && !Number.isFinite(parsed)) {
+      throw new BadRequestException('limit must be a number.');
+    }
+    return this.queueService.listHistoryForCustomer(user.id, parsed);
   }
 
   // Customer self-report is advisory; only shop staff may mark arrivedAt authoritative.

@@ -24,6 +24,7 @@ import {
   type ChairOptionDto,
   type ServiceOptionDto,
   type CreateQueueCustomerInput,
+  type CustomerQueueHistoryItemDto,
   type DashboardQueueDto,
   type QueueEntryDetailDto,
   type QueueStatusDto,
@@ -582,6 +583,48 @@ export class QueueService {
         ? await this.computePosition(entry)
         : null;
     return this.toDetailDto(entry, position);
+  }
+
+  /**
+   * The signed-in customer's own Live Queue visits, newest first (owner report 14 Nov: a customer
+   * could not see their Live Queue history). Walk-in / remote joins only: an appointment check-in
+   * (bookingId set) already shows in the customer's bookings, so it is not listed twice.
+   */
+  async listHistoryForCustomer(
+    customerId: string,
+    limit = 30,
+  ): Promise<CustomerQueueHistoryItemDto[]> {
+    const take = Math.min(Math.max(Math.trunc(limit) || 30, 1), 50);
+    const rows = await this.prisma.queueEntry.findMany({
+      where: { customerId, bookingId: null },
+      orderBy: [{ joinedAt: 'desc' }, { id: 'desc' }],
+      take,
+      include: {
+        service: { select: { name: true } },
+        salon: {
+          select: {
+            name: true,
+            slug: true,
+            timezone: true,
+            city: { select: { slug: true, countryCode: true } },
+          },
+        },
+      },
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      salonId: row.salonId,
+      salonName: row.salon.name,
+      salonSlug: row.salon.slug,
+      citySlug: row.salon.city.slug,
+      countryCode: row.salon.city.countryCode,
+      salonTimezone: row.salon.timezone ?? null,
+      tokenNumber: row.tokenNumber,
+      status: row.status as QueueEntryStatus,
+      serviceName: row.service?.name ?? null,
+      joinedAt: row.joinedAt.toISOString(),
+      serviceCompletedAt: row.serviceCompletedAt?.toISOString() ?? null,
+    }));
   }
 
   /**

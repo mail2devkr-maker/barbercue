@@ -56,4 +56,16 @@ describe('buildDiscoveryQuery', () => {
       buildDiscoveryQuery({ ...base, text: ' beard ', filters: { ...DEFAULT_DISCOVERY_FILTERS, service: 'hair' } }),
     ).toEqual({ kind: 'search', query: 'service=beard' });
   });
+  it('adds the viewer position to a picked-city search so distances show (owner report 14 Nov)', () => {
+    const built = buildDiscoveryQuery({
+      ...base,
+      filters: { ...DEFAULT_DISCOVERY_FILTERS, radiusKm: 2 },
+      city: { city: 'ghaziabad', countryCode: 'IN' },
+      viewer: { lat: 28.67, lng: 77.45 },
+    });
+    // City + position, never a radius (that would hide shops without a map pin).
+    expect(built).toEqual({ kind: 'search', query: 'city=ghaziabad&countryCode=IN&lat=28.67&lng=77.45' });
+    const withoutViewer = buildDiscoveryQuery({ ...base, filters: DEFAULT_DISCOVERY_FILTERS, city: { city: 'ghaziabad', countryCode: 'IN' } });
+    expect(withoutViewer).toEqual({ kind: 'search', query: 'city=ghaziabad&countryCode=IN' });
+  });
 });

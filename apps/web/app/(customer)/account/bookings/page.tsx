@@ -27,6 +27,7 @@ import { ReviewPanel } from "../../../../components/booking/ReviewPanel";
 import { useAssistantRefresh } from "../../../../lib/assistant-events";
 import { CheckInPanel, canCheckIn } from "../../../../components/queue/CheckInPanel";
 import { QueueStatusPanel } from "../../../../components/queue/QueueStatusPanel";
+import { QueueHistorySection } from "../../../../components/queue/QueueHistorySection";
 import { Card } from "../../../../components/ui/Card";
 import { Button, LinkButton } from "../../../../components/ui/Button";
 import styles from "./bookings.module.css";
@@ -410,6 +411,13 @@ export default function MyBookingsPage() {
           </Button>
         </div>
       )}
+
+      <QueueHistorySection
+        className={styles.section}
+        titleClassName={styles.sectionTitle}
+        rowClassName={styles.bookingRow}
+        metaClassName={styles.bookingRowMeta}
+      />
 
       {cancelTarget && (
         <CancelBookingDialog
