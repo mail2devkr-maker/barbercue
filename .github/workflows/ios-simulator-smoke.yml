@@ -404,14 +404,10 @@ jobs:
               timeout: 30000
           - tapOn: "you@example.com"
           - inputText: "owner@fastque.demo.invalid"
-          # With the keyboard up the password field sits under it (a plain tap lands on a key), so
-          # centre it first. Maestro only substitutes MAESTRO_-prefixed environment variables.
-          - scrollUntilVisible:
-              element:
-                text: "••••••••"
-              direction: DOWN
-              centerElement: true
-              timeout: 15000
+          # The open keyboard covers the password field (a tap there lands on a key and types into the
+          # email box), so close it first. Maestro only substitutes MAESTRO_-prefixed environment variables.
+          - hideKeyboard
+          - waitForAnimationToEnd
           - tapOn: "••••••••"
           - inputText: "${MAESTRO_SCREENSHOT_OWNER_PASSWORD}"
           - hideKeyboard
