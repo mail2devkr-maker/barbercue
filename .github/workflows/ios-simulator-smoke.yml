@@ -404,9 +404,22 @@ jobs:
               timeout: 30000
           - tapOn: "you@example.com"
           - inputText: "owner@fastque.demo.invalid"
+          # With the keyboard up the password field sits under it (a plain tap lands on a key), so
+          # centre it first. Maestro only substitutes MAESTRO_-prefixed environment variables.
+          - scrollUntilVisible:
+              element:
+                text: "••••••••"
+              direction: DOWN
+              centerElement: true
+              timeout: 15000
           - tapOn: "••••••••"
-          - inputText: "${SCREENSHOT_OWNER_PASSWORD}"
-          - tapOn: "Sign in"
+          - inputText: "${MAESTRO_SCREENSHOT_OWNER_PASSWORD}"
+          - hideKeyboard
+          - waitForAnimationToEnd
+          # index 0 is the navigation-bar title; index 1 is the Sign in button.
+          - tapOn:
+              text: "Sign in"
+              index: 1
           - extendedWaitUntil:
               visible: ".*FastQue Demo Studio.*"
               timeout: 60000
@@ -445,7 +458,7 @@ jobs:
             for attempt in 1 2; do
               rm -rf "$output_dir"; mkdir -p "$output_dir"
               set +e
-              perl -e 'alarm shift; exec @ARGV' 1500 maestro --device "$device_udid" test --test-output-dir "$output_dir" "$flow_path" 2>&1 | tee "$log_path"
+              MAESTRO_SCREENSHOT_OWNER_PASSWORD="${SCREENSHOT_OWNER_PASSWORD:-}" perl -e 'alarm shift; exec @ARGV' 1500 maestro --device "$device_udid" test --test-output-dir "$output_dir" "$flow_path" 2>&1 | tee "$log_path"
               status=${PIPESTATUS[0]}
               set -e
               [ "$status" -eq 0 ] && break
