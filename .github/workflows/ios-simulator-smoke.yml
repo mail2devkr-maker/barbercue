@@ -351,7 +351,8 @@ jobs:
               visible: "Choose a barber"
               timeout: 30000
           - takeScreenshot: iphone-booking-staff-selection
-          - back
+          # iOS has no system back: tap the navigation bar's back button ("< Salon").
+          - tapOn: "Salon"
           - scrollUntilVisible:
               element:
                 text: "Join queue now"
