@@ -376,13 +376,18 @@ jobs:
           - extendedWaitUntil:
               visible: "LIVE SHOP SNAPSHOT"
               timeout: 30000
+          # The button exists in the hierarchy while still below the fold, so force it to the centre
+          # of the viewport before tapping (an off-screen tap silently does nothing).
           - scrollUntilVisible:
               element:
                 text: "Join queue now"
               direction: DOWN
+              centerElement: true
               timeout: 30000
           - waitForAnimationToEnd
-          - tapOn: "Join queue now"
+          - tapOn:
+              text: "Join queue now"
+              retryTapIfNoChange: true
           - extendedWaitUntil:
               visible: "Join the queue"
               timeout: 30000
