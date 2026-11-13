@@ -11,6 +11,7 @@ import { useSalon } from '../../lib/salon-context';
 import { useLanguage } from '../../lib/language-context';
 import { classifySalonShareLinks, createQrMatrix, type SalonShareResult } from '../../lib/qr-poster';
 import { QrMatrixView } from '../../components/owner/QrMatrixView';
+import { PremiumQueueQr } from '../../components/owner/PremiumQueueQr';
 import { Button, Card, InlineError, Screen, SectionHeader } from '../../components/ui';
 import { color, font, fontSize, space } from '../../lib/theme';
 
@@ -118,6 +119,8 @@ export default function OwnerQrPosterScreen() {
   return (
     <Screen>
       <SectionHeader title={hindi ? 'दुकान का QR पोस्टर' : 'Shop QR poster'} subtitle={hindi ? 'यह QR आपकी दुकान के सार्वजनिक FastQue पेज पर खुलेगा।' : 'This QR opens your shop’s canonical public FastQue page.'} />
+      <PremiumQueueQr salonId={selectedSalonId} salonName={name} hindi={hindi} />
+      <Text style={styles.sectionLabel}>{hindi ? 'दुकान बुकिंग पेज लिंक' : 'Shop booking page link'}</Text>
       {load.kind === 'error' ? (
         <Card>
           <InlineError message={load.message} />
@@ -162,6 +165,7 @@ const styles = StyleSheet.create({
   tagline: { color: '#f6dfe5', fontFamily: font.bodyRegular, fontSize: fontSize.sm, textAlign: 'center', marginTop: space[2], marginBottom: space[3] },
   callout: { color: '#ff7190', fontFamily: font.bodyBold, fontSize: fontSize.sm, letterSpacing: 0.5, textAlign: 'center', marginTop: space[3] },
   powered: { color: '#c9c3c4', fontFamily: font.bodyRegular, fontSize: fontSize.xs, marginTop: space[1] },
+  sectionLabel: { color: color.ink, fontFamily: font.bodyBold, fontSize: fontSize.base, marginTop: space[4], marginBottom: space[2] },
   body: { color: color.ink, fontFamily: font.bodyRegular, fontSize: fontSize.base, lineHeight: 22 },
   note: { color: color.muted, fontFamily: font.bodyRegular, fontSize: fontSize.sm, lineHeight: 20, marginTop: space[3] },
   notice: { color: color.ink, fontFamily: font.bodyRegular, fontSize: fontSize.sm, marginTop: space[3] },

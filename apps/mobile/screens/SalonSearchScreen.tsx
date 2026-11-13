@@ -39,6 +39,8 @@ import {
 import { useLanguage } from '../lib/language-context';
 import { useAuth } from '../lib/auth-context';
 import { DEFAULT_DISCOVERY_FILTERS, buildDiscoveryQuery, type DiscoveryFilters } from '../lib/discovery-search';
+import { cityQueryParams, getLocationChoice, locationChoiceLabel, setLocationChoice, useLocationChoice, type LocationChoice } from '../lib/location-choice';
+import { LocationPickerModal } from '../components/location/LocationPickerModal';
 import { findCityForDeviceLocation, buildCityFallbackQuery, appendCityMatchesToNearby, getSearchGpsCoordinates } from '../lib/nearby-city-fallback';
 import type { SearchStackParamList } from '../navigation/types';
 
@@ -294,6 +296,9 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
     initialLat !== undefined && initialLng !== undefined ? { lat: initialLat, lng: initialLng } : null,
   );
   const [locating, setLocating] = useState(false);
+  // Website parity: one shared city / current-location choice (also shown on Home).
+  const locationChoice = useLocationChoice();
+  const [locationPickerOpen, setLocationPickerOpen] = useState(false);
   // Part 8/9 (distance + price + service filters).
   const [radiusKm, setRadiusKm] = useState<number | null>(null);
   const [priceMin, setPriceMin] = useState<number | null>(null);
@@ -357,7 +362,13 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
     queryOverride?: string,
   ) {
     const filters: DiscoveryFilters = { radiusKm, priceMin, priceMax, service, ...discovery, ...overrides };
-    const built = buildDiscoveryQuery({ text: queryOverride ?? q, coords, filters, favoriteIds: isCustomer ? favoriteIds : null });
+    const built = buildDiscoveryQuery({
+      text: queryOverride ?? q,
+      coords,
+      filters,
+      favoriteIds: isCustomer ? favoriteIds : null,
+      city: coords ? null : cityQueryParams(getLocationChoice()),
+    });
     const requestId = ++searchSequence.current;
     setSearched(true);
     setError(null);
@@ -499,7 +510,7 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
   // not on every param change, so returning to this same screen instance later doesn't re-fire a
   // stale search.
   useEffect(() => {
-    if (initialQuery || (initialLat !== undefined && initialLng !== undefined)) {
+    if (initialQuery || (initialLat !== undefined && initialLng !== undefined) || getLocationChoice()?.kind === 'city') {
       void runSearch(false, initialLat !== undefined && initialLng !== undefined ? { lat: initialLat, lng: initialLng } : null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -528,12 +539,27 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
       }
       const coords = gps.coords;
       setNearMe(coords);
+      if (getLocationChoice()?.kind !== 'gps') {
+        setLocationChoice({ kind: 'gps', label: t.nearMeFound, coords });
+      }
       await runSearch(false, coords);
     } catch {
       setError(t.couldNotGetLocation);
     } finally {
       setLocating(false);
     }
+  }
+
+  // A choice made in the picker re-runs the search the way the website's City / location control does.
+  function applyLocationChoice(choice: LocationChoice | null) {
+    if (choice?.kind === 'gps') {
+      setNearMe(choice.coords);
+      void runSearch(false, choice.coords);
+      return;
+    }
+    setNearMe(null);
+    setRadiusKm(null);
+    void runSearch(false, null, { radiusKm: null });
   }
 
   const distanceOptions: FilterDropdownOption[] = DISTANCE_OPTIONS.map((option) => ({
@@ -640,12 +666,35 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
         </ScrollView>
       )}
 
-      <PremiumButton
-        title={locating ? t.locatingAction : nearMe ? t.nearMeFound : t.nearMe}
-        variant="quiet"
-        onPress={() => void handleNearMe()}
-        loading={locating}
-        style={styles.nearMeButton}
+      <View style={styles.locationRow}>
+        <Pressable
+          style={styles.cityButton}
+          onPress={() => setLocationPickerOpen(true)}
+          accessibilityRole="button"
+          accessibilityLabel={language === 'HI' ? 'शहर / लोकेशन बदलें' : 'Change city / location'}
+        >
+          <Text style={styles.cityButtonText} numberOfLines={1}>
+            {`📍 ${locationChoiceLabel(locationChoice) ?? (language === 'HI' ? 'सभी शहर' : 'All cities')} ▾`}
+          </Text>
+        </Pressable>
+        <PremiumButton
+          title={locating ? t.locatingAction : nearMe ? t.nearMeFound : t.nearMe}
+          variant="quiet"
+          onPress={() => void handleNearMe()}
+          loading={locating}
+          style={styles.nearMeButton}
+        />
+      </View>
+      {locationChoice?.kind === 'city' && !nearMe ? (
+        <Text style={styles.filterHint}>
+          {language === 'HI' ? 'दूरी देखने के लिए "पास में" दबाएँ या मौजूदा लोकेशन चुनें।' : 'Tap Near me (or use your current location) to see how far each shop is.'}
+        </Text>
+      ) : null}
+      <LocationPickerModal
+        visible={locationPickerOpen}
+        onClose={() => setLocationPickerOpen(false)}
+        onChosen={applyLocationChoice}
+        hindi={language === 'HI'}
       />
 
       {/* Owner-reported discoverability fix: always visible, not gated behind "Near me" already
@@ -916,7 +965,10 @@ const styles = StyleSheet.create({
   },
   suggestionName: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: fastQue.text },
   suggestionCategory: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: fastQue.textMuted, marginTop: 2 },
-  nearMeButton: { marginBottom: space[4] },
+  nearMeButton: { marginBottom: space[4], flexShrink: 0 },
+  locationRow: { flexDirection: 'row', alignItems: 'flex-start', gap: space[2], flexWrap: 'wrap' },
+  cityButton: { flex: 1, minWidth: 140, minHeight: 44, justifyContent: 'center', paddingHorizontal: space[3], borderRadius: 12, borderWidth: 1, borderColor: fastQue.borderStrong, backgroundColor: fastQue.card, marginBottom: space[4] },
+  cityButtonText: { fontFamily: font.bodySemiBold, color: fastQue.text, fontSize: 14 },
   filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2], marginBottom: space[2] },
   toggleRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2], marginBottom: space[2] },
   toggleChip: {
