@@ -421,6 +421,15 @@ jobs:
           - extendedWaitUntil:
               visible: ".*FastQue Demo Studio.*"
               timeout: 60000
+          # iOS offers "Save Password?" after a password sign-in; it covers the screen (run 43509667212).
+          - extendedWaitUntil:
+              visible: "Not Now"
+              timeout: 10000
+              optional: true
+          - tapOn:
+              text: "Not Now"
+              optional: true
+          - waitForAnimationToEnd
           - takeScreenshot: iphone-owner-dashboard
           - tapOn: "Bookings"
           - extendedWaitUntil:
