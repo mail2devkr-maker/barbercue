@@ -337,10 +337,10 @@ jobs:
           - takeScreenshot: iphone-salon-profile
           - scrollUntilVisible:
               element:
-                text: "Haircut"
+                text: 'Haircut(?! \+).*'
               direction: DOWN
               timeout: 30000
-          - tapOn: "Haircut"
+          - tapOn: 'Haircut(?! \+).*'
           - scrollUntilVisible:
               element:
                 text: "Continue"
