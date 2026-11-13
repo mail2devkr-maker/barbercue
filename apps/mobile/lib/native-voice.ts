@@ -1,4 +1,5 @@
-import { ExpoSpeechRecognitionModule } from 'expo-speech-recognition';
+import type { ExpoSpeechRecognitionModule as SpeechModule } from 'expo-speech-recognition';
+import { hasExpoNativeModule } from './native-availability';
 import type { RecognizerLike } from './voice-conversation';
 
 // Phone adapter for the shared voice engine (lib/voice-conversation.ts, copied from the website).
@@ -9,7 +10,18 @@ import type { RecognizerLike } from './voice-conversation';
 
 type Alternative = { transcript: string; confidence?: number };
 type ResultList = Array<Alternative[] & { isFinal: boolean }>;
-type Module = Pick<typeof ExpoSpeechRecognitionModule, 'start' | 'stop' | 'abort' | 'addListener'>;
+type Module = Pick<typeof SpeechModule, 'start' | 'stop' | 'abort' | 'addListener'>;
+
+/** The phone's speech module, or null on an older binary that does not contain it (OTA safety). */
+function speechModule(): typeof SpeechModule | null {
+  if (!hasExpoNativeModule('ExpoSpeechRecognition')) return null;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return (require('expo-speech-recognition') as { ExpoSpeechRecognitionModule: typeof SpeechModule }).ExpoSpeechRecognitionModule;
+  } catch {
+    return null;
+  }
+}
 
 /** Languages offered in the Assistant, matching the website's हिंदी / Hinglish and English choices. */
 export const VOICE_LANGS = [
@@ -27,7 +39,7 @@ function toAlternatives(results: Array<{ transcript: string; confidence: number 
  * keeps the finished utterances of the current session so `results` looks like the browser's
  * continuous result list that readResults() expects.
  */
-export function createNativeRecognizer(module: Module = ExpoSpeechRecognitionModule): RecognizerLike {
+export function createNativeRecognizer(module: Module | null = speechModule()): RecognizerLike {
   let finals: ResultList = [];
   let subscriptions: Array<{ remove(): void }> = [];
   const detach = () => { subscriptions.forEach((s) => s.remove()); subscriptions = []; };
@@ -44,6 +56,12 @@ export function createNativeRecognizer(module: Module = ExpoSpeechRecognitionMod
     start() {
       finals = [];
       detach();
+      if (!module) {
+        // Older binary without the speech module (OTA safety): fail like a refused microphone.
+        recognizer.onerror?.({ error: 'service-not-allowed' });
+        recognizer.onend?.();
+        return;
+      }
       subscriptions = [
         module.addListener('result', (event) => {
           const alternatives = toAlternatives(event.results ?? []);
@@ -69,8 +87,8 @@ export function createNativeRecognizer(module: Module = ExpoSpeechRecognitionMod
         recognizer.onend?.();
       }
     },
-    stop() { try { module.stop(); } catch { /* already stopped */ } },
-    abort() { try { module.abort(); } catch { /* already stopped */ } },
+    stop() { try { module?.stop(); } catch { /* already stopped */ } },
+    abort() { try { module?.abort(); } catch { /* already stopped */ } },
   };
   return recognizer;
 }
@@ -78,7 +96,9 @@ export function createNativeRecognizer(module: Module = ExpoSpeechRecognitionMod
 /** Microphone + speech-recognition permission, asked only after the user tapped a voice button. */
 export async function ensureVoicePermission(): Promise<boolean> {
   try {
-    const result = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+    const native = speechModule();
+    if (!native) return false;
+    const result = await native.requestPermissionsAsync();
     return result.granted === true;
   } catch {
     return false;
@@ -87,7 +107,7 @@ export async function ensureVoicePermission(): Promise<boolean> {
 
 export function voiceRecognitionAvailable(): boolean {
   try {
-    return ExpoSpeechRecognitionModule.isRecognitionAvailable();
+    return speechModule()?.isRecognitionAvailable() ?? false;
   } catch {
     return false;
   }

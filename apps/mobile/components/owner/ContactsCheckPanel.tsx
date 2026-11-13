@@ -17,7 +17,8 @@ import {
 import { ledgerPath, parseRecordResult, savedSentence } from '../../lib/contact-ledger';
 import { ContactLedgerPanel } from './ContactLedgerPanel';
 import { contactFileToList, hasAcceptedExtension, MAX_FILE_BYTES } from '../../lib/contact-file';
-import * as DocumentPicker from 'expo-document-picker';
+import type * as DocumentPickerModule from 'expo-document-picker';
+import { hasExpoNativeModule } from '../../lib/native-availability';
 import * as FileSystem from 'expo-file-system/legacy';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 import { Button, Card, InlineError } from '../ui';
@@ -30,6 +31,17 @@ import { Button, Card, InlineError } from '../ui';
  * website's lib/contact-preview.ts and lib/contact-ledger.ts (copied).
  */
 type Result = { rows: ContactRow[]; body: SalonContactImportPreviewInput; preview: SalonContactImportPreviewDto };
+
+// Loaded only on a binary that contains the native picker (see lib/native-availability.ts).
+function loadDocumentPicker(): typeof DocumentPickerModule | null {
+  if (!hasExpoNativeModule('ExpoDocumentPicker')) return null;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require('expo-document-picker') as typeof DocumentPickerModule;
+  } catch {
+    return null;
+  }
+}
 
 export function ContactsCheckPanel({ salonId }: { salonId: string }) {
   const path = `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.contacts}/preview`;
@@ -95,6 +107,8 @@ export function ContactsCheckPanel({ salonId }: { salonId: string }) {
   // The file never leaves the device; only the reviewed list is checked when the owner presses Check.
   const importFile = async () => {
     setFileNote(null);
+    const DocumentPicker = loadDocumentPicker();
+    if (!DocumentPicker) return;
     try {
       const picked = await DocumentPicker.getDocumentAsync({
         type: ['text/csv', 'text/comma-separated-values', 'text/plain', 'text/vcard', 'text/x-vcard', 'application/vnd.ms-excel', '*/*'],
@@ -142,7 +156,9 @@ export function ContactsCheckPanel({ salonId }: { salonId: string }) {
       <Card>
         <Text style={styles.heading}>Your list</Text>
         <Text style={styles.muted}>{`One person per line: the phone number, and optionally how and when they agreed, like "98765 43210, IN_PERSON, 2026-09-30". Up to ${MAX_CONTACTS} at a time.`}</Text>
-        <Button title="Import a contacts file (.csv, .txt, .vcf)" variant="outline" onPress={() => void importFile()} />
+        {hasExpoNativeModule('ExpoDocumentPicker') ? (
+          <Button title="Import a contacts file (.csv, .txt, .vcf)" variant="outline" onPress={() => void importFile()} />
+        ) : null}
         {fileNote ? (
           <View accessibilityLiveRegion="polite">
             <Text style={fileNote.tone === 'error' ? styles.fileError : styles.muted}>{fileNote.message}</Text>

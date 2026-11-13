@@ -36,8 +36,8 @@ async function mount(): Promise<Rendered> {
   await act(async () => { tree = TestRenderer.create(createElement(OwnerLiveAlerts)); });
   return tree;
 }
-const banners = (tree: Rendered) => tree.root.findAll((n) => n.props.testID === 'owner-live-alert' && typeof n.props.onPress === 'function' && typeof n.type !== 'string');
-const bannerText = (tree: Rendered) => banners(tree).map((n) => n.props.accessibilityLabel);
+const banners = (tree: Rendered) => tree.root.findAll((n: { props: Record<string, unknown>; type: unknown }) => n.props.testID === 'owner-live-alert' && typeof n.props.onPress === 'function' && typeof n.type !== 'string');
+const bannerText = (tree: Rendered) => banners(tree).map((n: { props: Record<string, unknown>; type: unknown }) => n.props.accessibilityLabel);
 
 beforeEach(() => {
   __resetBookingVoiceDedupeForTests();
@@ -55,7 +55,7 @@ describe('OwnerLiveAlerts — alerts on every owner screen (owner report, 13 Nov
     expect(mockSpeak).toHaveBeenCalledWith(expect.objectContaining({ event: 'queue.joined', tokenNumber: 7, serviceName: 'Haircut' }));
     await act(async () => handlers['queue.entry.joined']({ salonId: 's1', queueEntryId: 'q1', tokenNumber: 7, serviceName: 'Haircut' }));
     expect(mockSpeak).toHaveBeenCalledTimes(1);
-    await act(async () => banners(tree)[0].props.onPress());
+    await act(async () => (banners(tree)[0].props.onPress as () => void)());
     expect(mockNavigate).toHaveBeenCalledWith('OwnerQueueTab');
     await act(async () => tree.unmount());
   });

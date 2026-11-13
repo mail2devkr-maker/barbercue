@@ -1,7 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
 import { Image, Share, StyleSheet, Text, View } from 'react-native';
 import * as Sharing from 'expo-sharing';
-import { captureRef } from 'react-native-view-shot';
+import { hasTurboNativeModule } from '../../lib/native-availability';
+
+// react-native-view-shot resolves its TurboModule at import time, so it is loaded only on a binary
+// that contains it (OTA safety, see lib/native-availability.ts).
+function loadCaptureRef(): typeof import('react-native-view-shot').captureRef | null {
+  if (!hasTurboNativeModule('RNViewShot')) return null;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return (require('react-native-view-shot') as typeof import('react-native-view-shot')).captureRef;
+  } catch {
+    return null;
+  }
+}
 import { DASHBOARD_PATHS, type PublicQueueQrDto, type SalonProfileDetailDto } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../../lib/api';
 import {
@@ -71,6 +83,8 @@ export function PremiumQueueQr({ salonId, salonName, hindi }: { salonId: string;
     if (!queueUrl || !posterRef.current) return;
     setAction('image'); setActionError(null); setNotice(null);
     try {
+      const captureRef = loadCaptureRef();
+      if (!captureRef) throw new Error('This app version cannot save the poster image. Update FastQue to save it.');
       const uri = await captureRef(posterRef, { format: 'png', quality: 1, result: 'tmpfile', fileName: queueQrFileName(salonName) });
       if (!(await Sharing.isAvailableAsync())) throw new Error('sharing unavailable');
       await Sharing.shareAsync(uri, { mimeType: 'image/png', dialogTitle: salonName });
