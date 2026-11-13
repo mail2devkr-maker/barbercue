@@ -398,7 +398,7 @@ jobs:
               visible: "Search"
               timeout: 90000
           - tapOn: "Menu"
-          - tapOn: "Shop Owner"
+          - tapOn: "Shop Owner.*"
           - extendedWaitUntil:
               visible: "you@example.com"
               timeout: 30000
