@@ -351,18 +351,38 @@ jobs:
               visible: "Choose a barber"
               timeout: 30000
           - takeScreenshot: iphone-booking-staff-selection
-          # iOS has no system back: tap the navigation bar's back button ("< Salon").
-          - tapOn: "Salon"
-          - waitForAnimationToEnd
+          # Navigating back to the salon page freezes later navigation at this app SHA (known RN
+          # defect), so start a fresh session and open the salon straight into the walk-in queue.
+          - launchApp:
+              clearState: true
+          - extendedWaitUntil:
+              visible: "Search"
+              timeout: 90000
+          - tapOn: "Search"
+          - extendedWaitUntil:
+              visible: "Find a salon"
+              timeout: 30000
+          - tapOn: "Search services…"
+          - inputText: "Haircut"
+          - tapOn:
+              text: "Continue"
+              optional: true
+          - pressKey: Enter
+          - extendedWaitUntil:
+              visible:
+                text: ".*FastQue Demo Studio.*"
+              timeout: 45000
+          - tapOn: ".*FastQue Demo Studio.*"
+          - extendedWaitUntil:
+              visible: "LIVE SHOP SNAPSHOT"
+              timeout: 30000
           - scrollUntilVisible:
               element:
                 text: "Join queue now"
-              direction: UP
+              direction: DOWN
               timeout: 30000
           - waitForAnimationToEnd
-          - tapOn:
-              text: "Join queue now"
-              retryTapIfNoChange: true
+          - tapOn: "Join queue now"
           - extendedWaitUntil:
               visible: "Join the queue"
               timeout: 30000
