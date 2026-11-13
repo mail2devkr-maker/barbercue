@@ -410,7 +410,9 @@ jobs:
           - waitForAnimationToEnd
           - tapOn: "••••••••"
           - inputText: "${MAESTRO_SCREENSHOT_OWNER_PASSWORD}"
-          - hideKeyboard
+          # hideKeyboard cannot close the secure-entry keyboard (iOS shows the Passwords bar there);
+          # Return blurs the single-line password field, which closes the keyboard.
+          - pressKey: Enter
           - waitForAnimationToEnd
           # index 0 is the navigation-bar title; index 1 is the Sign in button.
           - tapOn:
