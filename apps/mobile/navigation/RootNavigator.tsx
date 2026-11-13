@@ -16,6 +16,7 @@ import { subscribeQueueArrivalNavigation } from '../lib/queue-push-navigation';
 import { isCreditsEnabled } from '../lib/feature-flags';
 import { fastQue, font } from '../lib/theme';
 import { TabIcon, type TabIconName } from '../components/ui/TabIcon';
+import { AssistantFab } from '../components/assistant/AssistantFab';
 import type { TabParamList } from './types';
 
 const Tab = createBottomTabNavigator<TabParamList>();
@@ -166,6 +167,11 @@ export default function RootNavigator() {
         }}
         />
       </Tab.Navigator>
+      <AssistantFab
+        tabBarHeight={60 + insets.bottom}
+        includeBottomInset
+        onOpen={() => navigationRef.navigate('AccountTab', { screen: 'Assistant' })}
+      />
     </>
   );
 }
