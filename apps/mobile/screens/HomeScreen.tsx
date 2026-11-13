@@ -16,6 +16,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useKeyboardAwareScroll } from '../lib/keyboard-aware';
 import {
   BOOKING_PATHS,
   CREDITS_PATHS,
@@ -88,6 +89,7 @@ function formatSlot(iso: string, language: Language): string {
 
 export default function HomeScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
+  const keyboardAware = useKeyboardAwareScroll();
   const { width: windowWidth } = useWindowDimensions();
   const isNarrowHeader = windowWidth <= NARROW_HEADER_MAX_WIDTH;
   const [loading, setLoading] = useState(true);
@@ -285,8 +287,9 @@ export default function HomeScreen({ navigation }: Props) {
       </View>
 
       <ScrollView
+        {...keyboardAware.scrollProps}
         style={styles.scroll}
-        contentContainerStyle={{ paddingBottom: insets.bottom + space[6], backgroundColor: fastQue.background }}
+        contentContainerStyle={{ paddingBottom: insets.bottom + space[6] + keyboardAware.bottomInset, backgroundColor: fastQue.background }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} tintColor={color.accent} colors={[color.accent]} />}
         keyboardShouldPersistTaps="handled"
         automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}

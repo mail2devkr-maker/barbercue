@@ -37,6 +37,7 @@ import { resolveEffectiveBookingServices } from '../bookings/effective-booking-s
 import { zonedDayBounds } from '../common/timezone/timezone';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { NotificationsService } from '../notifications/notifications.service';
+import { PushDispatchService } from '../push-notifications/push-dispatch.service';
 import { QueueAutoAssignTrigger } from './queue-auto-assign.trigger';
 import { ServiceCompletedHook } from './service-completed.hook';
 
@@ -110,7 +111,32 @@ export class QueueService {
     @Optional() private readonly autoAssignTrigger?: QueueAutoAssignTrigger,
     // Inventory Phase 2: salon-approved automatic product deduction after a completed service.
     @Optional() private readonly serviceCompletedHook?: ServiceCompletedHook,
+    // Owner-reported (13 Nov): native push to the owner when a customer joins the Live Queue.
+    @Optional() private readonly pushDispatch?: PushDispatchService,
   ) {}
+
+  /**
+   * Owner-reported (13 Nov): a Live Queue join was only announced while the owner had the Live
+   * Queue page open. After the join has committed, tell every owner screen (realtime
+   * `queue.entry.joined`) and the owner's phone (OS push, works in the background / app closed).
+   * Best-effort and never throws: an alert failure must never undo or fail a successful join.
+   */
+  private announceQueueJoin(ownerUserId: string, entry: QueueEntryDetailDto): void {
+    try {
+      this.realtime.emitQueueEntryJoined(entry.salonId, entry.id, entry.tokenNumber ?? null, entry.serviceName ?? null);
+    } catch (err) {
+      this.logger.warn(`Queue join realtime alert failed: ${err instanceof Error ? err.message : 'unknown'}`);
+    }
+    void this.pushDispatch
+      ?.dispatchLocalizedToUser(ownerUserId, 'queueJoined', entry.serviceName ?? null, {
+        type: 'queue.joined',
+        salonId: entry.salonId,
+        queueEntryId: entry.id,
+      })
+      .catch((err: unknown) =>
+        this.logger.warn(`Queue join push failed: ${err instanceof Error ? err.message : 'unknown'}`),
+      );
+  }
 
   /** Lets the automatic allocator react to anything that may have freed a barber/chair or added a
    * seatable customer. Fire-and-forget; never affects the caller (see QueueAutoAssignTrigger). */
@@ -315,7 +341,9 @@ export class QueueService {
       { salonId },
       `dashboard/salons/${salonId}/queue`,
     );
-    return this.getDetailOrThrow(entryId);
+    const detail = await this.getDetailOrThrow(entryId);
+    this.announceQueueJoin(salon.ownerUserId, detail);
+    return detail;
   }
 
   /**
@@ -394,7 +422,9 @@ export class QueueService {
     } catch (err) {
       this.logger.warn(`Guest join owner notification failed: ${err instanceof Error ? err.message : 'unknown'}`);
     }
-    return { ...(await this.getDetailOrThrow(entryId)), guestAccessToken };
+    const detail = await this.getDetailOrThrow(entryId);
+    this.announceQueueJoin(salon.ownerUserId, detail);
+    return { ...detail, guestAccessToken };
   }
 
   private guestHash(guestAccessToken: string): string {

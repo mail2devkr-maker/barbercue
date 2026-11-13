@@ -27,7 +27,7 @@ Built on #398 head `4656dfb4` (contains master `ce2ee60d`). Mobile-only; no back
 | Customer | My invoices (PDF), notification preferences, verified sign-in phone, Premium plans (behind the existing Play release gate) |
 | Verification | Website also uses notes + hosted HTTPS links (no file upload) — already at parity |
 
-Intentional differences: privileged admin roles stay web-only; the website's in-browser contact-file import is paste-only on the phone; paid Premium plan prices stay behind the Play gate.
+Intentional differences: privileged admin roles stay web-only; paid Premium plan prices stay behind the Play gate.
 
 Native: adds `expo-sharing` and `expo-camera` (no microphone). The resolved Android permission list is unchanged by this PR (CAMERA and RECORD_AUDIO were already declared by `expo-image-picker`).
 
@@ -170,3 +170,17 @@ Exact-head GitHub CI — all three workflows **SUCCESS**:
 The parity matrix above remains honest: several owner flows are PARTIAL, printable public QR poster export and native Assistant are GAP, and owner/customer/employee production-authenticated runtime acceptance is pending. Public shop QR preview/link-share is only source-level in the current candidate until device acceptance. The last cited read-only map-pin aggregate was 6/107 active salons pinned; the other 101 distances remain unavailable until owners provide real coordinates.
 
 Current environment gates, rechecked 2026-11-05: `Resolve-DnsName api.expo.dev` failed and `Test-NetConnection api.expo.dev -Port 443` returned `False`; `eas.cmd whoami` did not return before the diagnostic was interrupted. EAS account identity, remote Android versionCode, current allowance and signing readiness are therefore NOT VERIFIED and no build was started. ADB attempted its read-only device listing but the local daemon failed with `could not read ok from ADB Server`; the Galaxy S20 FE was not detected or changed. No Play upload, OTA publication, production deployment/database change, master merge, or public rollout occurred.
+
+## Build 34 closure (13 Nov 2026)
+
+| Item | Status |
+|---|---|
+| Contacts file import (.csv/.txt/.vcf) | Done — expo-document-picker; website parser copied (contact-file.ts) with its tests |
+| Agreement records management (stop / erase) | Done — ContactLedgerPanel, same SANDBOX gate as the website |
+| Shop-wide stock history with type + product filter | Done — Inventory → History tab |
+| City / current-location picker incl. signed-out home | Done |
+| Premium Customer Queue QR + PNG poster | Done |
+| Floating FastQue Assistant + voice conversation / push-to-talk / spoken replies | Done — website VoiceConversation engine (28 tests) |
+| Sign in with Apple, account deletion requests (iOS) | Done — backend live on master 34e1f279 |
+
+After this build, JavaScript-only fixes ship over the air (EAS Update, channel `production`, runtime = app version) without a new store build.

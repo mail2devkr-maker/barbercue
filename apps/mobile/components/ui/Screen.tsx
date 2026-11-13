@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { KeyboardAvoidingView, Platform, RefreshControl, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useKeyboardAwareScroll } from '../../lib/keyboard-aware';
 import { color, space } from '../../lib/theme';
 
 interface ScreenProps {
@@ -22,6 +23,7 @@ interface ScreenProps {
  */
 export function Screen({ children, scroll = true, refreshing, onRefresh, contentStyle, edges = ['top', 'bottom'] }: ScreenProps) {
   const insets = useSafeAreaInsets();
+  const keyboardAware = useKeyboardAwareScroll({ padAndroid: false });
   const padding = {
     paddingTop: edges.includes('top') ? insets.top : 0,
     paddingBottom: edges.includes('bottom') ? insets.bottom : 0,
@@ -34,6 +36,7 @@ export function Screen({ children, scroll = true, refreshing, onRefresh, content
     Platform.OS === 'ios' ? <KeyboardAvoidingView style={styles.root} behavior="padding">{fixed}</KeyboardAvoidingView> : fixed
   ) : (
     <ScrollView
+      {...keyboardAware.scrollProps}
       style={styles.root}
       contentContainerStyle={[styles.scrollContent, padding, contentStyle]}
       keyboardShouldPersistTaps="handled"

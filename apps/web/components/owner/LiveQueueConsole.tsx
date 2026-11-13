@@ -23,6 +23,7 @@ import { ServiceUsageDialog } from "./inventory/ServiceUsageDialog";
 import { useOwnerShell, useShopTimeZone } from "./OwnerShell";
 import { Badge, Banner, Btn, BtnLink, Card, Dialog, EmptyState, Field, PageHead, Skeleton, Tabs } from "./parts";
 import ui from "./owner.module.css";
+import { claimOwnerAlert } from "../../lib/owner-alert-dedupe";
 
 type View = "waiting" | "in-service" | "completed" | "no-show" | "history";
 const VIEWS: ReadonlyArray<View> = ["waiting", "in-service", "completed", "no-show", "history"];
@@ -155,9 +156,13 @@ export function LiveQueueConsole({ salonId }: { salonId: string }) {
         const arrivals = waiting.filter((e) => !knownWaiting.current.has(e.id));
         if (arrivals.length > 0) {
           setFreshIds((cur) => Array.from(new Set([...cur, ...arrivals.map((e) => e.id)])));
+        }
+        // The shell-wide OwnerLiveAlerts may already have announced these joins.
+        const unannounced = arrivals.filter((e) => claimOwnerAlert("queue.joined", e.id));
+        if (unannounced.length > 0) {
           void chime();
           if (voiceRef.current) {
-            const latest = arrivals[arrivals.length - 1];
+            const latest = unannounced[unannounced.length - 1];
             speakOwnerVoice(ownerVoiceAnnouncements(language.current).newCustomerJoined(latest.tokenNumber, latest.serviceName), language.current);
           }
         }

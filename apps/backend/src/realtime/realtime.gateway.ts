@@ -94,6 +94,22 @@ export class RealtimeGateway implements OnGatewayConnection {
       .emit('queue.updated', { salonId, revision: Date.now() });
   }
 
+  /**
+   * Owner-reported (13 Nov): a customer joined the Live Queue. Lets every owner screen (web shell,
+   * mobile app) announce the join without the Live Queue page being open. Ids, token number and
+   * service name only - never the customer's name or phone.
+   */
+  emitQueueEntryJoined(
+    salonId: string,
+    queueEntryId: string,
+    tokenNumber: number | null,
+    serviceName: string | null,
+  ): void {
+    this.server
+      .to(`salon:${salonId}`)
+      .emit('queue.entry.joined', { salonId, queueEntryId, tokenNumber, serviceName });
+  }
+
   emitQueueEntryReassigned(salonId: string, queueEntryId: string): void {
     this.server
       .to(`salon:${salonId}`)

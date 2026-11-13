@@ -30,6 +30,20 @@ export function parseQueueArrivalPushData(raw: unknown): QueueArrivalPushData | 
   };
 }
 
+/**
+ * Owner-reported (13 Nov): the backend's "new customer in Live Queue" push (`queue.joined`). Only a
+ * TAP on it opens the owner's Live Queue (same verified-workplace routing as the arrival push);
+ * receiving it in the foreground never moves the owner off the screen they are using.
+ */
+export function parseOwnerQueueJoinedPushData(raw: unknown): QueueArrivalPushData | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const value = raw as Record<string, unknown>;
+  if (value.type !== 'queue.joined') return null;
+  if (typeof value.salonId !== 'string' || value.salonId.length === 0) return null;
+  if (typeof value.queueEntryId !== 'string' || value.queueEntryId.length === 0) return null;
+  return { type: 'queue.arrival_check', salonId: value.salonId, queueEntryId: value.queueEntryId };
+}
+
 function replay(target: 'owner' | 'customer' | 'guest') {
   const pending = target === 'owner' ? pendingOwner : target === 'customer' ? pendingCustomer : pendingGuest;
   if (!pending) return;

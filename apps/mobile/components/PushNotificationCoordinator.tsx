@@ -22,7 +22,7 @@ import {
   type OwnerBookingPushData,
 } from '../lib/push-navigation';
 import { requestOwnerArrivalPrompt } from '../lib/arrival-prompt';
-import { parseQueueArrivalPushData, requestQueueArrivalNavigation } from '../lib/queue-push-navigation';
+import { parseOwnerQueueJoinedPushData, parseQueueArrivalPushData, requestQueueArrivalNavigation } from '../lib/queue-push-navigation';
 import {
   LOCAL_ARRIVAL_ALERT_TYPE,
   foregroundArrivalPushBehavior,
@@ -117,6 +117,13 @@ export function PushNotificationCoordinator() {
     response: Notifications.NotificationResponse,
     actor: MeResponse | null,
   ): boolean {
+    // A tapped "new customer in Live Queue" push opens the owner's queue (navigation only).
+    const joined = parseOwnerQueueJoinedPushData(response.notification.request.content.data);
+    if (joined) {
+      if (!isOwner(actor)) return false;
+      requestQueueArrivalNavigation('owner', joined);
+      return true;
+    }
     const payload = parseQueueArrivalPushData(response.notification.request.content.data);
     if (!payload) return false;
     // A push only requests navigation; neither this handler nor its payload

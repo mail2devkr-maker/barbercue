@@ -26,6 +26,7 @@ import { Button } from "../ui/Button";
 import { ShopBookingActions } from "../owner/ShopBookingActions";
 import { OwnerQueueVisits } from "./OwnerQueueVisits";
 import styles from "./bookings.module.css";
+import { claimOwnerAlert } from "../../lib/owner-alert-dedupe";
 
 const PAGE_SIZE = 20;
 
@@ -353,7 +354,8 @@ export function OwnerBookingsView({ salonId }: { salonId: string }) {
       apiFetch<OwnerBookingDetailDto>(`${bookingsPath(salonId)}/${payload.bookingId}`)
         .then((detail) => {
           setNewNotice(detail);
-          if (alertsEnabledRef.current) {
+          // The shell-wide OwnerLiveAlerts may already have announced this booking.
+          if (alertsEnabledRef.current && claimOwnerAlert("booking.created", payload.bookingId)) {
             playChime();
             // Real assigned barber wins over the customer's soft preference; at booking.created
             // neither can be stale yet (assignment only happens later, at queue check-in). Never

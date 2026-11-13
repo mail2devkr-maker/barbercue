@@ -294,9 +294,13 @@ maybe('Live Queue #330 independent verification (disposable PostgreSQL)', () => 
       expect(await notifs(ids.cust2)).toBe(1);
       expect(await notifs(ids.ownerA)).toBe(2); // 1 from the guest above + this one
       expect(pushes.filter((p) => String(p.to).includes('CUST2'))).toHaveLength(1);
-      expect(pushes.filter((p) => String(p.to).includes('OWNERA'))).toHaveLength(1);
+      // The owner may also receive the fire-and-forget "new customer in Live Queue" push from the
+      // join itself (13 Nov); the T-10 reminder must still reach the owner exactly once.
+      const ownerArrival = pushes.filter((p) => String(p.to).includes('OWNERA') && (p.data as { type?: string } | undefined)?.type === 'queue.arrival_check');
+      expect(ownerArrival).toHaveLength(1);
+      expect(pushes.filter((p) => String(p.to).includes('OWNERA') && !['queue.arrival_check', 'queue.joined'].includes(String((p.data as { type?: string } | undefined)?.type)))).toHaveLength(0);
       expect(pushes.find((p) => String(p.to).includes('CUST2'))!.body).toContain('Have you arrived');
-      expect(pushes.find((p) => String(p.to).includes('OWNERA'))!.body).toContain('Confirm arrival');
+      expect(ownerArrival[0].body).toContain('Confirm arrival');
     });
 
     it('another customer, an owner and no token cannot answer for this ticket; the owner of a different shop cannot see it', async () => {
