@@ -353,12 +353,16 @@ jobs:
           - takeScreenshot: iphone-booking-staff-selection
           # iOS has no system back: tap the navigation bar's back button ("< Salon").
           - tapOn: "Salon"
+          - waitForAnimationToEnd
           - scrollUntilVisible:
               element:
                 text: "Join queue now"
               direction: UP
               timeout: 30000
-          - tapOn: "Join queue now"
+          - waitForAnimationToEnd
+          - tapOn:
+              text: "Join queue now"
+              retryTapIfNoChange: true
           - extendedWaitUntil:
               visible: "Join the queue"
               timeout: 30000
