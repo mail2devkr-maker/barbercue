@@ -413,10 +413,20 @@ jobs:
             local log_path="$RUNNER_TEMP/maestro-$device_name.log"
           
             mkdir -p "$output_dir" "$DIAGNOSTIC_DIR"
-            set +e
-            maestro --device "$device_udid" test --test-output-dir "$output_dir" "$flow_path" 2>&1 | tee "$log_path"
-            local status=$?
-            set -e
+            # A crashed XCTest driver (viewHierarchy HTTP 500) can leave Maestro hung until the job
+            # timeout. Cap each attempt at 25 minutes and retry the whole flow once from a clean state.
+            local status=1
+            local attempt
+            for attempt in 1 2; do
+              rm -rf "$output_dir"; mkdir -p "$output_dir"
+              set +e
+              perl -e 'alarm shift; exec @ARGV' 1500 maestro --device "$device_udid" test --test-output-dir "$output_dir" "$flow_path" 2>&1 | tee "$log_path"
+              status=${PIPESTATUS[0]}
+              set -e
+              [ "$status" -eq 0 ] && break
+              echo "Maestro attempt $attempt on $device_name failed with status $status"
+              xcrun simctl terminate "$device_udid" com.dcw.fastque >/dev/null 2>&1 || true
+            done
             if [ "$status" -ne 0 ]; then
               printf '%s\n' "$device_name" > "$RUNNER_TEMP/fastque-maestro-failed-device"
               python3 - "$log_path" "$device_name" <<'PY' > "$DIAGNOSTIC_DIR/maestro-failure-summary.txt"
