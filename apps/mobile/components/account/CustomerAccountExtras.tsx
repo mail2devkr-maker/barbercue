@@ -119,7 +119,7 @@ export function NotificationPreferencesCard({ language }: { language: Language }
     <Card style={styles.card}>
       <Text style={styles.heading}>{hi ? 'सूचना पसंद' : 'Notification preferences'}</Text>
       <Text style={styles.muted}>{hi ? 'चुनें कि FastQue से क्या सुनना है। अभी केवल इन-ऐप सूचना उपलब्ध है।' : 'Choose what you hear from FastQue. In-app is the only channel available today — SMS, email and WhatsApp aren’t connected yet.'}</Text>
-      {preferences === null ? <Text style={styles.muted}>…</Text> : preferences.categories.map((cat) => {
+      {preferences === null ? <Text style={styles.muted}>…</Text> : (preferences.categories ?? []).map((cat) => {
         const inApp = cat.channels.find((c) => c.channel === 'IN_APP');
         if (!inApp) return null;
         const [title, description] = (CATEGORY_LABEL[cat.category]?.[hi ? 'hi' : 'en']) ?? [cat.category, ''];

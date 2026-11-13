@@ -33,13 +33,17 @@ export function PremiumScreen({
 }) {
   const insets = useSafeAreaInsets();
   const padding = { paddingTop: insets.top + space[3], paddingBottom: insets.bottom + space[7] };
+  // Android: the whole screen avoids the keyboard (below). iOS: a fixed screen avoids it here and a
+  // scrolling screen adjusts its insets automatically.
+  const fixed = <View style={[styles.screen, padding, contentStyle]}>{children}</View>;
   const content = !scroll ? (
-    <View style={[styles.screen, padding, contentStyle]}>{children}</View>
+    Platform.OS === 'ios' ? <KeyboardAvoidingView style={styles.screen} behavior="padding">{fixed}</KeyboardAvoidingView> : fixed
   ) : (
     <ScrollView
       style={styles.screen}
       contentContainerStyle={[styles.content, padding, contentStyle]}
       keyboardShouldPersistTaps="handled"
+      automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
       refreshControl={onRefresh ? <RefreshControl refreshing={Boolean(refreshing)} onRefresh={onRefresh} tintColor={fastQue.pink} colors={[fastQue.pink]} /> : undefined}
     >
       {children}

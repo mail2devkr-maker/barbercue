@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
+import type { NavigatorScreenParams } from '@react-navigation/native';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
@@ -29,6 +30,7 @@ import type { InvoiceDetailDto } from '@barbercue/shared';
 import { color, font, fontSize, lineHeightFor, radius, space } from '../../lib/theme';
 import { Screen, SectionHeader, Card, Button, EmptyState, Skeleton, InlineError } from '../../components/ui';
 import type { OwnerTabParamList } from '../../navigation/OwnerNavigator';
+import type { OwnerShopStackParamList } from '../../navigation/OwnerShopStack';
 
 type Props = BottomTabScreenProps<OwnerTabParamList, 'OwnerBookingsTab'>;
 
@@ -112,7 +114,7 @@ function BookingRow({ booking, isNew, onChanged }: { booking: OwnerBookingDetail
  * No sound-enable gate like the web version needs — React Native has no browser autoplay policy to
  * work around, so a new booking speaks immediately while this screen is mounted.
  */
-export default function OwnerBookingsScreen({ route }: Props) {
+export default function OwnerBookingsScreen({ route, navigation }: Props) {
   const { selectedSalonId } = useSalon();
   const { t, language } = useLanguage();
   const [filter, setFilter] = useState<OwnerBookingFilter>(route.params?.filter ?? 'today');

@@ -3,8 +3,8 @@ import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, Text
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import {
   DISCOVERY_PATHS,
-  Language,
   FAVORITES_PATHS,
+  Language,
   MIN_RATING_OPTIONS,
   POPULAR_SERVICES,
   PRICE_FILTER_PRESETS,
@@ -375,6 +375,8 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
     setNotice(null);
     if (built.kind !== 'search') {
       setResults([]);
+      setLoading(false);
+      setRefreshing(false);
       setNotice(built.kind === 'favorites-sign-in' ? t.favoritesSignInHint : t.favoritesEmptyHint);
       return;
     }
@@ -415,8 +417,10 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
         setError(err instanceof ApiError ? err.message : t.couldNotSearchSalons);
       }
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (requestId === searchSequence.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }
 
@@ -456,7 +460,7 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
   // picking an actual radius here is itself a location request, applied to the same search in one
   // step, rather than requiring a separate prior tap on "Near me" first.
   async function selectRadius(value: number | null) {
-    if (!nearMe && value !== null) {
+    if (value !== null) {
       setLocating(true);
       setError(null);
       try {

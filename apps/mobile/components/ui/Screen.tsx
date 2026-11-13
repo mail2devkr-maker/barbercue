@@ -27,13 +27,17 @@ export function Screen({ children, scroll = true, refreshing, onRefresh, content
     paddingBottom: edges.includes('bottom') ? insets.bottom : 0,
   };
 
+  // Android: the whole screen avoids the keyboard (below). iOS: a fixed screen avoids it here and a
+  // scrolling screen adjusts its insets automatically.
+  const fixed = <View style={[styles.root, padding, contentStyle]}>{children}</View>;
   const content = !scroll ? (
-    <View style={[styles.root, padding, contentStyle]}>{children}</View>
+    Platform.OS === 'ios' ? <KeyboardAvoidingView style={styles.root} behavior="padding">{fixed}</KeyboardAvoidingView> : fixed
   ) : (
     <ScrollView
       style={styles.root}
       contentContainerStyle={[styles.scrollContent, padding, contentStyle]}
       keyboardShouldPersistTaps="handled"
+      automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
       refreshControl={
         onRefresh ? (
           <RefreshControl refreshing={Boolean(refreshing)} onRefresh={onRefresh} tintColor={color.accent} colors={[color.accent]} />
