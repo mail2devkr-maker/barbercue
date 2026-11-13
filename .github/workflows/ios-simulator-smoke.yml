@@ -446,7 +446,7 @@ jobs:
               [ "$status" -eq 0 ] && break
               echo "Maestro attempt $attempt on $device_name failed with status $status"
               # Leave the final failed screen in place for the failure diagnostics capture.
-              [ "$attempt" -lt 2 ] && { xcrun simctl terminate "$device_udid" com.dcw.fastque >/dev/null 2>&1 || true; }
+              if [ "$attempt" -lt 2 ]; then xcrun simctl terminate "$device_udid" com.dcw.fastque >/dev/null 2>&1 || true; fi
             done
             if [ "$status" -ne 0 ]; then
               printf '%s\n' "$device_name" > "$RUNNER_TEMP/fastque-maestro-failed-device"
