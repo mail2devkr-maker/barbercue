@@ -559,7 +559,9 @@ jobs:
           while IFS= read -r image; do
             name="$(basename "$image" .png)"
             sips -s format jpeg -s formatOptions 92 "$image" --out "screenshot-artifact/$name.jpg" >/dev/null
-          done < <(find "$RUNNER_TEMP/maestro-captures" -type f -name '*.png' -print)
+          # Only the named App Store captures; Maestro's own step-NNN debug images (same name on
+          # iPhone and iPad) collided here in run 43514708195.
+          done < <(find "$RUNNER_TEMP/maestro-captures" -type f \( -name 'iphone-*.png' -o -name 'ipad-13-*.png' \) -print)
           python3 <<'PY'
           import os, subprocess, sys
           files = sorted(f for f in os.listdir("screenshot-artifact") if f.lower().endswith(".jpg"))
