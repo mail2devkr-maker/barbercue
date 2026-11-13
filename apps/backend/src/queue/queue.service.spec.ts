@@ -8,6 +8,7 @@ import { AvailabilityService } from '../bookings/availability.service';
 import { ReservationService } from '../bookings/reservation.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { NotificationsService } from '../notifications/notifications.service';
+import { PushDispatchService } from '../push-notifications/push-dispatch.service';
 
 function lastCallData(
   mock: jest.Mock<Promise<unknown>, [unknown]>,
@@ -134,7 +135,9 @@ describe('QueueService', () => {
     emitStaffStatusChanged: jest.Mock;
     emitQueueEntryReassigned: jest.Mock;
     emitQueueEntryWaitAlert: jest.Mock;
+    emitQueueEntryJoined: jest.Mock;
   };
+  let pushDispatch: { dispatchLocalizedToUser: jest.Mock };
   let notifications: { notify: jest.Mock<Promise<void>, [string, string, unknown?, string?]> };
 
   beforeEach(async () => {
@@ -279,7 +282,9 @@ describe('QueueService', () => {
       emitStaffStatusChanged: jest.fn(),
       emitQueueEntryReassigned: jest.fn(),
       emitQueueEntryWaitAlert: jest.fn(),
+      emitQueueEntryJoined: jest.fn(),
     };
+    pushDispatch = { dispatchLocalizedToUser: jest.fn().mockResolvedValue(undefined) };
     notifications = { notify: jest.fn().mockResolvedValue(undefined) };
 
     const moduleRef = await Test.createTestingModule({
@@ -291,6 +296,7 @@ describe('QueueService', () => {
         { provide: SalonAccessService, useValue: salonAccess },
         { provide: RealtimeGateway, useValue: realtime },
         { provide: NotificationsService, useValue: notifications },
+        { provide: PushDispatchService, useValue: pushDispatch },
       ],
     }).compile();
     service = moduleRef.get(QueueService);
@@ -441,6 +447,27 @@ describe('QueueService', () => {
       expect(data.tokenNumber).toBe(6);
       expect(data.source).toBe(QueueEntrySource.WALK_IN);
       expect(realtime.emitQueueUpdated).toHaveBeenCalledWith('s1');
+    });
+
+    it('alerts the owner on every screen and by OS push once the join has committed (owner report, 13 Nov)', async () => {
+      prisma.queueEntry.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
+      prisma.queueEntry.create.mockResolvedValue({ id: 'q9' });
+      const detail = await service.joinWalkIn('c1', 's1', 'sv1');
+
+      expect(realtime.emitQueueEntryJoined).toHaveBeenCalledWith(detail.salonId, detail.id, detail.tokenNumber, detail.serviceName ?? null);
+      const [ownerId, kind, , data] = pushDispatch.dispatchLocalizedToUser.mock.calls[0];
+      expect(kind).toBe('queueJoined');
+      expect(typeof ownerId).toBe('string');
+      // Ids only - never the customer's name or phone in a push payload.
+      expect(data).toEqual({ type: 'queue.joined', salonId: detail.salonId, queueEntryId: detail.id });
+    });
+
+    it('never fails a successful join when the alert itself fails', async () => {
+      prisma.queueEntry.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
+      prisma.queueEntry.create.mockResolvedValue({ id: 'q10' });
+      realtime.emitQueueEntryJoined.mockImplementation(() => { throw new Error('socket down'); });
+      pushDispatch.dispatchLocalizedToUser.mockRejectedValue(new Error('expo down'));
+      await expect(service.joinWalkIn('c1', 's1', 'sv1')).resolves.toBeTruthy();
     });
 
     describe('contact details (Live Queue operations)', () => {

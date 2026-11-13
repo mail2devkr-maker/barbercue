@@ -1,4 +1,4 @@
-export type BookingVoiceEvent = 'booking.created' | 'booking.rescheduled' | 'booking.cancelled';
+export type BookingVoiceEvent = 'booking.created' | 'booking.rescheduled' | 'booking.cancelled' | 'queue.joined';
 
 const RECENT_EVENT_WINDOW_MS = 5 * 60_000;
 const spokenEvents = new Map<string, number>();

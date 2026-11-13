@@ -15,6 +15,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useKeyboardAwareScroll } from '../../lib/keyboard-aware';
 import { fastQue, font, fontSize, lineHeightFor, premiumShadow, radius, space } from '../../lib/theme';
 import { GradientView } from './GradientView';
 
@@ -32,6 +33,7 @@ export function PremiumScreen({
   contentStyle?: StyleProp<ViewStyle>;
 }) {
   const insets = useSafeAreaInsets();
+  const keyboardAware = useKeyboardAwareScroll({ padAndroid: false });
   const padding = { paddingTop: insets.top + space[3], paddingBottom: insets.bottom + space[7] };
   // Android: the whole screen avoids the keyboard (below). iOS: a fixed screen avoids it here and a
   // scrolling screen adjusts its insets automatically.
@@ -40,6 +42,7 @@ export function PremiumScreen({
     Platform.OS === 'ios' ? <KeyboardAvoidingView style={styles.screen} behavior="padding">{fixed}</KeyboardAvoidingView> : fixed
   ) : (
     <ScrollView
+      {...keyboardAware.scrollProps}
       style={styles.screen}
       contentContainerStyle={[styles.content, padding, contentStyle]}
       keyboardShouldPersistTaps="handled"

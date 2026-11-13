@@ -38,7 +38,8 @@ const PUSH_KIND_CATEGORY: Record<
   | 'bookingRescheduled'
   | 'bookingCancelled'
   | 'bookingReminder'
-  | 'arrivalCheck',
+  | 'arrivalCheck'
+  | 'queueJoined',
   NotificationCategory
 > = {
   newBooking: NotificationCategory.BOOKING_UPDATES,
@@ -46,6 +47,7 @@ const PUSH_KIND_CATEGORY: Record<
   bookingCancelled: NotificationCategory.BOOKING_UPDATES,
   bookingReminder: NotificationCategory.REMINDERS,
   arrivalCheck: NotificationCategory.BOOKING_UPDATES,
+  queueJoined: NotificationCategory.BOOKING_UPDATES,
 };
 
 // Only for log lines — never the full token. A stable-but-non-reversible-looking prefix is enough
@@ -98,7 +100,8 @@ export class PushDispatchService {
       | 'bookingRescheduled'
       | 'bookingCancelled'
       | 'bookingReminder'
-      | 'arrivalCheck',
+      | 'arrivalCheck'
+      | 'queueJoined',
     serviceName: string | null,
     data: Record<string, unknown>,
   ): Promise<void> {
@@ -125,7 +128,8 @@ export class PushDispatchService {
       data,
       ...(kind === 'arrivalCheck' ? { categoryId: 'booking_arrival_check' } : {}),
       ...(kind === 'newBooking' || kind === 'bookingRescheduled' ||
-        kind === 'bookingCancelled' || kind === 'arrivalCheck'
+        kind === 'bookingCancelled' || kind === 'arrivalCheck' ||
+        kind === 'queueJoined'
         ? {
             channelId: ANDROID_BOOKING_CHANNEL_ID,
             sound: 'default' as const,

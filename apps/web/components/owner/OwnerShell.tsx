@@ -24,6 +24,7 @@ import { getRealtimeSocket, joinSalonRoom, onReconnect } from "../../lib/realtim
 import { useAssistantRefresh } from "../../lib/assistant-events";
 import { AdminManagingBanner } from "../dashboard/AdminManagingBanner";
 import { ActionAssistant } from "../assistant/ActionAssistant";
+import { OwnerLiveAlerts } from "./OwnerLiveAlerts";
 import { Icon } from "./icons";
 import { BrandLockup } from "../ui/BrandLockup";
 import { NAV_GROUPS, NAV_ITEMS, activeItemId, hrefFor, navItemsFor, type NavItem } from "./owner-nav";
@@ -432,6 +433,7 @@ function ShellInner({ salonId, children }: { salonId: string; children: ReactNod
         </nav>
       </div>
       <ActionAssistant salonId={salonId} />
+      {kind === "owner" ? <OwnerLiveAlerts salonId={salonId} basePath={`/dashboard/salons/${salonId}`} /> : null}
     </ShellContext.Provider>
   );
 }

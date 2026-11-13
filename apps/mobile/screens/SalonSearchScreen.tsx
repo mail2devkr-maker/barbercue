@@ -606,274 +606,287 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
 
   return (
     <PremiumScreen scroll={false} contentStyle={styles.screenContent}>
-      <PremiumSectionHeader eyebrow={t.discoveryEyebrow} title={t.findASalonSearchTitle} />
-      {selectedStyleName && (
-        <Text style={styles.styleNote}>
-          {t.bookingForTheLookPrefix}<Text style={styles.styleNoteBold}>{selectedStyleName}</Text>{t.bookingForTheLookSuffix}
-        </Text>
-      )}
-
-      <View style={[styles.searchRow, stackSearchRow && styles.searchRowStacked]}>
-        <PremiumTextField
-          style={styles.input}
-          placeholder={t.searchByNamePlaceholder}
-          placeholderTextColor={fastQue.textMuted}
-          value={q}
-          onChangeText={(value) => {
-            setQ(value);
-            setSuggestionsOpen(true);
-          }}
-          onSubmitEditing={() => {
-            setSuggestionsOpen(false);
-            void handleSearch();
-          }}
-          returnKeyType="search"
-        />
-        <PremiumButton
-          title={t.searchAction}
-          onPress={() => void handleSearch()}
-          loading={loading}
-          style={[styles.searchButton, stackSearchRow && styles.searchButtonStacked]}
-        />
-      </View>
-
-      {suggestionsOpen && q.trim().length >= 2 && serviceSuggestions.length > 0 && (
-        <ScrollView
-          style={styles.suggestionsBox}
-          nestedScrollEnabled
-          keyboardShouldPersistTaps="handled"
-        >
-          {serviceSuggestions.map((suggestion) => (
-            <Pressable
-              key={`${suggestion.name}-${suggestion.category ?? ''}`}
-              style={styles.suggestionItem}
-              onPress={() => {
-                setQ(suggestion.name);
-                setService(null);
-                setSuggestionsOpen(false);
-                void runSearch(
-                  false,
-                  nearMe,
-                  { radiusKm, priceMin, priceMax, service: null },
-                  suggestion.name,
-                );
-              }}
-              accessibilityRole="button"
-              accessibilityLabel={suggestion.name}
-            >
-              <Text style={styles.suggestionName}>{suggestion.name}</Text>
-              {suggestion.category ? (
-                <Text style={styles.suggestionCategory}>{suggestion.category}</Text>
-              ) : null}
-            </Pressable>
-          ))}
-        </ScrollView>
-      )}
-
-      <View style={styles.locationRow}>
-        <Pressable
-          style={styles.cityButton}
-          onPress={() => setLocationPickerOpen(true)}
-          accessibilityRole="button"
-          accessibilityLabel={language === 'HI' ? 'शहर / लोकेशन बदलें' : 'Change city / location'}
-        >
-          <Text style={styles.cityButtonText} numberOfLines={1}>
-            {`📍 ${locationChoiceLabel(locationChoice) ?? (language === 'HI' ? 'सभी शहर' : 'All cities')} ▾`}
+      {/* Owner-reported (13 Nov, Android + iOS): the search box and filters used to be fixed above a
+          short results list, so after a search they filled ~90% of the screen and shops were barely
+          visible. The whole page is now ONE list: the header scrolls away with the results. The
+          header is passed as an element (not an inline component) so the search TextInput is never
+          remounted and keeps its focus/keyboard while typing. */}
+      <FlatList
+        style={styles.list}
+        data={loading && !refreshing ? [] : results}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={styles.listContent}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void handleSearch(true)} tintColor={color.accent} />}
+        ListHeaderComponent={
+          <>
+        <PremiumSectionHeader eyebrow={t.discoveryEyebrow} title={t.findASalonSearchTitle} />
+        {selectedStyleName && (
+          <Text style={styles.styleNote}>
+            {t.bookingForTheLookPrefix}<Text style={styles.styleNoteBold}>{selectedStyleName}</Text>{t.bookingForTheLookSuffix}
           </Text>
-        </Pressable>
-        <PremiumButton
-          title={locating ? t.locatingAction : nearMe ? t.nearMeFound : t.nearMe}
-          variant="quiet"
-          onPress={() => void handleNearMe()}
-          loading={locating}
-          style={styles.nearMeButton}
-        />
-      </View>
-      {locationChoice?.kind === 'city' && !nearMe ? (
-        <Text style={styles.filterHint}>
-          {language === 'HI' ? 'दूरी देखने के लिए "पास में" दबाएँ या मौजूदा लोकेशन चुनें।' : 'Tap Near me (or use your current location) to see how far each shop is.'}
-        </Text>
-      ) : null}
-      <LocationPickerModal
-        visible={locationPickerOpen}
-        onClose={() => setLocationPickerOpen(false)}
-        onChosen={applyLocationChoice}
-        hindi={language === 'HI'}
-      />
+        )}
 
-      {/* Owner-reported discoverability fix: always visible, not gated behind "Near me" already
-          being set — selectRadius itself requests location the moment a real radius is picked, so
-          the filter is reachable from the very first visit to this screen. Owner-reported cropping
-          fix: these were horizontally-scrolling chip rows that clipped off the right edge on
-          narrow phones — now three compact dropdown triggers that wrap onto a second row instead
-          of overflowing (each has flexBasis/minWidth via FilterDropdown's own style). */}
-      <View style={styles.filterRow}>
-        <FilterDropdown
-          label={t.distanceFilterLabel}
-          valueLabel={distanceValueLabel}
-          options={distanceOptions}
-          selectedId={distanceIdFor(radiusKm)}
-          onSelect={(id) => void selectRadius(distanceValueFor(id))}
-          disabled={locating}
-          closeLabel={t.closeFilterMenu}
-        />
-        <PriceFilterDropdown activeMin={priceMin} activeMax={priceMax} onApply={selectPrice} />
-        <FilterDropdown
-          label={t.serviceFilterLabel}
-          valueLabel={serviceValueLabel}
-          options={serviceOptions}
-          selectedId={service ? (activeServiceCategory?.id ?? null) : SERVICE_ALL_ID}
-          onSelect={(id) => {
-            if (id === SERVICE_ALL_ID) {
-              selectService(null);
-              return;
-            }
-            const category = SALON_DISCOVERY_CATEGORIES.find((entry) => entry.id === id);
-            selectService(category?.query ?? null);
-          }}
-          closeLabel={t.closeFilterMenu}
-        />
-      </View>
-      <View style={styles.filterRow}>
-        <FilterDropdown
-          label={t.salonTypeFilterLabel}
-          valueLabel={discovery.salonType ? t[SALON_TYPE_LABEL_KEYS[discovery.salonType]] : t.salonTypeAll}
-          options={salonTypeOptions}
-          selectedId={discovery.salonType ?? ANY_ID}
-          onSelect={(id) => selectDiscovery({ salonType: id === ANY_ID ? null : (id as SalonTypeFilter) })}
-          closeLabel={t.closeFilterMenu}
-        />
-        <FilterDropdown
-          label={t.compareServiceLabel}
-          valueLabel={comparedService?.label ?? t.compareServiceNone}
-          options={compareOptions}
-          selectedId={discovery.popularService ?? ANY_ID}
-          onSelect={(id) => selectDiscovery({ popularService: id === ANY_ID ? null : id })}
-          closeLabel={t.closeFilterMenu}
-        />
-        <FilterDropdown
-          label={t.sortLabel}
-          valueLabel={t[SORT_LABEL_KEYS[activeSort]]}
-          options={sortOptions}
-          selectedId={activeSort}
-          onSelect={(id) => selectDiscovery({ sort: id as SalonSortOption })}
-          closeLabel={t.closeFilterMenu}
-        />
-        <FilterDropdown
-          label={t.ratingFilterLabel}
-          valueLabel={discovery.minRating === null ? t.ratingFilterAny : `${discovery.minRating}★+`}
-          options={ratingOptions}
-          selectedId={discovery.minRating === null ? ANY_ID : String(discovery.minRating)}
-          onSelect={(id) => selectDiscovery({ minRating: id === ANY_ID ? null : Number(id) })}
-          closeLabel={t.closeFilterMenu}
-        />
-      </View>
-      <View style={styles.toggleRow}>
-        {[
-          { key: 'openNow' as const, label: t.openNowLabel },
-          { key: 'favoritesOnly' as const, label: t.favoritesOnlyLabel },
-        ].map((toggle) => {
-          const on = discovery[toggle.key];
-          return (
-            <Pressable
-              key={toggle.key}
-              style={[styles.toggleChip, on && styles.toggleChipOn]}
-              onPress={() => selectDiscovery({ [toggle.key]: !on })}
-              accessibilityRole="switch"
-              accessibilityState={{ checked: on }}
-            >
-              <Text style={[styles.toggleChipText, on && styles.toggleChipTextOn]}>{toggle.label}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
-      {!nearMe && <Text style={styles.filterHint}>{t.distanceFilterLocationHint}</Text>}
-      {notice && <Text style={styles.filterHint}>{notice}</Text>}
-
-      {error && <InlineError message={error} />}
-
-      {loading && !refreshing ? (
-        <View style={styles.skeletonStack}>
-          <Skeleton style={styles.skeletonCard} />
-          <Skeleton style={styles.skeletonCard} />
-          <Skeleton style={styles.skeletonCard} />
+        <View style={[styles.searchRow, stackSearchRow && styles.searchRowStacked]}>
+          <PremiumTextField
+            style={styles.input}
+            placeholder={t.searchByNamePlaceholder}
+            placeholderTextColor={fastQue.textMuted}
+            value={q}
+            onChangeText={(value) => {
+              setQ(value);
+              setSuggestionsOpen(true);
+            }}
+            onSubmitEditing={() => {
+              setSuggestionsOpen(false);
+              void handleSearch();
+            }}
+            returnKeyType="search"
+          />
+          <PremiumButton
+            title={t.searchAction}
+            onPress={() => void handleSearch()}
+            loading={loading}
+            style={[styles.searchButton, stackSearchRow && styles.searchButtonStacked]}
+          />
         </View>
-      ) : searched && !error && !notice && results.length === 0 ? (
-        <EmptyState title={t.noSalonsFoundTitle} message={t.noSalonsFoundHint} />
-      ) : (
-        <FlatList
-          data={results}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void handleSearch(true)} tintColor={color.accent} />}
-          renderItem={({ item }) => (
-            <Pressable
-              style={styles.card}
-              onPress={() =>
-                navigation.navigate('SalonProfile', {
-                  countryCode: item.countryCode,
-                  citySlug: item.citySlug,
-                  salonSlug: item.slug,
-                  selectedStyleName,
-                })
-              }
-            >
-              <SafeImage url={item.coverPhotoUrl} alt={item.name} style={styles.cardImage} />
+
+        {suggestionsOpen && q.trim().length >= 2 && serviceSuggestions.length > 0 && (
+          <ScrollView
+            style={styles.suggestionsBox}
+            nestedScrollEnabled
+            keyboardShouldPersistTaps="handled"
+          >
+            {serviceSuggestions.map((suggestion) => (
               <Pressable
-                style={styles.heart}
-                onPress={() => void toggleFavorite(item.id)}
-                hitSlop={8}
+                key={`${suggestion.name}-${suggestion.category ?? ''}`}
+                style={styles.suggestionItem}
+                onPress={() => {
+                  setQ(suggestion.name);
+                  setService(null);
+                  setSuggestionsOpen(false);
+                  void runSearch(
+                    false,
+                    nearMe,
+                    { radiusKm, priceMin, priceMax, service: null },
+                    suggestion.name,
+                  );
+                }}
                 accessibilityRole="button"
-                accessibilityLabel={`${favoriteIds?.has(item.id) ? t.removeFavoriteAction : t.saveFavoriteAction}: ${item.name}`}
-                accessibilityState={{ selected: !!favoriteIds?.has(item.id) }}
+                accessibilityLabel={suggestion.name}
               >
-                <Text style={[styles.heartText, favoriteIds?.has(item.id) && styles.heartTextOn]}>
-                  {favoriteIds?.has(item.id) ? '♥' : '♡'}
-                </Text>
+                <Text style={styles.suggestionName}>{suggestion.name}</Text>
+                {suggestion.category ? (
+                  <Text style={styles.suggestionCategory}>{suggestion.category}</Text>
+                ) : null}
               </Pressable>
-              <View style={styles.cardBody}>
-                <Text style={styles.cardTitle}>
-                  {item.name}
-                  {item.verified && <Text style={styles.verifiedMark}> ✓</Text>}
-                </Text>
-                <Text style={styles.cardSubtitle}>{item.addressLine}</Text>
-                <Text style={styles.cardType}>
-                  {item.salonType && item.salonTypeConfirmed ? t[SALON_TYPE_LABEL_KEYS[item.salonType]] : t.salonTypeNotSet}
-                </Text>
-                {item.ratingCount > 0 && (
-                  <Text style={styles.cardMeta}>
-                    ★ {item.ratingAverage?.toFixed(1)} ({item.ratingCount})
-                  </Text>
-                )}
-                {item.selectedService ? (
-                  <Text style={styles.cardMeta}>
-                    {item.selectedService.name} · {formatMoney(item.selectedService.price, item.currency, item.countryCode)}
-                  </Text>
-                ) : item.priceMin !== null && (
-                  <Text style={styles.cardMeta}>
-                    {t.startingPricePrefix}{formatMoney(item.priceMin, item.currency, item.countryCode)}
-                  </Text>
-                )}
-                {item.isClosedForToday && (
-                  <Text style={styles.closedToday}>{SHOP_CLOSED_TODAY_MESSAGE}</Text>
-                )}
-                {(item.isOpenNow !== null || item.distanceKm !== null) && (
-                  <Text style={styles.cardMeta}>
-                    {item.isOpenNow !== null ? (item.isOpenNow ? t.openNowLabel : t.closedNowLabel) : ''}
-                    {item.isOpenNow !== null && item.distanceKm !== null ? ' · ' : ''}
-                    {item.distanceKm !== null ? `${formatDistance(item.distanceKm, item.countryCode)}${t.awaySuffix}` : ''}
-                  </Text>
-                )}
-                {nearMe && (item.lat == null || item.lng == null) && (
-                  <Text style={styles.cardMeta}>
-                    {language === Language.HI ? 'दूरी उपलब्ध नहीं (मैप पिन बाकी)' : 'Distance unavailable (shop pin missing)'}
-                  </Text>
-                )}
-              </View>
-            </Pressable>
-          )}
+            ))}
+          </ScrollView>
+        )}
+
+        <View style={styles.locationRow}>
+          <Pressable
+            style={styles.cityButton}
+            onPress={() => setLocationPickerOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel={language === 'HI' ? 'शहर / लोकेशन बदलें' : 'Change city / location'}
+          >
+            <Text style={styles.cityButtonText} numberOfLines={1}>
+              {`📍 ${locationChoiceLabel(locationChoice) ?? (language === 'HI' ? 'सभी शहर' : 'All cities')} ▾`}
+            </Text>
+          </Pressable>
+          <PremiumButton
+            title={locating ? t.locatingAction : nearMe ? t.nearMeFound : t.nearMe}
+            variant="quiet"
+            onPress={() => void handleNearMe()}
+            loading={locating}
+            style={styles.nearMeButton}
+          />
+        </View>
+        {locationChoice?.kind === 'city' && !nearMe ? (
+          <Text style={styles.filterHint}>
+            {language === 'HI' ? 'दूरी देखने के लिए "पास में" दबाएँ या मौजूदा लोकेशन चुनें।' : 'Tap Near me (or use your current location) to see how far each shop is.'}
+          </Text>
+        ) : null}
+        <LocationPickerModal
+          visible={locationPickerOpen}
+          onClose={() => setLocationPickerOpen(false)}
+          onChosen={applyLocationChoice}
+          hindi={language === 'HI'}
         />
-      )}
+
+        {/* Owner-reported discoverability fix: always visible, not gated behind "Near me" already
+            being set — selectRadius itself requests location the moment a real radius is picked, so
+            the filter is reachable from the very first visit to this screen. Owner-reported cropping
+            fix: these were horizontally-scrolling chip rows that clipped off the right edge on
+            narrow phones — now three compact dropdown triggers that wrap onto a second row instead
+            of overflowing (each has flexBasis/minWidth via FilterDropdown's own style). */}
+        <View style={styles.filterRow}>
+          <FilterDropdown
+            label={t.distanceFilterLabel}
+            valueLabel={distanceValueLabel}
+            options={distanceOptions}
+            selectedId={distanceIdFor(radiusKm)}
+            onSelect={(id) => void selectRadius(distanceValueFor(id))}
+            disabled={locating}
+            closeLabel={t.closeFilterMenu}
+          />
+          <PriceFilterDropdown activeMin={priceMin} activeMax={priceMax} onApply={selectPrice} />
+          <FilterDropdown
+            label={t.serviceFilterLabel}
+            valueLabel={serviceValueLabel}
+            options={serviceOptions}
+            selectedId={service ? (activeServiceCategory?.id ?? null) : SERVICE_ALL_ID}
+            onSelect={(id) => {
+              if (id === SERVICE_ALL_ID) {
+                selectService(null);
+                return;
+              }
+              const category = SALON_DISCOVERY_CATEGORIES.find((entry) => entry.id === id);
+              selectService(category?.query ?? null);
+            }}
+            closeLabel={t.closeFilterMenu}
+          />
+        </View>
+        <View style={styles.filterRow}>
+          <FilterDropdown
+            label={t.salonTypeFilterLabel}
+            valueLabel={discovery.salonType ? t[SALON_TYPE_LABEL_KEYS[discovery.salonType]] : t.salonTypeAll}
+            options={salonTypeOptions}
+            selectedId={discovery.salonType ?? ANY_ID}
+            onSelect={(id) => selectDiscovery({ salonType: id === ANY_ID ? null : (id as SalonTypeFilter) })}
+            closeLabel={t.closeFilterMenu}
+          />
+          <FilterDropdown
+            label={t.compareServiceLabel}
+            valueLabel={comparedService?.label ?? t.compareServiceNone}
+            options={compareOptions}
+            selectedId={discovery.popularService ?? ANY_ID}
+            onSelect={(id) => selectDiscovery({ popularService: id === ANY_ID ? null : id })}
+            closeLabel={t.closeFilterMenu}
+          />
+          <FilterDropdown
+            label={t.sortLabel}
+            valueLabel={t[SORT_LABEL_KEYS[activeSort]]}
+            options={sortOptions}
+            selectedId={activeSort}
+            onSelect={(id) => selectDiscovery({ sort: id as SalonSortOption })}
+            closeLabel={t.closeFilterMenu}
+          />
+          <FilterDropdown
+            label={t.ratingFilterLabel}
+            valueLabel={discovery.minRating === null ? t.ratingFilterAny : `${discovery.minRating}★+`}
+            options={ratingOptions}
+            selectedId={discovery.minRating === null ? ANY_ID : String(discovery.minRating)}
+            onSelect={(id) => selectDiscovery({ minRating: id === ANY_ID ? null : Number(id) })}
+            closeLabel={t.closeFilterMenu}
+          />
+        </View>
+        <View style={styles.toggleRow}>
+          {[
+            { key: 'openNow' as const, label: t.openNowLabel },
+            { key: 'favoritesOnly' as const, label: t.favoritesOnlyLabel },
+          ].map((toggle) => {
+            const on = discovery[toggle.key];
+            return (
+              <Pressable
+                key={toggle.key}
+                style={[styles.toggleChip, on && styles.toggleChipOn]}
+                onPress={() => selectDiscovery({ [toggle.key]: !on })}
+                accessibilityRole="switch"
+                accessibilityState={{ checked: on }}
+              >
+                <Text style={[styles.toggleChipText, on && styles.toggleChipTextOn]}>{toggle.label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        {!nearMe && <Text style={styles.filterHint}>{t.distanceFilterLocationHint}</Text>}
+        {notice && <Text style={styles.filterHint}>{notice}</Text>}
+
+        {error && <InlineError message={error} />}
+
+          </>
+        }
+        ListEmptyComponent={
+          loading && !refreshing ? (
+            <View style={styles.skeletonStack}>
+              <Skeleton style={styles.skeletonCard} />
+              <Skeleton style={styles.skeletonCard} />
+              <Skeleton style={styles.skeletonCard} />
+            </View>
+          ) : searched && !error && !notice ? (
+            <EmptyState title={t.noSalonsFoundTitle} message={t.noSalonsFoundHint} />
+          ) : null
+        }
+        renderItem={({ item }) => (
+          <Pressable
+            style={styles.card}
+            onPress={() =>
+              navigation.navigate('SalonProfile', {
+                countryCode: item.countryCode,
+                citySlug: item.citySlug,
+                salonSlug: item.slug,
+                selectedStyleName,
+              })
+            }
+          >
+            <SafeImage url={item.coverPhotoUrl} alt={item.name} style={styles.cardImage} />
+            <Pressable
+              style={styles.heart}
+              onPress={() => void toggleFavorite(item.id)}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={`${favoriteIds?.has(item.id) ? t.removeFavoriteAction : t.saveFavoriteAction}: ${item.name}`}
+              accessibilityState={{ selected: !!favoriteIds?.has(item.id) }}
+            >
+              <Text style={[styles.heartText, favoriteIds?.has(item.id) && styles.heartTextOn]}>
+                {favoriteIds?.has(item.id) ? '♥' : '♡'}
+              </Text>
+            </Pressable>
+            <View style={styles.cardBody}>
+              <Text style={styles.cardTitle}>
+                {item.name}
+                {item.verified && <Text style={styles.verifiedMark}> ✓</Text>}
+              </Text>
+              <Text style={styles.cardSubtitle}>{item.addressLine}</Text>
+              <Text style={styles.cardType}>
+                {item.salonType && item.salonTypeConfirmed ? t[SALON_TYPE_LABEL_KEYS[item.salonType]] : t.salonTypeNotSet}
+              </Text>
+              {item.ratingCount > 0 && (
+                <Text style={styles.cardMeta}>
+                  ★ {item.ratingAverage?.toFixed(1)} ({item.ratingCount})
+                </Text>
+              )}
+              {item.selectedService ? (
+                <Text style={styles.cardMeta}>
+                  {item.selectedService.name} · {formatMoney(item.selectedService.price, item.currency, item.countryCode)}
+                </Text>
+              ) : item.priceMin !== null && (
+                <Text style={styles.cardMeta}>
+                  {t.startingPricePrefix}{formatMoney(item.priceMin, item.currency, item.countryCode)}
+                </Text>
+              )}
+              {item.isClosedForToday && (
+                <Text style={styles.closedToday}>{SHOP_CLOSED_TODAY_MESSAGE}</Text>
+              )}
+              {(item.isOpenNow !== null || item.distanceKm !== null) && (
+                <Text style={styles.cardMeta}>
+                  {item.isOpenNow !== null ? (item.isOpenNow ? t.openNowLabel : t.closedNowLabel) : ''}
+                  {item.isOpenNow !== null && item.distanceKm !== null ? ' · ' : ''}
+                  {item.distanceKm !== null ? `${formatDistance(item.distanceKm, item.countryCode)}${t.awaySuffix}` : ''}
+                </Text>
+              )}
+              {nearMe && (item.lat == null || item.lng == null) && (
+                <Text style={styles.cardMeta}>
+                  {language === Language.HI ? 'दूरी उपलब्ध नहीं (मैप पिन बाकी)' : 'Distance unavailable (shop pin missing)'}
+                </Text>
+              )}
+            </View>
+          </Pressable>
+        )}
+      />
     </PremiumScreen>
   );
 }
@@ -1025,6 +1038,7 @@ const styles = StyleSheet.create({
   customActionButton: { flex: 1 },
   skeletonStack: { gap: space[3] },
   skeletonCard: { height: 84, borderRadius: radius.lg },
+  list: { flex: 1 },
   listContent: { paddingBottom: space[6] },
   card: {
     flexDirection: 'row',

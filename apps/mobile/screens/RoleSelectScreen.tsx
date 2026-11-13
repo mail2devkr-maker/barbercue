@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useKeyboardAwareScroll } from '../lib/keyboard-aware';
 import { useLanguage } from '../lib/language-context';
 import { locationChoiceLabel, useLocationChoice } from '../lib/location-choice';
 import { LocationPickerModal } from '../components/location/LocationPickerModal';
@@ -50,6 +51,7 @@ const POPULAR_SERVICE_CATEGORIES = [
  */
 export default function RoleSelectScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
+  const keyboardAware = useKeyboardAwareScroll();
   const { width: windowWidth } = useWindowDimensions();
   const { t, language } = useLanguage();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -186,8 +188,9 @@ export default function RoleSelectScreen({ navigation }: Props) {
       )}
 
       <ScrollView
+        {...keyboardAware.scrollProps}
         style={styles.scroll}
-        contentContainerStyle={{ paddingBottom: 88 + insets.bottom }}
+        contentContainerStyle={{ paddingBottom: 88 + insets.bottom + keyboardAware.bottomInset }}
         keyboardShouldPersistTaps="handled"
         automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
       >

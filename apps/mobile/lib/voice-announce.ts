@@ -206,6 +206,15 @@ export function speakBooking(params: {
   language: Language;
   onHindiVoiceMissing?: () => void;
 }): void;
+export function speakBooking(params: {
+  event: 'queue.joined';
+  /** The queue entry id (dedupe/debug key only). */
+  bookingId: string;
+  language: Language;
+  tokenNumber: number;
+  serviceName: string | null;
+  onHindiVoiceMissing?: () => void;
+}): void;
 export function speakBooking(
   params:
     | {
@@ -221,7 +230,8 @@ export function speakBooking(
       }
     | { event: 'booking.rescheduled'; bookingId: string; language: Language; date: string | null; time: string | null; onHindiVoiceMissing?: () => void }
     | { event: 'booking.cancelled'; bookingId: string; language: Language; onHindiVoiceMissing?: () => void }
-    | { event: 'preview'; bookingId: string; language: Language; onHindiVoiceMissing?: () => void },
+    | { event: 'preview'; bookingId: string; language: Language; onHindiVoiceMissing?: () => void }
+    | { event: 'queue.joined'; bookingId: string; language: Language; tokenNumber: number; serviceName: string | null; onHindiVoiceMissing?: () => void },
 ): void {
   const { event, bookingId, language, onHindiVoiceMissing } = params;
 
@@ -234,6 +244,8 @@ export function speakBooking(
           ? t.bookingRescheduled(params.date, params.time)
           : event === 'preview'
             ? t.voiceAnnouncementsOn()
+            : params.event === 'queue.joined'
+              ? t.newCustomerJoined(params.tokenNumber, params.serviceName)
             : t.bookingCancelled();
 
     // Announcement language is intentionally independent of the UI language. "Same as app

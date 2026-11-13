@@ -246,6 +246,15 @@ export function speakBooking(params: {
   language: Language;
   onHindiVoiceMissing?: () => void;
 }): void;
+export function speakBooking(params: {
+  event: 'queue.joined';
+  /** The queue entry id (dedupe/debug key only). */
+  bookingId: string;
+  language: Language;
+  tokenNumber: number;
+  serviceName: string | null;
+  onHindiVoiceMissing?: () => void;
+}): void;
 export function speakBooking(
   params:
     | {
@@ -272,7 +281,8 @@ export function speakBooking(
         bookingId: string;
         language: Language;
         onHindiVoiceMissing?: () => void;
-      },
+      }
+    | { event: 'queue.joined'; bookingId: string; language: Language; tokenNumber: number; serviceName: string | null; onHindiVoiceMissing?: () => void },
 ): void {
   const t = voiceAnnouncementsFor(params.language);
   const text =
@@ -280,7 +290,9 @@ export function speakBooking(
       ? t.newBookingReceived(params.serviceName, params.barberName, params.salonName, params.date, params.time)
       : params.event === 'booking.rescheduled'
         ? t.bookingRescheduled(params.date, params.time)
-        : t.bookingCancelled();
+        : params.event === 'queue.joined'
+          ? t.newCustomerJoined(params.tokenNumber, params.serviceName)
+          : t.bookingCancelled();
   const requestedLocale = SPEECH_LOCALE[params.language] ?? SPEECH_LOCALE[Language.EN];
 
   if (params.language === Language.HI) {

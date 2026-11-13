@@ -2799,6 +2799,8 @@ export interface PushCopy {
   /** P0 arrival-alert mission — the one-shot T-5-minute push. Never a customer name (see
    * ArrivalAlertDto's own comment on why one is never invented). */
   arrivalCheck(serviceName: string | null): { title: string; body: string };
+  /** Owner-reported (13 Nov): a customer joined the shop's Live Queue (walk-in or guest). */
+  queueJoined(serviceName: string | null): { title: string; body: string };
   /** Owner-operations mission — CUSTOMER-facing push when the shop cancels their appointment.
    * `whenText` is the already-formatted, salon-local date/time (or null when it cannot be
    * resolved — the copy then simply omits it rather than guessing a timezone). */
@@ -2833,6 +2835,10 @@ const enPush: PushCopy = {
   arrivalCheck: (serviceName) => ({
     title: 'Appointment in 5 minutes',
     body: serviceName ? `Has the ${serviceName} customer arrived? Open FastQue to confirm.` : 'Has the customer arrived for their appointment? Open FastQue to confirm.',
+  }),
+  queueJoined: (serviceName) => ({
+    title: 'New customer in Live Queue',
+    body: serviceName ? `A customer joined your Live Queue for ${serviceName}.` : 'A customer joined your Live Queue.',
   }),
   shopCancelledBooking: ({ shopName, serviceName, whenText }) => ({
     title: 'Appointment cancelled by the shop',
@@ -2870,6 +2876,10 @@ const hiPush: PushCopy = {
   arrivalCheck: (serviceName) => ({
     title: 'अपॉइंटमेंट 5 मिनट में',
     body: serviceName ? `क्या ${serviceName} ग्राहक पहुंच चुका है? पुष्टि के लिए FastQue खोलें।` : 'क्या ग्राहक अपने अपॉइंटमेंट के लिए पहुंच चुका है? पुष्टि के लिए FastQue खोलें।',
+  }),
+  queueJoined: (serviceName) => ({
+    title: 'Live Queue में नया ग्राहक',
+    body: serviceName ? `${serviceName} के लिए एक ग्राहक आपकी Live Queue में जुड़ा।` : 'एक ग्राहक आपकी Live Queue में जुड़ा।',
   }),
   shopCancelledBooking: ({ shopName, serviceName, whenText }) => ({
     title: 'दुकान ने अपॉइंटमेंट रद्द की',
