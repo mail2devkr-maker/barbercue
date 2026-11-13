@@ -22,7 +22,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.dcw.fastque",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSPhotoLibraryAddUsageDescription": "FastQue saves your shop QR poster and QR images to your photos when you choose Save Image."
       }
     },
     "android": {
