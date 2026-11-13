@@ -15,6 +15,10 @@ import {
   type ContactRow,
 } from '../../lib/contact-preview';
 import { ledgerPath, parseRecordResult, savedSentence } from '../../lib/contact-ledger';
+import { ContactLedgerPanel } from './ContactLedgerPanel';
+import { contactFileToList, hasAcceptedExtension, MAX_FILE_BYTES } from '../../lib/contact-file';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 import { Button, Card, InlineError } from '../ui';
 
@@ -38,6 +42,7 @@ export function ContactsCheckPanel({ salonId }: { salonId: string }) {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saved, setSaved] = useState<RecordContactConsentsResultDto | null>(null);
   const [ledgerEnabled, setLedgerEnabled] = useState(false);
+  const [fileNote, setFileNote] = useState<{ tone: 'info' | 'error'; message: string; problems: string[] } | null>(null);
   const parsed = useMemo(() => parseContactList(text), [text]);
   const batchProblem = validateBatch(batch);
 
@@ -86,6 +91,47 @@ export function ContactsCheckPanel({ salonId }: { salonId: string }) {
     }
   };
 
+  // Website parity: read a contacts file on the phone and put its numbers in the box for review.
+  // The file never leaves the device; only the reviewed list is checked when the owner presses Check.
+  const importFile = async () => {
+    setFileNote(null);
+    try {
+      const picked = await DocumentPicker.getDocumentAsync({
+        type: ['text/csv', 'text/comma-separated-values', 'text/plain', 'text/vcard', 'text/x-vcard', 'application/vnd.ms-excel', '*/*'],
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
+      if (picked.canceled || !picked.assets?.[0]) return;
+      const file = picked.assets[0];
+      const name = file.name ?? 'contacts';
+      if (!hasAcceptedExtension(name)) {
+        setFileNote({ tone: 'error', message: 'That kind of file is not supported. Use a .csv, .txt or .vcf contacts file. Nothing was read.', problems: [] });
+        return;
+      }
+      if (typeof file.size === 'number' && file.size > MAX_FILE_BYTES) {
+        setFileNote({ tone: 'error', message: 'That file is larger than 512 KB, which is more than a contact list. Nothing was read.', problems: [] });
+        return;
+      }
+      const content = await FileSystem.readAsStringAsync(file.uri, { encoding: FileSystem.EncodingType.UTF8 });
+      const read = contactFileToList(content, name);
+      const problems = read.problems.slice(0, 5).map((p) => `${p.where}: ${p.message}`);
+      if (read.found === 0) {
+        setFileNote({ tone: 'error', message: `No phone numbers could be read from ${name}. What was in the box is unchanged.`, problems });
+        return;
+      }
+      const replacing = text.trim().length > 0;
+      setText(read.text);
+      setResult(null);
+      setFileNote({
+        tone: 'info',
+        message: `Read ${read.found} number${read.found === 1 ? '' : 's'} from ${name} and put them in the box below${replacing ? ', replacing what was there' : ''}. The file stays on your phone. Review the list, then press Check.`,
+        problems,
+      });
+    } catch {
+      setFileNote({ tone: 'error', message: 'Could not read that file. Nothing was changed.', problems: [] });
+    }
+  };
+
   const summary = result?.preview.summary;
   return (
     <>
@@ -96,6 +142,13 @@ export function ContactsCheckPanel({ salonId }: { salonId: string }) {
       <Card>
         <Text style={styles.heading}>Your list</Text>
         <Text style={styles.muted}>{`One person per line: the phone number, and optionally how and when they agreed, like "98765 43210, IN_PERSON, 2026-09-30". Up to ${MAX_CONTACTS} at a time.`}</Text>
+        <Button title="Import a contacts file (.csv, .txt, .vcf)" variant="outline" onPress={() => void importFile()} />
+        {fileNote ? (
+          <View accessibilityLiveRegion="polite">
+            <Text style={fileNote.tone === 'error' ? styles.fileError : styles.muted}>{fileNote.message}</Text>
+            {fileNote.problems.map((p) => <Text key={p} style={styles.muted}>{`• ${p}`}</Text>)}
+          </View>
+        ) : null}
         <TextInput accessibilityLabel="Contact list" value={text} onChangeText={(v) => { setText(v); setResult(null); }} multiline autoCorrect={false} autoCapitalize="none" style={[styles.input, styles.area]} />
         <Text style={styles.muted}>{`${parsed.rows.length} number${parsed.rows.length === 1 ? '' : 's'}`}</Text>
         <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: batch.attested }} onPress={() => setBatch({ ...batch, attested: !batch.attested })} style={styles.ackRow}>
@@ -148,11 +201,13 @@ export function ContactsCheckPanel({ salonId }: { salonId: string }) {
           )}
         </Card>
       )}
+      {ledgerEnabled && <ContactLedgerPanel salonId={salonId} refreshKey={saved ? 1 : 0} />}
     </>
   );
 }
 
 const styles = StyleSheet.create({
+  fileError: { fontFamily: font.bodyMedium, color: color.ink, fontSize: fontSize.sm, marginVertical: space[1] },
   heading: { fontFamily: font.bodyBold, color: color.ink, fontSize: fontSize.base, marginVertical: space[1] },
   label: { fontFamily: font.bodyMedium, color: color.muted, fontSize: fontSize.xs, marginTop: space[2] },
   muted: { fontFamily: font.bodyRegular, color: color.muted, fontSize: fontSize.xs, marginVertical: space[1] },

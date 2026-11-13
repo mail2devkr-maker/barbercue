@@ -1,3 +1,4 @@
+import { InventoryHistoryPanel } from '../../components/owner/InventoryHistoryPanel';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { Alert, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -78,7 +79,7 @@ export default function OwnerInventoryScreen() {
   const { language } = useLanguage();
   const copy = COPY[language === Language.HI ? 'hi' : 'en'];
   const requestSequence = useRef(0);
-  const [tab, setTab] = useState<'overview' | 'scan' | 'stock' | 'categories' | 'suppliers' | 'recipes' | 'usage' | 'predictions' | 'reports'>('stock');
+  const [tab, setTab] = useState<'overview' | 'scan' | 'stock' | 'categories' | 'suppliers' | 'recipes' | 'usage' | 'predictions' | 'reports' | 'history'>('stock');
   const [editing, setEditing] = useState<string | null>(null);
   const [supplierId, setSupplierId] = useState('');
   const [reference, setReference] = useState('');
@@ -286,8 +287,8 @@ export default function OwnerInventoryScreen() {
     <Screen contentStyle={styles.content} refreshing={loading} onRefresh={() => void load()}>
       <SectionHeader eyebrow="OWNER" title={copy.title} subtitle={copy.subtitle} />
       <View style={styles.filterRow}>
-        {(['overview', 'scan', 'stock', 'categories', 'suppliers', 'recipes', 'usage', 'predictions', 'reports'] as const).map((id) => (
-          <Button key={id} title={id === 'overview' ? copy.overviewTab : id === 'scan' ? copy.scanTab : id === 'reports' ? copy.reportsTab : id === 'stock' ? copy.stockTab : id === 'categories' ? copy.categoriesTab : id === 'suppliers' ? copy.suppliersTab : id === 'recipes' ? copy.recipesTab : id === 'usage' ? copy.usageTab : copy.predictionsTab} variant={tab === id ? 'secondary' : 'outline'} onPress={() => setTab(id)} style={styles.filterButton} />
+        {(['overview', 'scan', 'stock', 'history', 'categories', 'suppliers', 'recipes', 'usage', 'predictions', 'reports'] as const).map((id) => (
+          <Button key={id} title={id === 'history' ? 'History' : id === 'overview' ? copy.overviewTab : id === 'scan' ? copy.scanTab : id === 'reports' ? copy.reportsTab : id === 'stock' ? copy.stockTab : id === 'categories' ? copy.categoriesTab : id === 'suppliers' ? copy.suppliersTab : id === 'recipes' ? copy.recipesTab : id === 'usage' ? copy.usageTab : copy.predictionsTab} variant={tab === id ? 'secondary' : 'outline'} onPress={() => setTab(id)} style={styles.filterButton} />
         ))}
       </View>
       {tab === 'categories' && <CategoriesPanel salonId={selectedSalonId} />}
@@ -298,6 +299,7 @@ export default function OwnerInventoryScreen() {
       {tab === 'overview' && <InventoryDashboardPanel salonId={selectedSalonId} onOpenUsage={() => setTab('usage')} />}
       {tab === 'reports' && <InventoryAnalyticsPanel salonId={selectedSalonId} />}
       {tab === 'scan' && <ScanStockPanel salonId={selectedSalonId} />}
+      {tab === 'history' && <InventoryHistoryPanel salonId={selectedSalonId} currency={report?.currency ?? null} />}
       {tab === 'stock' && (<>
       {error ? <InlineError message={error} /> : null}
       {report ? (
