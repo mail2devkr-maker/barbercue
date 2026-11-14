@@ -208,3 +208,20 @@ export function isWaitAlertWorthy(
     Math.abs(nextWaitMinutes - previousWaitMinutes) >= MEANINGFUL_WAIT_CHANGE_MINUTES;
   return justApproaching || meaningfulSwing;
 }
+
+/**
+ * Fills in the straight-line distance for map-pinned shops a search returned without one (a search
+ * the API didn't compute distances for: all shops, map area, favourites). Same 1-decimal rounding
+ * as SalonListItemDto.distanceKm. Shops without a pin, and distances the API already computed,
+ * are left unchanged. Returns the same array when the viewer's position is unknown.
+ */
+export function withViewerDistance<
+  T extends { distanceKm: number | null; lat: number | null; lng: number | null },
+>(salons: T[], viewer: { lat: number; lng: number } | null): T[] {
+  if (!viewer) return salons;
+  return salons.map((salon) =>
+    salon.distanceKm === null && salon.lat !== null && salon.lng !== null
+      ? { ...salon, distanceKm: Math.round(haversineDistanceKm(viewer.lat, viewer.lng, salon.lat, salon.lng) * 10) / 10 }
+      : salon,
+  );
+}

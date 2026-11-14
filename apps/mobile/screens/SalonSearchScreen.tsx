@@ -21,6 +21,7 @@ import {
   type UiStrings,
 } from '@barbercue/shared';
 import type { PaginatedResult, SalonListItemDto, ServiceSuggestionDto } from '@barbercue/shared';
+import { withViewerDistance } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
 import { color, fastQue, font, fontSize, premiumShadow, radius, space } from '../lib/theme';
 import {
@@ -296,6 +297,9 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
     initialLat !== undefined && initialLng !== undefined ? { lat: initialLat, lng: initialLng } : null,
   );
   const [locating, setLocating] = useState(false);
+  // Whether the last search knew the customer's own position (location already allowed). When it
+  // didn't, pinned shops can't show a distance, so a one-tap "Show distance" asks once.
+  const [viewerKnown, setViewerKnown] = useState(false);
   // Website parity: one shared city / current-location choice (also shown on Home).
   const locationChoice = useLocationChoice();
   const [locationPickerOpen, setLocationPickerOpen] = useState(false);
@@ -366,7 +370,10 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
     const requestId = ++searchSequence.current;
     // A picked city still shows distances (nearest first) when the phone already allows location.
     if (city) isRefresh ? setRefreshing(true) : setLoading(true);
-    const viewer = city ? await getViewerCoordinatesIfAllowed() : null;
+    // Owner report (14 Nov, round 2): also for a plain search (no city, no Near me), so map-pinned
+    // shops show how far they are. Only when location is ALREADY allowed; never prompts here.
+    const viewer = coords ? null : await getViewerCoordinatesIfAllowed();
+    setViewerKnown(Boolean(coords || viewer));
     if (requestId !== searchSequence.current) return;
     const built = buildDiscoveryQuery({
       text: queryOverride ?? q,
@@ -392,7 +399,7 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
         `${DISCOVERY_PATHS.salons}?${built.query}`,
       );
       if (requestId !== searchSequence.current) return;
-      setResults(result.items);
+      setResults(withViewerDistance(result.items, viewer));
 
       // Older salons without verified map pins are excluded from nearby rankings.
       // Without a hard radius, supplement with canonical same-city salons,
@@ -538,6 +545,25 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
   // "Near Me" (Phase 4) — expo-location's foreground permission flow, no paid Maps/geocoding SDK.
   // Denial/unavailability degrades gracefully to the existing text search rather than blocking the
   // screen (see the caught branches below).
+  // Asks for location once (explicit tap), then re-runs the same search: a picked city stays
+  // picked and its shops come back nearest first; other searches get distances for pinned shops.
+  async function handleShowDistance() {
+    setLocating(true);
+    setError(null);
+    try {
+      const gps = await getSearchGpsCoordinates(true);
+      if (gps.kind !== 'ok') {
+        setError(gps.kind === 'denied' ? t.locationDenied : t.couldNotGetLocation);
+        return;
+      }
+      await runSearch(false, nearMe);
+    } catch {
+      setError(t.couldNotGetLocation);
+    } finally {
+      setLocating(false);
+    }
+  }
+
   async function handleNearMe() {
     setLocating(true);
     setError(null);
@@ -710,10 +736,14 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
             style={styles.nearMeButton}
           />
         </View>
-        {locationChoice?.kind === 'city' && !nearMe ? (
-          <Text style={styles.filterHint}>
-            {language === 'HI' ? 'दूरी देखने के लिए "पास में" दबाएँ या मौजूदा लोकेशन चुनें।' : 'Tap Near me (or use your current location) to see how far each shop is.'}
-          </Text>
+        {!nearMe && !viewerKnown && results.some((item) => item.lat != null && item.lng != null) ? (
+          <PremiumButton
+            title={language === 'HI' ? '📍 हर दुकान की दूरी देखें' : '📍 Show how far each shop is'}
+            variant="quiet"
+            onPress={() => void handleShowDistance()}
+            loading={locating}
+            style={styles.showDistanceButton}
+          />
         ) : null}
         <LocationPickerModal
           visible={locationPickerOpen}
@@ -1010,6 +1040,7 @@ const styles = StyleSheet.create({
   heartText: { fontSize: 22, color: fastQue.textMuted },
   heartTextOn: { color: fastQue.pink },
   cardType: { fontFamily: font.bodyMedium, fontSize: fontSize.xs, color: fastQue.textMuted, marginTop: space[1] },
+  showDistanceButton: { alignSelf: 'flex-start', marginTop: 8 },
   filterHint: {
     fontFamily: font.bodyRegular,
     fontSize: fontSize.sm,

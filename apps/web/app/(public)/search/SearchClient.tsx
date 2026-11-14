@@ -27,6 +27,7 @@ import { Button } from "../../../components/ui/Button";
 import { apiFetch } from "../../../lib/api";
 import { useFavorites } from "../../../lib/favorites";
 import { roundBounds } from "../../../lib/map-cluster";
+import { withViewerDistance } from "../../../lib/viewer-distance";
 import type { MapBounds } from "../../../components/customer-dashboard/SalonMap";
 import styles from "./search.module.css";
 
@@ -88,6 +89,9 @@ export default function SearchClient({ basePath = "/search", enableMap = false, 
   const [retryKey, setRetryKey] = useState(0);
   const [locating, setLocating] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
+  // The visitor's position when the browser has already allowed location (never prompts on its
+  // own) or after they tap "Show distance". Used to show distances to map-pinned shops.
+  const [viewer, setViewer] = useState<{ lat: number; lng: number } | null>(null);
   const styleName = searchParams.get("style") ?? undefined;
   const nearMeActive = searchParams.has("lat") && searchParams.has("lng");
 
@@ -227,6 +231,25 @@ export default function SearchClient({ basePath = "/search", enableMap = false, 
   }
 
   useEffect(() => {
+    let cancelled = false;
+    void silentBrowserPosition().then((position) => {
+      if (!cancelled && position) setViewer(position);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Owner report (14 Nov, round 2): pinned shops showed no distance because the browser had never
+  // been asked for location. One explicit tap asks once; a city search then re-runs nearest-first.
+  function showDistances() {
+    requestLocationThen((lat, lng) => {
+      setViewer({ lat, lng });
+      setRetryKey((key) => key + 1);
+    });
+  }
+
+  useEffect(() => {
     apiFetch<CityDto[]>(DISCOVERY_PATHS.cities)
       .then((cities) => {
         setSalonCities([...cities].sort((a, b) => a.name.localeCompare(b.name)));
@@ -317,6 +340,7 @@ export default function SearchClient({ basePath = "/search", enableMap = false, 
     document.getElementById(`result-${selectedId}`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [selectedId, mapView]);
 
+  const shownResults = useMemo(() => withViewerDistance(results, viewer), [results, viewer]);
   const selectedSalon = selectedId ? results.find((salon) => salon.id === selectedId) ?? null : null;
 
   function handleSubmit(event?: React.FormEvent, explicitService?: string) {
@@ -415,6 +439,11 @@ export default function SearchClient({ basePath = "/search", enableMap = false, 
           </Button>
         </form>
         {locationError && <p className={styles.locationNotice}>{locationError}</p>}
+        {!nearMeActive && !viewer && !locationError && results.some((salon) => salon.lat !== null && salon.lng !== null) && (
+          <Button type="button" variant="outline" className={styles.outlineOnDark} onClick={showDistances} disabled={locating}>
+            {locating ? "Locating…" : "📍 Show how far each shop is"}
+          </Button>
+        )}
 
         <div className={styles.serviceStrip} role="group" aria-label="Popular services">
           <span className={styles.serviceStripLabel}>Popular services:</span>
@@ -599,11 +628,11 @@ export default function SearchClient({ basePath = "/search", enableMap = false, 
         )}
 
         {!loading && !error && results.length > 0 && view === "compare" && comparedService && (
-          <CompareTable salons={results} serviceLabel={comparedService.label} />
+          <CompareTable salons={shownResults} serviceLabel={comparedService.label} />
         )}
         {!loading && !error && results.length > 0 && view === "cards" && (
           <div className={styles.cardList}>
-            {results.map((salon) =>
+            {shownResults.map((salon) =>
               mapView ? (
                 <div
                   key={salon.id}
@@ -620,7 +649,7 @@ export default function SearchClient({ basePath = "/search", enableMap = false, 
             )}
           </div>
         )}
-        {!loading && !error && results.length > 0 && <p className={styles.availabilityNote}>Real availability appears when you book.{nearMeActive ? " Distances are straight-line from your location, not driving distance." : ""}</p>}
+        {!loading && !error && results.length > 0 && <p className={styles.availabilityNote}>Real availability appears when you book.{nearMeActive || viewer ? " Distances are straight-line from your location, not driving distance." : ""}</p>}
       </section>
       {mapView && (
         <aside className={styles.mapColumn} aria-label="Map">
