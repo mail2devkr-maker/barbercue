@@ -256,6 +256,8 @@ export const QUEUE_ENTRIES_HISTORY_PATH = 'mine/history';
 export const REVIEW_PATHS = {
   reviews: 'reviews',
   booking: 'booking',
+  // GET reviews/mine — the signed-in customer's own reviews (customer dashboard).
+  mine: 'mine',
 } as const;
 
 // StyleAdvisorController's `@Controller('style-advisor')` prefix.
