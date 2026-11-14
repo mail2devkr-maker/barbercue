@@ -22,6 +22,7 @@ import { useLanguage } from '../../lib/language-context';
 import { fastQue, font, fontSize, lineHeightFor, premiumShadow, radius, space } from '../../lib/theme';
 import { EmptyState, Skeleton, InlineError, NotificationBell, PremiumButton, PremiumCard, PremiumScreen, PremiumSectionHeader } from '../../components/ui';
 import { CapacitySummaryPanel } from '../../components/dashboard/CapacitySummaryPanel';
+import { OwnerLocationNudge } from '../../components/owner/OwnerLocationNudge';
 import type { OwnerTabParamList } from '../../navigation/OwnerNavigator';
 
 const SUMMARY_COUNT_LIMIT = 50;
@@ -306,6 +307,14 @@ export default function OwnerDashboardScreen() {
             <PremiumButton title={t.openShop} onPress={() => void toggleStatus('ACTIVE')} loading={updating} style={styles.actionButton} />
           )}
         </PremiumCard>
+      )}
+
+      {selectedSalonId && (
+        <OwnerLocationNudge
+          salonId={selectedSalonId}
+          language={language}
+          onSetLocation={() => navigation.navigate('OwnerShopTab', { screen: 'OwnerShop', params: { openLocation: true } })}
+        />
       )}
 
       {selectedSalonId && <CapacitySummaryPanel salonId={selectedSalonId} />}

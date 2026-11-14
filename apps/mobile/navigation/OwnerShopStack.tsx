@@ -9,7 +9,8 @@ import OwnerQrPosterScreen from '../screens/owner/OwnerQrPosterScreen';
 import { useLanguage } from '../lib/language-context';
 
 export type OwnerShopStackParamList = {
-  OwnerShop: undefined;
+  /** openLocation: opened from the Dashboard location nudge, so show the location panel. */
+  OwnerShop: { openLocation?: boolean } | undefined;
   OwnerCustomers: undefined;
   OwnerCustomerDetail: { customerId: string };
   OwnerInventory: undefined;
