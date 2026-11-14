@@ -1,6 +1,6 @@
 /* Shared customer-dashboard page styles (cards, headings, chips, tabs, states). FastQue tokens only. */
 
-.page { display: grid; gap: 22px; min-width: 0; }
+.page { display: grid; grid-template-columns: minmax(0, 1fr); gap: 22px; min-width: 0; }
 
 .pageHead { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 20px; }
 .title {
