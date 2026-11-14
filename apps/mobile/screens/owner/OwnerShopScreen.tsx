@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Text, View } from 'react-native';
 import { StyleSheet } from 'react-native';
@@ -59,6 +59,20 @@ export default function OwnerShopScreen() {
   const [error, setError] = useState<string | null>(null);
   const [staffNotice, setStaffNotice] = useState<string | null>(null);
   const [showLocation, setShowLocation] = useState(false);
+  // Opened from the Dashboard nudge: show the location panel at the top, not below every section.
+  const [locationFirst, setLocationFirst] = useState(false);
+  const route = useRoute<RouteProp<OwnerShopStackParamList, 'OwnerShop'>>();
+  // Dashboard location nudge: open the location panel, then clear the param so a later visit
+  // to the Shop tab starts closed again.
+  const openLocation = route.params?.openLocation === true;
+  useFocusEffect(
+    useCallback(() => {
+      if (!openLocation) return;
+      setShowLocation(true);
+      setLocationFirst(true);
+      navigation.setParams({ openLocation: undefined });
+    }, [openLocation, navigation]),
+  );
   const [showCategories, setShowCategories] = useState(false);
   const { user } = useAuth();
   const mayDelete = canPermanentlyDelete(user?.roles);
@@ -125,6 +139,7 @@ export default function OwnerShopScreen() {
   return (
     <Screen contentStyle={styles.screenContent} refreshing={refreshing} onRefresh={() => void load(true)}>
       <SectionHeader eyebrow={t.ownerEyebrow} title={selectedSalon?.name ?? t.tabShop} subtitle={t.shopSubtitle} />
+      {showLocation && locationFirst && <ShopLocationPanel salonId={selectedSalonId} language={language} />}
 
       <Button
         title="Business reports and tools"
@@ -205,8 +220,8 @@ export default function OwnerShopScreen() {
       <PhotosSection salonId={selectedSalonId} photos={photos} onChanged={() => void load()} />
 
       <Text style={sectionStyles.sectionTitle}>{language === Language.HI ? 'नक्शे पर दुकान का स्थान' : 'Shop location on the map'}</Text>
-      <Button title={showLocation ? (language === Language.HI ? 'छिपाएँ' : 'Hide') : (language === Language.HI ? 'स्थान देखें / प्रस्तावित करें' : 'View or propose location')} variant="outline" onPress={() => setShowLocation(!showLocation)} style={sectionStyles.addButton} />
-      {showLocation && <ShopLocationPanel salonId={selectedSalonId} language={language} />}
+      <Button title={showLocation ? (language === Language.HI ? 'छिपाएँ' : 'Hide') : (language === Language.HI ? 'स्थान देखें / प्रस्तावित करें' : 'View or propose location')} variant="outline" onPress={() => { setLocationFirst(false); setShowLocation(!showLocation); }} style={sectionStyles.addButton} />
+      {showLocation && !locationFirst && <ShopLocationPanel salonId={selectedSalonId} language={language} />}
 
       <Text style={sectionStyles.sectionTitle}>{language === Language.HI ? 'दुकान का QR पोस्टर' : 'Public shop QR poster'}</Text>
       <Text style={sectionStyles.hint}>

@@ -12,6 +12,7 @@ import { DaySchedule } from "./DaySchedule";
 import { formatMoney, formatPercentChange, formatShopDate, formatShopTime, initialsOf } from "./format";
 import { NewQueueCustomerDialog } from "./NewQueueCustomerDialog";
 import { Banner, Btn, BtnLink, Card, EmptyState, PageHead, Skeleton, Tabs } from "./parts";
+import { LocationNudge } from "./LocationNudge";
 import { Icon, type IconName } from "./icons";
 import ui from "./owner.module.css";
 
@@ -213,6 +214,7 @@ export function OwnerOverview({ salonId }: { salonId: string }) {
     <>
       {notice && <Banner tone="ok">{notice}</Banner>}
       {error && <Banner tone="warn">{error.message} Showing the last loaded numbers.</Banner>}
+      <LocationNudge salonId={salonId} />
 
       <section className={ui.ovTop} aria-label="Welcome">
         <div className={ui.ovWelcome}>

@@ -172,3 +172,19 @@ export function formatReviewTime(iso: string): string {
 }
 
 export type { SalonLocationDto };
+
+/** What the owner dashboard should nudge about, so customers can see how far the shop is. */
+export type LocationNudge = "missing" | "pending" | "rejected";
+
+/**
+ * null when the shop already has a map pin (distance works) or the location could not be read.
+ * "pending": a proposal is waiting for FastQue review. "rejected": the last proposal was rejected
+ * and nothing new is pending. "missing": no pin and nothing sent yet.
+ */
+export function locationNudge(view: LocationView | null): LocationNudge | null {
+  if (!view) return null;
+  if (view.current.latitude !== null && view.current.longitude !== null) return null;
+  if (view.pending) return "pending";
+  if (view.lastDecision?.status === "REJECTED") return "rejected";
+  return "missing";
+}
