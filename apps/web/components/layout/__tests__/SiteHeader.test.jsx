@@ -76,15 +76,14 @@ describe('SiteHeader mobile navigation', () => {
       ['About Us', '/about-us'],
       ['Employee Login', '/employee/login'],
       ['Contact Us', '/contact-us'],
-      ["We're Hiring", '/careers'],
       ['Sign In', '/login'],
       ['List your shop', '/dashboard/register-shop'],
     ]);
   });
 
-  // REGRESSION: Employee Login, Contact Us and We're Hiring had no close handler, so tapping the
+  // REGRESSION: Employee Login and Contact Us (and the since-removed We're Hiring link) had no close handler, so tapping the
   // link for the page you were already on (no pathname change) left the menu open over the page.
-  it.each(['Find Salons', 'Services', 'Offers', 'About Us', 'Employee Login', 'Contact Us', "We're Hiring", 'Sign In', 'List your shop'])(
+  it.each(['Find Salons', 'Services', 'Offers', 'About Us', 'Employee Login', 'Contact Us', 'Sign In', 'List your shop'])(
     'REGRESSION: closes the menu when "%s" is tapped, even on the page it links to',
     (linkLabel) => {
       const tree = render('/contact-us');
