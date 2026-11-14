@@ -418,14 +418,19 @@ jobs:
           - tapOn:
               text: "Sign in"
               index: 1
+          # iOS offers "Save Password?" after a password sign-in and it covers the screen: it can
+          # appear before the dashboard (run 43530955487) or after it (run 43509667212), so wait
+          # for it first, dismiss it, then check the dashboard, then dismiss once more if late.
+          - extendedWaitUntil:
+              visible: "Not Now"
+              timeout: 20000
+              optional: true
+          - tapOn:
+              text: "Not Now"
+              optional: true
           - extendedWaitUntil:
               visible: ".*FastQue Demo Studio.*"
               timeout: 60000
-          # iOS offers "Save Password?" after a password sign-in; it covers the screen (run 43509667212).
-          - extendedWaitUntil:
-              visible: "Not Now"
-              timeout: 10000
-              optional: true
           - tapOn:
               text: "Not Now"
               optional: true
