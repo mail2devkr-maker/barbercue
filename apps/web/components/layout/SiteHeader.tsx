@@ -143,16 +143,6 @@ export function SiteHeader() {
   return (
     <>
       <header className={styles.landingHeader}>
-        <div className={styles.hiringBar}>
-          <Link href="/careers" className={styles.hiringInner} aria-label="FastQue is hiring — view open field sales role">
-            <span className={styles.hiringBadge}>We&apos;re hiring</span>
-            <span className={styles.hiringText}>
-              Field Sales &amp; Shop Onboarding · No experience required · ₹10k–₹12k/month on target
-            </span>
-            <span className={styles.hiringCta}>View role <span aria-hidden="true">→</span></span>
-          </Link>
-        </div>
-
         <div className={styles.utilityBar}>
           <div className={styles.utilityInner}>
             <div className={styles.utilityLeft}>
@@ -261,9 +251,6 @@ export function SiteHeader() {
                   </Link>
                   <Link href="/contact-us" className={styles.mobileNavLink} onClick={closeMobileMenu}>
                     Contact Us
-                  </Link>
-                  <Link href="/careers" className={styles.mobileNavLink} onClick={closeMobileMenu}>
-                    We&apos;re Hiring
                   </Link>
                   <ShopSwitcher mobile />
                   <div className={styles.mobileNavDivider} aria-hidden="true" />
