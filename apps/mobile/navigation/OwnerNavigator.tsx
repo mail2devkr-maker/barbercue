@@ -17,6 +17,7 @@ import { useLanguage } from '../lib/language-context';
 import { fastQue, font } from '../lib/theme';
 import { TabIcon, type TabIconName } from '../components/ui/TabIcon';
 import { useEffect } from 'react';
+import { setStatusBarStyle } from 'expo-status-bar';
 import { useSalon } from '../lib/salon-context';
 import { navigationRef } from './navigation-ref';
 import { subscribeToOwnerBookingPushNavigation } from '../lib/push-navigation';
@@ -93,9 +94,16 @@ function OwnerTabs() {
   const unreadCount = useUnreadNotificationCount();
   const { t } = useLanguage();
   const { selectedSalonId } = useSalon();
+  // The app-wide status bar is light (white text) for the dark customer screens. Every owner tab
+  // except the dark Dashboard sits on the cream surface with no header, so white clock/battery
+  // icons were invisible there. Switch per focused tab; restore light when the owner shell closes.
+  useEffect(() => () => setStatusBarStyle('light'), []);
   return (
     <>
     <Tab.Navigator
+      screenListeners={({ route }) => ({
+        focus: () => setStatusBarStyle(route.name === 'OwnerDashboardTab' ? 'light' : 'dark'),
+      })}
       screenOptions={{
         headerShown: false,
         tabBarHideOnKeyboard: true,

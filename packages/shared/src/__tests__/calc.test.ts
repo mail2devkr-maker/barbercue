@@ -1,5 +1,6 @@
 import { ChargeType } from '../enums';
 import {
+  withViewerDistance,
   computeCancellationCharge,
   computeSlotCapacity,
   effectiveFreeCancellationWindowMinutes,
@@ -211,5 +212,26 @@ describe('isWaitAlertWorthy', () => {
 
   it('is true on the very first estimate landing inside the approaching window', () => {
     expect(isWaitAlertWorthy(null, 3)).toBe(true);
+  });
+});
+
+describe('withViewerDistance', () => {
+  const viewer = { lat: 25.69, lng: 85.2 };
+  it('adds a 1-decimal distance only to map-pinned shops without one', () => {
+    const [pinned, unpinned, known] = withViewerDistance(
+      [
+        { id: 'a', distanceKm: null, lat: 25.7, lng: 85.209 },
+        { id: 'b', distanceKm: null, lat: null, lng: null },
+        { id: 'c', distanceKm: 9.9, lat: 25.7, lng: 85.209 },
+      ],
+      viewer,
+    );
+    expect(pinned.distanceKm).toBe(1.4);
+    expect(unpinned.distanceKm).toBeNull();
+    expect(known.distanceKm).toBe(9.9);
+  });
+  it('returns the same list when the viewer position is unknown', () => {
+    const list = [{ distanceKm: null, lat: 1, lng: 1 }];
+    expect(withViewerDistance(list, null)).toBe(list);
   });
 });
