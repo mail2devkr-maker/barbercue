@@ -42,8 +42,14 @@ export function buildDiscoveryQuery(input: {
   favoriteIds: ReadonlySet<string> | null;
   /** A picked city (website parity: `city` + `countryCode`). Ignored when GPS coordinates are used. */
   city?: { city: string; countryCode: string } | null;
+  /**
+   * The customer's own position when a city is picked and location permission is ALREADY granted
+   * (never prompted for this). Sent with the city so the API can show distances and list that
+   * city's shops nearest first (owner report 14 Nov). Ignored when `coords` (near me) is used.
+   */
+  viewer?: { lat: number; lng: number } | null;
 }): DiscoveryQuery {
-  const { text, coords, filters, favoriteIds, city } = input;
+  const { text, coords, filters, favoriteIds, city, viewer } = input;
   if (filters.favoritesOnly) {
     if (!favoriteIds) return { kind: 'favorites-sign-in' };
     if (favoriteIds.size === 0) return { kind: 'favorites-empty' };
@@ -60,6 +66,10 @@ export function buildDiscoveryQuery(input: {
   } else if (city) {
     params.set('city', city.city);
     params.set('countryCode', city.countryCode);
+    if (viewer) {
+      params.set('lat', String(viewer.lat));
+      params.set('lng', String(viewer.lng));
+    }
   }
   if (filters.priceMin !== null) params.set('priceMin', String(filters.priceMin));
   if (filters.priceMax !== null) params.set('priceMax', String(filters.priceMax));
@@ -70,7 +80,7 @@ export function buildDiscoveryQuery(input: {
     filters.sort === 'price'
       ? !!(filters.popularService || params.has('service'))
       : filters.sort === 'distance'
-        ? !!coords
+        ? !!coords || !!(city && viewer)
         : filters.sort !== 'relevance';
   if (sortAllowed) params.set('sort', filters.sort);
   if (filters.minRating !== null) params.set('minRating', String(filters.minRating));

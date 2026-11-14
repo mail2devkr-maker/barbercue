@@ -628,6 +628,45 @@ describe('SalonsService', () => {
       });
     });
 
+    describe('city + viewer location (owner report 14 Nov)', () => {
+      it('keeps every shop in the city: pinned shops nearest first, unpinned shops after them', async () => {
+        const unpinnedA = makeSalon({ id: 'a-unpinned', name: 'A Salon', lat: null, lng: null });
+        const far = makeSalon({ id: 'far', name: 'B Salon', lat: 28.7, lng: 77.5 });
+        const near = makeSalon({ id: 'near', name: 'C Salon', lat: 28.6692, lng: 77.4538 });
+        const unpinnedZ = makeSalon({ id: 'z-unpinned', name: 'Z Salon', lat: null, lng: null });
+        prisma.salon.findMany.mockResolvedValue([unpinnedA, far, near, unpinnedZ]);
+        const result = await service.search({
+          city: 'ghaziabad',
+          countryCode: 'IN',
+          lat: 28.6692,
+          lng: 77.4538,
+        });
+        expect(result.items.map((i) => i.id)).toEqual(['near', 'far', 'a-unpinned', 'z-unpinned']);
+        expect(result.items[0].distanceKm).toBeCloseTo(0, 0);
+        expect(result.items[1].distanceKm).toBeGreaterThan(0);
+        expect(result.items[2].distanceKm).toBeNull();
+        expect(result.nextCursor).toBeNull();
+        const call = prisma.salon.findMany.mock.calls[0][0] as unknown as {
+          where: { city: unknown; lat?: unknown };
+        };
+        expect(call.where.city).toEqual({ slug: 'ghaziabad', countryCode: 'IN' });
+        expect(call.where.lat).toBeUndefined();
+      });
+
+      it('still uses the strict near-me radius filter when a radius is requested', async () => {
+        const unpinned = makeSalon({ id: 'unpinned', lat: null, lng: null });
+        prisma.salon.findMany.mockResolvedValue([unpinned]);
+        const result = await service.search({
+          city: 'ghaziabad',
+          countryCode: 'IN',
+          lat: 28.6692,
+          lng: 77.4538,
+          radiusKm: 2,
+        });
+        expect(result.items).toHaveLength(0);
+      });
+    });
+
     describe('"near me" (lat/lng supplied)', () => {
       it('sorts results by ascending distance and always returns a null nextCursor', async () => {
         const near = makeSalon({ id: 'near', lat: 12.9716, lng: 77.6412 }); // ~0km from query point

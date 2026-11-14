@@ -1225,6 +1225,26 @@ export interface QueueEntryDto {
   estimatedWaitMinutes: number | null;
 }
 
+/**
+ * One past or current Live Queue visit of the signed-in customer (queue-entries/mine/history).
+ * Walk-in / remote joins only — appointment check-ins already appear in the customer's bookings.
+ * Ids, shop and token only: no contact details.
+ */
+export interface CustomerQueueHistoryItemDto {
+  id: string;
+  salonId: string;
+  salonName: string;
+  salonSlug: string;
+  citySlug: string;
+  countryCode: string;
+  salonTimezone: string | null;
+  tokenNumber: number;
+  status: QueueEntryStatus;
+  serviceName: string | null;
+  joinedAt: string; // ISO 8601
+  serviceCompletedAt: string | null; // ISO 8601
+}
+
 // ---------- Queue & check-in (Phase 3C) ----------
 
 // Adds display fields a UI needs (customer queue-status view, staff dashboard) without extra

@@ -246,6 +246,8 @@ export const SALON_QUEUE_PATHS = {
 
 // QueueEntriesController's `@Controller('queue-entries')` prefix (customer view).
 export const QUEUE_ENTRIES_PATH = 'queue-entries';
+// queue-entries/mine/history — the customer's own Live Queue visits (newest first).
+export const QUEUE_ENTRIES_HISTORY_PATH = 'mine/history';
 
 // ReviewsController's `@Controller('reviews')` prefix (Phase 16 — Ratings & Reviews).
 // GET reviews/booking/:bookingId, POST reviews, PATCH reviews/:id — the owner-response side lives

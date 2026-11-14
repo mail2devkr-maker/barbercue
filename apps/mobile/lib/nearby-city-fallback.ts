@@ -60,6 +60,35 @@ export async function getSearchGpsCoordinates(allowRecentCached: boolean): Promi
   }
 }
 
+/**
+ * The device position ONLY when location permission is already granted — never shows a prompt.
+ * Used to add distances to a picked-city search. Recent cached fix first (fast), else one bounded
+ * fresh fix; null on any failure, so the city search simply runs without distances.
+ */
+export async function getViewerCoordinatesIfAllowed(): Promise<{ lat: number; lng: number } | null> {
+  try {
+    const permission = await Location.getForegroundPermissionsAsync();
+    if (permission.status !== 'granted') return null;
+    const position =
+      (await bounded(
+        Location.getLastKnownPositionAsync({ maxAge: 10 * 60_000, requiredAccuracy: 2_000 }),
+        null as Location.LocationObject | null,
+        2_000,
+      )) ||
+      (await bounded(
+        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+        null as Location.LocationObject | null,
+        6_000,
+      ));
+    if (!position) return null;
+    const { latitude: lat, longitude: lng } = position.coords;
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+    return { lat, lng };
+  } catch {
+    return null;
+  }
+}
+
 function normalized(value: string): string {
   return value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('en').replace(/[^a-z0-9]/g, '');
 }

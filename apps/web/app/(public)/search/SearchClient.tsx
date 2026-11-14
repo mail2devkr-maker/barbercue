@@ -31,6 +31,26 @@ const SIDEBAR_TOP = 168;
 const SIDEBAR_BOTTOM_GAP = 16;
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api/v1";
+
+/** The browser position only when location permission is already "granted"; never prompts. */
+function silentBrowserPosition(): Promise<{ lat: number; lng: number } | null> {
+  if (typeof navigator === "undefined" || !navigator.geolocation || !navigator.permissions?.query) {
+    return Promise.resolve(null);
+  }
+  return navigator.permissions
+    .query({ name: "geolocation" as PermissionName })
+    .then((status) => {
+      if (status.state !== "granted") return null;
+      return new Promise<{ lat: number; lng: number } | null>((resolve) => {
+        navigator.geolocation.getCurrentPosition(
+          (position) => resolve({ lat: position.coords.latitude, lng: position.coords.longitude }),
+          () => resolve(null),
+          { enableHighAccuracy: false, timeout: 6_000, maximumAge: 10 * 60_000 },
+        );
+      });
+    })
+    .catch(() => null);
+}
 
 export default function SearchClient() {
   const router = useRouter();
@@ -190,9 +210,17 @@ export default function SearchClient() {
     const params = new URLSearchParams(searchApiQuery(searchParams, favoriteKey ? favoriteKey.split(",") : undefined));
 
     let cancelled = false;
-    Promise.resolve()
-      .then(() => {
+    // Owner report (14 Nov): a picked city listed shops A-Z with no distance. When the browser has
+    // ALREADY granted location (never prompted here), the API also gets the visitor's position, so
+    // that city's shops come back nearest first with distances (shops without a map pin follow).
+    const needsViewer = params.has("city") && !params.has("lat") && !favoritesGate;
+    (needsViewer ? silentBrowserPosition() : Promise.resolve(null))
+      .then((viewer) => {
         if (cancelled) return undefined;
+        if (viewer) {
+          params.set("lat", String(viewer.lat));
+          params.set("lng", String(viewer.lng));
+        }
         if (favoritesGate) {
           setResults([]);
           setHasMore(false);

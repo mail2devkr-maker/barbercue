@@ -566,6 +566,46 @@ export class SalonsService {
         nextCursor: null,
       };
     }
+    if (nearMe && query.city && query.radiusKm === undefined) {
+      // Owner report (14 Nov): with a city picked, shops came back alphabetically with no distance
+      // even though the customer's location was known. City + viewer coordinates (and no hard
+      // radius) now lists EVERY shop in that city: shops with a map pin first, nearest first, each
+      // with its distance; shops without a pin after them (by name), distance null. The plain
+      // near-me path below drops unpinned shops, which in a city filter would hide real shops.
+      const from = { lat: query.lat!, lng: query.lng! };
+      const candidates = await this.prisma.salon.findMany({
+        where,
+        orderBy: { name: 'asc' },
+        take: NEAR_ME_CANDIDATE_CAP,
+        include: listInclude,
+      });
+      const candidateItems = await this.toListItems(candidates, from, selected);
+      const ordered = candidates
+        .map((s, index) => ({
+          item: candidateItems[index],
+          raw:
+            s.lat !== null && s.lng !== null
+              ? haversineDistanceKm(from.lat, from.lng, s.lat, s.lng)
+              : null,
+        }))
+        .filter((w) => keepOpen([w.item]).length === 1)
+        .sort((a, b) => {
+          if (a.raw !== null && b.raw !== null) {
+            return a.raw - b.raw || a.item.id.localeCompare(b.item.id);
+          }
+          if (a.raw !== null) return -1;
+          if (b.raw !== null) return 1;
+          return 0; // both unpinned: keep the name order from the query
+        })
+        .map((w) => w.item);
+      return {
+        items: (ranked ? sortListItems(ordered, ranked) : ordered).slice(
+          0,
+          limit,
+        ),
+        nextCursor: null,
+      };
+    }
     if (nearMe) {
       const from = { lat: query.lat!, lng: query.lng! };
       // Distance filter (Part 8/9): an explicit radiusKm is a hard cap the caller asked for, not a

@@ -44,6 +44,7 @@ import { color, fastQue, font, fontSize, lineHeightFor, premiumShadow, radius, s
 import { BrandLockup, Skeleton, NotificationBell, LanguageSwitcher, SafeImage, GradientView, PremiumButton, PremiumCard } from '../components/ui';
 import { TabIcon } from '../components/ui/TabIcon';
 import { EDITORIAL_ASSET_URL } from '../lib/editorial';
+import { AllServicesModal } from '../components/AllServicesModal';
 import type { HomeStackParamList, TabParamList } from '../navigation/types';
 
 type Props = CompositeScreenProps<
@@ -99,6 +100,7 @@ export default function HomeScreen({ navigation }: Props) {
   const [creditsBalance, setCreditsBalance] = useState<number | null>(null);
   const unreadCount = useUnreadNotificationCount();
   const { t, language } = useLanguage();
+  const [allServicesOpen, setAllServicesOpen] = useState(false);
   const { status } = useAuth();
 
   // Website parity: the customer picks a city or uses their current location (shared with Search).
@@ -503,7 +505,7 @@ export default function HomeScreen({ navigation }: Props) {
         <View style={styles.section}>
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionTitle}>{t.popularServicesTitle}</Text>
-            <Pressable onPress={() => goSearch()}>
+            <Pressable onPress={() => setAllServicesOpen(true)} accessibilityRole="button" testID="popular-services-view-all">
               <Text style={styles.viewAllText}>{t.viewAllAction} →</Text>
             </Pressable>
           </View>
@@ -576,6 +578,15 @@ export default function HomeScreen({ navigation }: Props) {
           </Pressable>
         </View>
       </ScrollView>
+      <AllServicesModal
+        visible={allServicesOpen}
+        hindi={language === 'HI'}
+        onClose={() => setAllServicesOpen(false)}
+        onPick={(value) => {
+          setAllServicesOpen(false);
+          goSearch({ initialQuery: value });
+        }}
+      />
     </View>
   );
 }

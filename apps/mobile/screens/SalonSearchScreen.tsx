@@ -41,7 +41,7 @@ import { useAuth } from '../lib/auth-context';
 import { DEFAULT_DISCOVERY_FILTERS, buildDiscoveryQuery, type DiscoveryFilters } from '../lib/discovery-search';
 import { cityQueryParams, getLocationChoice, locationChoiceLabel, setLocationChoice, useLocationChoice, type LocationChoice } from '../lib/location-choice';
 import { LocationPickerModal } from '../components/location/LocationPickerModal';
-import { findCityForDeviceLocation, buildCityFallbackQuery, appendCityMatchesToNearby, getSearchGpsCoordinates } from '../lib/nearby-city-fallback';
+import { findCityForDeviceLocation, buildCityFallbackQuery, appendCityMatchesToNearby, getSearchGpsCoordinates, getViewerCoordinatesIfAllowed } from '../lib/nearby-city-fallback';
 import type { SearchStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<SearchStackParamList, 'SalonSearch'>;
@@ -362,14 +362,20 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
     queryOverride?: string,
   ) {
     const filters: DiscoveryFilters = { radiusKm, priceMin, priceMax, service, ...discovery, ...overrides };
+    const city = coords ? null : cityQueryParams(getLocationChoice());
+    const requestId = ++searchSequence.current;
+    // A picked city still shows distances (nearest first) when the phone already allows location.
+    if (city) isRefresh ? setRefreshing(true) : setLoading(true);
+    const viewer = city ? await getViewerCoordinatesIfAllowed() : null;
+    if (requestId !== searchSequence.current) return;
     const built = buildDiscoveryQuery({
       text: queryOverride ?? q,
       coords,
       filters,
       favoriteIds: isCustomer ? favoriteIds : null,
-      city: coords ? null : cityQueryParams(getLocationChoice()),
+      city,
+      viewer,
     });
-    const requestId = ++searchSequence.current;
     setSearched(true);
     setError(null);
     setNotice(null);

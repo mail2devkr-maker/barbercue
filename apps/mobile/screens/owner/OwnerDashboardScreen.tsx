@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { AppState, Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   DASHBOARD_PATHS,
   SHOP_CLOSED_TODAY_MESSAGE,
@@ -88,6 +88,9 @@ export default function OwnerDashboardScreen() {
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const summaryRequestIdRef = useRef(0);
+  // The shop-local day the counts belong to; when it changes the counts reload (daily reset).
+  const summaryZoneRef = useRef<string | null>(null);
+  const [summaryDate, setSummaryDate] = useState<string | null>(null);
   const unreadCount = useUnreadNotificationCount();
   const { t, language } = useLanguage();
 
@@ -105,12 +108,20 @@ export default function OwnerDashboardScreen() {
         `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${selectedSalonId}/${DASHBOARD_PATHS.timezone}`,
       );
       if (requestId !== summaryRequestIdRef.current) return;
-      if (!timezone.timezone) {
+      // Owner report (14 Nov): shops with no saved timezone never saw today's counts. Use the
+      // suggested zone, else India's single zone (Asia/Kolkata) — the same fallback the server uses.
+      const zone =
+        timezone.timezone ??
+        timezone.suggestion?.timezone ??
+        (timezone.countryCode === 'IN' ? 'Asia/Kolkata' : null);
+      if (!zone) {
         setSummary(null);
         setSummaryError('Set your shop timezone to show accurate daily booking counts.');
         return;
       }
-      const date = salonCalendarDate(timezone.timezone);
+      summaryZoneRef.current = zone;
+      setSummaryDate(salonCalendarDate(zone));
+      const date = salonCalendarDate(zone);
       const [today, upcoming, completed, cancelled_, noShow] = await Promise.all([
         fetchCount(selectedSalonId, 'today'),
         fetchCount(selectedSalonId, 'upcoming'),
@@ -176,6 +187,31 @@ export default function OwnerDashboardScreen() {
       unsubscribeReconnect();
     };
   }, [selectedSalonId, loadSummary]);
+
+  // Owner report (14 Nov): "today" counts must update daily. The app can stay open (or sit in the
+  // background) across midnight, and coming back from the background is not a screen focus — so
+  // reload when the app returns to the foreground on a new shop day, and once a minute check
+  // whether the shop's day has rolled over while the dashboard is open.
+  const reloadRef = useRef(reload);
+  reloadRef.current = reload;
+  useEffect(() => {
+    const rollIfNewDay = () => {
+      const zone = summaryZoneRef.current;
+      if (!zone || !summaryDate) return;
+      if (salonCalendarDate(zone) !== summaryDate) void loadSummary();
+    };
+    const appState = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        reloadRef.current();
+        void loadSummary();
+      }
+    });
+    const timer = setInterval(rollIfNewDay, 60_000);
+    return () => {
+      appState.remove();
+      clearInterval(timer);
+    };
+  }, [summaryDate, loadSummary]);
 
   async function toggleStatus(next: 'ACTIVE' | 'SUSPENDED') {
     if (!selectedSalonId) return;
