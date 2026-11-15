@@ -16,7 +16,7 @@ const PROD = [
   { id: "crimson-field-96192935", endpoint: "ep-bold-boat-az50sm0r" },
   { id: "muddy-paper-72512632", endpoint: "ep-silent-meadow-b3orxmoc" },
 ];
-const REHEARSAL = { source: "damp-queen-75773024", target: "divine-darkness-83650713" };
+const REHEARSAL = { source: "damp-queen-75773024", target: "misty-brook-21882562" }; // divine-darkness has a 10 h active-time project quota (exhausted, 423)
 const RW = {
   project: "0a338e79-e96a-4aac-99c9-8e94d48a2f03",
   env: "41bff3cc-5c98-4c6d-9aa6-33cc519badb1",
@@ -54,8 +54,8 @@ async function neon(method, path, body) {
       body: body ? JSON.stringify(body) : undefined,
     });
     if (r.status === 423 || r.status === 429 || r.status >= 500) {
-      if (attempt >= 6) throw new Error(`Neon ${method} ${path} -> ${r.status}`);
-      await sleep(5000 * attempt);
+      if (attempt >= 8) throw new Error(`Neon ${method} ${path} -> ${r.status}`);
+      await sleep(6000 * attempt);
       continue;
     }
     const text = await r.text();
@@ -122,7 +122,7 @@ async function railway(query, variables) {
     });
     const j = await r.json().catch(() => ({}));
     if ((r.status >= 500 || r.status === 429) && attempt < 6) {
-      await sleep(5000 * attempt);
+      await sleep(6000 * attempt);
       continue;
     }
     if (!r.ok || j.errors) throw new Error(`Railway ${r.status} ${JSON.stringify(j.errors || j).slice(0, 300)}`);
