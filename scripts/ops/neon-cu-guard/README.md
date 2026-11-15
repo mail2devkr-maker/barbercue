@@ -30,7 +30,7 @@ Production projects (pinned in `guard.mjs`):
 | BarberCue (P1) | `crimson-field-96192935` | `ep-bold-boat-az50sm0r` |
 | FastQue Production 2026-09 Recovery (P2) | `muddy-paper-72512632` | `ep-silent-meadow-b3orxmoc` |
 
-Rehearsals use only the test projects `damp-queen-75773024` (source) and `misty-brook-21882562` (target).
+Rehearsals use only the test project `damp-queen-75773024` (two databases on it: source and target).
 
 ## One-time setup (owner)
 

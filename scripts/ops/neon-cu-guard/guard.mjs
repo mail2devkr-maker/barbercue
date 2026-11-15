@@ -16,7 +16,8 @@ const PROD = [
   { id: "crimson-field-96192935", endpoint: "ep-bold-boat-az50sm0r" },
   { id: "muddy-paper-72512632", endpoint: "ep-silent-meadow-b3orxmoc" },
 ];
-const REHEARSAL = { source: "damp-queen-75773024", target: "misty-brook-21882562" }; // divine-darkness has a 10 h active-time project quota (exhausted, 423)
+// Test project only (divine-darkness and misty-brook are over their own quotas -> 423). Source and target are two databases on it.
+const REHEARSAL = { source: "damp-queen-75773024", target: "damp-queen-75773024" };
 const RW = {
   project: "0a338e79-e96a-4aac-99c9-8e94d48a2f03",
   env: "41bff3cc-5c98-4c6d-9aa6-33cc519badb1",
@@ -54,7 +55,7 @@ async function neon(method, path, body) {
       body: body ? JSON.stringify(body) : undefined,
     });
     if (r.status === 423 || r.status === 429 || r.status >= 500) {
-      if (attempt >= 8) throw new Error(`Neon ${method} ${path} -> ${r.status}`);
+      if (attempt >= 8) throw new Error(`Neon ${method} ${path} -> ${r.status} ${(await r.text()).slice(0, 200)}`);
       await sleep(6000 * attempt);
       continue;
     }
@@ -414,7 +415,7 @@ async function rehearse() {
   const src = REHEARSAL.source, dst = REHEARSAL.target;
   const sb = await defaultBranch(src), db = await defaultBranch(dst);
   const srcDb = newDatabaseName(NOW); // synthetic source, seeded below
-  const dstDb = newDatabaseName(NOW);
+  const dstDb = newDatabaseName(new Date(NOW.getTime() + 60_000));
   // Self-healing: remove guard copies left in the TEST projects by an earlier interrupted rehearsal.
   for (const [p, b] of [[src, sb.id], [dst, db.id]]) {
     for (const name of (await listDbs(p, b)).filter((n) => /^fq_guard_\d{12}$/.test(n))) {
