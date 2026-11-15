@@ -7,7 +7,7 @@
 // any failure after -> restore the previous variables and redeploy; every outcome is reported.
 import { spawn } from "node:child_process";
 import {
-  cleanupPlan, decide, describeDbUrl, istDay, newDatabaseName, prismaUrl, usageOf, usageRow,
+  AUTO_PROJECT_PREFIX, MAX_PROJECTS, autoProjectName, cleanupPlan, decide, describeDbUrl, istDay, newDatabaseName, pickStandby, prismaUrl, usageOf, usageRow,
 } from "./lib.mjs";
 
 const NEON = "https://console.neon.tech/api/v2";
@@ -75,6 +75,45 @@ async function waitOps(projectId, ops) {
   }
 }
 const getProject = async (id) => (await neon("GET", `/projects/${id}`)).project;
+async function orgProjects() {
+  const org = (await getProject(PROD[0].id)).org_id;
+  const q = new URLSearchParams({ limit: "400", ...(org ? { org_id: org } : {}) });
+  return (await neon("GET", `/projects?${q}`)).projects;
+}
+/** Pinned production projects plus projects the guard created ("FastQue Prod Auto ..."). */
+async function prodCandidates() {
+  const list = PROD.map((p) => ({ ...p, pinned: true }));
+  for (const p of await orgProjects()) {
+    if (!p.name?.startsWith(AUTO_PROJECT_PREFIX) || list.some((x) => x.id === p.id)) continue;
+    const b = await defaultBranch(p.id);
+    const e = await rwEndpoint(p.id, b.id);
+    list.push({ id: p.id, endpoint: e.id, pinned: false });
+  }
+  return list;
+}
+/** Creates a new empty Neon project with the same region / Postgres / compute settings as `like`. */
+async function createProject(name, like) {
+  if ((await orgProjects()).length >= MAX_PROJECTS) throw new Error(`the Neon organisation already has ${MAX_PROJECTS} projects`);
+  const r = await neon("POST", "/projects", {
+    project: {
+      name, region_id: like.region_id, pg_version: like.pg_version,
+      default_endpoint_settings: {
+        autoscaling_limit_min_cu: like.default_endpoint_settings?.autoscaling_limit_min_cu ?? 0.25,
+        autoscaling_limit_max_cu: like.default_endpoint_settings?.autoscaling_limit_max_cu ?? 2,
+      },
+      ...(like.org_id ? { org_id: like.org_id } : {}),
+    },
+  });
+  await waitOps(r.project.id, r.operations);
+  const b = await defaultBranch(r.project.id);
+  const e = await rwEndpoint(r.project.id, b.id);
+  return { id: r.project.id, endpoint: e.id, pinned: false, name };
+}
+async function deleteProject(id, expectedPrefix) {
+  const p = await getProject(id);
+  if (!p.name?.startsWith(expectedPrefix) || PROD.some((x) => x.id === id)) throw new Error(`refusing to delete project ${id}`);
+  await neon("DELETE", `/projects/${id}`);
+}
 async function defaultBranch(projectId) {
   const { branches } = await neon("GET", `/projects/${projectId}/branches`);
   const b = branches.find((x) => x.default) || branches.find((x) => x.primary);
@@ -317,18 +356,35 @@ async function status() {
   const live = describeDbUrl(vars.DATABASE_URL);
   const direct = describeDbUrl(vars.DIRECT_DATABASE_URL);
   if (!live || !direct || live.endpoint !== direct.endpoint || live.database !== direct.database) throw new Error("backend DATABASE_URL / DIRECT_DATABASE_URL missing or not pointing at the same database");
-  const activeCfg = PROD.find((p) => p.endpoint === live.endpoint);
+  const candidates = await prodCandidates();
+  const activeCfg = candidates.find((p) => p.endpoint === live.endpoint);
   if (!activeCfg) throw new Error(`backend points at an unknown endpoint ${live.endpoint}`);
-  const otherCfg = PROD.find((p) => p !== activeCfg);
-  const [ap, op] = [await getProject(activeCfg.id), await getProject(otherCfg.id)];
-  return { live, activeCfg, otherCfg, active: usageOf(ap, NOW), other: usageOf(op, NOW) };
+  const activeProject = await getProject(activeCfg.id);
+  const standbys = [];
+  for (const cfg of candidates.filter((c) => c !== activeCfg)) standbys.push({ cfg, usage: usageOf(await getProject(cfg.id), NOW) });
+  const best = pickStandby(standbys.map((x) => x.usage));
+  const otherCfg = best ? standbys.find((x) => x.usage === best).cfg : null;
+  return { live, activeCfg, activeProject, otherCfg, active: usageOf(activeProject, NOW), other: best, standbys: standbys.map((x) => x.usage) };
 }
 function table(s) {
-  return ["| project | CU-h used | of 100 | CU-h/day | resets |", "|---|---|---|---|---|", usageRow(s.active, true), usageRow(s.other, false)].join("\n")
+  return ["| project | CU-h used | of 100 | CU-h/day | resets |", "|---|---|---|---|---|", usageRow(s.active, true), ...s.standbys.map((u) => usageRow(u, false))].join("\n")
     + `\n\nLive database: \`${s.live.database}\` on \`${s.live.endpoint}\`.`;
 }
 
 async function switchOver(s, d) {
+  let createdProject = null;
+  if (d.target === "new") {
+    try {
+      createdProject = await createProject(autoProjectName(NOW), s.activeProject);
+    } catch (e) {
+      await post(`### 🔴 Switch needed but a new Neon project could not be created\n${e.message}\nProduction stays on **${s.active.name}** (${(s.active.pct * 100).toFixed(1)}% used). Nothing else was changed.`, { mention: true });
+      process.exitCode = 1;
+      return;
+    }
+    log(`created new project ${createdProject.id} (${createdProject.name})`);
+    s.otherCfg = createdProject;
+    s.other = { name: createdProject.name, pct: 0, cuHours: 0 };
+  }
   const p = s.otherCfg.id;
   const srcBranch = await defaultBranch(s.activeCfg.id);
   const dstBranch = await defaultBranch(p);
@@ -375,7 +431,7 @@ async function switchOver(s, d) {
     }
     await post([
       `### ✅ Automatic database switch done`,
-      `Production moved from **${s.active.name}** (\`${s.live.database}\`, ${(s.active.pct * 100).toFixed(1)}% used) to **${s.other.name}** \`${newDb}\`.`,
+      `Production moved from **${s.active.name}** (\`${s.live.database}\`, ${(s.active.pct * 100).toFixed(1)}% used) to **${s.other.name}** \`${newDb}\`${createdProject ? ` - a NEW Neon project \`${createdProject.id}\` was created for this switch` : ""}.`,
       `Why: ${d.reasons.join("; ")}`,
       `Copy ${facts.seconds} s · tables ${facts.tables} · rows ${facts.rows} · digest \`${facts.digest}\` · migration ledger equal ${facts.ledgerEqual}`,
       `Backend and website redeployed at their previous commits (${backendLive.sha.slice(0, 8)} / ${webLive.sha.slice(0, 8)}); health OK; website ${siteOk ? "OK" : "**not 200 - check**"}; backend sessions on the new database: ${sessions}.`,
@@ -402,6 +458,9 @@ async function switchOver(s, d) {
         restore.push(`website ${(await httpOk(SITE_URL)) ? "OK" : "FAILED"}`);
       }
       try { await dropDb(p, dstBranch.id, newDb); restore.push(`unused target ${newDb} removed`); } catch { /* keep it */ }
+      if (createdProject) {
+        try { await deleteProject(createdProject.id, AUTO_PROJECT_PREFIX); restore.push(`unused new project ${createdProject.name} deleted`); } catch { /* keep it */ }
+      }
       await post(`### ⚠️ Automatic switch FAILED and was rolled back\nStage: ${stage}. Error: ${err.message}\nRollback: ${restore.join("; ") || "nothing to undo"}.\nProduction stays on **${s.active.name}** \`${s.live.database}\`. The guard will try again in the next window.`, { mention: true });
     } catch (rb) {
       await post(`### 🚨 CRITICAL: switch failed AND rollback failed\nStage: ${stage}. Error: ${err.message}\nRollback error: ${rb.message}\nDone so far: ${restore.join("; ") || "none"}.\n**The site may be down. Manual action needed now** (runbook: scripts/ops/neon-cu-guard/README.md).`, { mention: true });
@@ -446,7 +505,7 @@ async function rehearse() {
   }
   // Production read-only probes: token scopes and identities, no change.
   const s = await status();
-  out.push(`Railway read OK; live = ${s.live.database} on ${s.live.endpoint} (${s.active.name}); standby = ${s.other.name}`);
+  out.push(`Railway read OK; live = ${s.live.database} on ${s.live.endpoint} (${s.active.name}); standby = ${s.other?.name ?? "none"}`);
   for (const cfg of PROD) {
     const b = await defaultBranch(cfg.id);
     const e = await rwEndpoint(cfg.id, b.id);
@@ -462,6 +521,10 @@ async function rehearse() {
   await railway("mutation($i:VariableDeleteInput!){variableDelete(input:$i)}",
     { i: { projectId: RW.project, environmentId: RW.env, serviceId: RW.web, name: "NEON_GUARD_PROBE" } });
   out.push("Railway write permission OK (harmless probe variable set and removed, no deploy)");
+  const probe = await createProject(`FastQue Rehearsal ${NOW.toISOString().slice(0, 16)}`, s.activeProject);
+  await deleteProject(probe.id, "FastQue Rehearsal ");
+  out.push(`new-project permission OK (created and deleted test project ${probe.id}, endpoint ${probe.endpoint})`);
+  out.push(`production candidates: live ${s.activeCfg.id}; standbys ${s.standbys.map((u) => `${u.name} ${(u.pct * 100).toFixed(1)}%`).join(", ") || "none"}`);
   out.push(`decision now: ${JSON.stringify(decide({ active: s.active, other: s.other, now: NOW, autoswitch: AUTOSWITCH }))}`);
   await post(`### 🧪 Rehearsal PASS\n${out.map((l) => `- ${l}`).join("\n")}\n\n${table(s)}\n\nAuto-switch is **${AUTOSWITCH ? "ON" : "OFF"}**.`);
 }
