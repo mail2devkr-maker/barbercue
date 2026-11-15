@@ -10,6 +10,8 @@ export const IST_OFFSET_MIN = 330;
 export const WINDOW_START_MIN = 2 * 60; // 02:00 IST
 export const WINDOW_LAST_START_MIN = 4 * 60 + 30; // a switch must START by 04:30 IST to end before 05:00
 export const GUARD_DB_PREFIX = "fq_guard_";
+export const AUTO_PROJECT_PREFIX = "FastQue Prod Auto "; // projects the guard itself created
+export const MAX_PROJECTS = 100; // Neon Free plan
 
 /** Minutes since IST midnight for a UTC Date. */
 export function istMinutes(now) {
@@ -70,7 +72,21 @@ function nextPeriodStart(start, quotaResetAt) {
  * Decide what to do. `active` is the live project's usage, `other` the standby project's usage.
  * Returns { action: 'ok' | 'warn' | 'switch' | 'wait-window' | 'blocked', reasons: string[] }.
  */
-export function decide({ active, other, now, autoswitch, quota = QUOTA_CU_HOURS }) {
+/** The standby with the most headroom (lowest usage), or null when there is none. */
+export function pickStandby(candidates) {
+  return [...candidates].sort((a, b) => a.pct - b.pct)[0] || null;
+}
+
+/** Name for a project the guard creates, e.g. "FastQue Prod Auto 2026-11-21". */
+export function autoProjectName(now) {
+  return AUTO_PROJECT_PREFIX + istDay(now);
+}
+
+/**
+ * `other` = best standby (may be null). When no standby has headroom (< 50% used) the switch
+ * targets a NEW project ("target: 'new'") if `allowNewProject`, else it is blocked.
+ */
+export function decide({ active, other, now, autoswitch, quota = QUOTA_CU_HOURS, allowNewProject = true }) {
   const reasons = [];
   const horizon = hoursUntilNextWindowEnd(now);
   const projectedNextWindow = active.cuHours + active.burnPerHour * horizon;
@@ -89,24 +105,29 @@ export function decide({ active, other, now, autoswitch, quota = QUOTA_CU_HOURS 
   reasons.push(overThreshold
     ? `live project at ${(active.pct * 100).toFixed(1)}% (>= ${SWITCH_AT * 100}%)`
     : `live project would reach ${projectedNextWindow.toFixed(1)} CU-h before the next window ends`);
-  if (other.pct >= TARGET_MAX_START) {
-    reasons.push(`standby project ${other.name} cannot take over: already ${(other.pct * 100).toFixed(1)}% used`);
-    return { action: "blocked", reasons, projectedNextWindow, projectedAtReset };
+  let target = "existing";
+  if (!other || other.pct >= TARGET_MAX_START) {
+    reasons.push(other
+      ? `standby project ${other.name} is already ${(other.pct * 100).toFixed(1)}% used and has not reset`
+      : "no standby project is available");
+    if (!allowNewProject) return { action: "blocked", target: null, reasons, projectedNextWindow, projectedAtReset };
+    target = "new";
+    reasons.push("a NEW Neon project will be created for the switch");
   }
   // A short-lived standby is still better than running out: switch, but say so loudly.
-  const otherAtReset = other.cuHours + active.burnPerHour * other.hoursToReset;
-  if (otherAtReset >= quota * SWITCH_AT) {
+  const otherAtReset = target === "existing" ? other.cuHours + active.burnPerHour * other.hoursToReset : 0;
+  if (target === "existing" && otherAtReset >= quota * SWITCH_AT) {
     reasons.push(`WARNING: at this burn rate ${other.name} also passes ${SWITCH_AT * 100}% before its reset (projected ${otherAtReset.toFixed(1)} CU-h) - cut usage or upgrade the Neon plan`);
   }
   if (!inSwitchWindow(now)) {
     reasons.push("outside 02:00-04:30 IST - will switch in the next window");
-    return { action: "wait-window", reasons, projectedNextWindow, projectedAtReset };
+    return { action: "wait-window", target, reasons, projectedNextWindow, projectedAtReset };
   }
   if (!autoswitch) {
     reasons.push("auto-switch is OFF (repository variable NEON_GUARD_AUTOSWITCH != on) - alert only");
-    return { action: "blocked", reasons, projectedNextWindow, projectedAtReset };
+    return { action: "blocked", target, reasons, projectedNextWindow, projectedAtReset };
   }
-  return { action: "switch", reasons, projectedNextWindow, projectedAtReset };
+  return { action: "switch", target, reasons, projectedNextWindow, projectedAtReset };
 }
 
 /** New target database name, e.g. fq_guard_202611152045 (UTC). */

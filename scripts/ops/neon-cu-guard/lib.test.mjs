@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  cleanupPlan, decide, describeDbUrl, hoursUntilNextWindowEnd, inSwitchWindow, istDay, istMinutes, newDatabaseName, prismaUrl, usageOf,
+  autoProjectName, pickStandby, cleanupPlan, decide, describeDbUrl, hoursUntilNextWindowEnd, inSwitchWindow, istDay, istMinutes, newDatabaseName, prismaUrl, usageOf,
 } from "./lib.mjs";
 
 const at = (iso) => new Date(iso);
@@ -60,10 +60,16 @@ test("auto-switch OFF never switches", () => {
   assert.equal(decide({ active: usage(95), other: usage(2), now: IN_WINDOW, autoswitch: false }).action, "blocked");
 });
 
-test("a half-used standby is refused; a short-lived one is used with a warning", () => {
-  assert.equal(decide({ active: usage(95), other: usage(55), now: IN_WINDOW, autoswitch: true }).action, "blocked");
+test("a half-used standby is replaced by a NEW project; a short-lived one is used with a warning", () => {
+  const n = decide({ active: usage(95), other: usage(55), now: IN_WINDOW, autoswitch: true });
+  assert.equal(n.action, "switch");
+  assert.equal(n.target, "new");
+  assert.equal(decide({ active: usage(95), other: usage(55), now: IN_WINDOW, autoswitch: true, allowNewProject: false }).action, "blocked");
+  assert.equal(decide({ active: usage(95), other: null, now: IN_WINDOW, autoswitch: true }).target, "new");
+  assert.equal(decide({ active: usage(95), other: usage(55), now: DAYTIME, autoswitch: true }).action, "wait-window");
   const d = decide({ active: usage(95), other: usage(40, { hoursToReset: 300 }), now: IN_WINDOW, autoswitch: true });
   assert.equal(d.action, "switch");
+  assert.equal(d.target, "existing");
   assert.ok(d.reasons.some((r) => r.startsWith("WARNING")));
 });
 
@@ -88,4 +94,10 @@ test("names and URLs", () => {
   });
   assert.equal(prismaUrl("postgresql://u:p@ep-a.c-3.neon.tech/db?sslmode=require&channel_binding=require"), "postgresql://u:p@ep-a.c-3.neon.tech/db?sslmode=require");
   assert.throws(() => prismaUrl("postgresql://u:p@ep-a-pooler.c-3.neon.tech/db"));
+});
+
+test("standby choice and auto project names", () => {
+  assert.equal(pickStandby([usage(60, { name: "A" }), usage(3, { name: "B" }), usage(40, { name: "C" })]).name, "B");
+  assert.equal(pickStandby([]), null);
+  assert.equal(autoProjectName(at("2026-11-20T21:00:00Z")), "FastQue Prod Auto 2026-11-21");
 });

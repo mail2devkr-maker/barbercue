@@ -18,6 +18,14 @@ live project runs out, Neon suspends the database and FastQue goes down. The gua
   7. Keep the old database unchanged as the previous copy. Older guard copies (`fq_guard_*` only)
      are deleted, so each project keeps the live copy plus one previous copy. Databases with any other
      name are **never** deleted.
+- **If no standby project has room** (every other FastQue project is 50% or more used and has not
+  reset yet), it **creates a new Neon project** named `FastQue Prod Auto YYYY-MM-DD`. The new project
+  gets the same region, Postgres version and compute size, and the switch goes there. The Free plan
+  allows 100 projects, 100 CU-hours each, and 20 GB of storage in total. The guard treats as production
+  only the two pinned projects and projects whose name starts with `FastQue Prod Auto `. If the
+  switch fails, the empty new project is deleted again. Note: moving production through new free
+  projects to stay inside the free compute allowance may be against Neon's fair-use terms. The Launch
+  plan ($0.106 per CU-hour) is the long-term answer.
 - **If anything fails**, it puts everything back: the old variables and a redeploy on the unchanged
   old database. It then reports the failure and mentions you. If even the rollback fails, the report
   says **CRITICAL** and the site may be down (see "Manual recovery" below).
