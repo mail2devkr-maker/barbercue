@@ -87,8 +87,17 @@ async function rwEndpoint(projectId, branchId) {
   return e;
 }
 const listDbs = async (p, b) => (await neon("GET", `/projects/${p}/branches/${b}/databases`)).databases.map((d) => d.name);
+/** Owner role: neondb_owner on production (required); on the test projects whatever role exists. */
+async function ownerRole(p, b) {
+  const { roles } = await neon("GET", `/projects/${p}/branches/${b}/roles`);
+  const names = roles.map((r) => r.name);
+  if (names.includes(ROLE)) return ROLE;
+  if (PROD.some((x) => x.id === p)) throw new Error(`production project ${p} has no ${ROLE} role`);
+  if (!names.length) throw new Error(`no role on ${p}/${b}`);
+  return names[0];
+}
 async function createDb(p, b, name) {
-  const r = await neon("POST", `/projects/${p}/branches/${b}/databases`, { database: { name, owner_name: ROLE } });
+  const r = await neon("POST", `/projects/${p}/branches/${b}/databases`, { database: { name, owner_name: await ownerRole(p, b) } });
   await waitOps(p, r.operations);
 }
 async function dropDb(p, b, name) {
@@ -97,7 +106,7 @@ async function dropDb(p, b, name) {
   await waitOps(p, r.operations);
 }
 async function connUri(p, b, db) {
-  const q = new URLSearchParams({ branch_id: b, database_name: db, role_name: ROLE, pooled: "false" });
+  const q = new URLSearchParams({ branch_id: b, database_name: db, role_name: await ownerRole(p, b), pooled: "false" });
   const { uri } = await neon("GET", `/projects/${p}/connection_uri?${q}`);
   mask(uri);
   return prismaUrl(uri);
@@ -406,9 +415,16 @@ async function rehearse() {
   const sb = await defaultBranch(src), db = await defaultBranch(dst);
   const srcDb = newDatabaseName(NOW); // synthetic source, seeded below
   const dstDb = newDatabaseName(NOW);
-  await createDb(src, sb.id, srcDb);
-  await createDb(dst, db.id, dstDb);
+  // Self-healing: remove guard copies left in the TEST projects by an earlier interrupted rehearsal.
+  for (const [p, b] of [[src, sb.id], [dst, db.id]]) {
+    for (const name of (await listDbs(p, b)).filter((n) => /^fq_guard_\d{12}$/.test(n))) {
+      await dropDb(p, b, name);
+      out.push(`removed leftover test copy ${p}/${name}`);
+    }
+  }
   try {
+    await createDb(src, sb.id, srcDb);
+    await createDb(dst, db.id, dstDb);
     const srcUrl = await connUri(src, sb.id, srcDb);
     const dstUrl = await connUri(dst, db.id, dstDb);
     await sql(srcUrl, `create extension if not exists pg_trgm;
@@ -422,8 +438,9 @@ async function rehearse() {
     const facts = await copyAndProve(srcUrl, dstUrl, { requireFrozen: true });
     out.push(`DB copy rehearsal PASS: ${JSON.stringify(facts)}`);
   } finally {
-    await dropDb(src, sb.id, srcDb);
-    await dropDb(dst, db.id, dstDb);
+    for (const [p, b, n] of [[src, sb.id, srcDb], [dst, db.id, dstDb]]) {
+      try { await dropDb(p, b, n); } catch (e) { out.push(`could not remove ${p}/${n}: ${e.message}`); }
+    }
     out.push("rehearsal databases removed");
   }
   // Production read-only probes: token scopes and identities, no change.
