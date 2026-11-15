@@ -1,4 +1,4 @@
-import { DbDeadlineSchedulerService } from './db-deadline-scheduler.service';
+import { DbDeadlineSchedulerService, reconcileIntervalMs } from './db-deadline-scheduler.service';
 
 describe('DbDeadlineSchedulerService', () => {
   let service: DbDeadlineSchedulerService;
@@ -64,5 +64,26 @@ describe('DbDeadlineSchedulerService', () => {
 
     await jest.advanceTimersByTimeAsync(1_950);
     expect(runDue).toHaveBeenCalledTimes(1);
+  });
+
+  it('tells listeners about domain signals and the reconcile tick (6 h by default)', async () => {
+    const seen: string[] = [];
+    service.onSignal((reason) => seen.push(reason));
+    service.signal('queue');
+    expect(seen).toEqual(['queue']);
+    jest.advanceTimersByTime(60 * 60 * 1000);
+    expect(seen).toEqual(['queue']);
+    jest.advanceTimersByTime(5 * 60 * 60 * 1000);
+    expect(seen).toEqual(['queue', 'reconcile']);
+  });
+});
+
+describe('reconcileIntervalMs', () => {
+  it('defaults to 6 h, honours an override and never drops below 15 min', () => {
+    expect(reconcileIntervalMs(undefined)).toBe(6 * 60 * 60 * 1000);
+    expect(reconcileIntervalMs('')).toBe(6 * 60 * 60 * 1000);
+    expect(reconcileIntervalMs('abc')).toBe(6 * 60 * 60 * 1000);
+    expect(reconcileIntervalMs('3600000')).toBe(3600000);
+    expect(reconcileIntervalMs('1000')).toBe(15 * 60 * 1000);
   });
 });

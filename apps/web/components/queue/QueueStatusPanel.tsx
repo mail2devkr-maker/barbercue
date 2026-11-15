@@ -5,6 +5,7 @@ import { QUEUE_ENTRIES_PATH, queuePhaseOf, type QueueEntryDetailDto } from "@bar
 import { apiFetch, ApiError } from "../../lib/api";
 import { getRealtimeSocket, joinSalonRoom, onReconnect } from "../../lib/realtime";
 import styles from "./queue.module.css";
+import { setVisibleInterval } from "../../lib/visible-interval";
 
 const ACTIVE_STATUSES = new Set(["WAITING", "CALLED", "IN_SERVICE"]);
 
@@ -165,14 +166,14 @@ export function QueueStatusPanel({
     // Phase 15: the "updates automatically, no need to refresh" promise below only holds if a
     // dropped connection resyncs on its own once restored.
     const unsubscribeReconnect = onReconnect(refetch);
-    const guestPoll = guestAccessToken ? window.setInterval(refetch, 15_000) : null;
+    const stopGuestPoll = guestAccessToken ? setVisibleInterval(refetch, 15_000) : null;
     return () => {
       cancelled = true;
       socket.off("queue.updated", onQueueUpdated);
       socket.off("queue.entry.called", onEntryCalled);
       socket.off("queue.entry.wait_alert", onWaitAlert);
       unsubscribeReconnect();
-      if (guestPoll) window.clearInterval(guestPoll);
+      stopGuestPoll?.();
     };
   }, [entry.salonId, entry.status, entry.id, onEntryChange, guestAccessToken]);
 

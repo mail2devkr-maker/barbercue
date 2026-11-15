@@ -24,6 +24,7 @@ import { useOwnerShell, useShopTimeZone } from "./OwnerShell";
 import { Badge, Banner, Btn, BtnLink, Card, Dialog, EmptyState, Field, PageHead, Skeleton, Tabs } from "./parts";
 import ui from "./owner.module.css";
 import { claimOwnerAlert } from "../../lib/owner-alert-dedupe";
+import { setVisibleInterval } from "../../lib/visible-interval";
 
 type View = "waiting" | "in-service" | "completed" | "no-show" | "history";
 const VIEWS: ReadonlyArray<View> = ["waiting", "in-service", "completed", "no-show", "history"];
@@ -220,8 +221,7 @@ export function LiveQueueConsole({ salonId }: { salonId: string }) {
 
   // Polling is the safety net behind the socket: tighter while the socket is down.
   useEffect(() => {
-    const timer = window.setInterval(() => void refetch(true), live ? LIVE_POLL_MS : FALLBACK_POLL_MS);
-    return () => window.clearInterval(timer);
+    return setVisibleInterval(() => void refetch(true), live ? LIVE_POLL_MS : FALLBACK_POLL_MS);
   }, [live, refetch]);
 
   // Browsers keep audio locked until a gesture; arm it on the first interaction.

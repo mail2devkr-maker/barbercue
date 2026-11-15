@@ -6,6 +6,7 @@ import { NOTIFICATION_PATHS } from "@barbercue/shared";
 import type { NotificationDto } from "@barbercue/shared";
 import { apiFetch } from "../../lib/api";
 import styles from "./notification-bell.module.css";
+import { setVisibleInterval } from "../../lib/visible-interval";
 
 const POLL_INTERVAL_MS = 60_000;
 
@@ -62,8 +63,7 @@ export function NotificationBell() {
 
   useEffect(() => {
     refreshCount();
-    const id = setInterval(refreshCount, POLL_INTERVAL_MS);
-    return () => clearInterval(id);
+    return setVisibleInterval(refreshCount, POLL_INTERVAL_MS);
   }, [refreshCount]);
 
   useEffect(() => {

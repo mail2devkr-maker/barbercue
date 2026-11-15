@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit, Optional } from '@nestjs/common';
 import { Interval } from '@nestjs/schedule';
 import { NotificationCategory, QueueEntryStatus } from '@barbercue/shared';
 import { PrismaService } from '../prisma/prisma.service';
@@ -6,6 +6,7 @@ import { NotificationDeliveryService } from '../notifications/notification-deliv
 import { QueueService } from './queue.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { ExpoPushSender } from '../push-notifications/expo-push-sender';
+import { DbDeadlineSchedulerService } from '../common/db-deadline-scheduler/db-deadline-scheduler.service';
 
 /** Customers and shop receive the same T-10 *estimated* service-arrival prompt. */
 export const LIVE_QUEUE_ARRIVAL_LEAD_MINUTES = 10;
@@ -13,9 +14,19 @@ const MAX_SHOPS_PER_SWEEP = 120;
 const MAX_REMINDERS_PER_SWEEP = 240;
 
 @Injectable()
-export class QueueArrivalReminderService {
+export class QueueArrivalReminderService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(QueueArrivalReminderService.name);
   private sweeping = false;
+  /**
+   * Neon compute cost (owner report 15 Nov): an unconditional 30 s sweep queried the database
+   * around the clock, so the compute never suspended. The sweep now runs only while someone may
+   * be waiting: armed at startup, by every queue/booking mutation signal and by the scheduler's
+   * reconcile tick; it disarms itself when no un-prompted WAITING entry is left.
+   */
+  private armed = true;
+  /** Bumped on every re-arm, so a sweep that started before a new join never disarms over it. */
+  private armSeq = 0;
+  private unsubscribe: (() => void) | null = null;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -23,11 +34,33 @@ export class QueueArrivalReminderService {
     private readonly delivery: NotificationDeliveryService,
     private readonly realtime: RealtimeGateway,
     private readonly expo: ExpoPushSender,
+    @Optional() private readonly deadlineScheduler?: DbDeadlineSchedulerService,
   ) {}
+
+  onModuleInit(): void {
+    this.unsubscribe = this.deadlineScheduler?.onSignal((reason) => {
+      if (reason === 'queue' || reason === 'booking' || reason === 'reconcile') this.arm();
+    }) ?? null;
+  }
+
+  onModuleDestroy(): void {
+    this.unsubscribe?.();
+    this.unsubscribe = null;
+  }
+
+  arm(): void {
+    this.armed = true;
+    this.armSeq += 1;
+  }
+
+  /** True while the 30 s sweep is allowed to touch the database. */
+  isArmed(): boolean {
+    return this.armed;
+  }
 
   @Interval(30_000)
   async sweep(): Promise<void> {
-    if (this.sweeping) return;
+    if (this.sweeping || !this.armed) return;
     this.sweeping = true;
     try {
       await this.sendDueReminders();
@@ -39,6 +72,7 @@ export class QueueArrivalReminderService {
   }
 
   async sendDueReminders(): Promise<number> {
+    const seqAtStart = this.armSeq;
     // The previous estimatedWaitMinutes is a snapshot and does not decrease by itself.
     // Recompute active salons first so a long-running service can actually cross the T-10 boundary.
     const salons = await this.prisma.queueEntry.findMany({
@@ -51,6 +85,11 @@ export class QueueArrivalReminderService {
       distinct: ['salonId'],
       take: MAX_SHOPS_PER_SWEEP,
     });
+    if (salons.length === 0) {
+      // Nobody is waiting for a prompt: stop querying until a queue/booking change re-arms us.
+      if (this.armSeq === seqAtStart) this.armed = false;
+      return 0;
+    }
     for (const { salonId } of salons) {
       try {
         await this.queue.recomputeEtas(salonId);

@@ -14,6 +14,7 @@ import { moneyText, quantityText } from '../../lib/inventory-shared';
 import { inventoryBase } from '../../lib/use-inventory-lookups';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 import { Button, Card, InlineError } from '../ui';
+import { setForegroundInterval } from '../../lib/foreground-interval';
 
 /**
  * Website parity for the inventory home (ServiceUsageViews InventoryDashboard) and Reports
@@ -43,8 +44,8 @@ function Line({ title, value, note }: { title: string; value: string | number; n
 export function InventoryDashboardPanel({ salonId, onOpenUsage }: { salonId: string; onOpenUsage?: () => void }) {
   const { data, error, loading, reload } = useResource<InventoryDashboardDto>(`${inventoryBase(salonId)}/${SERVICE_USAGE_PATHS.dashboard}`);
   // Refresh every minute while open, as the website does (the server computes everything).
-  useEffect(() => { const t = setInterval(reload, 60_000); return () => clearInterval(t); // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => setForegroundInterval(reload, 60_000), []);
   if (loading) return <Text style={styles.muted}>Loading…</Text>;
   if (error || !data) return <><InlineError message={error ?? 'No dashboard.'} /><Button title="Try again" variant="outline" onPress={reload} /></>;
   const money = (v: string) => moneyText(v, data.currency);

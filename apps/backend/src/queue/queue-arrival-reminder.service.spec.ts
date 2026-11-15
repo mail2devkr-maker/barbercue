@@ -66,3 +66,68 @@ describe('Live Queue T-10 arrival reminders', () => {
     })]);
   });
 });
+
+describe('Live Queue arrival sweep lets the database sleep (Neon CU, 15 Nov)', () => {
+  function build() {
+    const findMany = jest.fn();
+    let listener: ((reason: string) => void) | null = null;
+    const scheduler = { onSignal: jest.fn((fn: (reason: string) => void) => { listener = fn; return () => { listener = null; }; }) };
+    const service = new QueueArrivalReminderService(
+      { queueEntry: { findMany, updateMany: jest.fn() } } as never,
+      { recomputeEtas: jest.fn() } as never,
+      { deliverToUser: jest.fn() } as never,
+      { emitQueueUpdated: jest.fn() } as never,
+      { send: jest.fn() } as never,
+      scheduler as never,
+    );
+    service.onModuleInit();
+    return { service, findMany, fire: (reason: string) => listener?.(reason) };
+  }
+
+  it('stops querying once nobody is waiting, until a queue change re-arms it', async () => {
+    const { service, findMany, fire } = build();
+    findMany.mockResolvedValueOnce([]);
+    await service.sweep();
+    expect(findMany).toHaveBeenCalledTimes(1);
+    expect(service.isArmed()).toBe(false);
+
+    await service.sweep();
+    await service.sweep();
+    expect(findMany).toHaveBeenCalledTimes(1);
+
+    fire('queue');
+    expect(service.isArmed()).toBe(true);
+    findMany.mockResolvedValueOnce([]);
+    await service.sweep();
+    expect(findMany).toHaveBeenCalledTimes(2);
+  });
+
+  it('re-arms on booking changes and on the reconcile safety tick, not on inventory', () => {
+    const { service, fire } = build();
+    (service as unknown as { armed: boolean }).armed = false;
+    fire('inventory');
+    expect(service.isArmed()).toBe(false);
+    fire('booking');
+    expect(service.isArmed()).toBe(true);
+    (service as unknown as { armed: boolean }).armed = false;
+    fire('reconcile');
+    expect(service.isArmed()).toBe(true);
+  });
+
+  it('a join that lands while an empty sweep is in flight is never lost', async () => {
+    const { service, findMany, fire } = build();
+    findMany.mockImplementationOnce(async () => {
+      fire('queue');
+      return [];
+    });
+    await service.sweep();
+    expect(service.isArmed()).toBe(true);
+  });
+
+  it('keeps sweeping while someone is waiting', async () => {
+    const { service, findMany } = build();
+    findMany.mockResolvedValueOnce([{ salonId: 'salon-1' }]).mockResolvedValueOnce([]);
+    await service.sweep();
+    expect(service.isArmed()).toBe(true);
+  });
+});

@@ -20,7 +20,23 @@ interface JobState {
 
 const MIN_DELAY_MS = 250;
 const MAX_TIMER_DELAY_MS = 2_000_000_000;
-const RECONCILE_INTERVAL_MS = 60 * 60 * 1000;
+const DEFAULT_RECONCILE_INTERVAL_MS = 6 * 60 * 60 * 1000;
+const MIN_RECONCILE_INTERVAL_MS = 15 * 60 * 1000;
+
+/**
+ * Neon compute cost (owner report 15 Nov: the free 100 CU-h ran out in ~15 days because the
+ * database never slept). The reconcile tick is only a crash/manual-write safety net - every
+ * booking/queue mutation already re-plans - so it runs every 6 h by default.
+ * DB_DEADLINE_RECONCILE_MS overrides it (minimum 15 min).
+ */
+export function reconcileIntervalMs(raw: string | undefined = process.env.DB_DEADLINE_RECONCILE_MS): number {
+  const parsed = raw === undefined || raw.trim() === '' ? NaN : Number(raw);
+  if (!Number.isFinite(parsed)) return DEFAULT_RECONCILE_INTERVAL_MS;
+  return Math.max(MIN_RECONCILE_INTERVAL_MS, Math.floor(parsed));
+}
+
+/** Notified on every domain signal and on every reconcile tick ('reconcile'). */
+export type DbDeadlineListener = (reason: DbDeadlineDomain | 'reconcile') => void;
 
 /**
  * Keeps deadline-driven database jobs accurate without waking Neon every minute.
@@ -36,6 +52,27 @@ export class DbDeadlineSchedulerService implements OnModuleDestroy {
   private readonly logger = new Logger(DbDeadlineSchedulerService.name);
   private readonly jobs = new Map<string, JobState>();
   private reconcileTimer: NodeJS.Timeout | null = null;
+  private readonly listeners = new Set<DbDeadlineListener>();
+
+  /**
+   * Lets a sweep that would otherwise poll the database (e.g. the Live Queue arrival reminder)
+   * sleep until a related mutation or the reconcile tick says there may be work again.
+   */
+  onSignal(listener: DbDeadlineListener): () => void {
+    this.listeners.add(listener);
+    this.ensureReconcileTimer();
+    return () => this.listeners.delete(listener);
+  }
+
+  private notify(reason: DbDeadlineDomain | 'reconcile'): void {
+    for (const listener of this.listeners) {
+      try {
+        listener(reason);
+      } catch (error) {
+        this.logger.warn(`Deadline listener failed: ${error instanceof Error ? error.message : 'unknown error'}`);
+      }
+    }
+  }
 
   register(job: DbDeadlineJob): () => void {
     this.unregister(job.name);
@@ -55,6 +92,7 @@ export class DbDeadlineSchedulerService implements OnModuleDestroy {
   }
 
   signal(domain: DbDeadlineDomain): void {
+    this.notify(domain);
     for (const state of this.jobs.values()) {
       if (state.job.domain === domain) this.queueRefresh(state, 50);
     }
@@ -64,7 +102,8 @@ export class DbDeadlineSchedulerService implements OnModuleDestroy {
     if (this.reconcileTimer) return;
     this.reconcileTimer = setInterval(() => {
       for (const state of this.jobs.values()) this.queueRefresh(state, 0);
-    }, RECONCILE_INTERVAL_MS);
+      this.notify('reconcile');
+    }, reconcileIntervalMs());
     this.reconcileTimer.unref?.();
   }
 
@@ -140,7 +179,7 @@ export class DbDeadlineSchedulerService implements OnModuleDestroy {
     if (state.timer) clearTimeout(state.timer);
     if (state.refreshTimer) clearTimeout(state.refreshTimer);
     this.jobs.delete(name);
-    if (this.jobs.size === 0 && this.reconcileTimer) {
+    if (this.jobs.size === 0 && this.listeners.size === 0 && this.reconcileTimer) {
       clearInterval(this.reconcileTimer);
       this.reconcileTimer = null;
     }
@@ -150,5 +189,6 @@ export class DbDeadlineSchedulerService implements OnModuleDestroy {
     for (const name of Array.from(this.jobs.keys())) this.unregister(name);
     if (this.reconcileTimer) clearInterval(this.reconcileTimer);
     this.reconcileTimer = null;
+    this.listeners.clear();
   }
 }

@@ -30,6 +30,7 @@ import { BrandLockup } from "../ui/BrandLockup";
 import { NAV_GROUPS, NAV_ITEMS, activeItemId, hrefFor, navItemsFor, type NavItem } from "./owner-nav";
 import { initialsOf, shortName } from "./format";
 import ui from "./owner.module.css";
+import { setVisibleInterval } from "../../lib/visible-interval";
 
 export type ShopKind = "owner" | "staff";
 
@@ -158,7 +159,7 @@ function ShellInner({ salonId, children }: { salonId: string; children: ReactNod
 
   useEffect(() => {
     refreshCounts();
-    const timer = window.setInterval(refreshCounts, COUNT_POLL_MS);
+    const stopPoll = setVisibleInterval(refreshCounts, COUNT_POLL_MS);
     const socket = getRealtimeSocket();
     joinSalonRoom(salonId);
     const onEvent = (payload: { salonId?: string }) => {
@@ -167,7 +168,7 @@ function ShellInner({ salonId, children }: { salonId: string; children: ReactNod
     socket.on("queue.updated", onEvent);
     const unsubscribeReconnect = onReconnect(refreshCounts);
     return () => {
-      window.clearInterval(timer);
+      stopPoll();
       socket.off("queue.updated", onEvent);
       unsubscribeReconnect();
     };

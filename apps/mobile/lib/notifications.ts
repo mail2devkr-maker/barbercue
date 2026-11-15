@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { NOTIFICATION_PATHS } from '@barbercue/shared';
 import { apiFetch } from './api';
+import { setForegroundInterval } from './foreground-interval';
 
 const UNREAD_POLL_INTERVAL_MS = 60_000;
 
@@ -23,10 +24,10 @@ export function useUnreadNotificationCount(): number {
         });
     }
     refresh();
-    const id = setInterval(refresh, UNREAD_POLL_INTERVAL_MS);
+    const stopPoll = setForegroundInterval(refresh, UNREAD_POLL_INTERVAL_MS);
     return () => {
       cancelled = true;
-      clearInterval(id);
+      stopPoll();
     };
   }, []);
   return count;
