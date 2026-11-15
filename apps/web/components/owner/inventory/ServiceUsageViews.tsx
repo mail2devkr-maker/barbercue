@@ -21,6 +21,7 @@ import { ServiceUsageDialog } from "./ServiceUsageDialog";
 import ui from "../owner.module.css";
 import styles from "./usage.module.css";
 import { useShopTimeZone } from "../OwnerShell";
+import { setVisibleInterval } from "../../../lib/visible-interval";
 
 const errorText = (err: unknown, fallback: string) => (err instanceof ApiError ? err.message || fallback : fallback);
 const RECIPE_UNITS: readonly InventoryUnit[] = ["MILLILITER", "LITER", "GRAM", "KILOGRAM", "EACH", "PACK", "BOX"];
@@ -357,8 +358,7 @@ export function InventoryDashboard({ salonId }: { salonId: string }) {
   // Refresh every minute while the page is open (the server computes everything).
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const t = window.setInterval(reload, 60_000);
-    return () => window.clearInterval(t);
+    return setVisibleInterval(reload, 60_000);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reload is a stable intent
   }, []);
   if (loading) return <Skeleton height={160} />;

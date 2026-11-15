@@ -12,6 +12,7 @@ import { ServiceUsageDialog } from "./inventory/ServiceUsageDialog";
 import { Badge, Banner, Btn, BtnLink, Card, Dialog, EmptyState, Field, Kpi, PageHead, Skeleton } from "./parts";
 import ui from "./owner.module.css";
 import { useShopTimeZone } from "./OwnerShell";
+import { setVisibleInterval } from "../../lib/visible-interval";
 
 const POLL_MS = 30_000;
 
@@ -54,7 +55,7 @@ export function StaffHome({ salonId }: { salonId: string }) {
 
   useEffect(() => {
     load();
-    const poll = window.setInterval(load, POLL_MS);
+    const stopPoll = setVisibleInterval(load, POLL_MS);
     const socket = getRealtimeSocket();
     joinSalonRoom(salonId);
     const handler = (payload: { salonId?: string }) => {
@@ -66,7 +67,7 @@ export function StaffHome({ salonId }: { salonId: string }) {
     events.forEach((e) => socket.on(e, handler));
     const off = onReconnect(load);
     return () => {
-      window.clearInterval(poll);
+      stopPoll();
       if (timer.current) window.clearTimeout(timer.current);
       events.forEach((e) => socket.off(e, handler));
       off();

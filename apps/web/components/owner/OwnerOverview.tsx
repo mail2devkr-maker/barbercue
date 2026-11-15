@@ -14,6 +14,7 @@ import { NewQueueCustomerDialog } from "./NewQueueCustomerDialog";
 import { Banner, Btn, BtnLink, Card, EmptyState, PageHead, Skeleton, Tabs } from "./parts";
 import { Icon, type IconName } from "./icons";
 import ui from "./owner.module.css";
+import { setVisibleInterval } from "../../lib/visible-interval";
 
 const REFRESH_MS = 60_000;
 
@@ -130,7 +131,7 @@ export function OwnerOverview({ salonId }: { salonId: string }) {
 
   useEffect(() => {
     load();
-    const poll = window.setInterval(load, REFRESH_MS);
+    const stopPoll = setVisibleInterval(load, REFRESH_MS);
     const socket = getRealtimeSocket();
     joinSalonRoom(salonId);
     const events = ["queue.updated", "booking.created", "booking.cancelled", "booking.rescheduled", "staff.status.changed"];
@@ -140,7 +141,7 @@ export function OwnerOverview({ salonId }: { salonId: string }) {
     events.forEach((e) => socket.on(e, handler));
     const off = onReconnect(load);
     return () => {
-      window.clearInterval(poll);
+      stopPoll();
       if (timer.current) window.clearTimeout(timer.current);
       events.forEach((e) => socket.off(e, handler));
       off();
