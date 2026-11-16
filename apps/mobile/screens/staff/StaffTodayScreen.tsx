@@ -134,7 +134,7 @@ export default function StaffTodayScreen() {
         <SectionHeader eyebrow={t.tabToday} title={selectedSalon?.name ?? t.todaysQueue} />
         <NotificationBell
           unreadCount={unreadCount}
-          onPress={() => navigation.navigate('StaffAccountTab', { screen: 'Notifications' })}
+          onPress={() => navigation.navigate('StaffAccountTab', { screen: 'Notifications', initial: false })}
         />
       </View>
 

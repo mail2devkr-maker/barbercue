@@ -53,7 +53,7 @@ export default function StaffNavigator() {
           }}
         />
       </Tab.Navigator>
-      <AssistantFab tabBarHeight={60 + insets.bottom} includeBottomInset onOpen={() => navigationRef.navigate('StaffAccountTab', { screen: 'Assistant' })} />
+      <AssistantFab tabBarHeight={60 + insets.bottom} includeBottomInset onOpen={() => navigationRef.navigate('StaffAccountTab', { screen: 'Assistant', initial: false })} />
     </SalonProvider>
   );
 }
