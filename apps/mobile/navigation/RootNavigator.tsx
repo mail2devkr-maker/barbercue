@@ -62,7 +62,7 @@ function CustomerDestinationHandoffBridge() {
       // CreditsHistory isn't registered when its release gate is off, so the resolver returns null
       // for that intent. Register Shop always resolves to AccountTab → RegisterShop.
       const destination = resolvePostAuthCustomerNavigation(intent, isCreditsEnabled());
-      if (destination) navigationRef.navigate(destination.tab, { screen: destination.screen });
+      if (destination) navigationRef.navigate(destination.tab, { screen: destination.screen, initial: false });
     };
 
     replay();
@@ -170,7 +170,7 @@ export default function RootNavigator() {
       <AssistantFab
         tabBarHeight={60 + insets.bottom}
         includeBottomInset
-        onOpen={() => navigationRef.navigate('AccountTab', { screen: 'Assistant' })}
+        onOpen={() => navigationRef.navigate('AccountTab', { screen: 'Assistant', initial: false })}
       />
     </>
   );

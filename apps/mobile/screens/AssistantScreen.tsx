@@ -405,9 +405,9 @@ export default function AssistantScreen({ route }: { route?: { params?: Assistan
       case 'owner-verification': navigationRef.navigate('OwnerShopTab', { screen: 'OwnerBusiness', params: { initialPanel: 'verification' } }); break;
       case 'owner-inventory': navigationRef.navigate('OwnerShopTab', { screen: 'OwnerInventory' }); break;
       case 'owner-customers': navigationRef.navigate('OwnerShopTab', { screen: 'OwnerCustomers' }); break;
-      case 'owner-notifications': navigationRef.navigate('OwnerAccountTab', { screen: 'Notifications' }); break;
+      case 'owner-notifications': navigationRef.navigate('OwnerAccountTab', { screen: 'Notifications', initial: false }); break;
       case 'staff-today': navigationRef.navigate('StaffTodayTab'); break;
-      case 'staff-notifications': navigationRef.navigate('StaffAccountTab', { screen: 'Notifications' }); break;
+      case 'staff-notifications': navigationRef.navigate('StaffAccountTab', { screen: 'Notifications', initial: false }); break;
       case 'employee-dashboard': navigationRef.navigate('EmployeeDashboard'); break;
     }
   }

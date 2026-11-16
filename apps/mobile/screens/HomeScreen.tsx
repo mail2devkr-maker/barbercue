@@ -260,7 +260,7 @@ export default function HomeScreen({ navigation }: Props) {
   const bell = (
     <NotificationBell
       unreadCount={unreadCount}
-      onPress={() => navigation.navigate('AccountTab', { screen: 'Notifications' })}
+      onPress={() => navigation.navigate('AccountTab', { screen: 'Notifications', initial: false })}
     />
   );
 
@@ -566,7 +566,7 @@ export default function HomeScreen({ navigation }: Props) {
           </Pressable>
           {/* Google Play release gate (see lib/feature-flags.ts) */}
           {status === 'authenticated' && isCreditsEnabled() && (
-            <Pressable style={styles.shortcut} onPress={() => navigation.navigate('AccountTab', { screen: 'CreditsHistory' })}>
+            <Pressable style={styles.shortcut} onPress={() => navigation.navigate('AccountTab', { screen: 'CreditsHistory', initial: false })}>
               <Text style={styles.shortcutText} numberOfLines={1}>
                 {t.fastQueCreditsShortcut}
                 {creditsBalance !== null ? ` · ${formatMoney(creditsBalance, null)}` : ''}

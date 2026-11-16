@@ -148,7 +148,7 @@ function OwnerTabs() {
         }}
       />
     </Tab.Navigator>
-    <AssistantFab tabBarHeight={60 + insets.bottom} includeBottomInset onOpen={() => navigationRef.navigate('OwnerAccountTab', { screen: 'Assistant', params: { salonId: selectedSalonId ?? undefined } })} />
+    <AssistantFab tabBarHeight={60 + insets.bottom} includeBottomInset onOpen={() => navigationRef.navigate('OwnerAccountTab', { screen: 'Assistant', initial: false, params: { salonId: selectedSalonId ?? undefined } })} />
     <OwnerLiveAlerts />
     </>
   );

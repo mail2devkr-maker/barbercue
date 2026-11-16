@@ -268,7 +268,7 @@ export default function OwnerDashboardScreen() {
   const bell = (
     <NotificationBell
       unreadCount={unreadCount}
-      onPress={() => navigation.navigate('OwnerAccountTab', { screen: 'Notifications' })}
+      onPress={() => navigation.navigate('OwnerAccountTab', { screen: 'Notifications', initial: false })}
     />
   );
 
