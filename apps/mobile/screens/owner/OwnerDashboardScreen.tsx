@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
-import { AppState, Pressable, StyleSheet, Text, View } from 'react-native';
+import { AppState, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   DASHBOARD_PATHS,
   SHOP_CLOSED_TODAY_MESSAGE,
@@ -21,6 +21,8 @@ import { useUnreadNotificationCount } from '../../lib/notifications';
 import { useLanguage } from '../../lib/language-context';
 import { fastQue, font, fontSize, lineHeightFor, premiumShadow, radius, space } from '../../lib/theme';
 import { EmptyState, Skeleton, InlineError, NotificationBell, PremiumButton, PremiumCard, PremiumScreen, PremiumSectionHeader } from '../../components/ui';
+import { OwnerShopHero } from '../../components/owner/OwnerShopHero';
+import { showDashboardPanelLink } from '../../lib/owner-dashboard-layout';
 import { CapacitySummaryPanel } from '../../components/dashboard/CapacitySummaryPanel';
 import type { OwnerTabParamList } from '../../navigation/OwnerNavigator';
 
@@ -262,6 +264,10 @@ export default function OwnerDashboardScreen() {
 
   return (
     <PremiumScreen refreshing={refreshing} onRefresh={() => void handleRefresh()}>
+      {Platform.OS === 'android' && selectedSalonId && selectedSalon && (
+        <OwnerShopHero salonId={selectedSalonId} name={selectedSalon.name} />
+      )}
+
       <View style={styles.headerRow}>
         <PremiumSectionHeader eyebrow={t.ownerEyebrow} title={t.dashboardTitle} />
         <NotificationBell
@@ -362,13 +368,15 @@ export default function OwnerDashboardScreen() {
         >
           <Text style={styles.quickLinkText}>{language === 'HI' ? 'व्यावसायिक विश्लेषण' : 'Business analytics'}</Text>
         </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          style={styles.quickLink}
-          onPress={() => navigation.navigate('OwnerShopTab', { screen: 'OwnerBusiness', params: { initialPanel: 'report' } })}
-        >
-          <Text style={styles.quickLinkText}>{language === 'HI' ? 'आय रिपोर्ट' : 'Revenue report'}</Text>
-        </Pressable>
+        {showDashboardPanelLink('report', Platform.OS) && (
+          <Pressable
+            accessibilityRole="button"
+            style={styles.quickLink}
+            onPress={() => navigation.navigate('OwnerShopTab', { screen: 'OwnerBusiness', params: { initialPanel: 'report' } })}
+          >
+            <Text style={styles.quickLinkText}>{language === 'HI' ? 'आय रिपोर्ट' : 'Revenue report'}</Text>
+          </Pressable>
+        )}
         <Pressable
           accessibilityRole="button"
           style={styles.quickLink}
@@ -376,20 +384,24 @@ export default function OwnerDashboardScreen() {
         >
           <Text style={styles.quickLinkText}>{language === 'HI' ? 'इन्वेंटरी' : 'Inventory'}</Text>
         </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          style={styles.quickLink}
-          onPress={() => navigation.navigate('OwnerShopTab', { screen: 'OwnerBusiness', params: { initialPanel: 'cancellations' } })}
-        >
-          <Text style={styles.quickLinkText}>{language === 'HI' ? 'रद्दीकरण' : 'Cancellations'}</Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          style={styles.quickLink}
-          onPress={() => navigation.navigate('OwnerShopTab', { screen: 'OwnerBusiness', params: { initialPanel: 'reviews' } })}
-        >
-          <Text style={styles.quickLinkText}>{language === 'HI' ? 'समीक्षाएँ' : 'Reviews'}</Text>
-        </Pressable>
+        {showDashboardPanelLink('cancellations', Platform.OS) && (
+          <Pressable
+            accessibilityRole="button"
+            style={styles.quickLink}
+            onPress={() => navigation.navigate('OwnerShopTab', { screen: 'OwnerBusiness', params: { initialPanel: 'cancellations' } })}
+          >
+            <Text style={styles.quickLinkText}>{language === 'HI' ? 'रद्दीकरण' : 'Cancellations'}</Text>
+          </Pressable>
+        )}
+        {showDashboardPanelLink('reviews', Platform.OS) && (
+          <Pressable
+            accessibilityRole="button"
+            style={styles.quickLink}
+            onPress={() => navigation.navigate('OwnerShopTab', { screen: 'OwnerBusiness', params: { initialPanel: 'reviews' } })}
+          >
+            <Text style={styles.quickLinkText}>{language === 'HI' ? 'समीक्षाएँ' : 'Reviews'}</Text>
+          </Pressable>
+        )}
       </View>
     </PremiumScreen>
   );
