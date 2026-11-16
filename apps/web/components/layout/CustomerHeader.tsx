@@ -143,18 +143,6 @@ export function CustomerHeader({ dark }: { dark?: boolean }) {
                   >
                     AI Style Advisor
                   </Link>
-                  {/* Own-shop management is a different login/session surface entirely (see
-                      /owner/login) — shown unconditionally, same reasoning as account/layout.tsx's
-                      own Owner Dashboard link: a CUSTOMER-audience session can never tell whether
-                      this account also owns a shop. */}
-                  <Link
-                    href="/owner/login"
-                    role="menuitem"
-                    className={styles.accountDropdownItem}
-                    onClick={() => setAccountMenuOpen(false)}
-                  >
-                    Owner Dashboard
-                  </Link>
                   <button
                     type="button"
                     role="menuitem"
@@ -216,9 +204,6 @@ export function CustomerHeader({ dark }: { dark?: boolean }) {
                   </Link>
                   <Link href="/account/premium" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
                     Premium
-                  </Link>
-                  <Link href="/owner/login" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
-                    Owner Dashboard
                   </Link>
                 </>
               )}
