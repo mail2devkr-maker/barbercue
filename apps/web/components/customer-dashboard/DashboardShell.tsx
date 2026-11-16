@@ -96,11 +96,6 @@ export function DashboardShell({ children }: { children: ReactNode }) {
               <span>{item.label}</span>
             </Link>
           ))}
-          {/* Separate login surface — see account-shell history; shown to every customer. */}
-          <Link href="/owner/login" className={`${styles.navLink} ${styles.navLinkQuiet}`}>
-            <DashIcon name="user" />
-            <span>Owner Dashboard</span>
-          </Link>
         </nav>
         <div className={styles.promo}>
           {giftCardsEnabled() ? (
@@ -171,11 +166,6 @@ export function DashboardShell({ children }: { children: ReactNode }) {
                 <span aria-hidden="true" className={styles.chev}>›</span>
               </Link>
             ))}
-            <Link href="/owner/login" role="menuitem" className={styles.moreLink} onClick={() => setMoreOpen(false)}>
-              <DashIcon name="user" />
-              <span>Owner Dashboard</span>
-              <span aria-hidden="true" className={styles.chev}>›</span>
-            </Link>
           </div>
         </div>
       )}
