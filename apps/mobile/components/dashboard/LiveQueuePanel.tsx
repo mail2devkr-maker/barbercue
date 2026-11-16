@@ -21,6 +21,7 @@ import { CreateInvoiceButton } from '../owner/InvoiceTools';
 import { openOwnerInvoice } from '../../lib/owner-invoice-link';
 import { ServiceUsageSheet } from '../owner/ServiceUsageSheet';
 import type { UiStrings } from '@barbercue/shared';
+import { ChairModeRow, type ChairOccupancy } from './ChairModeRow';
 
 function dashboardBase(salonId: string): string {
   return `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.queue}`;
@@ -430,14 +431,11 @@ export const LiveQueuePanel = forwardRef<LiveQueuePanelHandle, { salonId: string
 
   const chairStatus = (
     <Card style={styles.entryCard}>
-      <View style={styles.entryHeaderRow}><Text style={styles.token}>Chair status</Text>{data.chairs.some((c) => c.occupancy === 'LOCAL') && <Button title="Free all local" variant="outline" onPress={() => void freeAllLocalChairs()} loading={chairBusyId === 'all-local'} />}</View>
+      <View style={styles.entryHeaderRow}><Text style={styles.token}>Chair status</Text>{data.chairs.some((c) => c.occupancy === 'LOCAL') && <Button title={hi ? 'सभी ऑनलाइन' : 'All online'} variant="outline" onPress={() => void freeAllLocalChairs()} loading={chairBusyId === 'all-local'} />}</View>
       {data.chairs.map((chair) => {
         const occupancy = chair.occupancy ?? 'FREE';
-        return <View key={chair.id} style={styles.chairRow}>
-          <View style={styles.chairText}><Text style={styles.assignLabel}>{chair.label}</Text><Text style={styles.meta}>{occupancy === 'FREE' ? 'FREE' : occupancy === 'LOCAL' ? 'OCCUPIED — Local customer' : `OCCUPIED — Token #${chair.tokenNumber ?? '?'}`}</Text></View>
-          {occupancy === 'FREE' && <Button title="Seat local" variant="outline" onPress={() => void updateLocalChair(chair, true)} loading={chairBusyId === chair.id} />}
-          {occupancy === 'LOCAL' && <Button title="Mark free" variant="outline" onPress={() => void updateLocalChair(chair, false)} loading={chairBusyId === chair.id} />}
-        </View>;
+        return <ChairModeRow key={chair.id} label={chair.label} occupancy={occupancy as ChairOccupancy} tokenNumber={chair.tokenNumber} busy={chairBusyId === chair.id} hi={hi}
+          onGoOffline={() => void updateLocalChair(chair, true)} onGoOnline={() => void updateLocalChair(chair, false)} />;
       })}
     </Card>
   );
@@ -479,17 +477,10 @@ export const LiveQueuePanel = forwardRef<LiveQueuePanelHandle, { salonId: string
   );
 
   const autoAssign = !ownerTools || data.autoAssignEnabled === undefined ? null : (
-    <Card style={styles.entryCard}>
-      <View style={styles.chairRow}>
-        <View style={styles.chairText}>
-          <Text style={styles.assignLabel}>{hi ? 'स्वचालित असाइनमेंट' : 'Automatic assignment'}</Text>
-          <Text style={styles.meta}>{data.autoAssignEnabled
-            ? (hi ? 'खाली कर्मचारी को अगला ग्राहक अपने-आप मिलता है। सेवा शुरू आप करते हैं।' : 'The next customer is assigned to free staff automatically. You still start the service.')
-            : (hi ? 'बंद: ग्राहक को आप स्वयं असाइन करते हैं।' : 'Off: you assign each customer yourself.')}</Text>
-        </View>
-        <Switch accessibilityLabel={hi ? 'स्वचालित असाइनमेंट' : 'Automatic assignment'} value={data.autoAssignEnabled === true} disabled={autoBusy} onValueChange={(next) => void toggleAutoAssign(next)} />
-      </View>
-    </Card>
+    <View style={styles.autoRow}>
+      <Text style={styles.autoLabel} numberOfLines={1}>{hi ? 'स्वचालित असाइनमेंट' : 'Automatic assignment'}</Text>
+      <Switch accessibilityLabel={hi ? 'स्वचालित असाइनमेंट' : 'Automatic assignment'} value={data.autoAssignEnabled === true} disabled={autoBusy} onValueChange={(next) => void toggleAutoAssign(next)} />
+    </View>
   );
 
   if (view !== 'active') {
@@ -591,6 +582,8 @@ const styles = StyleSheet.create({
   assignPanel: { marginTop: space[3] },
   chairRow: { flexDirection: 'row', alignItems: 'center', gap: space[2], paddingVertical: space[2], borderTopWidth: 1, borderTopColor: color.border },
   chairText: { flex: 1 },
+  autoRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 2, paddingHorizontal: space[3], marginBottom: space[2], borderWidth: 1, borderColor: color.border, borderRadius: 12, backgroundColor: color.surface },
+  autoLabel: { flex: 1, fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: color.ink },
   assignLabel: {
     fontFamily: font.bodySemiBold,
     fontSize: fontSize.xs,

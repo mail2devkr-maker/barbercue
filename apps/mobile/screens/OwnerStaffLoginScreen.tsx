@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { PasswordVisibilityButton, PASSWORD_FIELD_PADDING } from '../components/ui/PasswordVisibilityButton';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { staffLoginSchema } from '@barbercue/shared';
 import { ApiError } from '../lib/api';
@@ -29,6 +30,7 @@ export default function OwnerStaffLoginScreen({ route, navigation }: Props) {
   const { t } = useLanguage();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [googleSubmitting, setGoogleSubmitting] = useState(false);
@@ -113,14 +115,17 @@ export default function OwnerStaffLoginScreen({ route, navigation }: Props) {
 
       <View style={styles.field}>
         <Text style={styles.label}>{t.passwordLabel}</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="••••••••"
-          placeholderTextColor={fastQue.textSecondary}
-          secureTextEntry
-          value={password}
-          onChangeText={setPassword}
-        />
+        <View style={styles.passwordWrap}>
+          <TextInput
+            style={[styles.input, { paddingRight: PASSWORD_FIELD_PADDING }]}
+            placeholder="••••••••"
+            placeholderTextColor={fastQue.textSecondary}
+            secureTextEntry={!showPassword}
+            value={password}
+            onChangeText={setPassword}
+          />
+          <PasswordVisibilityButton visible={showPassword} onToggle={() => setShowPassword((v) => !v)} />
+        </View>
         <Pressable
           style={styles.recoveryLink}
           onPress={() =>
@@ -172,6 +177,7 @@ const styles = StyleSheet.create({
     color: fastQue.text,
     marginBottom: space[2],
   },
+  passwordWrap: { position: 'relative' },
   input: {
     minHeight: 50,
     backgroundColor: fastQue.input,

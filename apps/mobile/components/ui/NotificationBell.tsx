@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { color, font, fontSize } from '../../lib/theme';
+import { color, fastQue, font, fontSize } from '../../lib/theme';
 import { useLanguage } from '../../lib/language-context';
 
 /**
@@ -8,8 +8,11 @@ import { useLanguage } from '../../lib/language-context';
  * Account first. Native-drawn (matches TabIcon's own reasoning: no font-glyph dependency), badge
  * count capped the same way the Account tab's own tabBarBadge already is.
  */
-export function NotificationBell({ unreadCount, onPress }: { unreadCount: number; onPress: () => void }) {
+export function NotificationBell({ unreadCount, onPress, tone = 'light' }: { unreadCount: number; onPress: () => void; tone?: 'light' | 'dark' }) {
   const { t } = useLanguage();
+  // Owner report (16 Nov): the bell was dark ink on the dark owner dashboard and effectively
+  // invisible. Every place the bell is used sits on a dark surface, so 'light' is the default.
+  const stroke = tone === 'light' ? fastQue.text : color.ink;
   return (
     <Pressable
       onPress={onPress}
@@ -19,8 +22,8 @@ export function NotificationBell({ unreadCount, onPress }: { unreadCount: number
       style={styles.button}
     >
       <View style={styles.bellShape}>
-        <View style={styles.bellBody} />
-        <View style={styles.bellClapper} />
+        <View style={[styles.bellBody, { borderColor: stroke }]} />
+        <View style={[styles.bellClapper, { backgroundColor: stroke }]} />
       </View>
       {unreadCount > 0 && (
         <View style={styles.badge}>

@@ -1,11 +1,17 @@
-import { useEffect, useState } from 'react';
-import { Keyboard, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, Dimensions, Keyboard, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ASSISTANT_PATHS, type AssistantAccessDto } from '@barbercue/shared';
 import { apiFetch } from '../../lib/api';
 import { navigationRef } from '../../navigation/navigation-ref';
 import { fastQue, font } from '../../lib/theme';
 import { GradientView } from '../ui/GradientView';
+import { clampFabOffset, parseFabOffset, type FabOffset } from '../../lib/assistant-fab-position';
+import { getItem, setItem } from '../../lib/secure-storage';
+
+const POSITION_KEY = 'assistant_fab_offset_v1';
+const FAB_WIDTH = 132;
+const FAB_HEIGHT = 48;
 
 /** Routes where a floating launcher would cover the assistant itself or a full-screen task. */
 const HIDDEN_ON = new Set(['Assistant']);
@@ -27,6 +33,43 @@ export function AssistantFab({ onOpen, tabBarHeight = TAB_BAR_HEIGHT, includeBot
   const [enabled, setEnabled] = useState(false);
   const [routeName, setRouteName] = useState<string | undefined>(undefined);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
+  // Owner request (16 Nov): the launcher can be dragged anywhere so it never covers content, and it
+  // remembers where it was left. The offset is relative to the default bottom-right anchor.
+  const offset = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
+  const saved = useRef<FabOffset>({ x: 0, y: 0 });
+  const dragStart = useRef<FabOffset>({ x: 0, y: 0 });
+  const bottomRef = useRef(0);
+  const topInsetRef = useRef(0);
+
+  useEffect(() => {
+    let active = true;
+    void getItem(POSITION_KEY).then((raw) => {
+      const parsed = parseFabOffset(raw);
+      if (!active || !parsed) return;
+      saved.current = parsed;
+      offset.setValue(parsed);
+    }).catch(() => { /* keep the default spot */ });
+    return () => { active = false; };
+  }, [offset]);
+
+  const pan = useMemo(() => PanResponder.create({
+    onStartShouldSetPanResponder: () => false,
+    // A real drag only starts after a few px of movement, so a plain tap still opens the assistant.
+    onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 6 || Math.abs(g.dy) > 6,
+    onPanResponderGrant: () => { dragStart.current = { ...saved.current }; },
+    onPanResponderMove: (_, g) => {
+      const { width, height } = Dimensions.get('window');
+      const next = clampFabOffset({ x: dragStart.current.x + g.dx, y: dragStart.current.y + g.dy }, { width, height, fabWidth: FAB_WIDTH, fabHeight: FAB_HEIGHT, bottom: bottomRef.current, top: topInsetRef.current });
+      offset.setValue(next);
+    },
+    onPanResponderRelease: (_, g) => {
+      const { width, height } = Dimensions.get('window');
+      const next = clampFabOffset({ x: dragStart.current.x + g.dx, y: dragStart.current.y + g.dy }, { width, height, fabWidth: FAB_WIDTH, fabHeight: FAB_HEIGHT, bottom: bottomRef.current, top: topInsetRef.current });
+      saved.current = next;
+      offset.setValue(next);
+      void setItem(POSITION_KEY, JSON.stringify(next)).catch(() => { /* position is a convenience only */ });
+    },
+  }), [offset]);
 
   useEffect(() => {
     let active = true;
@@ -48,8 +91,11 @@ export function AssistantFab({ onOpen, tabBarHeight = TAB_BAR_HEIGHT, includeBot
   if (!enabled || keyboardOpen || (routeName && HIDDEN_ON.has(routeName))) return null;
 
   const bottom = tabBarHeight + (includeBottomInset ? 0 : insets.bottom) + 14;
+  bottomRef.current = bottom;
+  topInsetRef.current = insets.top;
   return (
     <View pointerEvents="box-none" style={[styles.layer, { bottom }]}>
+      <Animated.View {...pan.panHandlers} style={{ transform: offset.getTranslateTransform() }}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Open FastQue Assistant"
@@ -62,6 +108,7 @@ export function AssistantFab({ onOpen, tabBarHeight = TAB_BAR_HEIGHT, includeBot
           <Text style={styles.label}>Assistant</Text>
         </GradientView>
       </Pressable>
+      </Animated.View>
     </View>
   );
 }

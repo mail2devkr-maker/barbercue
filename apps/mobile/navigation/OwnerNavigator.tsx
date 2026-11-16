@@ -17,6 +17,7 @@ import { useLanguage } from '../lib/language-context';
 import { fastQue, font } from '../lib/theme';
 import { TabIcon, type TabIconName } from '../components/ui/TabIcon';
 import { useEffect } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { setStatusBarStyle } from 'expo-status-bar';
 import { useSalon } from '../lib/salon-context';
 import { navigationRef } from './navigation-ref';
@@ -94,6 +95,9 @@ function OwnerTabs() {
   const unreadCount = useUnreadNotificationCount();
   const { t } = useLanguage();
   const { selectedSalonId } = useSalon();
+  // Owner report (16 Nov): on phones with Android's back/home bar the 5 tabs sat underneath it. The
+  // fixed 60px bar ignored the bottom inset (the customer bar already adds it).
+  const insets = useSafeAreaInsets();
   // The app-wide status bar is light (white text) for the dark customer screens. Every owner tab
   // except the dark Dashboard sits on the cream surface with no header, so white clock/battery
   // icons were invisible there. Switch per focused tab; restore light when the owner shell closes.
@@ -109,7 +113,7 @@ function OwnerTabs() {
         tabBarHideOnKeyboard: true,
         tabBarActiveTintColor: fastQue.pink,
         tabBarInactiveTintColor: fastQue.textMuted,
-        tabBarStyle: { backgroundColor: fastQue.glassStrong, borderTopColor: fastQue.border, borderTopWidth: 1, height: 60, paddingBottom: 8, paddingTop: 8 },
+        tabBarStyle: { backgroundColor: fastQue.glassStrong, borderTopColor: fastQue.border, borderTopWidth: 1, height: 60 + insets.bottom, paddingBottom: 8 + insets.bottom, paddingTop: 8 },
         tabBarLabelStyle: { fontFamily: font.bodySemiBold, fontSize: 11 },
         tabBarIconStyle: { marginTop: 2 },
       }}
@@ -144,7 +148,7 @@ function OwnerTabs() {
         }}
       />
     </Tab.Navigator>
-    <AssistantFab onOpen={() => navigationRef.navigate('OwnerAccountTab', { screen: 'Assistant', params: { salonId: selectedSalonId ?? undefined } })} />
+    <AssistantFab tabBarHeight={60 + insets.bottom} includeBottomInset onOpen={() => navigationRef.navigate('OwnerAccountTab', { screen: 'Assistant', params: { salonId: selectedSalonId ?? undefined } })} />
     <OwnerLiveAlerts />
     </>
   );
