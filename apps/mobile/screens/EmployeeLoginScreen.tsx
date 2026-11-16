@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { PasswordVisibilityButton, PASSWORD_FIELD_PADDING } from '../components/ui/PasswordVisibilityButton';
 import { employeeLoginSchema } from '@barbercue/shared';
 import { ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
@@ -12,6 +13,7 @@ export default function EmployeeLoginScreen() {
   const { t } = useLanguage();
   const [employeeCode, setEmployeeCode] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const submittingRef = useRef(false);
@@ -70,17 +72,21 @@ export default function EmployeeLoginScreen() {
 
       <View style={styles.field}>
         <Text style={styles.label}>{t.employeePasswordLabel}</Text>
-        <PremiumTextField
-          accessibilityLabel={t.employeePasswordLabel}
-          autoCapitalize="none"
-          autoComplete="password"
-          secureTextEntry
-          returnKeyType="done"
-          value={password}
-          onChangeText={setPassword}
-          onSubmitEditing={() => void handleSubmit()}
-          editable={!submitting}
-        />
+        <View style={styles.passwordWrap}>
+          <PremiumTextField
+            accessibilityLabel={t.employeePasswordLabel}
+            autoCapitalize="none"
+            autoComplete="password"
+            secureTextEntry={!showPassword}
+            returnKeyType="done"
+            value={password}
+            onChangeText={setPassword}
+            onSubmitEditing={() => void handleSubmit()}
+            editable={!submitting}
+            style={{ paddingRight: PASSWORD_FIELD_PADDING }}
+          />
+          <PasswordVisibilityButton visible={showPassword} onToggle={() => setShowPassword((v) => !v)} />
+        </View>
       </View>
 
       <PremiumButton title={t.signInTitle} onPress={() => void handleSubmit()} loading={submitting} />
@@ -90,6 +96,7 @@ export default function EmployeeLoginScreen() {
 }
 
 const styles = StyleSheet.create({
+  passwordWrap: { position: 'relative' },
   content: { paddingHorizontal: space[5] },
   brand: { alignSelf: 'center', marginBottom: space[5] },
   field: { marginBottom: space[4] },

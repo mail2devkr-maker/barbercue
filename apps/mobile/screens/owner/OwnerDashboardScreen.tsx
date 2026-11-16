@@ -95,6 +95,7 @@ export default function OwnerDashboardScreen() {
   const [summaryDate, setSummaryDate] = useState<string | null>(null);
   const unreadCount = useUnreadNotificationCount();
   const { t, language } = useLanguage();
+  const [heroShown, setHeroShown] = useState(false);
 
   const loadSummary = useCallback(async () => {
     const requestId = ++summaryRequestIdRef.current;
@@ -262,18 +263,29 @@ export default function OwnerDashboardScreen() {
     );
   }
 
+  // The bell sits in the top-right corner of the cover hero when a cover photo is shown, else in the
+  // header row (owner report 16 Nov: it had dropped below the hero).
+  const bell = (
+    <NotificationBell
+      unreadCount={unreadCount}
+      onPress={() => navigation.navigate('OwnerAccountTab', { screen: 'Notifications' })}
+    />
+  );
+
   return (
     <PremiumScreen refreshing={refreshing} onRefresh={() => void handleRefresh()}>
       {selectedSalonId && selectedSalon && (
-        <OwnerShopHero salonId={selectedSalonId} name={selectedSalon.name} />
+        <OwnerShopHero
+          salonId={selectedSalonId}
+          name={selectedSalon.name}
+          onShownChange={setHeroShown}
+          topRight={bell}
+        />
       )}
 
       <View style={styles.headerRow}>
         <PremiumSectionHeader eyebrow={t.ownerEyebrow} title={t.dashboardTitle} />
-        <NotificationBell
-          unreadCount={unreadCount}
-          onPress={() => navigation.navigate('OwnerAccountTab', { screen: 'Notifications' })}
-        />
+        {!heroShown && bell}
       </View>
 
       {workplaces.length > 1 && (

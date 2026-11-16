@@ -1,3 +1,4 @@
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import type { NavigatorScreenParams } from '@react-navigation/native';
 import StaffTodayScreen from '../screens/staff/StaffTodayScreen';
@@ -23,6 +24,7 @@ const Tab = createBottomTabNavigator<StaffTabParamList>();
 export default function StaffNavigator() {
   const unreadCount = useUnreadNotificationCount();
   const { t } = useLanguage();
+  const insets = useSafeAreaInsets();
   return (
     <SalonProvider>
       <Tab.Navigator
@@ -31,7 +33,7 @@ export default function StaffNavigator() {
         tabBarHideOnKeyboard: true,
           tabBarActiveTintColor: fastQue.pink,
           tabBarInactiveTintColor: fastQue.textMuted,
-          tabBarStyle: { backgroundColor: fastQue.glassStrong, borderTopColor: fastQue.border, borderTopWidth: 1, height: 60, paddingBottom: 8, paddingTop: 8 },
+          tabBarStyle: { backgroundColor: fastQue.glassStrong, borderTopColor: fastQue.border, borderTopWidth: 1, height: 60 + insets.bottom, paddingBottom: 8 + insets.bottom, paddingTop: 8 },
           tabBarLabelStyle: { fontFamily: font.bodySemiBold, fontSize: 11 },
           tabBarIconStyle: { marginTop: 2 },
         }}
@@ -51,7 +53,7 @@ export default function StaffNavigator() {
           }}
         />
       </Tab.Navigator>
-      <AssistantFab onOpen={() => navigationRef.navigate('StaffAccountTab', { screen: 'Assistant' })} />
+      <AssistantFab tabBarHeight={60 + insets.bottom} includeBottomInset onOpen={() => navigationRef.navigate('StaffAccountTab', { screen: 'Assistant' })} />
     </SalonProvider>
   );
 }
