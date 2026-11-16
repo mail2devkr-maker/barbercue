@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
-import { AppState, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { AppState, Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   DASHBOARD_PATHS,
   SHOP_CLOSED_TODAY_MESSAGE,
@@ -264,7 +264,7 @@ export default function OwnerDashboardScreen() {
 
   return (
     <PremiumScreen refreshing={refreshing} onRefresh={() => void handleRefresh()}>
-      {Platform.OS === 'android' && selectedSalonId && selectedSalon && (
+      {selectedSalonId && selectedSalon && (
         <OwnerShopHero salonId={selectedSalonId} name={selectedSalon.name} />
       )}
 
@@ -368,7 +368,7 @@ export default function OwnerDashboardScreen() {
         >
           <Text style={styles.quickLinkText}>{language === 'HI' ? 'व्यावसायिक विश्लेषण' : 'Business analytics'}</Text>
         </Pressable>
-        {showDashboardPanelLink('report', Platform.OS) && (
+        {showDashboardPanelLink('report') && (
           <Pressable
             accessibilityRole="button"
             style={styles.quickLink}
@@ -384,7 +384,7 @@ export default function OwnerDashboardScreen() {
         >
           <Text style={styles.quickLinkText}>{language === 'HI' ? 'इन्वेंटरी' : 'Inventory'}</Text>
         </Pressable>
-        {showDashboardPanelLink('cancellations', Platform.OS) && (
+        {showDashboardPanelLink('cancellations') && (
           <Pressable
             accessibilityRole="button"
             style={styles.quickLink}
@@ -393,7 +393,7 @@ export default function OwnerDashboardScreen() {
             <Text style={styles.quickLinkText}>{language === 'HI' ? 'रद्दीकरण' : 'Cancellations'}</Text>
           </Pressable>
         )}
-        {showDashboardPanelLink('reviews', Platform.OS) && (
+        {showDashboardPanelLink('reviews') && (
           <Pressable
             accessibilityRole="button"
             style={styles.quickLink}
