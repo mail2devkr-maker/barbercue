@@ -16,7 +16,10 @@ import { AppException } from '../common/exceptions/app.exception';
 import { SalonAccessService } from '../common/salon-access/salon-access.service';
 import { AvailabilityService } from '../bookings/availability.service';
 import { ReservationService } from '../bookings/reservation.service';
-import { QueueService } from '../queue/queue.service';
+import {
+  QueueService,
+  queueEntryDetailInclude,
+} from '../queue/queue.service';
 import { QueueAutoAssignTrigger } from '../queue/queue-auto-assign.trigger';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { zonedDayBounds } from '../common/timezone/timezone';
@@ -567,9 +570,12 @@ export class QueueAutoAssignService implements OnModuleInit {
         : e.serviceId
           ? [e.serviceId]
           : [];
+      // Live-visit add-on mission: a walk-in's own add-ons are part of the time it needs a barber
+      // for (an appointment's add-ons are absorbed by the shop's buffer, see assignLoaded).
       const durationMinutes = e.booking
         ? bookingServices.reduce((sum, s) => sum + s.durationMinutes, 0)
-        : (e.service?.durationMinutes ?? 30);
+        : (e.service?.durationMinutes ?? 30) +
+          ((e.addOnMinutes ?? 0) > 0 ? e.addOnMinutes : 0);
       return {
         id: e.id,
         serviceIds,
@@ -583,6 +589,12 @@ export class QueueAutoAssignService implements OnModuleInit {
     });
 
     const now = new Date();
+    // Same buffer rule as QueueService.assignLoaded (walk-ins only), so the planner never proposes
+    // a seat the transactional assignment would then refuse.
+    const bufferMinutes = await this.availability.getServiceBufferMinutes(
+      this.prisma,
+      salonId,
+    );
     const plan = await planAllocation({
       entries,
       staff,
@@ -599,6 +611,7 @@ export class QueueAutoAssignService implements OnModuleInit {
           {
             excludeBookingId: entry.bookingId ?? undefined,
             excludeQueueEntryId: entry.id,
+            bufferMinutes: entry.bookingId ? 0 : bufferMinutes,
           },
         );
         if (!check.free) return false;
@@ -680,6 +693,7 @@ export class QueueAutoAssignService implements OnModuleInit {
             preferredStaff: { select: { displayName: true } },
           },
         },
+        addOns: queueEntryDetailInclude.addOns,
       },
     });
     return this.queue.toDetailDto(entry, null);

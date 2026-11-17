@@ -31,6 +31,9 @@ export interface ExpoPushMessage {
   channelId?: string;
   sound?: 'default' | null;
   priority?: 'default' | 'normal' | 'high';
+  // Unix seconds after which APNs/FCM drop an undelivered message (e.g. phone offline) instead of
+  // showing it late. Live-visit add-on mission: a visit notice must never arrive after the visit.
+  expiration?: number;
 }
 
 export interface ExpoPushTicket {

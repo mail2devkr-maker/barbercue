@@ -104,6 +104,16 @@ jobs:
           export JWT_ACCESS_SECRET="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
           export TOTP_ENCRYPTION_KEY="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
           npx jest --config ./test/jest-e2e.json --runInBand --ci test/owner-ops.e2e-spec.ts
+      - name: Live-visit add-ons, service buffer, notification expiry and join hours E2E (must ALL pass)
+        working-directory: apps/backend
+        env:
+          DATABASE_URL: ${{ env.CHAIN_DATABASE_URL }}
+          NODE_ENV: development
+          AGENT_LLM_PROVIDER: none
+        run: |
+          export JWT_ACCESS_SECRET="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
+          export TOTP_ENCRYPTION_KEY="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
+          npx jest --config ./test/jest-e2e.json --runInBand --ci test/live-visit-addons.e2e-spec.ts
       - name: Customer directory keyset continuation under a non-UTC PostgreSQL session timezone
         working-directory: apps/backend
         env:

@@ -121,6 +121,7 @@ interface AvailabilityMock {
   >;
   getSlotCapacity: jest.Mock<Promise<number>, [unknown, string, string]>;
   getSlotCapacityForServices: jest.Mock<Promise<number>, [unknown, string, string[]]>;
+  getServiceBufferMinutes: jest.Mock<Promise<number>, [unknown, string]>;
 }
 
 describe('BookingsService', () => {
@@ -260,6 +261,10 @@ describe('BookingsService', () => {
       getSlotCapacityForServices: jest
         .fn<Promise<number>, [unknown, string, string[]]>()
         .mockResolvedValue(2),
+      // Live-visit add-on mission: 0 = the exact pre-buffer reservation behaviour these tests pin.
+      getServiceBufferMinutes: jest
+        .fn<Promise<number>, [unknown, string]>()
+        .mockResolvedValue(0),
     };
     cancellationPolicy = {
       // Part 5 completion (arrival guidance): create() now also calls getEffectivePolicy to
@@ -1452,6 +1457,8 @@ describe('BookingsService', () => {
         'bookingRescheduled',
         'Haircut',
         { type: 'booking.rescheduled', salonId: 's1', bookingId: 'b1' },
+        // Live-visit add-on mission: the push expires at the (new) appointment end.
+        { expiresAt: expect.any(Date) },
       );
       // Part 15 — same reasoning as create()'s matching test: a reschedule moves the reservation
       // window, and the Live Queue dashboard only listens for queue.updated.

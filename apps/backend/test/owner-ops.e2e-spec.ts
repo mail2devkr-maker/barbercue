@@ -173,6 +173,11 @@ maybe('Owner operations (e2e, disposable local database)', () => {
         // is the "owner switched automatic assignment OFF" case. The ON-by-default behaviour is proven on a
         // brand-new shop at the end of the allocation scenarios.
         queueAutoAssignEnabled: false,
+        // These scenarios pack one barber's day with back-to-back appointments (10:00, 10:30, 11:00 ...).
+        // The shop's buffer after each service (live-visit add-on mission, default 10 minutes) is proven
+        // separately in live-visit-addons.e2e-spec.ts; here it is off so every scenario keeps testing
+        // exactly what it was written for.
+        serviceBufferMinutes: 0,
       },
     });
     ids.salon = salon.id;

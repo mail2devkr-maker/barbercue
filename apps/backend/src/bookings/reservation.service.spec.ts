@@ -390,3 +390,135 @@ describe('ReservationService - assigned (not yet started) customers hold a barbe
     expect(used).toBe(1);
   });
 });
+
+// Live-visit add-on mission (17 Nov 2026): the shop's buffer after every service and add-on
+// services chosen at the shop.
+describe('ReservationService — service buffer and add-ons', () => {
+  const at = (hhmm: string) => new Date(`2026-09-24T${hhmm}:00.000Z`);
+  let service: ReservationService;
+
+  beforeEach(() => {
+    service = new ReservationService();
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-09-24T09:00:00.000Z'));
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('without a buffer the booking query window is exactly the candidate (pre-mission behaviour)', async () => {
+    const mockDb = db();
+    await service.isStaffFreeForInterval(mockDb, SALON, RAMESH, at('10:00'), at('10:30'));
+    const where = mockDb.booking.count.mock.calls[0][0].where;
+    expect(where.slotStart).toEqual({ lt: at('10:30') });
+    expect(where.slotEnd).toEqual({ gt: at('10:00') });
+  });
+
+  it('a 10-minute buffer widens the booking window by 10 minutes on both sides', async () => {
+    const mockDb = db();
+    await service.isStaffFreeForInterval(mockDb, SALON, RAMESH, at('10:00'), at('10:30'), {
+      bufferMinutes: 10,
+    });
+    const where = mockDb.booking.count.mock.calls[0][0].where;
+    expect(where.slotStart).toEqual({ lt: at('10:40') });
+    expect(where.slotEnd).toEqual({ gt: at('09:50') });
+  });
+
+  it('a pool count with a buffer widens the same way', async () => {
+    const mockDb = db();
+    await service.countPoolReservations(mockDb, SALON, at('10:00'), at('10:30'), {
+      bufferMinutes: 15,
+    });
+    const where = mockDb.booking.count.mock.calls[0][0].where;
+    expect(where.slotStart).toEqual({ lt: at('10:45') });
+    expect(where.slotEnd).toEqual({ gt: at('09:45') });
+  });
+
+  it('a negative or non-finite buffer is ignored', async () => {
+    const mockDb = db();
+    await service.countPoolReservations(mockDb, SALON, at('10:00'), at('10:30'), {
+      bufferMinutes: -5,
+    });
+    await service.countPoolReservations(mockDb, SALON, at('10:00'), at('10:30'), {
+      bufferMinutes: Number.NaN,
+    });
+    for (const call of mockDb.booking.count.mock.calls) {
+      expect(call[0].where.slotStart).toEqual({ lt: at('10:30') });
+      expect(call[0].where.slotEnd).toEqual({ gt: at('10:00') });
+    }
+  });
+
+  it('an in-service walk-in with add-ons keeps the barber busy for service + add-ons', async () => {
+    // 09:00 start, 30 min haircut + 15 min beard = busy until 09:45.
+    const mockDb = db({
+      serviceSession: {
+        findFirst: jest.fn().mockResolvedValue({
+          startedAt: at('09:00'),
+          service: { durationMinutes: 30 },
+          queueEntry: { addOnMinutes: 15 },
+        }),
+      },
+    });
+    const result = await service.isStaffFreeForInterval(mockDb, SALON, RAMESH, at('09:35'), at('10:05'));
+    expect(result).toEqual({ free: false, reason: 'ACTIVE_SESSION', busyUntil: at('09:45') });
+    const later = await service.isStaffFreeForInterval(mockDb, SALON, RAMESH, at('09:45'), at('10:15'));
+    expect(later.free).toBe(true);
+  });
+
+  it('the buffer also keeps a gap after an in-service visit', async () => {
+    const mockDb = db({
+      serviceSession: {
+        findFirst: jest.fn().mockResolvedValue({
+          startedAt: at('09:00'),
+          service: { durationMinutes: 30 },
+          queueEntry: { addOnMinutes: 0 },
+        }),
+      },
+    });
+    const tight = await service.isStaffFreeForInterval(mockDb, SALON, RAMESH, at('09:35'), at('10:05'), {
+      bufferMinutes: 10,
+    });
+    expect(tight.free).toBe(false);
+    const ok = await service.isStaffFreeForInterval(mockDb, SALON, RAMESH, at('09:40'), at('10:10'), {
+      bufferMinutes: 10,
+    });
+    expect(ok.free).toBe(true);
+  });
+
+  it('an assigned (not started) walk-in with add-ons holds the barber for service + add-ons', async () => {
+    const mockDb = db({
+      queueEntry: {
+        findFirst: jest.fn().mockResolvedValue({
+          assignedAt: at('09:00'),
+          calledAt: null,
+          addOnMinutes: 20,
+          service: { durationMinutes: 30 },
+        }),
+      },
+    });
+    const result = await service.isStaffFreeForInterval(mockDb, SALON, RAMESH, at('09:45'), at('10:15'));
+    expect(result).toEqual({ free: false, reason: 'ASSIGNED_CUSTOMER', busyUntil: at('09:50') });
+  });
+
+  it('pool counting includes a walk-in session\'s add-on minutes', async () => {
+    const mockDb = db({
+      serviceSession: {
+        findMany: jest.fn().mockResolvedValue([
+          { startedAt: at('09:00'), service: { durationMinutes: 30 }, queueEntry: { addOnMinutes: 20 } },
+        ]),
+      },
+    });
+    // Without the add-on the session would end 09:30 and not touch 09:40-10:10.
+    expect(await service.countPoolReservations(mockDb, SALON, at('09:40'), at('10:10'))).toBe(1);
+    expect(await service.countPoolReservations(mockDb, SALON, at('09:50'), at('10:20'))).toBe(0);
+  });
+
+  it('occupiedMinutes adds add-ons and falls back for a visit with no recorded duration', () => {
+    expect(service.occupiedMinutes(30, 15)).toBe(45);
+    expect(service.occupiedMinutes(30, 0)).toBe(30);
+    expect(service.occupiedMinutes(30, null)).toBe(30);
+    expect(service.occupiedMinutes(null, 10)).toBe(40);
+    expect(service.occupiedMinutes(undefined, undefined, 25)).toBe(25);
+  });
+});

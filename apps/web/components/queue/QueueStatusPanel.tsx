@@ -221,6 +221,12 @@ export function QueueStatusPanel({
       {entry.status === "WAITING" && entry.turnApproaching && (
         <p className={styles.ticketDetail}>Please head over now — you&apos;re almost up.</p>
       )}
+      {(entry.addOns ?? []).length > 0 && (
+        <p className={styles.ticketDetail}>
+          Added at the shop:{" "}
+          <strong>{(entry.addOns ?? []).map((a) => `${a.name} (+${a.durationMinutes} min)`).join(", ")}</strong>
+        </p>
+      )}
       {queuePhaseOf(entry) === "ASSIGNED" && (
         <p className={styles.ticketDetail}>
           {entry.assignedStaffName ? <><strong>{entry.assignedStaffName}</strong> will serve you</> : "A barber will serve you"}

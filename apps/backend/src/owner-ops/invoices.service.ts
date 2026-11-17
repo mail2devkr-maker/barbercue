@@ -813,6 +813,10 @@ export class InvoicesService {
               take: 1,
               select: { staff: { select: { displayName: true } } },
             },
+            addOns: {
+              orderBy: { createdAt: 'asc' },
+              select: { serviceId: true, name: true, price: true },
+            },
           },
         },
       },
@@ -849,6 +853,18 @@ export class InvoicesService {
       quantity: 1,
       discountPaise: discounts[i],
     }));
+    // Live-visit add-on mission: services added at the shop are billed at the price snapshotted when
+    // they were added. Booking-level reductions (online discount, credits) were promised only for the
+    // booked services and stay allocated to those lines.
+    const addOns = booking.queueEntries[0]?.addOns ?? [];
+    for (const addOn of addOns) {
+      lines.push({
+        description: addOn.name,
+        unitPricePaise: decimalStringToPaise(addOn.price.toString()),
+        quantity: 1,
+        discountPaise: 0,
+      });
+    }
     const performer =
       booking.queueEntries[0]?.serviceSessions[0]?.staff.displayName;
     return {
@@ -865,7 +881,10 @@ export class InvoicesService {
         null,
       serviceDate: booking.slotStart,
       lines,
-      serviceIds: services.map((s) => s.serviceId),
+      serviceIds: [
+        ...services.map((s) => s.serviceId),
+        ...addOns.map((a) => a.serviceId),
+      ],
     };
   }
 
@@ -882,6 +901,10 @@ export class InvoicesService {
             service: { select: { id: true, name: true, price: true } },
             staff: { select: { displayName: true } },
           },
+        },
+        addOns: {
+          orderBy: { createdAt: 'asc' },
+          select: { serviceId: true, name: true, price: true },
         },
       },
     });
@@ -915,6 +938,13 @@ export class InvoicesService {
         quantity: 1,
         discountPaise: 0,
       },
+      // Live-visit add-on mission: each service added at the shop, at its snapshotted price.
+      ...entry.addOns.map((addOn) => ({
+        description: addOn.name,
+        unitPricePaise: decimalStringToPaise(addOn.price.toString()),
+        quantity: 1,
+        discountPaise: 0,
+      })),
     ];
     return {
       sourceType: 'QUEUE_ENTRY' as const,
@@ -926,7 +956,10 @@ export class InvoicesService {
       staffName: session.staff.displayName,
       serviceDate: entry.serviceCompletedAt ?? session.endedAt ?? new Date(),
       lines,
-      serviceIds: [session.service.id],
+      serviceIds: [
+        session.service.id,
+        ...entry.addOns.map((addOn) => addOn.serviceId),
+      ],
     };
   }
 

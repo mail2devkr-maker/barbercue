@@ -67,6 +67,40 @@ describe('PushDispatchService', () => {
     ]);
   });
 
+  // Live-visit add-on mission (17 Nov 2026).
+  it('tells the OS push services when the message expires, and the app via data.expiresAt', async () => {
+    devices.devicesForUser.mockResolvedValue([{ expoPushToken: 'ExponentPushToken[a]' }]);
+    expo.send.mockResolvedValue([{ status: 'ok' }]);
+    const expiresAt = new Date(Date.now() + 30 * 60_000);
+    await service.dispatchToUser('u1', {
+      title: 'T',
+      body: 'B',
+      data: { type: 'queue.joined', queueEntryId: 'q1' },
+      expiresAt,
+    });
+    expect(expo.send).toHaveBeenCalledWith([
+      {
+        to: 'ExponentPushToken[a]',
+        title: 'T',
+        body: 'B',
+        data: { type: 'queue.joined', queueEntryId: 'q1', expiresAt: expiresAt.toISOString() },
+        expiration: Math.ceil(expiresAt.getTime() / 1000),
+      },
+    ]);
+  });
+
+  it('never sends a push that has already expired', async () => {
+    devices.devicesForUser.mockResolvedValue([{ expoPushToken: 'ExponentPushToken[a]' }]);
+    const result = await service.sendToUser('u1', {
+      title: 'T',
+      body: 'B',
+      expiresAt: new Date(Date.now() - 1),
+    });
+    expect(result).toMatchObject({ delivered: 0, transientFailure: false, error: 'EXPIRED' });
+    expect(expo.send).not.toHaveBeenCalled();
+    expect(devices.devicesForUser).not.toHaveBeenCalled();
+  });
+
   it('removes only the devices Expo reports as DeviceNotRegistered, leaving healthy tokens alone', async () => {
     devices.devicesForUser.mockResolvedValue([
       { expoPushToken: 'ExponentPushToken[stale]' },
@@ -138,6 +172,18 @@ describe('PushDispatchService.dispatchLocalizedToUser', () => {
       ],
     }).compile();
     service = moduleRef.get(PushDispatchService);
+  });
+
+  it('drops a localized push whose expiry has already passed, before any lookup', async () => {
+    await service.dispatchLocalizedToUser(
+      'owner-1',
+      'arrivalCheck',
+      'Haircut',
+      { type: 'booking.arrival_check' },
+      { expiresAt: new Date(Date.now() - 1) },
+    );
+    expect(expo.send).not.toHaveBeenCalled();
+    expect(prisma.notificationPreference.findUnique).not.toHaveBeenCalled();
   });
 
   it('sends an English push when the recipient has no language preference set', async () => {

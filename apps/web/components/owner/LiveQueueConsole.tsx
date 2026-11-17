@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { DASHBOARD_PATHS, StaffMemberStatus, queuePhaseOf } from "@barbercue/shared";
+import { DASHBOARD_PATHS, SERVICE_BUFFER_CHOICES, StaffMemberStatus, queuePhaseOf } from "@barbercue/shared";
 import type { QueueEntryPhase } from "@barbercue/shared";
 import type {
   AutoAssignResultDto,
@@ -18,6 +18,7 @@ import { useAuth } from "../../lib/auth-context";
 import { ownerVoiceAnnouncements, setVoiceEnabled, speakOwnerVoice, useVoiceEnabled } from "../../lib/voice-preference";
 import { formatShopTime } from "./format";
 import { InvoiceAction } from "./InvoiceActions";
+import { AddOnServices, visitServiceLabel } from "./AddOnServices";
 import { NewQueueCustomerDialog } from "./NewQueueCustomerDialog";
 import { ServiceUsageDialog } from "./inventory/ServiceUsageDialog";
 import { useOwnerShell, useShopTimeZone } from "./OwnerShell";
@@ -434,6 +435,15 @@ export function LiveQueueConsole({ salonId }: { salonId: string }) {
               )}
               {called.map((entry) => (
                 <EntryCard key={entry.id} entry={entry} tone="called">
+                  <AddOnServices
+                    entry={entry}
+                    services={data.services}
+                    disabled={busy !== null}
+                    onChanged={(message) => {
+                      setNotice(message);
+                      void refetch(false);
+                    }}
+                  />
                   <div className={ui.entryActions}>
                     <Btn variant="primary" small disabled={busy !== null || entry.arrivedAt === null} onClick={() => void assignAutomatically(entry)}>
                       Start service automatically
@@ -453,6 +463,15 @@ export function LiveQueueConsole({ salonId }: { salonId: string }) {
               ))}
               {waiting.map((entry) => (
                 <EntryCard key={entry.id} entry={entry} tone="waiting" fresh={freshIds.includes(entry.id)}>
+                  <AddOnServices
+                    entry={entry}
+                    services={data.services}
+                    disabled={busy !== null}
+                    onChanged={(message) => {
+                      setNotice(message);
+                      void refetch(false);
+                    }}
+                  />
                   {skipReasons[entry.id] ? (
                     <div className={ui.entryReason}>Not assigned yet: {skipReasons[entry.id]}</div>
                   ) : (
@@ -497,6 +516,15 @@ export function LiveQueueConsole({ salonId }: { salonId: string }) {
             <div className={ui.entryGrid}>
               {assigned.map((entry) => (
                 <EntryCard key={entry.id} entry={entry} tone="assigned">
+                  <AddOnServices
+                    entry={entry}
+                    services={data.services}
+                    disabled={busy !== null}
+                    onChanged={(message) => {
+                      setNotice(message);
+                      void refetch(false);
+                    }}
+                  />
                   <div className={ui.entryReason}>Existing reservation from an older app: the barber and chair are held, but service has not started. Press Start service only when the customer is in the chair.</div>
                   <div className={ui.entryActions}>
                     <Btn
@@ -533,6 +561,15 @@ export function LiveQueueConsole({ salonId }: { salonId: string }) {
               )}
               {inService.map((entry) => (
                 <EntryCard key={entry.id} entry={entry} tone="in-service">
+                  <AddOnServices
+                    entry={entry}
+                    services={data.services}
+                    disabled={busy !== null}
+                    onChanged={(message) => {
+                      setNotice(message);
+                      void refetch(false);
+                    }}
+                  />
                   <div className={ui.entryActions}>
                     <Btn variant="primary" small icon="check" disabled={busy !== null || !entry.activeServiceSessionId} onClick={() => entry.activeServiceSessionId && setUsageFor({ entryId: entry.id, sessionId: entry.activeServiceSessionId, who: whoLabel(entry) })}>
                       Complete service
@@ -665,6 +702,34 @@ export function LiveQueueConsole({ salonId }: { salonId: string }) {
               </div>
             </Card>
           )}
+
+          {kind === "owner" && typeof data.serviceBufferMinutes === "number" && (
+            <Card title="Buffer after each service">
+              <div className={ui.cardSub}>
+                Minutes kept free after every service, so an extra service a customer asks for at the chair never delays the next appointment. When nothing is added, the barber can sanitise tools or take a short break.
+              </div>
+              <select
+                aria-label="Buffer after each service"
+                className={`${ui.select} ${ui.mt12}`}
+                value={String(data.serviceBufferMinutes)}
+                disabled={busy !== null}
+                onChange={(event) => {
+                  const minutes = Number(event.target.value);
+                  void run(
+                    "buffer-setting",
+                    () => apiFetch(`${base}/${DASHBOARD_PATHS.serviceBuffer}`, { method: "PATCH", body: JSON.stringify({ serviceBufferMinutes: minutes }) }),
+                    minutes === 0 ? "No buffer after services." : `${minutes} minutes are now kept free after every service.`,
+                  );
+                }}
+              >
+                {SERVICE_BUFFER_CHOICES.map((minutes) => (
+                  <option key={minutes} value={minutes}>
+                    {minutes === 0 ? "No buffer" : `${minutes} minutes`}
+                  </option>
+                ))}
+              </select>
+            </Card>
+          )}
         </div>
       </div>
 
@@ -743,7 +808,7 @@ function EntryCard({
         <div className={ui.entryWho}>
           <div className={ui.entryName}>{whoLabel(entry)}</div>
           <div className={ui.entryMeta}>
-            {entry.serviceName ?? "Service not chosen yet"}
+            {visitServiceLabel(entry) ?? "Service not chosen yet"}
             {entry.status === "WAITING" && entry.position ? ` · position ${entry.position} in line` : ""}
             {entry.status === "WAITING" && entry.estimatedWaitMinutes !== null ? ` · about ${entry.estimatedWaitMinutes} min` : ""}
           </div>

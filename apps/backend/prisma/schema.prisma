@@ -985,6 +985,13 @@ model Salon {
   // without overwriting any shop with a recorded owner choice (see docs/OWNER_OPERATIONS.md).
   showPhoneToCustomers              Boolean     @default(true)
   queueAutoAssignEnabled            Boolean     @default(true)
+  // Live-visit add-on mission (17 Nov 2026). Minutes kept free after every service so an add-on a
+  // customer asks for at the chair (beard, head massage...) never delays the next appointment; when
+  // nobody adds anything the barber uses it to sanitise tools or take a short break. Applied as a
+  // planning gap only: new bookings/reschedules keep this gap from every other reservation of the
+  // same pool/barber, and a walk-in is only started on a barber when service + gap still ends before
+  // that barber's next appointment. 0 = exactly the behaviour before this column existed.
+  serviceBufferMinutes              Int         @default(10)
 
   // Subscription fields — inert in V1, see ARCHITECTURE.md §16.
   planId                String?
@@ -1262,6 +1269,7 @@ model Service {
   // Inventory Phase 2 — product recipe lines and the products recorded as used.
   productRules        ServiceProductRule[]
   productUsages       ServiceUsage[]
+  queueEntryAddOns    QueueEntryAddOn[]
 
   @@index([salonId, categoryId, subcategoryId])
   @@unique([salonId, id])
@@ -1788,8 +1796,32 @@ model QueueEntry {
 
   serviceSessions ServiceSession[]
   serviceUsages   ServiceUsage[]
+  // Live-visit add-on mission: services the customer added at the shop after joining/check-in.
+  // addOnMinutes is the cached SUM(addOns.durationMinutes), written in the same transaction as the
+  // add-on rows, so every ETA/reservation read can include it without a join.
+  addOns          QueueEntryAddOn[]
+  addOnMinutes    Int               @default(0)
 
   @@map("queue_entries")
+}
+
+// Live-visit add-on mission (17 Nov 2026): an extra service the customer chose at the shop, on top of
+// the service(s) picked when joining the queue or booking. name/duration/price are snapshots taken
+// when it was added, so later catalogue edits never rewrite what this visit actually was or costs.
+model QueueEntryAddOn {
+  id              String     @id @default(uuid())
+  queueEntryId    String
+  queueEntry      QueueEntry @relation(fields: [queueEntryId], references: [id], onDelete: Cascade)
+  serviceId       String
+  service         Service    @relation(fields: [serviceId], references: [id])
+  name            String
+  durationMinutes Int
+  price           Decimal    @db.Decimal(10, 2)
+  addedByUserId   String?
+  createdAt       DateTime   @default(now()) @db.Timestamptz(6)
+
+  @@unique([queueEntryId, serviceId])
+  @@map("queue_entry_add_ons")
 }
 
 // The concurrency-critical model. See the two partial unique indexes noted at the top of this

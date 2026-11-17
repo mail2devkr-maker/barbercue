@@ -21,6 +21,7 @@ const arrivalCandidateSelect = {
   id: true,
   salonId: true,
   slotStart: true,
+  slotEnd: true,
   serviceId: true,
   service: { select: { name: true, durationMinutes: true, price: true } },
   services: {
@@ -150,6 +151,7 @@ export class ArrivalAlertsService {
           'arrivalCheck',
           serviceName,
           { type: 'booking.arrival_check', salonId: booking.salonId, bookingId: booking.id },
+          { expiresAt: booking.slotEnd },
         );
       }
     }

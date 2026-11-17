@@ -229,6 +229,31 @@ export const reassignQueueEntrySchema = z
   });
 export type ReassignQueueEntryInput = z.infer<typeof reassignQueueEntrySchema>;
 
+// Live-visit add-on mission (17 Nov 2026).
+// POST /dashboard/queue-entries/:id/add-ons — a service the customer asked for at the shop.
+export const addQueueEntryAddOnSchema = z.object({
+  serviceId: z.string().uuid(),
+});
+export type AddQueueEntryAddOnInput = z.infer<typeof addQueueEntryAddOnSchema>;
+
+/** Most add-ons one visit may carry (a guard against accidental taps, not a business rule). */
+export const MAX_QUEUE_ADD_ONS = 5;
+/** Owner-selectable buffer kept after every service (minutes). */
+export const SERVICE_BUFFER_MIN_MINUTES = 0;
+export const SERVICE_BUFFER_MAX_MINUTES = 30;
+export const DEFAULT_SERVICE_BUFFER_MINUTES = 10;
+export const SERVICE_BUFFER_CHOICES = [0, 5, 10, 15, 20, 30] as const;
+
+// PATCH /dashboard/salons/:salonId/service-buffer
+export const serviceBufferSchema = z.object({
+  serviceBufferMinutes: z
+    .number()
+    .int()
+    .min(SERVICE_BUFFER_MIN_MINUTES)
+    .max(SERVICE_BUFFER_MAX_MINUTES),
+});
+export type ServiceBufferInput = z.infer<typeof serviceBufferSchema>;
+
 // PATCH /dashboard/staff/:id/status
 export const staffStatusSchema = z.object({
   status: z.nativeEnum(StaffMemberStatus),
