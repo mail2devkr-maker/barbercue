@@ -33,6 +33,7 @@ describe('ArrivalAlertsService', () => {
       id: 'b1',
       salonId: 's1',
       slotStart: new Date(Date.now() + 3 * 60_000), // 3 minutes out — inside the 5-minute lead
+      slotEnd: new Date(Date.now() + 33 * 60_000),
       serviceId: 'sv1',
       service: { name: 'Haircut', durationMinutes: 30, price: 500 },
       services: [
@@ -108,6 +109,8 @@ describe('ArrivalAlertsService', () => {
         'arrivalCheck',
         'Haircut',
         expect.objectContaining({ salonId: 's1', bookingId: 'b1' }),
+        // Live-visit add-on mission: never delivered after the appointment has ended.
+        { expiresAt: expect.any(Date) },
       );
     });
 

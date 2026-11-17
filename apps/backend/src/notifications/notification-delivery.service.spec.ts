@@ -121,6 +121,61 @@ describe('NotificationDeliveryService', () => {
     expect(rows.get('booking.cancelled_by_shop:b1:PUSH')).toMatchObject({ status: 'GAVE_UP', lastError: 'DeviceNotRegistered' });
   });
 
+  // Live-visit add-on mission (17 Nov 2026): never send an expired notice.
+  it('never sends a push whose moment has already passed, and records it as an EXPIRED skip', async () => {
+    const { service, rows, push } = build();
+    const outcome = await service.deliverToUser({
+      ...INPUT,
+      expiresAt: new Date(Date.now() - 1_000),
+    });
+    expect(outcome.push).toBe('SKIPPED');
+    expect(push.sendToUser).not.toHaveBeenCalled();
+    expect(rows.get('booking.cancelled_by_shop:b1:PUSH')).toMatchObject({
+      status: 'SKIPPED',
+      lastError: 'EXPIRED',
+      nextAttemptAt: null,
+    });
+    // The in-app row is still written: the notification centre decides visibility on read.
+    expect(outcome.inApp).toBe('SENT');
+  });
+
+  it('passes the expiry to the provider on a live push', async () => {
+    const { service, push } = build();
+    const expiresAt = new Date(Date.now() + 30 * 60_000);
+    await service.deliverToUser({ ...INPUT, expiresAt });
+    expect(push.sendToUser).toHaveBeenCalledWith(
+      'u1',
+      expect.objectContaining({ expiresAt }),
+    );
+  });
+
+  it('a retry that comes due after the notice expired is dropped, never sent late', async () => {
+    const send = jest.fn(async () => ({ attempted: 1, delivered: 0, noDevices: false, transientFailure: true, error: 'down' }));
+    const { service, rows } = build({ send });
+    const expiresAt = new Date(Date.now() + 10 * 60_000);
+    await service.deliverToUser({ ...INPUT, expiresAt });
+    expect(rows.get('booking.cancelled_by_shop:b1:PUSH')).toMatchObject({ status: 'FAILED', attempts: 1 });
+    // The next retry is due after the expiry (backoff 60s+, sweep runs an hour later).
+    await service.sweepRetries(new Date(Date.now() + 3_600_000));
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(rows.get('booking.cancelled_by_shop:b1:PUSH')).toMatchObject({
+      status: 'SKIPPED',
+      lastError: 'EXPIRED',
+      nextAttemptAt: null,
+    });
+  });
+
+  it('a retry that comes due before the expiry is still attempted', async () => {
+    const send = jest
+      .fn()
+      .mockResolvedValueOnce({ attempted: 1, delivered: 0, noDevices: false, transientFailure: true, error: 'down' })
+      .mockResolvedValueOnce({ attempted: 1, delivered: 1, noDevices: false, transientFailure: false, error: null });
+    const { service, rows } = build({ send });
+    await service.deliverToUser({ ...INPUT, expiresAt: new Date(Date.now() + 3 * 3_600_000) });
+    await service.sweepRetries(new Date(Date.now() + 3_600_000));
+    expect(rows.get('booking.cancelled_by_shop:b1:PUSH')).toMatchObject({ status: 'SENT', attempts: 2 });
+  });
+
   it('a retried delivery succeeds once the provider recovers', async () => {
     const send = jest
       .fn()

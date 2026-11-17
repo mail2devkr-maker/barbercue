@@ -1295,6 +1295,20 @@ export interface QueueEntryDetailDto extends QueueEntryDto {
   // Whether this entry is within TURN_APPROACHING_THRESHOLD_MINUTES — drives the client's
   // turn-approaching banner/alert copy without duplicating the threshold constant client-side.
   turnApproaching: boolean;
+  // Live-visit add-on mission (17 Nov 2026) — services added at the shop after joining/check-in.
+  // Optional on the wire so every released client keeps parsing responses.
+  addOns?: QueueEntryAddOnDto[];
+  /** Sum of the add-ons' minutes (already included in this entry's own wait/ETA math). */
+  addOnMinutes?: number;
+}
+
+export interface QueueEntryAddOnDto {
+  serviceId: string;
+  name: string;
+  durationMinutes: number;
+  /** Price snapshot when it was added (shop currency). */
+  price: number;
+  addedAt: string; // ISO 8601
 }
 
 // GET /dashboard/salons/:salonId/booking/staff mirror for the live queue's chair dropdown.
@@ -1323,6 +1337,9 @@ export interface ChairOptionDto {
 export interface ServiceOptionDto {
   id: string;
   name: string;
+  // Live-visit add-on mission — shown in the "Add service" picker. Optional on the wire.
+  durationMinutes?: number;
+  price?: number;
 }
 
 // GET /dashboard/salons/:salonId/queue — embeds the roster/chairs read-only so the assign UI works
@@ -1358,6 +1375,8 @@ export interface DashboardQueueDto {
     historyToday: number;
   };
   autoAssignEnabled?: boolean;
+  /** Live-visit add-on mission: minutes kept free after every service (Salon.serviceBufferMinutes). */
+  serviceBufferMinutes?: number;
 }
 
 export interface DashboardQueueSectionsDto {

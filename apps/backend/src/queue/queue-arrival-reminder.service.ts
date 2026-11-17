@@ -10,6 +10,11 @@ import { DbDeadlineSchedulerService } from '../common/db-deadline-scheduler/db-d
 
 /** Customers and shop receive the same T-10 *estimated* service-arrival prompt. */
 export const LIVE_QUEUE_ARRIVAL_LEAD_MINUTES = 10;
+/**
+ * Live-visit add-on mission: an "about 10 minutes away" prompt stops being true soon after it is
+ * sent. Pushes (and their retries) carry this lifetime and are never delivered after it.
+ */
+export const QUEUE_ARRIVAL_PUSH_TTL_MINUTES = 30;
 const MAX_SHOPS_PER_SWEEP = 120;
 const MAX_REMINDERS_PER_SWEEP = 240;
 
@@ -143,6 +148,8 @@ export class QueueArrivalReminderService implements OnModuleInit, OnModuleDestro
             dedupeKey: `queue-arrival:${row.id}:${recipient.kind}`,
             userId: recipient.id,
             type: 'queue.arrival_check',
+            // "~10 minutes away" is only true for a short while: a late retry must never send it.
+            expiresAt: new Date(now.getTime() + QUEUE_ARRIVAL_PUSH_TTL_MINUTES * 60_000),
             inAppPayload: {
               salonId: row.salonId,
               queueEntryId: row.id,
@@ -176,14 +183,23 @@ export class QueueArrivalReminderService implements OnModuleInit, OnModuleDestro
       // can display the prompt; never claim a background notification was sent.
       if (!row.customerId && row.guestExpoPushToken) {
         try {
+          const expiresAt = new Date(
+            now.getTime() + QUEUE_ARRIVAL_PUSH_TTL_MINUTES * 60_000,
+          );
           const tickets = await this.expo.send([{
             to: row.guestExpoPushToken,
             title: 'FastQue · Arrival confirmation',
             body: 'Your Live Queue service is approximately 10 minutes away. Have you arrived?',
-            data: { type: 'queue.arrival_check', salonId: row.salonId, queueEntryId: row.id },
+            data: {
+              type: 'queue.arrival_check',
+              salonId: row.salonId,
+              queueEntryId: row.id,
+              expiresAt: expiresAt.toISOString(),
+            },
             channelId: 'booking-updates',
             priority: 'high',
             sound: 'default',
+            expiration: Math.ceil(expiresAt.getTime() / 1000),
           }]);
           if (tickets.every((ticket) => ticket.status !== 'ok')) {
             // A permanently rejected token cannot block the whole queue.

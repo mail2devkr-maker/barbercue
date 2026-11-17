@@ -372,6 +372,10 @@ export const DASHBOARD_PATHS = {
   // Owner-operations corrective mission: assignment and the start of service are separate steps.
   startService: 'start-service',
   reassign: 'reassign',
+  // Live-visit add-on mission: POST/DELETE dashboard/queue-entries/:id/add-ons[/:serviceId] and
+  // PATCH dashboard/salons/:salonId/service-buffer.
+  addOns: 'add-ons',
+  serviceBuffer: 'service-buffer',
   noShow: 'no-show',
   cancel: 'cancel',
   complete: 'complete',

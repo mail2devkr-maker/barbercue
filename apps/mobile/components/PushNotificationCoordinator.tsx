@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import * as Notifications from 'expo-notifications';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import { DASHBOARD_PATHS, Role, formatVoiceDateTime, type Language, type MeResponse, type OwnerBookingDetailDto } from '@barbercue/shared';
 import { useAuth } from '../lib/auth-context';
 import { apiFetch } from '../lib/api';
@@ -29,11 +29,14 @@ import {
   localArrivalAlertBehavior,
   markArrivalAlerted,
 } from '../lib/arrival-alert-sound';
+import { dismissExpiredPresentedNotifications, expiredPushBehavior, isPushExpired } from '../lib/push-expiry';
 
 if (Platform.OS !== 'web') {
   Notifications.setNotificationHandler({
     handleNotification: async (notification) => {
       const data = notification.request.content.data;
+      // Live-visit add-on mission: a time-bound notice that arrives after its moment is never shown.
+      if (isPushExpired(data)) return expiredPushBehavior();
       // The in-app arrival alert (a local notification): heads-up + sound, never left in the tray.
       if (data?.type === LOCAL_ARRIVAL_ALERT_TYPE) return localArrivalAlertBehavior();
       // The real arrival-check push while the app is open: audible unless the in-app alert already
@@ -210,6 +213,8 @@ export function PushNotificationCoordinator() {
     let mounted = true;
 
     const receivedSubscription = Notifications.addNotificationReceivedListener((notification) => {
+      // An expired notice is never acted on or spoken.
+      if (isPushExpired(notification.request.content.data)) return;
       const queuePayload = parseQueueArrivalPushData(notification.request.content.data);
       const actor = currentUserRef.current;
       if (queuePayload && isOwner(actor)) requestQueueArrivalNavigation('owner', queuePayload);
@@ -223,9 +228,20 @@ export function PushNotificationCoordinator() {
     });
 
     const responseSubscription = Notifications.addNotificationResponseReceivedListener((response) => {
+      // Tapping an expired notice just opens the app: no stale prompt or action is replayed.
+      if (isPushExpired(response.notification.request.content.data)) return;
       if (!handleOwnerBookingResponse(response, currentUserRef.current) && !handleCustomerBookingResponse(response, currentUserRef.current) && !handleQueueArrivalResponse(response, currentUserRef.current)) {
         deferredResponseRef.current = response;
       }
+    });
+    // Expired notices already in the notification tray are removed now and whenever the app returns
+    // to the foreground.
+    const sweepTray = () => {
+      void dismissExpiredPresentedNotifications(Notifications);
+    };
+    sweepTray();
+    const appStateSubscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') sweepTray();
     });
     const tokenSubscription = Notifications.addPushTokenListener((token) => {
       void reregisterRefreshedPushToken(currentUserRef.current, token.data);
@@ -234,6 +250,10 @@ export function PushNotificationCoordinator() {
     void Notifications.getLastNotificationResponseAsync()
       .then((response) => {
         if (!mounted || !response) return;
+        if (isPushExpired(response.notification.request.content.data)) {
+          void Notifications.clearLastNotificationResponseAsync();
+          return;
+        }
         if (handleOwnerBookingResponse(response, currentUserRef.current) || handleCustomerBookingResponse(response, currentUserRef.current) || handleQueueArrivalResponse(response, currentUserRef.current)) {
           void Notifications.clearLastNotificationResponseAsync();
         } else {
@@ -249,6 +269,7 @@ export function PushNotificationCoordinator() {
       receivedSubscription.remove();
       responseSubscription.remove();
       tokenSubscription.remove();
+      appStateSubscription.remove();
     };
   }, []);
 

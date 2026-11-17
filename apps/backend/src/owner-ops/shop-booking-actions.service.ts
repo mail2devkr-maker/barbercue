@@ -267,6 +267,9 @@ export class ShopBookingActionsService {
         dedupeKey,
         userId: input.customerId,
         type,
+        // Live-visit add-on mission: about the appointment at slotStart; a push retry is never
+        // delivered more than an hour after that time.
+        expiresAt: new Date(input.slotStart.getTime() + 60 * 60_000),
         inAppPayload: {
           salonId: input.salonId,
           salonName: input.salonName,

@@ -1,8 +1,10 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Query,
@@ -10,9 +12,13 @@ import {
 import {
   DASHBOARD_PATHS,
   Role,
+  addQueueEntryAddOnSchema,
   assignQueueEntrySchema,
   reassignQueueEntrySchema,
+  serviceBufferSchema,
   staffStatusSchema,
+  type AddQueueEntryAddOnInput,
+  type ServiceBufferInput,
   type AssignQueueEntryInput,
   type ReassignQueueEntryInput,
   type AuthenticatedUser,
@@ -152,6 +158,43 @@ export class DashboardQueueController {
     body: ReassignQueueEntryInput,
   ) {
     return this.queueService.reassign(user.id, id, body);
+  }
+
+  // Live-visit add-on mission (17 Nov 2026): a service the customer asked for at the shop.
+  @Post(`${DASHBOARD_PATHS.queueEntries}/:id/${DASHBOARD_PATHS.addOns}`)
+  @Idempotent()
+  addAddOn(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(addQueueEntryAddOnSchema))
+    body: AddQueueEntryAddOnInput,
+  ) {
+    return this.queueService.addAddOn(user.id, id, body.serviceId);
+  }
+
+  @Delete(`${DASHBOARD_PATHS.queueEntries}/:id/${DASHBOARD_PATHS.addOns}/:serviceId`)
+  removeAddOn(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('serviceId', ParseUUIDPipe) serviceId: string,
+  ) {
+    return this.queueService.removeAddOn(user.id, id, serviceId);
+  }
+
+  // Owner/admin only (re-checked inside setServiceBuffer): minutes kept free after every service.
+  @Patch(`${DASHBOARD_PATHS.salons}/:salonId/${DASHBOARD_PATHS.serviceBuffer}`)
+  @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN, Role.CO_FOUNDER)
+  setServiceBuffer(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId', ParseUUIDPipe) salonId: string,
+    @Body(new ZodValidationPipe(serviceBufferSchema))
+    body: ServiceBufferInput,
+  ) {
+    return this.queueService.setServiceBuffer(
+      user.id,
+      salonId,
+      body.serviceBufferMinutes,
+    );
   }
 
   @Post(`${DASHBOARD_PATHS.queueEntries}/:id/${DASHBOARD_PATHS.noShow}`)

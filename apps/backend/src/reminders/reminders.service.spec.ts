@@ -44,11 +44,15 @@ describe('RemindersService', () => {
   });
 
   it('claims, creates the in-app notification, then dispatches one customer push', async () => {
-    prisma.booking.findMany.mockResolvedValueOnce([makeDueBooking()]);
+    const slotEnd = new Date(Date.now() + 40 * 60_000);
+    const dueBooking = makeDueBooking({ slotEnd });
+    prisma.booking.findMany.mockResolvedValueOnce([dueBooking]);
     await expect(service.sendDueReminders()).resolves.toBe(1);
     expect(tx.booking.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ reminderSentAt: null, slotStart: { gt: expect.any(Date), lte: expect.any(Date) } }), data: { reminderSentAt: expect.any(Date) } }));
     expect(notifications.notifyInTransaction).toHaveBeenCalledWith(tx, 'c1', 'booking.reminder', expect.objectContaining({ salonName: 'Demo Salon', serviceName: 'Haircut' }), 'account/bookings');
-    expect(pushDispatch.dispatchLocalizedToUser).toHaveBeenCalledWith('c1', 'bookingReminder', 'Haircut', { type: 'booking.reminder', bookingId: 'b1', salonId: 's1' });
+    expect(pushDispatch.dispatchLocalizedToUser).toHaveBeenCalledWith('c1', 'bookingReminder', 'Haircut', { type: 'booking.reminder', bookingId: 'b1', salonId: 's1' }, { expiresAt: slotEnd });
+    // Live-visit add-on mission: the in-app reminder names its booking so it retires after the visit.
+    expect(notifications.notifyInTransaction).toHaveBeenCalledWith(tx, 'c1', 'booking.reminder', expect.objectContaining({ bookingId: 'b1' }), 'account/bookings');
   });
 
   it('summarizes every selected service and falls back to the primary service snapshot', async () => {

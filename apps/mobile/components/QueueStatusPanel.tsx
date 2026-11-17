@@ -35,7 +35,7 @@ export function QueueStatusPanel({
   guestAccessToken?: string | null;
 }) {
   const { user } = useAuth();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [turnAlert, setTurnAlert] = useState(false);
   const [shopPhone, setShopPhone] = useState<string | null>(null);
   const [responding, setResponding] = useState(false);
@@ -205,6 +205,12 @@ export function QueueStatusPanel({
       )}
       {entry.status === 'WAITING' && entry.turnApproaching && (
         <Text style={styles.detail}>{t.headOverNowMessage}</Text>
+      )}
+      {(entry.addOns ?? []).length > 0 && (
+        <Text style={styles.detail}>
+          {language === Language.HI ? 'दुकान पर जोड़ी गई सेवाएँ: ' : 'Added at the shop: '}
+          {(entry.addOns ?? []).map((a) => `${a.name} (+${a.durationMinutes} ${t.minutesAbbrev})`).join(', ')}
+        </Text>
       )}
       {entry.status === 'IN_SERVICE' && (
         <Text style={styles.detail}>

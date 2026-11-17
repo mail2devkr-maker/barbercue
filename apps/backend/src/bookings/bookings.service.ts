@@ -379,11 +379,18 @@ export class BookingsService {
       // Booking/queue resource-reservation mission — reuses the same reservation authority
       // AvailabilityService's grid uses (reserving Bookings + genuine walk-in ACTIVE sessions),
       // so a slot this transaction accepts can never disagree with what the customer was shown.
+      // Live-visit add-on mission: a new booking keeps the shop's buffer free before and after every
+      // other reservation, exactly like the slot grid the customer was shown.
+      const bufferMinutes = await this.availability.getServiceBufferMinutes(
+        tx,
+        input.salonId,
+      );
       const overlapping = await this.reservations.countPoolReservations(
         tx,
         input.salonId,
         slotStart,
         slotEnd,
+        { bufferMinutes },
       );
       if (!isSlotBookable(slotCapacity, overlapping)) {
         throw new AppException(
@@ -407,6 +414,7 @@ export class BookingsService {
           input.preferredStaffId,
           slotStart,
           slotEnd,
+          { bufferMinutes },
         );
         if (!staffCheck.free) {
           throw new AppException(
@@ -554,6 +562,8 @@ export class BookingsService {
       'booking.confirmed',
       {
         salonId: input.salonId,
+        // Lets the notification centre retire this notice once the appointment is over.
+        bookingId,
         salonName: salon.name,
         serviceName: serviceSummary,
       },
@@ -579,6 +589,7 @@ export class BookingsService {
       'newBooking',
       serviceSummary,
       { type: 'booking.created', salonId: input.salonId, bookingId },
+      { expiresAt: slotEnd },
     );
 
     return this.getDetailOrThrow(bookingId, customerId);
@@ -688,11 +699,16 @@ export class BookingsService {
           salonId,
           input.serviceIds,
         );
+        const bufferMinutes = await this.availability.getServiceBufferMinutes(
+          tx,
+          salonId,
+        );
         const overlapping = await this.reservations.countPoolReservations(
           tx,
           salonId,
           slotStart,
           slotEnd,
+          { bufferMinutes },
         );
         if (!isSlotBookable(slotCapacity, overlapping)) {
           throw new AppException(
@@ -708,6 +724,7 @@ export class BookingsService {
             input.preferredStaffId,
             slotStart,
             slotEnd,
+            { bufferMinutes },
           );
           if (!staffCheck.free) {
             throw new AppException(
@@ -1007,7 +1024,7 @@ export class BookingsService {
     await this.notifications.notify(
       customerId,
       'booking.cancelled',
-      { salonId: updated.salonId, salonName: updated.salon.name },
+      { salonId: updated.salonId, bookingId, salonName: updated.salon.name },
       'account/bookings',
     );
     await this.notifications.notify(
@@ -1027,6 +1044,7 @@ export class BookingsService {
         resolveEffectiveBookingServices(updated).map((s) => s.serviceName),
       ),
       { type: 'booking.cancelled', salonId: updated.salonId, bookingId },
+      { expiresAt: updated.slotEnd },
     );
 
     return {
@@ -1331,12 +1349,16 @@ export class BookingsService {
       );
       // Same reservation authority create() uses, excluding this booking's own (about-to-move)
       // reservation from the count — see Part 14: reschedule must never conflict with itself.
+      const bufferMinutes = await this.availability.getServiceBufferMinutes(
+        tx,
+        booking.salonId,
+      );
       const overlapping = await this.reservations.countPoolReservations(
         tx,
         booking.salonId,
         newSlotStart,
         newSlotEnd,
-        { excludeBookingId: bookingId },
+        { excludeBookingId: bookingId, bufferMinutes },
       );
       if (!isSlotBookable(slotCapacity, overlapping)) {
         throw new AppException(
@@ -1356,7 +1378,7 @@ export class BookingsService {
           booking.preferredStaffId,
           newSlotStart,
           newSlotEnd,
-          { excludeBookingId: bookingId },
+          { excludeBookingId: bookingId, bufferMinutes },
         );
         if (!staffCheck.free) {
           throw new AppException(
@@ -1407,6 +1429,7 @@ export class BookingsService {
           resolveEffectiveBookingServices(updated).map((s) => s.serviceName),
         ),
         { type: 'booking.rescheduled', salonId: booking.salonId, bookingId },
+        { expiresAt: updated.slotEnd },
       );
     }
 

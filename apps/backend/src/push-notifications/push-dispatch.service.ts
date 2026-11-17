@@ -23,7 +23,16 @@ export interface PushPayload {
   channelId?: string;
   sound?: 'default' | null;
   priority?: 'default' | 'normal' | 'high';
+  /**
+   * Live-visit add-on mission: when the notice stops being true (the visit/booking end). A push past
+   * this instant is never sent; before it, the OS push services are told to drop it at this instant
+   * if the phone could not be reached, and the app hides it if it still arrives late.
+   */
+  expiresAt?: Date | null;
 }
+
+/** Outcome reason when a push was not sent because its moment had already passed. */
+export const PUSH_EXPIRED = 'EXPIRED';
 
 // The Android channel the mobile app creates at push registration (lib/push-notifications.ts:
 // ANDROID_BOOKING_CHANNEL_ID) — HIGH importance, default sound, vibration. Time-sensitive booking
@@ -104,7 +113,9 @@ export class PushDispatchService {
       | 'queueJoined',
     serviceName: string | null,
     data: Record<string, unknown>,
+    options?: { expiresAt?: Date | null },
   ): Promise<void> {
+    if (options?.expiresAt && options.expiresAt.getTime() <= Date.now()) return;
     // PUSH is deliberately gated independently from the IN_APP notification center. A reminder
     // may be opted out of in-app while its native push remains enabled (and vice versa).
     if (!(await this.isPushEnabled(userId, PUSH_KIND_CATEGORY[kind]))) return;
@@ -126,6 +137,7 @@ export class PushDispatchService {
       title,
       body,
       data,
+      expiresAt: options?.expiresAt ?? null,
       ...(kind === 'arrivalCheck' ? { categoryId: 'booking_arrival_check' } : {}),
       ...(kind === 'newBooking' || kind === 'bookingRescheduled' ||
         kind === 'bookingCancelled' || kind === 'arrivalCheck' ||
@@ -183,6 +195,16 @@ export class PushDispatchService {
     userId: string,
     payload: PushPayload,
   ): Promise<PushSendResult> {
+    const expiresAtMs = payload.expiresAt ? payload.expiresAt.getTime() : null;
+    if (expiresAtMs !== null && expiresAtMs <= Date.now()) {
+      return {
+        attempted: 0,
+        delivered: 0,
+        noDevices: false,
+        transientFailure: false,
+        error: PUSH_EXPIRED,
+      };
+    }
     let devices: PushDevice[];
     try {
       devices = await this.devices.devicesForUser(userId);
@@ -206,11 +228,19 @@ export class PushDispatchService {
       };
     }
 
+    // The app also reads data.expiresAt to hide a notice that still arrives after its moment.
+    const data =
+      expiresAtMs !== null
+        ? { ...(payload.data ?? {}), expiresAt: new Date(expiresAtMs).toISOString() }
+        : payload.data;
     const messages: ExpoPushMessage[] = devices.map((device) => ({
       to: device.expoPushToken,
       title: payload.title,
       body: payload.body,
-      data: payload.data,
+      data,
+      ...(expiresAtMs !== null
+        ? { expiration: Math.ceil(expiresAtMs / 1000) }
+        : {}),
       ...(payload.categoryId ? { categoryId: payload.categoryId } : {}),
       ...(payload.channelId ? { channelId: payload.channelId } : {}),
       ...(payload.sound !== undefined ? { sound: payload.sound } : {}),

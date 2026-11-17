@@ -108,6 +108,14 @@ interface PrismaMock {
   user: {
     findUnique: jest.Mock<Promise<unknown>, [unknown]>;
   };
+  // Live-visit add-on mission.
+  operatingHours: {
+    findMany: jest.Mock<Promise<unknown[]>, [unknown]>;
+  };
+  queueEntryAddOn: {
+    create: jest.Mock<Promise<unknown>, [unknown]>;
+    delete: jest.Mock<Promise<unknown>, [unknown]>;
+  };
   $executeRaw: jest.Mock<Promise<unknown>, [unknown]>;
   $transaction: jest.Mock;
 }
@@ -123,6 +131,7 @@ describe('QueueService', () => {
     getSlotCapacityForServices: jest.Mock<Promise<number>, [unknown, string, string[]]>;
     getSalonTimeZone: jest.Mock<Promise<string | null>, [string]>;
     resolveTimeZoneOrThrow: jest.Mock<Promise<string>, [string]>;
+    getServiceBufferMinutes: jest.Mock<Promise<number>, [unknown, string]>;
   };
   let salonAccess: {
     assertOwnerOrAdminAccess: jest.Mock<Promise<unknown>, [string, string]>;
@@ -230,6 +239,14 @@ describe('QueueService', () => {
           .fn<Promise<unknown>, [unknown]>()
           .mockResolvedValue({ phone: '+919000000001' }),
       },
+      // No opening hours configured by default: joins behave exactly as before this mission.
+      operatingHours: {
+        findMany: jest.fn<Promise<unknown[]>, [unknown]>().mockResolvedValue([]),
+      },
+      queueEntryAddOn: {
+        create: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue({}),
+        delete: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue({}),
+      },
       $executeRaw: jest
         .fn<Promise<unknown>, [unknown]>()
         .mockResolvedValue(undefined),
@@ -265,6 +282,10 @@ describe('QueueService', () => {
       resolveTimeZoneOrThrow: jest
         .fn<Promise<string>, [string]>()
         .mockResolvedValue('Asia/Kolkata'),
+      // Buffer 0 by default = the exact pre-mission reservation behaviour.
+      getServiceBufferMinutes: jest
+        .fn<Promise<number>, [unknown, string]>()
+        .mockResolvedValue(0),
     };
     salonAccess = {
       assertOwnerOrAdminAccess: jest.fn<Promise<unknown>, [string, string]>().mockResolvedValue('OWNER'),
@@ -1964,6 +1985,455 @@ describe('QueueService', () => {
       expect(options.where.salonId).toBe('s1');
       expect(options.where.bookingId).toBeNull();
       expect(options.where.OR).toHaveLength(3);
+    });
+  });
+
+  // ---------- Live-visit add-on mission (17 Nov 2026) ----------
+
+  describe('add-on services on a live visit', () => {
+    const beard = {
+      id: 'sv2',
+      salonId: 's1',
+      name: 'Beard Trim',
+      durationMinutes: 15,
+      price: new Prisma.Decimal('150.00'),
+      isActive: true,
+    };
+
+    function inTx(overrides: Record<string, unknown> = {}) {
+      return {
+        status: QueueEntryStatus.IN_SERVICE,
+        serviceId: 'sv1',
+        booking: null,
+        addOns: [],
+        ...overrides,
+      };
+    }
+
+    it('records the add-on with a price/duration snapshot, updates the visit minutes, audits and refreshes every screen', async () => {
+      availability.getServiceOrThrow.mockResolvedValueOnce(beard);
+      prisma.queueEntry.findUnique
+        .mockResolvedValueOnce(makeRawEntry({ status: QueueEntryStatus.IN_SERVICE })) // getEntryOrThrow
+        .mockResolvedValueOnce(inTx()) // inside the transaction
+        .mockResolvedValueOnce(
+          makeDetailEntry({
+            status: QueueEntryStatus.IN_SERVICE,
+            addOnMinutes: 15,
+            addOns: [
+              {
+                serviceId: 'sv2',
+                name: 'Beard Trim',
+                durationMinutes: 15,
+                price: new Prisma.Decimal('150.00'),
+                createdAt: new Date('2026-11-17T10:00:00.000Z'),
+              },
+            ],
+          }),
+        );
+
+      const dto = await service.addAddOn('staff-user', 'q1', 'sv2');
+
+      expect(salonAccess.assertAccessOrAdminAccess).toHaveBeenCalledWith('staff-user', 's1');
+      expect(prisma.$executeRaw).toHaveBeenCalled(); // per-salon lock
+      expect(prisma.queueEntryAddOn.create).toHaveBeenCalledWith({
+        data: {
+          queueEntryId: 'q1',
+          serviceId: 'sv2',
+          name: 'Beard Trim',
+          durationMinutes: 15,
+          price: beard.price,
+          addedByUserId: 'staff-user',
+        },
+      });
+      expect(prisma.queueEntry.update).toHaveBeenCalledWith({
+        where: { id: 'q1' },
+        data: { addOnMinutes: 15 },
+      });
+      expect(prisma.auditLog.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ action: 'QUEUE_ENTRY_ADD_ON_ADDED', entityId: 'q1' }),
+        }),
+      );
+      expect(realtime.emitQueueUpdated).toHaveBeenCalledWith('s1');
+      expect(dto.addOnMinutes).toBe(15);
+      expect(dto.addOns).toEqual([
+        {
+          serviceId: 'sv2',
+          name: 'Beard Trim',
+          durationMinutes: 15,
+          price: 150,
+          addedAt: '2026-11-17T10:00:00.000Z',
+        },
+      ]);
+    });
+
+    it('adds to the minutes of add-ons already on the visit', async () => {
+      availability.getServiceOrThrow.mockResolvedValueOnce(beard);
+      prisma.queueEntry.findUnique
+        .mockResolvedValueOnce(makeRawEntry({ status: QueueEntryStatus.WAITING }))
+        .mockResolvedValueOnce(
+          inTx({
+            status: QueueEntryStatus.WAITING,
+            addOns: [{ serviceId: 'sv3', durationMinutes: 20 }],
+          }),
+        );
+      await service.addAddOn('staff-user', 'q1', 'sv2');
+      expect(prisma.queueEntry.update).toHaveBeenCalledWith({
+        where: { id: 'q1' },
+        data: { addOnMinutes: 35 },
+      });
+    });
+
+    it('refuses the visit\'s own service as an add-on', async () => {
+      availability.getServiceOrThrow.mockResolvedValueOnce({ ...beard, id: 'sv1' });
+      prisma.queueEntry.findUnique
+        .mockResolvedValueOnce(makeRawEntry({ status: QueueEntryStatus.IN_SERVICE }))
+        .mockResolvedValueOnce(inTx());
+      await expect(service.addAddOn('staff-user', 'q1', 'sv1')).rejects.toMatchObject({
+        code: 'ADD_ON_DUPLICATE',
+      });
+      expect(prisma.queueEntryAddOn.create).not.toHaveBeenCalled();
+    });
+
+    it('refuses a service that is one of the appointment\'s booked services', async () => {
+      availability.getServiceOrThrow.mockResolvedValueOnce(beard);
+      prisma.queueEntry.findUnique
+        .mockResolvedValueOnce(makeRawEntry({ status: QueueEntryStatus.IN_SERVICE, bookingId: 'bk1' }))
+        .mockResolvedValueOnce(
+          inTx({
+            booking: {
+              serviceId: 'sv1',
+              service: { name: 'Haircut', durationMinutes: 30, price: 300 },
+              services: [
+                { serviceId: 'sv1', serviceName: 'Haircut', durationMinutes: 30, price: 300 },
+                { serviceId: 'sv2', serviceName: 'Beard Trim', durationMinutes: 15, price: 150 },
+              ],
+            },
+          }),
+        );
+      await expect(service.addAddOn('staff-user', 'q1', 'sv2')).rejects.toMatchObject({
+        code: 'ADD_ON_DUPLICATE',
+      });
+    });
+
+    it('refuses the same add-on twice', async () => {
+      availability.getServiceOrThrow.mockResolvedValueOnce(beard);
+      prisma.queueEntry.findUnique
+        .mockResolvedValueOnce(makeRawEntry({ status: QueueEntryStatus.IN_SERVICE }))
+        .mockResolvedValueOnce(inTx({ addOns: [{ serviceId: 'sv2', durationMinutes: 15 }] }));
+      await expect(service.addAddOn('staff-user', 'q1', 'sv2')).rejects.toMatchObject({
+        code: 'ADD_ON_DUPLICATE',
+      });
+    });
+
+    it('refuses more than the maximum number of add-ons', async () => {
+      availability.getServiceOrThrow.mockResolvedValueOnce(beard);
+      prisma.queueEntry.findUnique
+        .mockResolvedValueOnce(makeRawEntry({ status: QueueEntryStatus.IN_SERVICE }))
+        .mockResolvedValueOnce(
+          inTx({
+            addOns: ['a', 'b', 'c', 'd', 'e'].map((id) => ({ serviceId: id, durationMinutes: 5 })),
+          }),
+        );
+      await expect(service.addAddOn('staff-user', 'q1', 'sv2')).rejects.toMatchObject({
+        code: 'ADD_ON_LIMIT',
+      });
+    });
+
+    it.each([
+      QueueEntryStatus.COMPLETED,
+      QueueEntryStatus.CANCELLED,
+      QueueEntryStatus.NO_SHOW,
+      QueueEntryStatus.EXPIRED,
+    ])('refuses an add-on on a %s visit', async (status) => {
+      availability.getServiceOrThrow.mockResolvedValueOnce(beard);
+      prisma.queueEntry.findUnique
+        .mockResolvedValueOnce(makeRawEntry({ status }))
+        .mockResolvedValueOnce(inTx({ status }));
+      await expect(service.addAddOn('staff-user', 'q1', 'sv2')).rejects.toMatchObject({
+        code: 'ADD_ON_NOT_ALLOWED',
+      });
+      expect(prisma.queueEntryAddOn.create).not.toHaveBeenCalled();
+    });
+
+    it('never lets someone without access to the shop add a service', async () => {
+      salonAccess.assertAccessOrAdminAccess.mockRejectedValueOnce(
+        Object.assign(new Error('denied'), { code: 'SALON_ACCESS_DENIED' }),
+      );
+      prisma.queueEntry.findUnique.mockResolvedValueOnce(makeRawEntry());
+      await expect(service.addAddOn('stranger', 'q1', 'sv2')).rejects.toMatchObject({
+        code: 'SALON_ACCESS_DENIED',
+      });
+      expect(prisma.queueEntryAddOn.create).not.toHaveBeenCalled();
+    });
+
+    it('removes an add-on and recomputes the visit minutes', async () => {
+      prisma.queueEntry.findUnique
+        .mockResolvedValueOnce(makeRawEntry({ status: QueueEntryStatus.IN_SERVICE }))
+        .mockResolvedValueOnce({
+          status: QueueEntryStatus.IN_SERVICE,
+          addOns: [
+            { serviceId: 'sv2', durationMinutes: 15 },
+            { serviceId: 'sv3', durationMinutes: 20 },
+          ],
+        });
+      await service.removeAddOn('staff-user', 'q1', 'sv2');
+      expect(prisma.queueEntryAddOn.delete).toHaveBeenCalledWith({
+        where: { queueEntryId_serviceId: { queueEntryId: 'q1', serviceId: 'sv2' } },
+      });
+      expect(prisma.queueEntry.update).toHaveBeenCalledWith({
+        where: { id: 'q1' },
+        data: { addOnMinutes: 20 },
+      });
+      expect(realtime.emitQueueUpdated).toHaveBeenCalledWith('s1');
+    });
+
+    it('treats removing an add-on that is already gone as a no-op (double tap)', async () => {
+      prisma.queueEntry.findUnique
+        .mockResolvedValueOnce(makeRawEntry({ status: QueueEntryStatus.IN_SERVICE }))
+        .mockResolvedValueOnce({ status: QueueEntryStatus.IN_SERVICE, addOns: [] });
+      await expect(service.removeAddOn('staff-user', 'q1', 'sv2')).resolves.toBeDefined();
+      expect(prisma.queueEntryAddOn.delete).not.toHaveBeenCalled();
+    });
+
+    it('a customer in the chair who adds a service pushes the wait of everyone behind them', async () => {
+      prisma.queueEntry.findMany.mockResolvedValueOnce([
+        makeRawEntry({ id: 'q2', customerId: null, serviceId: null, estimatedWaitMinutes: null, addOnMinutes: 0 }),
+      ]);
+      // One barber/chair busy: started 1 minute ago, 30 min haircut + 15 min beard trim added.
+      prisma.salonStaff.count.mockResolvedValue(1);
+      prisma.chair.count.mockResolvedValue(1);
+      prisma.serviceSession.findMany.mockResolvedValueOnce([
+        {
+          staffId: 'st1',
+          startedAt: new Date(Date.now() - 60_000),
+          service: { durationMinutes: 30 },
+          queueEntry: { addOnMinutes: 15 },
+        },
+      ]);
+      await service.recomputeEtas('s1');
+      const update = prisma.queueEntry.update.mock.calls[0][0] as {
+        data: { estimatedWaitMinutes: number };
+      };
+      expect(update.data.estimatedWaitMinutes).toBe(44);
+    });
+  });
+
+  describe('setServiceBuffer', () => {
+    it('is owner/admin only, saves the minutes, audits and refreshes the queue', async () => {
+      (prisma.salon as unknown as { update: jest.Mock }).update = jest.fn().mockResolvedValue({});
+      prisma.$transaction.mockImplementationOnce(async (ops: unknown) =>
+        Array.isArray(ops) ? Promise.all(ops) : (ops as (tx: unknown) => unknown)(prisma),
+      );
+      await expect(service.setServiceBuffer('owner1', 's1', 15)).resolves.toEqual({
+        serviceBufferMinutes: 15,
+      });
+      expect(salonAccess.assertOwnerOrAdminAccess).toHaveBeenCalledWith('owner1', 's1');
+      expect((prisma.salon as unknown as { update: jest.Mock }).update).toHaveBeenCalledWith({
+        where: { id: 's1' },
+        data: { serviceBufferMinutes: 15 },
+      });
+      expect(prisma.auditLog.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ action: 'SALON_SERVICE_BUFFER_CHANGED' }),
+        }),
+      );
+      expect(realtime.emitQueueUpdated).toHaveBeenCalledWith('s1');
+    });
+  });
+
+  describe('opening hours guard on Live Queue joins', () => {
+    // Tuesday 17 Nov 2026 in Asia/Kolkata (UTC+05:30); the shop is open 09:00-21:00.
+    const tuesdayHours = [
+      { dayOfWeek: 2, isClosed: false, openTime: '09:00', closeTime: '21:00' },
+    ];
+
+    beforeEach(() => {
+      jest.useFakeTimers({
+        doNotFake: ['nextTick', 'setImmediate', 'setTimeout', 'setInterval', 'queueMicrotask'],
+      });
+      availability.getServiceOrThrow.mockResolvedValue({
+        id: 'sv1',
+        salonId: 's1',
+        durationMinutes: 30,
+      });
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('refuses a join after closing time with QUEUE_CLOSED', async () => {
+      jest.setSystemTime(new Date('2026-11-17T16:00:00.000Z')); // 21:30 IST
+      prisma.operatingHours.findMany.mockResolvedValue(tuesdayHours);
+      prisma.queueEntry.findFirst.mockResolvedValueOnce(null);
+      await expect(service.joinWalkIn('c1', 's1', 'sv1')).rejects.toMatchObject({
+        code: 'QUEUE_CLOSED',
+      });
+      expect(prisma.queueEntry.create).not.toHaveBeenCalled();
+    });
+
+    it('refuses a join before opening time', async () => {
+      jest.setSystemTime(new Date('2026-11-17T02:00:00.000Z')); // 07:30 IST
+      prisma.operatingHours.findMany.mockResolvedValue(tuesdayHours);
+      prisma.queueEntry.findFirst.mockResolvedValueOnce(null);
+      await expect(service.joinWalkIn('c1', 's1', 'sv1')).rejects.toMatchObject({
+        code: 'QUEUE_CLOSED',
+      });
+    });
+
+    it('refuses a join on a day the shop is closed', async () => {
+      jest.setSystemTime(new Date('2026-11-17T06:30:00.000Z')); // 12:00 IST
+      prisma.operatingHours.findMany.mockResolvedValue([
+        { dayOfWeek: 2, isClosed: true, openTime: '09:00', closeTime: '21:00' },
+      ]);
+      prisma.queueEntry.findFirst.mockResolvedValueOnce(null);
+      await expect(service.joinWalkIn('c1', 's1', 'sv1')).rejects.toMatchObject({
+        code: 'QUEUE_CLOSED',
+      });
+    });
+
+    it('refuses a join the shop cannot finish before closing with QUEUE_CLOSING', async () => {
+      jest.setSystemTime(new Date('2026-11-17T15:10:00.000Z')); // 20:40 IST, 20 min to close
+      prisma.operatingHours.findMany.mockResolvedValue(tuesdayHours);
+      prisma.queueEntry.findFirst.mockResolvedValueOnce(null);
+      await expect(service.joinWalkIn('c1', 's1', 'sv1')).rejects.toMatchObject({
+        code: 'QUEUE_CLOSING',
+      });
+      expect(prisma.queueEntry.create).not.toHaveBeenCalled();
+    });
+
+    it('accepts a join that can finish before closing', async () => {
+      jest.setSystemTime(new Date('2026-11-17T14:00:00.000Z')); // 19:30 IST
+      prisma.operatingHours.findMany.mockResolvedValue(tuesdayHours);
+      prisma.queueEntry.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
+      prisma.queueEntry.create.mockResolvedValue({ id: 'q2' });
+      await expect(service.joinWalkIn('c1', 's1', 'sv1')).resolves.toBeDefined();
+      expect(prisma.queueEntry.create).toHaveBeenCalled();
+    });
+
+    it('keeps accepting joins when the shop has no opening hours set (unchanged behaviour)', async () => {
+      jest.setSystemTime(new Date('2026-11-17T16:00:00.000Z'));
+      prisma.operatingHours.findMany.mockResolvedValue([]);
+      prisma.queueEntry.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
+      prisma.queueEntry.create.mockResolvedValue({ id: 'q2' });
+      await expect(service.joinWalkIn('c1', 's1', 'sv1')).resolves.toBeDefined();
+    });
+
+    it('treats a 23:59 close as open until midnight, with no closing projection (24-hour shops)', async () => {
+      jest.setSystemTime(new Date('2026-11-17T18:29:30.000Z')); // 23:59:30 IST
+      prisma.operatingHours.findMany.mockResolvedValue([
+        { dayOfWeek: 2, isClosed: false, openTime: '00:00', closeTime: '23:59' },
+      ]);
+      prisma.queueEntry.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
+      prisma.queueEntry.create.mockResolvedValue({ id: 'q2' });
+      await expect(service.joinWalkIn('c1', 's1', 'sv1')).resolves.toBeDefined();
+    });
+
+    it('never guesses "closed" from hours it cannot interpret', async () => {
+      jest.setSystemTime(new Date('2026-11-17T16:00:00.000Z'));
+      prisma.operatingHours.findMany.mockResolvedValue([
+        { dayOfWeek: 2, isClosed: false, openTime: '22:00', closeTime: '02:00' },
+      ]);
+      prisma.queueEntry.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
+      prisma.queueEntry.create.mockResolvedValue({ id: 'q2' });
+      await expect(service.joinWalkIn('c1', 's1', 'sv1')).resolves.toBeDefined();
+    });
+
+    it('keeps accepting joins when the shop has no trustworthy time zone', async () => {
+      jest.setSystemTime(new Date('2026-11-17T16:00:00.000Z'));
+      availability.getSalonTimeZone.mockResolvedValue(null);
+      prisma.operatingHours.findMany.mockResolvedValue(tuesdayHours);
+      prisma.queueEntry.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
+      prisma.queueEntry.create.mockResolvedValue({ id: 'q2' });
+      await expect(service.joinWalkIn('c1', 's1', 'sv1')).resolves.toBeDefined();
+    });
+
+    it('applies the same rule to a guest join', async () => {
+      jest.setSystemTime(new Date('2026-11-17T16:00:00.000Z'));
+      prisma.operatingHours.findMany.mockResolvedValue(tuesdayHours);
+      await expect(
+        service.joinGuestWalkIn('s1', 'sv1', 'Guest', '+919000000002'),
+      ).rejects.toMatchObject({ code: 'QUEUE_CLOSED' });
+      expect(prisma.queueEntry.create).not.toHaveBeenCalled();
+    });
+
+    it('the shop itself cannot add a customer after hours either', async () => {
+      jest.setSystemTime(new Date('2026-11-17T16:00:00.000Z'));
+      prisma.operatingHours.findMany.mockResolvedValue(tuesdayHours);
+      await expect(
+        service.createOperatorEntry('owner1', 's1', {
+          name: 'Ravi',
+          contactConsent: false,
+        } as never),
+      ).rejects.toMatchObject({ code: 'QUEUE_CLOSED' });
+      expect(prisma.queueEntry.create).not.toHaveBeenCalled();
+    });
+
+    it('the shop may add a customer late in the day (no closing projection for the owner)', async () => {
+      jest.setSystemTime(new Date('2026-11-17T15:25:00.000Z')); // 20:55 IST
+      prisma.operatingHours.findMany.mockResolvedValue(tuesdayHours);
+      prisma.queueEntry.findFirst.mockResolvedValue(null);
+      prisma.queueEntry.create.mockResolvedValue({ id: 'q3' });
+      await expect(
+        service.createOperatorEntry('owner1', 's1', {
+          name: 'Ravi',
+          contactConsent: false,
+        } as never),
+      ).resolves.toBeDefined();
+    });
+  });
+
+  describe('assign — walk-in placement keeps the buffer and the visit\'s add-ons', () => {
+    const input = { staffId: 'st1', chairId: 'ch1' };
+
+    beforeEach(() => {
+      prisma.chair.findFirst.mockResolvedValue({ id: 'ch1', salonId: 's1', status: 'ACTIVE' });
+      jest.useFakeTimers({
+        doNotFake: ['nextTick', 'setImmediate', 'setTimeout', 'setInterval', 'queueMicrotask'],
+      });
+      jest.setSystemTime(new Date('2026-11-17T06:00:00.000Z'));
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('checks the barber for service + add-ons + buffer before their next appointment', async () => {
+      availability.getServiceBufferMinutes.mockResolvedValueOnce(10);
+      prisma.queueEntry.findUnique.mockResolvedValueOnce(makeRawEntry({ addOnMinutes: 15 }));
+      await service.assign('staff1', 'q1', input);
+      const where = prisma.booking.count.mock.calls[0][0] as {
+        where: { slotStart: { lt: Date }; slotEnd: { gt: Date } };
+      };
+      // now 06:00Z + 30 haircut + 15 add-on + 10 buffer = 06:55Z; start widened by the buffer.
+      expect(where.where.slotStart.lt).toEqual(new Date('2026-11-17T06:55:00.000Z'));
+      expect(where.where.slotEnd.gt).toEqual(new Date('2026-11-17T05:50:00.000Z'));
+    });
+
+    it('refuses the barber when the buffer would run into their next appointment', async () => {
+      availability.getServiceBufferMinutes.mockResolvedValueOnce(10);
+      prisma.queueEntry.findUnique.mockResolvedValueOnce(makeRawEntry());
+      prisma.booking.count.mockResolvedValueOnce(1);
+      prisma.booking.findFirst.mockResolvedValueOnce({ slotEnd: new Date('2026-11-17T07:05:00.000Z') });
+      await expect(service.assign('staff1', 'q1', input)).rejects.toMatchObject({
+        code: 'STAFF_RESERVED_FOR_APPOINTMENT',
+      });
+    });
+
+    it('an appointment customer is checked exactly as before (no buffer, no add-on minutes)', async () => {
+      availability.getServiceBufferMinutes.mockResolvedValue(10);
+      prisma.queueEntry.findUnique.mockResolvedValueOnce(
+        makeRawEntry({ bookingId: 'bk1', source: QueueEntrySource.APPOINTMENT, addOnMinutes: 15 }),
+      );
+      prisma.booking.findUnique.mockResolvedValueOnce({ preferredStaffId: null });
+      await service.assign('staff1', 'q1', input);
+      const where = prisma.booking.count.mock.calls[0][0] as {
+        where: { slotStart: { lt: Date }; slotEnd: { gt: Date } };
+      };
+      expect(where.where.slotStart.lt).toEqual(new Date('2026-11-17T06:30:00.000Z'));
+      expect(where.where.slotEnd.gt).toEqual(new Date('2026-11-17T06:00:00.000Z'));
+      expect(availability.getServiceBufferMinutes).not.toHaveBeenCalled();
     });
   });
 });
