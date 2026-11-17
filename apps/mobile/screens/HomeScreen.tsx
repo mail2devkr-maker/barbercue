@@ -296,6 +296,19 @@ export default function HomeScreen({ navigation }: Props) {
         keyboardShouldPersistTaps="handled"
         automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
       >
+        {status === 'authenticated' && (
+          <Pressable
+            style={({ pressed }) => [styles.dashboardCard, pressed && styles.benefitItemPressed]}
+            onPress={() => navigation.navigate('AccountTab', { screen: 'CustomerDashboard', initial: false })}
+            accessibilityRole="button"
+            accessibilityLabel={language === 'HI' ? 'मेरा डैशबोर्ड' : 'My dashboard'}
+          >
+            <Text style={styles.dashboardCardTitle}>{language === 'HI' ? 'मेरा डैशबोर्ड' : 'My dashboard'}</Text>
+            <Text style={styles.dashboardCardHint}>
+              {language === 'HI' ? 'अपॉइंटमेंट, क्यू, हाल में देखे सैलून और समीक्षाएँ' : 'Appointments, queue, recently viewed and reviews'}
+            </Text>
+          </Pressable>
+        )}
         <ImageBackground source={{ uri: EDITORIAL_ASSET_URL.heroBand }} style={styles.hero} imageStyle={styles.heroImage}>
           <View style={[StyleSheet.absoluteFill, styles.heroBaseScrim]} />
           <GradientView
@@ -597,6 +610,9 @@ export default function HomeScreen({ navigation }: Props) {
 const HERO_HEIGHT = 336;
 
 const styles = StyleSheet.create({
+  dashboardCard: { marginHorizontal: space[4], marginTop: space[3], marginBottom: space[2], padding: space[4], borderRadius: radius.lg, backgroundColor: fastQue.card, borderWidth: 1, borderColor: fastQue.borderStrong },
+  dashboardCardTitle: { fontFamily: font.bodyBold, fontSize: fontSize.base, color: fastQue.text },
+  dashboardCardHint: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, color: fastQue.textSecondary, marginTop: 2 },
   root: { flex: 1, backgroundColor: fastQue.background },
   scroll: { flex: 1, backgroundColor: fastQue.background },
 

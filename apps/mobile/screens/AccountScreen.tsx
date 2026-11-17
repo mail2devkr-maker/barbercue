@@ -205,8 +205,17 @@ export default function AccountScreen() {
       </Card>
 
       <View style={styles.shortcutGrid}>
+        <Pressable style={styles.shortcutCard} onPress={() => navigation.navigate('CustomerDashboard')} accessibilityRole="button">
+          <Text style={styles.shortcutTitle}>{language === 'HI' ? 'मेरा डैशबोर्ड' : 'My dashboard'}</Text>
+        </Pressable>
         <Pressable style={styles.shortcutCard} onPress={() => navigation.navigate('BookingsTab', { screen: 'MyBookings' })}>
           <Text style={styles.shortcutTitle}>{t.myBookings}</Text>
+        </Pressable>
+        <Pressable style={styles.shortcutCard} onPress={() => navigation.navigate('RecentlyViewed')} accessibilityRole="button">
+          <Text style={styles.shortcutTitle}>{language === 'HI' ? 'हाल में देखे गए' : 'Recently viewed'}</Text>
+        </Pressable>
+        <Pressable style={styles.shortcutCard} onPress={() => navigation.navigate('MyReviews')} accessibilityRole="button">
+          <Text style={styles.shortcutTitle}>{language === 'HI' ? 'मेरी समीक्षाएँ' : 'My reviews'}</Text>
         </Pressable>
         <Pressable style={styles.shortcutCard} onPress={() => navigation.navigate('BookingsTab', { screen: 'MyInvoices' })} accessibilityRole="button">
           <Text style={styles.shortcutTitle}>My invoices</Text>

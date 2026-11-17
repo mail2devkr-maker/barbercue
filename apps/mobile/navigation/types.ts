@@ -108,6 +108,10 @@ export type AccountStackParamList = {
   StyleAdvisor: undefined;
   Notifications: undefined;
   CreditsHistory: undefined;
+  // Customer dashboard (website parity, 17 Nov 2026)
+  CustomerDashboard: undefined;
+  RecentlyViewed: undefined;
+  MyReviews: undefined;
   // Mobile Shop Owner Onboarding mission — reachable directly from Account ("List your shop") and
   // via the pending-intent replay from the signed-out CTAs (see shop-registration-intent.ts).
   RegisterShop: undefined;

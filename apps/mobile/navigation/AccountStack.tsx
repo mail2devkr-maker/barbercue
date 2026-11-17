@@ -2,6 +2,9 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import AccountScreen from '../screens/AccountScreen';
 import StyleAdvisorScreen from '../screens/StyleAdvisorScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
+import CustomerDashboardScreen from '../screens/CustomerDashboardScreen';
+import RecentlyViewedScreen from '../screens/RecentlyViewedScreen';
+import MyReviewsScreen from '../screens/MyReviewsScreen';
 import CreditsHistoryScreen from '../screens/CreditsHistoryScreen';
 import RegisterShopScreen from '../screens/RegisterShopScreen';
 import AssistantScreen from '../screens/AssistantScreen';
@@ -25,6 +28,9 @@ export default function AccountStack() {
         options={{ ...styleAdvisorHeaderOptions, title: t.aiStyleAdvisor, headerRight: () => <HomeHeaderButton /> }}
       />
       <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ title: t.notifications }} />
+      <Stack.Screen name="CustomerDashboard" component={CustomerDashboardScreen} options={{ title: t.tabAccount === 'Account' ? 'Dashboard' : t.tabAccount }} />
+      <Stack.Screen name="RecentlyViewed" component={RecentlyViewedScreen} options={{ title: 'Recently viewed' }} />
+      <Stack.Screen name="MyReviews" component={MyReviewsScreen} options={{ title: 'My reviews' }} />
       {/* Google Play release gate (see lib/feature-flags.ts): the route itself is unregistered in
           the production build, not just hidden from menus — navigation.navigate('CreditsHistory')
           from anywhere (a stray link, a queued notification replay) has nowhere to go.
