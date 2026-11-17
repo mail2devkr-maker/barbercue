@@ -28,6 +28,9 @@ jest.mock('../../ui', () => {
   };
 });
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Inst = any;
+
 const services = [
   { id: 'sv1', name: 'Haircut', durationMinutes: 30, price: 250 },
   { id: 'sv2', name: 'Beard Trim', durationMinutes: 15, price: 150 },
@@ -50,18 +53,18 @@ function entry(over: Record<string, unknown> = {}) {
   } as never;
 }
 
-function byLabel(root: TestRenderer.ReactTestInstance, label: string) {
-  return root.find((n) => n.props.accessibilityLabel === label && typeof n.props.onPress === 'function');
+function byLabel(root: Inst, label: string) {
+  return root.find((n: Inst) => n.props.accessibilityLabel === label && typeof n.props.onPress === 'function');
 }
 
-function byTitle(root: TestRenderer.ReactTestInstance, title: string) {
-  return root.find((n) => n.props.title === title && typeof n.props.onPress === 'function');
+function byTitle(root: Inst, title: string) {
+  return root.find((n: Inst) => n.props.title === title && typeof n.props.onPress === 'function');
 }
 
-function texts(root: TestRenderer.ReactTestInstance): string {
+function texts(root: Inst): string {
   return root
-    .findAll((n) => typeof n.props.children === 'string' || Array.isArray(n.props.children))
-    .map((n) => (Array.isArray(n.props.children) ? n.props.children.join('') : n.props.children))
+    .findAll((n: Inst) => typeof n.props.children === 'string' || Array.isArray(n.props.children))
+    .map((n: Inst) => (Array.isArray(n.props.children) ? n.props.children.join('') : n.props.children))
     .join(' | ');
 }
 
@@ -73,7 +76,7 @@ describe('AddOnServicesRow (Android and iOS)', () => {
   it('offers only services that are not already part of the visit, then adds the chosen one', async () => {
     (apiFetch as jest.Mock).mockResolvedValue({});
     const onChanged = jest.fn();
-    let r!: TestRenderer.ReactTestRenderer;
+    let r!: { root: Inst };
     await act(async () => {
       r = TestRenderer.create(
         createElement(AddOnServicesRow, {
@@ -102,7 +105,7 @@ describe('AddOnServicesRow (Android and iOS)', () => {
       buttons?.find((b) => b.style === 'destructive')?.onPress?.();
     });
     const onChanged = jest.fn();
-    let r!: TestRenderer.ReactTestRenderer;
+    let r!: { root: Inst };
     await act(async () => {
       r = TestRenderer.create(
         createElement(AddOnServicesRow, {
@@ -123,7 +126,7 @@ describe('AddOnServicesRow (Android and iOS)', () => {
     const { ApiError } = jest.requireMock('../../../lib/api') as { ApiError: new (s: number, m: string) => Error };
     (apiFetch as jest.Mock).mockRejectedValueOnce(new ApiError(409, 'This service is already part of this visit.'));
     const onChanged = jest.fn();
-    let r!: TestRenderer.ReactTestRenderer;
+    let r!: { root: Inst };
     await act(async () => {
       r = TestRenderer.create(createElement(AddOnServicesRow, { entry: entry(), services, onChanged }));
     });
