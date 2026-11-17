@@ -23,6 +23,7 @@ import {
   withParams,
 } from "../../../lib/discovery-params";
 import { ShopNameSearchField } from "../../../components/discovery/ShopNameSearchField";
+import { ShopServiceSearchField } from "../../../components/discovery/ShopServiceSearchField";
 import { Button } from "../../../components/ui/Button";
 import { apiFetch } from "../../../lib/api";
 import { useFavorites } from "../../../lib/favorites";
@@ -79,6 +80,17 @@ export default function SearchClient({ basePath = "/search", enableMap = false, 
   const router = useRouter();
   const searchParams = useSearchParams();
   const [q, setQ] = useState(searchParams.get("shopName") ?? "");
+  // Smart search (owner, 18 Nov): the Service field, beside the Shop-name field. The server matches
+  // synonyms, Hindi/Hinglish names and small typos for the `service` param.
+  const [serviceText, setServiceText] = useState(searchParams.get("service") ?? "");
+  // Keep the box in step with the URL (a cleared "Category ×" chip, back/forward): the React
+  // "adjust state when a prop changes" pattern, no effect needed.
+  const serviceParam = searchParams.get("service") ?? "";
+  const [syncedServiceParam, setSyncedServiceParam] = useState(serviceParam);
+  if (serviceParam !== syncedServiceParam) {
+    setSyncedServiceParam(serviceParam);
+    setServiceText(serviceParam);
+  }
   const [selectedCity, setSelectedCity] = useState<CitySearchResultDto | null>(null);
   // Every city with at least one active salon (GET cities) — customers pick from where FastQue
   // actually has salons, never from a global catalogue full of cities with no results.
@@ -343,15 +355,18 @@ export default function SearchClient({ basePath = "/search", enableMap = false, 
   const shownResults = useMemo(() => withViewerDistance(results, viewer), [results, viewer]);
   const selectedSalon = selectedId ? results.find((salon) => salon.id === selectedId) ?? null : null;
 
-  function handleSubmit(event?: React.FormEvent, explicitService?: string) {
+  function handleSubmit(event?: React.FormEvent, explicitShop?: string, explicitService?: string) {
     event?.preventDefault();
     const params = new URLSearchParams(searchParams.toString());
-    const shopName = (explicitService ?? q).trim();
-    // The Shop input is name-only; preserve the separate Service, price and distance filters.
-    // A legacy homepage "q" query must not quietly AND with a new shop-name search.
+    const shopName = (explicitShop ?? q).trim();
+    const serviceName = (explicitService ?? serviceText).trim();
+    // The Shop input is name-only; the Service input is the smart service filter. Price and distance
+    // filters are preserved. A legacy homepage "q" query must not quietly AND with a new search.
     params.delete("q");
     if (shopName) params.set("shopName", shopName);
     else params.delete("shopName");
+    if (serviceName) params.set("service", serviceName);
+    else params.delete("service");
     // A new city/name search starts from the whole city again, not a previously searched map area.
     for (const key of ["minLat", "maxLat", "minLng", "maxLng"]) params.delete(key);
     if (selectedCity) {
@@ -401,6 +416,15 @@ export default function SearchClient({ basePath = "/search", enableMap = false, 
         </div>
 
         <form className={styles.searchForm} onSubmit={handleSubmit} role="search">
+          <div className={styles.field}>
+            <span id="search-service-label">Service</span>
+            <ShopServiceSearchField
+              value={serviceText}
+              onChange={setServiceText}
+              onSubmit={(serviceName) => handleSubmit(undefined, undefined, serviceName)}
+              labelledBy="search-service-label"
+            />
+          </div>
           <div className={styles.field}>
             <span id="search-q-label">Shop</span>
             <ShopNameSearchField

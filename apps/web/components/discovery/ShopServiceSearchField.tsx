@@ -23,10 +23,13 @@ export function ShopServiceSearchField({
   value,
   onChange,
   onSubmit,
+  labelledBy,
 }: {
   value: string;
   onChange: (value: string) => void;
   onSubmit: (serviceName?: string) => void;
+  /** id of the visible label, so screen readers announce "Service". */
+  labelledBy?: string;
 }) {
   const listboxId = useId();
   const [state, setState] = useState<SuggestState>({ kind: "idle" });
@@ -100,6 +103,7 @@ export function ShopServiceSearchField({
         ref={inputRef}
         type="search"
         placeholder="Haircut, hair spa, beard trim…"
+        aria-labelledby={labelledBy}
         autoComplete="off"
         role="combobox"
         aria-expanded={expanded}

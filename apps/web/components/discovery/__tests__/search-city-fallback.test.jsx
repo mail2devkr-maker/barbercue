@@ -64,6 +64,32 @@ it('keeps the city from the link selected, and "All cities" clears it', async ()
   expect(push).toHaveBeenLastCalledWith('/search');
 });
 
+// Smart search (owner, 18 Nov): a Service field beside the Shop-name field; both can be used.
+it('searches by the Service field and keeps the Shop-name search', async () => {
+  const tree = await render();
+  const serviceInput = tree.root.find(
+    (n) => n.type === 'input' && n.props['aria-labelledby'] === 'search-service-label',
+  );
+  await act(async () => serviceInput.props.onChange({ target: { value: 'baal katna' } }));
+  await act(async () => tree.root.findByProps({ role: 'search' }).props.onSubmit({ preventDefault() {} }));
+  expect(push).toHaveBeenLastCalledWith('/search?service=baal+katna');
+  // The Shop-name field is still on the page.
+  expect(textOf(tree.root)).toContain('Shop');
+});
+
+it('shows the service from the link, and clearing it removes the filter', async () => {
+  query = 'service=Haircut';
+  window.location.search = '?service=Haircut';
+  const tree = await render();
+  const serviceInput = tree.root.find(
+    (n) => n.type === 'input' && n.props['aria-labelledby'] === 'search-service-label',
+  );
+  expect(serviceInput.props.value).toBe('Haircut');
+  await act(async () => serviceInput.props.onChange({ target: { value: '' } }));
+  await act(async () => tree.root.findByProps({ role: 'search' }).props.onSubmit({ preventDefault() {} }));
+  expect(push).toHaveBeenLastCalledWith('/search');
+});
+
 it('never sits on "Loading cities…" if the city list fails', async () => {
   const tree = await render(true);
   const select = tree.root.find((n) => n.type === 'select' && n.props['aria-labelledby'] === 'search-city-label');

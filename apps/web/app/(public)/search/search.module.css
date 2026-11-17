@@ -49,10 +49,11 @@
 
 .searchForm {
   display: grid;
-  grid-template-columns: minmax(220px, 1.3fr) minmax(190px, 0.8fr) auto;
+  /* Service | Shop | City, then Near me + Find salons on the next row. */
+  grid-template-columns: minmax(200px, 1.2fr) minmax(180px, 1fr) minmax(170px, 0.8fr);
   align-items: end;
   gap: 12px;
-  max-width: 900px;
+  max-width: 980px;
   margin-top: 36px;
   padding: 12px;
   background: var(--fq-charcoal);
