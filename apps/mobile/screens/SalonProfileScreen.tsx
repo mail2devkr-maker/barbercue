@@ -5,6 +5,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { DISCOVERY_PATHS, SHOP_CLOSED_TODAY_MESSAGE, VERIFICATION_BADGE_CAPTION, formatMoney, summarizeServiceNames } from '@barbercue/shared';
 import type { PublicSalonStatusDto, SalonProfileDto, ServiceDto } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
+import { useRecordSalonView } from '../lib/record-salon-view';
 import { color, fastQue, font, fontSize, radius, space } from '../lib/theme';
 import { Skeleton, ErrorState, SafeImage, PhotoGalleryViewer, PremiumButton, PremiumScreen } from '../components/ui';
 import { PublicSalonStatus } from '../components/PublicSalonStatus';
@@ -91,6 +92,8 @@ export default function SalonProfileScreen({ route, navigation }: Props) {
       void load(false);
     }, [load]),
   );
+  // Signed-in customers: remember this salon under Recently viewed (website parity).
+  useRecordSalonView(salon?.id);
 
   if (loading) {
     return (
