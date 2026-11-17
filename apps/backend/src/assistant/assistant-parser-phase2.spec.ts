@@ -121,6 +121,19 @@ describe('assistant phase 2 intents (shop)', () => {
       name: 'Amit Haircut',
       phoneMentioned: false,
     });
+    // Live bug (17 Nov): "naam ka" became part of the customer's name ("Pooja Naam Ka").
+    expect(shop('Pooja naam ka walk in customer add karo')).toMatchObject({
+      action: AssistantActionId.QUEUE_ADD_WALK_IN,
+      name: 'Pooja',
+    });
+    expect(shop('walk in add karo Rahul naam se')).toMatchObject({
+      action: AssistantActionId.QUEUE_ADD_WALK_IN,
+      name: 'Rahul',
+    });
+    expect(shop('Ravi Kumar naam ke customer ko walk in me daalo')).toMatchObject({
+      action: AssistantActionId.QUEUE_ADD_WALK_IN,
+      name: 'Ravi Kumar',
+    });
     // Phase 1 queue view still works.
     expect(shop('aaj ki queue dikhao')).toEqual({
       action: AssistantActionId.QUEUE_STATUS,

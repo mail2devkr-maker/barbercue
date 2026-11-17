@@ -88,6 +88,41 @@ describe('assistant parser (English / Hindi / Hinglish)', () => {
     });
   });
 
+  // Live bug (17 Nov): "20 rupay badha do" was read as "set the price to ₹20".
+  it.each([
+    ['haircut ka rate 20 rupay badha do', 20, 'up'],
+    ['haircut ka rate 20 badhao', 20, 'up'],
+    ['shave ka daam 30 rupaye aur badha do', 30, 'up'],
+    ['facial ka price ₹50 badha do', 50, 'up'],
+    ['haircut ka rate 20 rupay kam karo', 20, 'down'],
+    ['massage ka rate 25 ghata do', 25, 'down'],
+    ['हेयरकट का रेट 20 रुपये बढ़ा दो', 20, 'up'],
+    ['हेयरकट का रेट 20 रुपये कम करो', 20, 'down'],
+    ['raise haircut price 40 rupees more', 40, 'up'],
+  ])('"%s" changes the price BY %s (%s), never TO it', (text, delta, direction) => {
+    expect(parseAssistantText(text)).toMatchObject({
+      action: AssistantActionId.SERVICE_SET_PRICE,
+      to: null,
+      from: null,
+      percent: null,
+      delta,
+      direction,
+    });
+  });
+
+  it.each([
+    ['haircut ka rate 300 kar do', 300],
+    ['haircut ka rate badha ke 300 kar do', 300],
+    ['increase haircut price to 150', 150],
+    ['haircut ka rate 250 karo', 250],
+  ])('"%s" still sets the price TO %s', (text, to) => {
+    expect(parseAssistantText(text)).toMatchObject({
+      action: AssistantActionId.SERVICE_SET_PRICE,
+      to,
+      delta: null,
+    });
+  });
+
   it('reads a new service with price and duration', () => {
     expect(
       parseAssistantText('Beard trim service add karo ₹100 20 minute'),
