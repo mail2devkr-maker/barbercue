@@ -20,6 +20,7 @@ import { useAuth } from '../lib/auth-context';
 import { useLanguage } from '../lib/language-context';
 import { color, font, fontSize, lineHeightFor, radius, space } from '../lib/theme';
 import { Screen, SectionHeader, Card, Button } from '../components/ui';
+import { AppearanceCard } from '../components/AppearanceCard';
 import { InlineError } from '../components/ui/ErrorState';
 import { OwnerVoiceSettingsCard } from '../components/owner/OwnerVoiceSettingsCard';
 import { AccountDeletionRequestCard } from '../components/account/AccountDeletionRequestCard';
@@ -197,6 +198,8 @@ export default function AccountScreen() {
       </Card>
 
       {isSalonOwner && <OwnerVoiceSettingsCard />}
+
+      <AppearanceCard />
 
       <Card style={styles.card}>
         <Text style={styles.cardTitle}>{t.listYourShopCta}</Text>

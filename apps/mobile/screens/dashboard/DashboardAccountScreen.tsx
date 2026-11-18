@@ -10,6 +10,7 @@ import { useAuth } from '../../lib/auth-context';
 import { useLanguage } from '../../lib/language-context';
 import { color, font, fontSize, space } from '../../lib/theme';
 import { Screen, SectionHeader, Card, Button, InlineError, LanguageSwitcher } from '../../components/ui';
+import { AppearanceCard } from '../../components/AppearanceCard';
 import { AccountDeletionRequestCard } from '../../components/account/AccountDeletionRequestCard';
 import { AssistantEntry } from '../../components/assistant/AssistantEntry';
 import { useOptionalSalon } from '../../lib/salon-context';
@@ -88,6 +89,8 @@ export default function DashboardAccountScreen() {
       </View>
 
       <AssistantEntry onPress={() => navigation.navigate('Assistant', { salonId: selectedSalonId ?? undefined })} />
+
+      <AppearanceCard />
 
       <Card style={styles.card}>
         <View style={styles.fieldRow}>
