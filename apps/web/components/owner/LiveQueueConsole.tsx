@@ -705,12 +705,9 @@ export function LiveQueueConsole({ salonId }: { salonId: string }) {
 
           {kind === "owner" && typeof data.serviceBufferMinutes === "number" && (
             <Card title="Buffer after each service">
-              <div className={ui.cardSub}>
-                Minutes kept free after every service, so an extra service a customer asks for at the chair never delays the next appointment. When nothing is added, the barber can sanitise tools or take a short break.
-              </div>
               <select
                 aria-label="Buffer after each service"
-                className={`${ui.select} ${ui.mt12}`}
+                className={ui.select}
                 value={String(data.serviceBufferMinutes)}
                 disabled={busy !== null}
                 onChange={(event) => {

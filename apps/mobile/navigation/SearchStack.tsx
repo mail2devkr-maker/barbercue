@@ -11,6 +11,7 @@ import { lightStackOptions } from './screenOptions';
 import { HomeHeaderButton } from './HomeHeaderButton';
 import { useLanguage } from '../lib/language-context';
 import type { SearchStackParamList } from './types';
+import { TabBackButton } from '../components/TabBackButton';
 
 const Stack = createNativeStackNavigator<SearchStackParamList>();
 
@@ -27,7 +28,7 @@ export default function SearchStack() {
   const { t } = useLanguage();
   return (
     <Stack.Navigator initialRouteName="SalonSearch" screenOptions={lightStackOptions}>
-      <Stack.Screen name="SalonSearch" component={SalonSearchScreen} options={{ title: t.findASalonTitle }} />
+      <Stack.Screen name="SalonSearch" component={SalonSearchScreen} options={{ title: t.findASalonTitle, headerLeft: () => <TabBackButton compact /> }} />
       <Stack.Screen name="Offers" component={OffersScreen} options={{ title: t.trustOffersLabel }} />
       <Stack.Screen name="SalonProfile" component={SalonProfileScreen} options={{ title: t.salonTitle, ...homeAction }} />
       <Stack.Screen name="StaffSelect" component={StaffSelectScreen} options={{ title: t.chooseABarberTitle, ...homeAction }} />

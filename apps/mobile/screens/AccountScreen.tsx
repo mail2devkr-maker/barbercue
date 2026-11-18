@@ -26,6 +26,7 @@ import { AccountDeletionRequestCard } from '../components/account/AccountDeletio
 import { AssistantEntry } from '../components/assistant/AssistantEntry';
 import { isCreditsEnabled } from '../lib/feature-flags';
 import type { AccountStackParamList, TabParamList } from '../navigation/types';
+import { TabBackButton } from '../components/TabBackButton';
 
 type Nav = CompositeNavigationProp<
   NativeStackNavigationProp<AccountStackParamList, 'Account'>,
@@ -153,6 +154,7 @@ export default function AccountScreen() {
 
   return (
     <Screen refreshing={refreshing} onRefresh={() => void handleRefresh()}>
+      <TabBackButton />
       <SectionHeader eyebrow={t.tabAccount} title={t.yourAccount} subtitle={t.contactDetailsSubtitle} />
 
       <AssistantEntry onPress={() => navigation.navigate('Assistant')} />

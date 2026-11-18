@@ -87,6 +87,8 @@ export type SearchStackParamList = {
 };
 
 export type HomeStackParamList = {
+  // Owner (18 Nov): the customer's first tab is their Dashboard; Home stays reachable by name.
+  CustomerDashboard: undefined;
   Home: undefined;
   StyleAdvisor: undefined;
 };

@@ -14,6 +14,7 @@ import { AccountDeletionRequestCard } from '../../components/account/AccountDele
 import { AssistantEntry } from '../../components/assistant/AssistantEntry';
 import { useOptionalSalon } from '../../lib/salon-context';
 import type { DashboardAccountStackParamList } from '../../navigation/DashboardAccountStack';
+import { TabBackButton } from '../../components/TabBackButton';
 
 function roleLabel(t: UiStrings, role: string): string {
   const labels: Record<string, string> = {
@@ -77,6 +78,7 @@ export default function DashboardAccountScreen() {
 
   return (
     <Screen refreshing={refreshing} onRefresh={() => void load(true)}>
+      <TabBackButton />
       <View style={styles.headerRow}>
         <SectionHeader eyebrow={t.tabAccount} title={t.yourAccount} />
         <LanguageSwitcher />

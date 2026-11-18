@@ -39,6 +39,7 @@ import { ShopLocationPanel } from '../../components/owner/ShopLocationPanel';
 import { ServiceCategoryManager } from '../../components/owner/ServiceCategoryManager';
 import { useAuth } from '../../lib/auth-context';
 import type { OwnerShopStackParamList } from '../../navigation/OwnerShopStack';
+import { TabBackButton } from '../../components/TabBackButton';
 
 // Owner's day-to-day shop management (post-onboarding). Every form here is shared with
 // OwnerOnboardingScreen (Mobile Shop Owner Onboarding mission) via ShopSetupSections — this
@@ -124,6 +125,7 @@ export default function OwnerShopScreen() {
 
   return (
     <Screen contentStyle={styles.screenContent} refreshing={refreshing} onRefresh={() => void load(true)}>
+      <TabBackButton />
       <SectionHeader eyebrow={t.ownerEyebrow} title={selectedSalon?.name ?? t.tabShop} subtitle={t.shopSubtitle} />
 
       <Button

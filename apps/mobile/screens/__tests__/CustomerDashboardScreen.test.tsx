@@ -96,9 +96,11 @@ describe('CustomerDashboardScreen (mobile parity with the website dashboard)', (
     await render(<CustomerDashboardScreen />);
     await waitFor(() => expect(screen.getByText('Kreative Unisex Salon')).toBeTruthy());
     await fireEvent.press(screen.getByLabelText('All recently viewed'));
-    expect(mockNavigate).toHaveBeenCalledWith('RecentlyViewed');
+    // The dashboard is now also the customer's first tab, so links go through the Account tab.
+    expect(mockNavigate).toHaveBeenCalledWith('AccountTab', { screen: 'RecentlyViewed', initial: false });
     await fireEvent.press(screen.getByLabelText('All reviews'));
-    expect(mockNavigate).toHaveBeenCalledWith('MyReviews');
+    // The dashboard is now also the customer's first tab, so links go through the Account tab.
+    expect(mockNavigate).toHaveBeenCalledWith('AccountTab', { screen: 'MyReviews', initial: false });
     await fireEvent.press(screen.getByLabelText('Kreative Unisex Salon'));
     expect(mockNavigate).toHaveBeenCalledWith('SearchTab', { screen: 'SalonProfile', params: { countryCode: 'IN', citySlug: 'noida', salonSlug: 'kreative' }, initial: false });
     await fireEvent.press(screen.getByLabelText('Book an Appointment'));

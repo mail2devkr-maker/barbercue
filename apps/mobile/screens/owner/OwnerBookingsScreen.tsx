@@ -31,6 +31,7 @@ import { color, font, fontSize, lineHeightFor, radius, space } from '../../lib/t
 import { Screen, SectionHeader, Card, Button, EmptyState, Skeleton, InlineError } from '../../components/ui';
 import type { OwnerTabParamList } from '../../navigation/OwnerNavigator';
 import type { OwnerShopStackParamList } from '../../navigation/OwnerShopStack';
+import { TabBackButton } from '../../components/TabBackButton';
 
 type Props = BottomTabScreenProps<OwnerTabParamList, 'OwnerBookingsTab'>;
 
@@ -361,6 +362,7 @@ export default function OwnerBookingsScreen({ route, navigation }: Props) {
 
   return (
     <Screen scroll={false}>
+      <TabBackButton />
       <SectionHeader eyebrow={t.ownerEyebrow} title={t.bookingsTitle} />
       <Button title="New in-shop appointment" variant="secondary" onPress={() => setCreatingInShopAppointment(true)} />
       <View style={styles.viewToggle}>

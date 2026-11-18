@@ -3,6 +3,7 @@ import { useSalon } from '../../lib/salon-context';
 import { useLanguage } from '../../lib/language-context';
 import { Screen, SectionHeader, EmptyState } from '../../components/ui';
 import { LiveQueuePanel, type LiveQueuePanelHandle } from '../../components/dashboard/LiveQueuePanel';
+import { TabBackButton } from '../../components/TabBackButton';
 
 export default function OwnerQueueScreen() {
   const { selectedSalonId, selectedSalon } = useSalon();
@@ -26,6 +27,7 @@ export default function OwnerQueueScreen() {
 
   return (
     <Screen refreshing={refreshing} onRefresh={() => void handleRefresh()}>
+      <TabBackButton />
       <SectionHeader eyebrow={t.liveQueue} title={selectedSalon?.name ?? t.queueTitle} />
       <LiveQueuePanel ref={panelRef} salonId={selectedSalonId} ownerTools />
     </Screen>

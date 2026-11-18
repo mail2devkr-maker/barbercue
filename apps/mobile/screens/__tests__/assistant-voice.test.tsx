@@ -13,11 +13,14 @@ jest.mock('expo-speech-recognition', () => ({ ExpoSpeechRecognitionModule: {} })
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 
 const mockRecognizer: any = { lang: '', interimResults: true, continuous: true, maxAlternatives: 5, onresult: null, onerror: null, onend: null, onaudiostart: null, start: jest.fn(), stop: jest.fn(), abort: jest.fn() };
+const mockVoice = { present: true, permission: 'granted' as string, available: true };
 jest.mock('../../lib/native-voice', () => ({
   VOICE_LANGS: [{ id: 'hi-IN', label: 'हिंदी / Hinglish' }, { id: 'en-IN', label: 'English' }],
   createNativeRecognizer: () => mockRecognizer,
-  ensureVoicePermission: async () => true,
-  voiceRecognitionAvailable: () => true,
+  ensureVoicePermission: async () => mockVoice.permission === 'granted',
+  requestVoicePermission: async () => mockVoice.permission,
+  voiceModulePresent: () => mockVoice.present,
+  voiceRecognitionAvailable: () => mockVoice.available,
 }));
 const mockSpeak = jest.fn(async () => ({ ok: true }));
 jest.mock('../../lib/speech-output', () => ({
@@ -28,6 +31,8 @@ jest.mock('../../lib/speech-output', () => ({
 const fetchMock = apiFetch as jest.Mock;
 
 beforeEach(() => {
+  Object.assign(mockVoice, { present: true, permission: 'granted', available: true });
+  mockRecognizer.start.mockClear();
   fetchMock.mockReset();
   mockSpeak.mockClear();
   fetchMock.mockImplementation(async (path: string, init?: { body?: string }) => {
@@ -73,4 +78,29 @@ it('typed questions still go as text and are not spoken', async () => {
   const body = JSON.parse(fetchMock.mock.calls.find(([p]) => String(p).endsWith('/turns'))![1].body);
   expect(body.inputMode).toBe('text');
   expect(mockSpeak).not.toHaveBeenCalled();
+});
+
+// Owner report (18 Nov): "Start voice conversation does nothing". Each failure is now named right
+// under the voice button, and a phone that wrongly reports "no speech service" still tries.
+it('names why the voice conversation cannot start, right under the button', async () => {
+  await render(<AssistantScreen />);
+  mockVoice.present = false;
+  await fireEvent.press(await screen.findByText('🎤  Start voice conversation'));
+  expect(await screen.findByText(/does not include voice yet/)).toBeTruthy();
+  mockVoice.present = true;
+  mockVoice.permission = 'denied';
+  await fireEvent.press(screen.getByText('🎤  Start voice conversation'));
+  expect(await screen.findByText(/Microphone permission is off/)).toBeTruthy();
+  mockVoice.permission = 'timeout';
+  await fireEvent.press(screen.getByText('🎤  Start voice conversation'));
+  expect(await screen.findByText(/did not answer/)).toBeTruthy();
+  expect(mockRecognizer.start).not.toHaveBeenCalled();
+});
+
+it('still starts listening when the phone wrongly reports no speech service', async () => {
+  mockVoice.available = false;
+  await render(<AssistantScreen />);
+  await fireEvent.press(await screen.findByText('🎤  Start voice conversation'));
+  await waitFor(() => expect(mockRecognizer.start).toHaveBeenCalled());
+  expect(screen.getByText(/Trying anyway/)).toBeTruthy();
 });
