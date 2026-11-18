@@ -2,6 +2,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { LANGUAGE_LABELS, Language } from '@barbercue/shared';
 import { useLanguage } from '../../lib/language-context';
 import { color, font, fontSize, lineHeightFor } from '../../lib/theme';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 /**
  * Issue 9 (mobile launch mission) — directly visible, not buried in Account: rendered on the
@@ -17,6 +18,7 @@ import { color, font, fontSize, lineHeightFor } from '../../lib/theme';
  * a full row to themselves and keep the default full-word labels.
  */
 export function LanguageSwitcher({ compact = false }: { compact?: boolean }) {
+  const styles = useThemedStyles(makeStyles);
   const { language, setLanguage, t } = useLanguage();
   return (
     <View style={styles.row} accessibilityRole="radiogroup" accessibilityLabel={t.language}>
@@ -37,7 +39,7 @@ export function LanguageSwitcher({ compact = false }: { compact?: boolean }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   // flexShrink: 0 — a sibling in a flex row (e.g. Home's header title) must never compress this
   // control instead of wrapping/truncating itself; see HomeScreen's header layout for the other
   // half of the Part 7 cropping fix (the row that was pushing this off-screen, not this component).

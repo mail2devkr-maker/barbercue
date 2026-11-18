@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useKeyboardAwareScroll } from '../../lib/keyboard-aware';
 import { fastQue, font, fontSize, lineHeightFor, premiumShadow, radius, space } from '../../lib/theme';
 import { GradientView } from './GradientView';
+import { useThemedStyles, useThemeTokens, type ThemeTokens } from '../../lib/theme-mode';
 
 export function PremiumScreen({
   children,
@@ -32,6 +33,8 @@ export function PremiumScreen({
   onRefresh?: () => void;
   contentStyle?: StyleProp<ViewStyle>;
 }) {
+  const { fastQue } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const insets = useSafeAreaInsets();
   const keyboardAware = useKeyboardAwareScroll({ padAndroid: false });
   const padding = { paddingTop: insets.top + space[3], paddingBottom: insets.bottom + space[7] };
@@ -58,10 +61,12 @@ export function PremiumScreen({
 }
 
 export function PremiumCard({ children, style, strong = false }: { children: ReactNode; style?: StyleProp<ViewStyle>; strong?: boolean }) {
+  const styles = useThemedStyles(makeStyles);
   return <View style={[styles.card, strong && styles.cardStrong, style]}>{children}</View>;
 }
 
 export function PremiumSectionHeader({ eyebrow, title, subtitle }: { eyebrow?: string; title: string; subtitle?: string }) {
+  const styles = useThemedStyles(makeStyles);
   return (
     <View style={styles.heading}>
       {eyebrow ? <Text style={styles.eyebrow}>{eyebrow}</Text> : null}
@@ -74,6 +79,8 @@ export function PremiumSectionHeader({ eyebrow, title, subtitle }: { eyebrow?: s
 export function PremiumButton({ title, onPress, variant = 'primary', loading, disabled, style }: {
   title: string; onPress: () => void; variant?: 'primary' | 'secondary' | 'quiet'; loading?: boolean; disabled?: boolean; style?: StyleProp<ViewStyle>;
 }) {
+  const { fastQue } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const inactive = Boolean(loading || disabled);
   const content = loading ? <ActivityIndicator color={fastQue.text} /> : <Text style={[styles.buttonText, variant !== 'primary' && styles.secondaryButtonText]}>{title}</Text>;
   return (
@@ -90,10 +97,12 @@ export function PremiumButton({ title, onPress, variant = 'primary', loading, di
 }
 
 export function PremiumTextField(props: TextInputProps) {
+  const { fastQue } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   return <TextInput {...props} style={[styles.field, props.style]} placeholderTextColor={fastQue.textMuted} selectionColor={fastQue.pink} />;
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ fastQue }: ThemeTokens) => StyleSheet.create({
   screen: { flex: 1, backgroundColor: fastQue.background },
   content: { flexGrow: 1, paddingHorizontal: space[4] },
   card: { backgroundColor: fastQue.card, borderWidth: 1, borderColor: fastQue.border, borderRadius: radius.lg, padding: space[4], ...premiumShadow },

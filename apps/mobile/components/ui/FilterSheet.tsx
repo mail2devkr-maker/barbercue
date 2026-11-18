@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { fastQue, font, fontSize, radius, space } from '../../lib/theme';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 interface FilterSheetProps {
   visible: boolean;
@@ -18,6 +19,7 @@ interface FilterSheetProps {
  * the full-screen Pressable backdrop gives tap-outside dismissal.
  */
 export function FilterSheet({ visible, title, onClose, closeLabel, children }: FilterSheetProps) {
+  const styles = useThemedStyles(makeStyles);
   const sheet = (
     <>
       <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel={closeLabel} />
@@ -44,7 +46,7 @@ export function FilterSheet({ visible, title, onClose, closeLabel, children }: F
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ fastQue }: ThemeTokens) => StyleSheet.create({
   root: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(9,9,12,0.72)' },
   card: {
     maxHeight: '75%',

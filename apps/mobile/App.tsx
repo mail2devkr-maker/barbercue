@@ -15,6 +15,7 @@ import {
 import type { MeResponse } from '@barbercue/shared';
 import { AuthProvider, useAuth } from './lib/auth-context';
 import { LanguageProvider } from './lib/language-context';
+import { ThemeProvider } from './lib/theme-mode';
 import { hasIntroPlayed, markIntroPlayed } from './lib/startup-intro';
 import { color } from './lib/theme';
 import { OfflineBanner } from './components/OfflineBanner';
@@ -145,6 +146,7 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
+      <ThemeProvider>
       <AuthProvider>
         <LanguageProvider>
           {!introDone ? (
@@ -169,6 +171,7 @@ export default function App() {
           )}
         </LanguageProvider>
       </AuthProvider>
+      </ThemeProvider>
     </SafeAreaProvider>
   );
 }

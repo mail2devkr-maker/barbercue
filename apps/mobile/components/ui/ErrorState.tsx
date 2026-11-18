@@ -2,6 +2,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { color, font, fontSize, space } from '../../lib/theme';
 import { useLanguage } from '../../lib/language-context';
 import { Button } from './Button';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 interface ErrorStateProps {
   message: string;
@@ -11,6 +12,7 @@ interface ErrorStateProps {
 /** A retry-capable error surface — every screen that fetches on mount should offer this instead
  * of stranding the customer on plain red text with no way forward. */
 export function ErrorState({ message, onRetry }: ErrorStateProps) {
+  const styles = useThemedStyles(makeStyles);
   const { t } = useLanguage();
   return (
     <View style={styles.container}>
@@ -23,6 +25,7 @@ export function ErrorState({ message, onRetry }: ErrorStateProps) {
 /** Inline variant — a soft tinted card for form-level errors, matching the login screen's
  * errorCard treatment. Does not include a retry action; the surrounding form's own submit does. */
 export function InlineError({ message }: { message: string }) {
+  const styles = useThemedStyles(makeStyles);
   return (
     <View style={styles.card}>
       <Text style={styles.cardText}>{message}</Text>
@@ -30,7 +33,7 @@ export function InlineError({ message }: { message: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color, surface }: ThemeTokens) => StyleSheet.create({
   container: { alignItems: 'center', paddingVertical: space[6], paddingHorizontal: space[4] },
   message: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.muted, textAlign: 'center' },
   action: { marginTop: space[4], minWidth: 160 },
@@ -43,5 +46,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: space[4],
     marginBottom: space[4],
   },
-  cardText: { fontFamily: font.bodyMedium, fontSize: fontSize.xs, color: '#8f302d', textAlign: 'center' },
+  cardText: { fontFamily: font.bodyMedium, fontSize: fontSize.xs, color: surface.errorText, textAlign: 'center' },
 });

@@ -2,6 +2,7 @@ import { Pressable, StyleSheet, Text } from 'react-native';
 import { Language } from '@barbercue/shared';
 import { useLanguage } from '../../lib/language-context';
 import { fastQue, font, fontSize, space } from '../../lib/theme';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 /**
  * Owner request (16 Nov): let people see the password they are typing. A small Show / Hide button
@@ -12,6 +13,7 @@ import { fastQue, font, fontSize, space } from '../../lib/theme';
 export const PASSWORD_FIELD_PADDING = 76;
 
 export function PasswordVisibilityButton({ visible, onToggle }: { visible: boolean; onToggle: () => void }) {
+  const styles = useThemedStyles(makeStyles);
   const { language } = useLanguage();
   const hi = language === Language.HI;
   const label = visible ? (hi ? 'छिपाएँ' : 'Hide') : (hi ? 'दिखाएँ' : 'Show');
@@ -29,7 +31,7 @@ export function PasswordVisibilityButton({ visible, onToggle }: { visible: boole
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ fastQue }: ThemeTokens) => StyleSheet.create({
   button: { position: 'absolute', right: space[2], top: 0, bottom: 0, justifyContent: 'center', paddingHorizontal: space[2] },
   text: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: fastQue.pink },
 });

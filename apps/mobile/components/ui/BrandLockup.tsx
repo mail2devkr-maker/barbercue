@@ -1,5 +1,6 @@
 import { Image, StyleSheet, View } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 // Brand closure mission (round 2): the web identity moved to a NEW clean, unboxed lockup — no
 // square/card/rim around the FQ monogram, see apps/web/components/ui/BrandLockup.tsx's
@@ -70,6 +71,7 @@ export function BrandLockup({
   variant = 'default',
   style,
 }: Props) {
+  const styles = useThemedStyles(makeStyles);
   void showTagline;
 
   if (variant === 'auth' && !markOnly) {
@@ -118,7 +120,7 @@ export function BrandLockup({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (_tokens: ThemeTokens) => StyleSheet.create({
   root: { alignItems: 'center', flexShrink: 1, minWidth: 0 },
   rootCompact: {},
   markOnly: { flexShrink: 0 },

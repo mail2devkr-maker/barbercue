@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { color, fastQue, font, fontSize } from '../../lib/theme';
 import { useLanguage } from '../../lib/language-context';
+import { useThemedStyles, useThemeTokens, type ThemeTokens } from '../../lib/theme-mode';
 
 /**
  * Issue 7 (mobile stabilization mission) — a directly-visible entry point to the existing
@@ -9,6 +10,8 @@ import { useLanguage } from '../../lib/language-context';
  * count capped the same way the Account tab's own tabBarBadge already is.
  */
 export function NotificationBell({ unreadCount, onPress, tone = 'light' }: { unreadCount: number; onPress: () => void; tone?: 'light' | 'dark' }) {
+  const { color, fastQue } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const { t } = useLanguage();
   // Owner report (16 Nov): the bell was dark ink on the dark owner dashboard and effectively
   // invisible. Every place the bell is used sits on a dark surface, so 'light' is the default.
@@ -34,7 +37,7 @@ export function NotificationBell({ unreadCount, onPress, tone = 'light' }: { unr
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   button: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
   bellShape: { width: 20, height: 20, alignItems: 'center' },
   bellBody: {

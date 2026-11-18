@@ -3,6 +3,7 @@ import { Image, StyleSheet, Text, View } from 'react-native';
 import type { ImageStyle, ImageResizeMode, StyleProp, ViewStyle } from 'react-native';
 import { useLanguage } from '../../lib/language-context';
 import { color, font } from '../../lib/theme';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 /**
  * The one place a remote (owner-supplied) photo is rendered on mobile, mirroring
@@ -29,6 +30,7 @@ export function SafeImage({
   // un-cropped photo is the point, so it passes 'contain' instead.
   resizeMode?: ImageResizeMode;
 }) {
+  const styles = useThemedStyles(makeStyles);
   const { t } = useLanguage();
   // Tracks the specific URL that failed, not just a boolean — if the `url` prop later changes to
   // a different (potentially working) address, this re-attempts it instead of staying stuck.
@@ -61,7 +63,7 @@ export function SafeImage({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   placeholder: {
     backgroundColor: color.goldSoft,
     alignItems: 'center',

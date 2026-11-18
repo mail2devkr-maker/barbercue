@@ -1,5 +1,6 @@
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { color, radius } from '../../lib/theme';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 /**
  * A static (non-animated) placeholder block — deliberately no shimmer/pulse animation, per the
@@ -7,9 +8,10 @@ import { color, radius } from '../../lib/theme';
  * A muted flat block reads clearly as "loading" without an animation loop running underneath it.
  */
 export function Skeleton({ style }: { style?: StyleProp<ViewStyle> }) {
+  const styles = useThemedStyles(makeStyles);
   return <View style={[styles.block, style]} />;
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   block: { backgroundColor: color.border, borderRadius: radius.sm, opacity: 0.6 },
 });
