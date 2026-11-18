@@ -450,7 +450,7 @@ export default function SearchClient({ basePath = "/search", enableMap = false, 
         hidden={!filtersOpen}
       >
         <div className={styles.filterSheetHeader}>
-          <h2 id="filters-heading">Filters</h2>
+          <h2 id="filters-heading">All filters</h2>
           <button type="button" className={styles.filterClose} onClick={() => setFiltersOpen(false)} aria-label="Close filters">
             ×
           </button>
