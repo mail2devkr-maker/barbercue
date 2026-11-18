@@ -62,6 +62,11 @@ export function toCatalogProductDto(
       format: b.format,
     })),
     imageUrls: row.images.map((i) => i.url),
+    visibility: row.visibility,
+    ownerSalonId: row.ownerSalonId,
+    externalRef: row.externalRef,
+    variant: row.variantText,
+    isTestData: row.isTestData,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -132,7 +137,14 @@ export class ProductCatalogService {
         stockOnHand: p.stockOnHand.toFixed(3),
         unit: p.unit,
       }));
-      if (product.verificationStatus === ProductVerificationStatus.VERIFIED)
+      // A shop-only master product is private to its shop: others learn only that the barcode is
+      // taken (they can still stock it under their own product name), never its details.
+      const privateElsewhere =
+        product.visibility === 'SHOP' && product.ownerSalonId !== salonId;
+      if (
+        product.verificationStatus === ProductVerificationStatus.VERIFIED &&
+        !privateElsewhere
+      )
         return {
           ...base,
           status: 'FOUND',
@@ -140,7 +152,7 @@ export class ProductCatalogService {
           salonStock,
         };
       // Unverified details are only shown to the salon that submitted them.
-      if (product.submittedBySalonId === salonId)
+      if (product.submittedBySalonId === salonId && !privateElsewhere)
         return {
           ...base,
           status: 'FOUND_PENDING',
@@ -395,6 +407,8 @@ export class ProductCatalogService {
         submittedBySalonId: true,
         packSize: true,
         packUnit: true,
+        visibility: true,
+        ownerSalonId: true,
       },
     });
     if (
@@ -406,9 +420,12 @@ export class ProductCatalogService {
         'This catalog product is not available.',
         HttpStatus.NOT_FOUND,
       );
+    const privateElsewhere =
+      catalog.visibility === 'SHOP' && catalog.ownerSalonId !== salonId;
     const detailsVisible =
-      catalog.verificationStatus === ProductVerificationStatus.VERIFIED ||
-      catalog.submittedBySalonId === salonId;
+      !privateElsewhere &&
+      (catalog.verificationStatus === ProductVerificationStatus.VERIFIED ||
+        catalog.submittedBySalonId === salonId);
     const productName =
       input.name?.trim() || (detailsVisible ? catalog.name : null);
     if (!productName)

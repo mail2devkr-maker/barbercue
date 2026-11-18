@@ -248,6 +248,9 @@ export function ProductsView({ salonId }: { salonId: string }) {
                         {p.name}{p.sku ? <span className={ui.cardSub}> ({p.sku})</span> : null}{" "}
                         {!p.isActive && <Badge tone="neutral">Not in use</Badge>}
                         {p.supplier && <div className={ui.cardSub}>Supplier: {p.supplier.name}</div>}
+                        <div className={ui.cardSub}>
+                          {Number(p.stockOnHand) <= 0 ? "Out of stock" : p.isLowStock ? "Low stock" : "In stock"} · updated {new Date(p.updatedAt).toLocaleDateString()}
+                        </div>
                         {(p.barcode || p.globalProductId) && (
                           <div className={ui.cardSub}>
                             {p.usage === "RETAIL" ? "Sold to customers" : "Used on services"}

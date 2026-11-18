@@ -229,6 +229,12 @@ export const adminCatalogListQuerySchema = z
   .object({
     status: z.nativeEnum(ProductVerificationStatus).optional(),
     q: z.string().trim().max(120).optional(),
+    /** Inventory master filters: global vs shop-only, one shop's products, rows without a barcode, test data. */
+    visibility: z.enum(["GLOBAL", "SHOP"]).optional(),
+    salonId: z.string().uuid().optional(),
+    category: z.string().trim().max(80).optional(),
+    missingBarcode: z.enum(["true", "false"]).optional(),
+    testData: z.enum(["true", "false"]).optional(),
     cursor: z.string().trim().max(1024).optional(),
     limit: z.coerce.number().int().min(1).max(100).default(25),
   })
@@ -434,6 +440,14 @@ export interface CatalogProductDto {
   verificationStatus: ProductVerificationStatus;
   barcodes: { code: string; display: string; format: BarcodeFormat }[];
   imageUrls: string[];
+  /** GLOBAL = offered to every salon; SHOP = private to ownerSalonId. */
+  visibility: "GLOBAL" | "SHOP";
+  ownerSalonId: string | null;
+  /** The supplier's / upload file's own product code. */
+  externalRef: string | null;
+  variant: string | null;
+  /** Synthetic test/demo data (e.g. sample barcodes) — never a real product. */
+  isTestData: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -441,6 +455,8 @@ export interface CatalogProductDto {
 /** Same as CatalogProductDto, plus who submitted it and review details (admin only). */
 export interface AdminCatalogProductDto extends CatalogProductDto {
   submittedBySalon: { id: string; name: string } | null;
+  ownerSalon: { id: string; name: string } | null;
+  uploadJobId: string | null;
   reviewNote: string | null;
   reviewedAt: string | null;
   salonsStocking: number;

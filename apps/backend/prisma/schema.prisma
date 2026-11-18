@@ -223,6 +223,37 @@ enum ProductVerificationStatus {
   REJECTED
 }
 
+enum CatalogVisibility {
+  GLOBAL
+  SHOP
+}
+
+enum InventoryUploadFileType {
+  XLSX
+  CSV
+}
+
+enum InventoryUploadStatus {
+  PREVIEWED
+  PROCESSING
+  COMPLETED
+  COMPLETED_WITH_ERRORS
+  FAILED
+  CANCELLED
+}
+
+enum InventoryUploadIssueSeverity {
+  ERROR
+  WARNING
+  REVIEW
+}
+
+enum CatalogChangeRequestStatus {
+  OPEN
+  RESOLVED
+  REJECTED
+}
+
 enum BarcodeFormat {
   GTIN
   OTHER
@@ -472,6 +503,9 @@ model User {
   inventoryMovements            InventoryMovement[]
   globalProductsCreated  GlobalProduct[] @relation("GlobalProductCreator")
   globalProductsReviewed GlobalProduct[] @relation("GlobalProductReviewer")
+  inventoryUploadJobs    InventoryUploadJob[]
+  catalogChangeRequests  CatalogChangeRequest[] @relation("CatalogChangeRequester")
+  catalogChangeResolved  CatalogChangeRequest[] @relation("CatalogChangeResolver")
   serviceUsagesRecorded  ServiceUsage[]  @relation("ServiceUsageRecordedBy")
   serviceUsagesReversed  ServiceUsage[]  @relation("ServiceUsageReversedBy")
   otpRequests                   OtpRequest[]             @relation("OtpRequestSubject")
@@ -1039,6 +1073,8 @@ model Salon {
   inventoryProducts           InventoryProduct[]
   inventoryMovements          InventoryMovement[]
   globalProductSubmissions GlobalProduct[] @relation("GlobalProductSubmissions")
+  shopCatalogProducts      GlobalProduct[] @relation("GlobalProductOwnerSalon")
+  catalogChangeRequests    CatalogChangeRequest[]
   serviceProductRules      ServiceProductRule[]
   serviceUsages            ServiceUsage[]
   inventorySettings        InventorySettings?
@@ -2230,14 +2266,32 @@ model GlobalProduct {
   reviewNote         String?                   @db.VarChar(300)
   createdAt          DateTime                  @default(now()) @db.Timestamptz(6)
   updatedAt          DateTime                  @updatedAt @db.Timestamptz(6)
+  // Inventory master upload: GLOBAL products are offered to every salon; SHOP products are private
+  // to ownerSalonId (a database check keeps the two columns consistent). Neither ever becomes stock
+  // in a salon by itself: a salon only stocks a product through its own InventoryProduct row.
+  visibility         CatalogVisibility         @default(GLOBAL)
+  ownerSalonId       String?
+  ownerSalon         Salon?                    @relation("GlobalProductOwnerSalon", fields: [ownerSalonId], references: [id], onDelete: Restrict)
+  // The supplier's / file's own product code (e.g. "FQ-TST-001") - identity for rows without a barcode.
+  externalRef        String?                   @db.VarChar(80)
+  // Free-text variant / size exactly as supplied ("100 ml", "Shade 4.0"); never merged across variants.
+  variantText        String?                   @db.VarChar(80)
+  // Synthetic/test rows (e.g. demo barcodes). Kept out of production unless explicitly allowed.
+  isTestData         Boolean                   @default(false)
+  uploadJobId        String?                   @db.Uuid
+  uploadJob          InventoryUploadJob?       @relation(fields: [uploadJobId], references: [id], onDelete: SetNull)
 
   barcodes          GlobalProductBarcode[]
   images            GlobalProductImage[]
   inventoryProducts InventoryProduct[]
+  changeRequests    CatalogChangeRequest[]
 
   @@index([verificationStatus, createdAt])
   @@index([normalizedName])
   @@index([submittedBySalonId])
+  @@index([visibility, ownerSalonId])
+  @@index([category])
+  @@index([uploadJobId])
   @@map("global_products")
 }
 
@@ -2266,6 +2320,92 @@ model GlobalProductImage {
 
   @@index([productId, sortOrder])
   @@map("global_product_images")
+}
+
+// ---------- Inventory master uploads (admin Excel/CSV) ----------
+// One row per uploaded file. The parsed, normalized rows are kept on the job at preview time so the
+// commit imports exactly what the admin previewed (no second upload). Row problems are separate rows
+// so they can be paged and downloaded as a CSV report.
+model InventoryUploadJob {
+  id                 String                  @id @default(uuid()) @db.Uuid
+  uploadedByUserId   String
+  uploadedBy         User                    @relation(fields: [uploadedByUserId], references: [id], onDelete: Restrict)
+  fileName           String                  @db.VarChar(255)
+  fileType           InventoryUploadFileType
+  fileSizeBytes      Int
+  fileSha256         String                  @db.VarChar(64)
+  sheetName          String?                 @db.VarChar(120)
+  headerRow          Int?
+  status             InventoryUploadStatus   @default(PREVIEWED)
+  columnMapping      Json?
+  parsedRows         Json?
+  sourceReference    String?                 @db.VarChar(300)
+  sourceLicense      String?                 @db.VarChar(80)
+  markAsTestData     Boolean                 @default(false)
+  totalRows          Int                     @default(0)
+  createdCount       Int                     @default(0)
+  linkedCount        Int                     @default(0)
+  unchangedCount     Int                     @default(0)
+  skippedCount       Int                     @default(0)
+  errorCount         Int                     @default(0)
+  warningCount       Int                     @default(0)
+  reviewCount        Int                     @default(0)
+  embeddedImageCount Int                     @default(0)
+  failureMessage     String?                 @db.VarChar(500)
+  createdAt          DateTime                @default(now()) @db.Timestamptz(6)
+  startedAt          DateTime?               @db.Timestamptz(6)
+  completedAt        DateTime?               @db.Timestamptz(6)
+
+  issues   InventoryUploadError[]
+  products GlobalProduct[]
+
+  @@index([createdAt, id])
+  @@index([status, createdAt])
+  @@index([fileSha256])
+  @@map("inventory_upload_jobs")
+}
+
+model InventoryUploadError {
+  id        String                       @id @default(uuid()) @db.Uuid
+  jobId     String                       @db.Uuid
+  job       InventoryUploadJob           @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  rowNumber Int
+  severity  InventoryUploadIssueSeverity
+  code      String                       @db.VarChar(60)
+  field     String?                      @db.VarChar(60)
+  message   String                       @db.VarChar(500)
+  rawValue  String?                      @db.VarChar(300)
+  // Which phase found it: PREVIEW (file checks) or COMMIT (what happened when it was imported).
+  phase     String                       @default("PREVIEW") @db.VarChar(10)
+  createdAt DateTime                     @default(now()) @db.Timestamptz(6)
+
+  @@index([jobId, phase, rowNumber])
+  @@index([jobId, severity])
+  @@map("inventory_upload_errors")
+}
+
+// An owner asking FastQue to correct a master product (owners never edit the shared catalog).
+model CatalogChangeRequest {
+  id                String                     @id @default(uuid()) @db.Uuid
+  salonId           String
+  salon             Salon                      @relation(fields: [salonId], references: [id], onDelete: Restrict)
+  requestedByUserId String
+  requestedBy       User                       @relation("CatalogChangeRequester", fields: [requestedByUserId], references: [id], onDelete: Restrict)
+  globalProductId   String?
+  globalProduct     GlobalProduct?             @relation(fields: [globalProductId], references: [id], onDelete: SetNull)
+  barcode           String?                    @db.VarChar(64)
+  message           String                     @db.VarChar(1000)
+  proposedFields    Json?
+  status            CatalogChangeRequestStatus @default(OPEN)
+  resolvedByUserId  String?
+  resolvedBy        User?                      @relation("CatalogChangeResolver", fields: [resolvedByUserId], references: [id], onDelete: SetNull)
+  resolvedAt        DateTime?                  @db.Timestamptz(6)
+  resolutionNote    String?                    @db.VarChar(500)
+  createdAt         DateTime                   @default(now()) @db.Timestamptz(6)
+
+  @@index([status, createdAt])
+  @@index([salonId, createdAt])
+  @@map("catalog_change_requests")
 }
 
 // ---------- Subscription (inactive in V1 — see ARCHITECTURE.md §16) ----------

@@ -13,6 +13,12 @@ import { ProductCatalogController } from './product-catalog.controller';
 import { ProductCatalogService } from './product-catalog.service';
 import { ServiceUsageController } from './service-usage.controller';
 import { ServiceUsageService } from './service-usage.service';
+import {
+  InventoryUploadController,
+  OwnerCatalogController,
+} from './upload/inventory-upload.controller';
+import { InventoryUploadService } from './upload/inventory-upload.service';
+import { OwnerCatalogService } from './upload/owner-catalog.service';
 
 @Module({
   // AssignmentReleaseModule provides the shared ServiceCompletedHook (Phase 2 auto-deduction).
@@ -23,6 +29,8 @@ import { ServiceUsageService } from './service-usage.service';
     AdminInventoryController,
     ServiceUsageController,
     InventoryForecastController,
+    InventoryUploadController,
+    OwnerCatalogController,
   ],
   providers: [
     InventoryService,
@@ -31,6 +39,8 @@ import { ServiceUsageService } from './service-usage.service';
     OpenBeautyFactsClient,
     ServiceUsageService,
     InventoryForecastService,
+    InventoryUploadService,
+    OwnerCatalogService,
   ],
 })
 export class InventoryModule {}
