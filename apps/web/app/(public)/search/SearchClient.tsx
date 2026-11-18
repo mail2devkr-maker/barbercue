@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import type {
@@ -10,7 +10,7 @@ import type {
   SalonListItemDto,
   SalonSearchSortOption,
 } from "@barbercue/shared";
-import { DISCOVERY_PATHS, POPULAR_SERVICES, formatPriceFilterLabel, popularServiceById } from "@barbercue/shared";
+import { DISCOVERY_PATHS, formatPriceFilterLabel, popularServiceById } from "@barbercue/shared";
 import { SERVICE_CATEGORIES } from "../../../lib/editorial/manifest";
 import { SalonResultCard } from "../../../components/discovery/SalonResultCard";
 import { MapPreviewCard } from "../../../components/customer-dashboard/MapPreviewCard";
@@ -23,6 +23,7 @@ import {
   withParams,
 } from "../../../lib/discovery-params";
 import { ShopNameSearchField } from "../../../components/discovery/ShopNameSearchField";
+import { ShopServiceSearchField } from "../../../components/discovery/ShopServiceSearchField";
 import { Button } from "../../../components/ui/Button";
 import { apiFetch } from "../../../lib/api";
 import { useFavorites } from "../../../lib/favorites";
@@ -41,8 +42,6 @@ const SalonMap = dynamic(() => import("../../../components/customer-dashboard/Sa
 const MAP_PAGE_LIMIT = 50;
 
 // The filter sidebar sits below the fixed site header (152px, see landing.module.css .siteHeaderSpacer).
-const SIDEBAR_TOP = 168;
-const SIDEBAR_BOTTOM_GAP = 16;
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api/v1";
 
@@ -79,6 +78,17 @@ export default function SearchClient({ basePath = "/search", enableMap = false, 
   const router = useRouter();
   const searchParams = useSearchParams();
   const [q, setQ] = useState(searchParams.get("shopName") ?? "");
+  // Smart search (owner, 18 Nov): the Service field, beside the Shop-name field. The server matches
+  // synonyms, Hindi/Hinglish names and small typos for the `service` param.
+  const [serviceText, setServiceText] = useState(searchParams.get("service") ?? "");
+  // Keep the box in step with the URL (a cleared "Category ×" chip, back/forward): the React
+  // "adjust state when a prop changes" pattern, no effect needed.
+  const serviceParam = searchParams.get("service") ?? "";
+  const [syncedServiceParam, setSyncedServiceParam] = useState(serviceParam);
+  if (serviceParam !== syncedServiceParam) {
+    setSyncedServiceParam(serviceParam);
+    setServiceText(serviceParam);
+  }
   const [selectedCity, setSelectedCity] = useState<CitySearchResultDto | null>(null);
   // Every city with at least one active salon (GET cities) — customers pick from where FastQue
   // actually has salons, never from a global catalogue full of cities with no results.
@@ -123,24 +133,22 @@ export default function SearchClient({ basePath = "/search", enableMap = false, 
   const origin = nearMeActive ? { lat: Number(searchParams.get("lat")), lng: Number(searchParams.get("lng")) } : null;
   const [hasMore, setHasMore] = useState(false);
   const filterCount = activeFilterCount(discovery);
-  // The sidebar never scrolls inside itself. If it fits on screen it stays pinned under the header;
-  // if it is taller, it scrolls with the page and then stays put once its bottom reaches the
-  // bottom of the screen (a negative sticky top), so every option is reachable by page scrolling.
-  const asideRef = useRef<HTMLElement>(null);
-  const [asideTop, setAsideTop] = useState(SIDEBAR_TOP);
+  // Owner (18 Nov): every search option lives behind ONE "Filters" button. Its badge counts the
+  // discovery filters plus shop name, city and Near me.
+  const totalFilterCount =
+    filterCount +
+    (searchParams.get("shopName") ? 1 : 0) +
+    (searchParams.get("city") ? 1 : 0) +
+    (nearMeActive ? 1 : 0);
+  // Escape closes the Filters panel.
   useEffect(() => {
-    const aside = asideRef.current;
-    if (!aside || typeof ResizeObserver === "undefined") return undefined;
-    const update = () => setAsideTop(Math.min(SIDEBAR_TOP, window.innerHeight - aside.offsetHeight - SIDEBAR_BOTTOM_GAP));
-    update();
-    const observer = new ResizeObserver(update);
-    observer.observe(aside);
-    window.addEventListener("resize", update);
-    return () => {
-      observer.disconnect();
-      window.removeEventListener("resize", update);
+    if (!filtersOpen || typeof document === "undefined") return undefined;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setFiltersOpen(false);
     };
-  }, []);
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [filtersOpen]);
   // "My favorites" sends the customer's saved salon IDs to the public search; until they are known
   // (or when signed out / nothing saved) there is nothing to search.
   const { savedIds, loaded: favoritesLoaded, isCustomer, ready: authReady } = useFavorites();
@@ -168,10 +176,12 @@ export default function SearchClient({ basePath = "/search", enableMap = false, 
     router.push(`${basePath}${query ? `?${query}` : ""}`);
   }
 
+  // "Clear all" in the one Filters panel clears every option in it: shop, city and Near me too.
   function clearAllFilters() {
     applyChanges({
       salonType: null, __popularService: null, service: null, priceMin: null, priceMax: null, view: null,
       minRating: null, openNow: null, offersOnly: null, maxWaitMinutes: null, favorites: null,
+      shopName: null, q: null, city: null, countryCode: null, lat: null, lng: null, radiusKm: null,
     });
   }
 
@@ -343,15 +353,18 @@ export default function SearchClient({ basePath = "/search", enableMap = false, 
   const shownResults = useMemo(() => withViewerDistance(results, viewer), [results, viewer]);
   const selectedSalon = selectedId ? results.find((salon) => salon.id === selectedId) ?? null : null;
 
-  function handleSubmit(event?: React.FormEvent, explicitService?: string) {
+  function handleSubmit(event?: React.FormEvent, explicitShop?: string, explicitService?: string) {
     event?.preventDefault();
     const params = new URLSearchParams(searchParams.toString());
-    const shopName = (explicitService ?? q).trim();
-    // The Shop input is name-only; preserve the separate Service, price and distance filters.
-    // A legacy homepage "q" query must not quietly AND with a new shop-name search.
+    const shopName = (explicitShop ?? q).trim();
+    const serviceName = (explicitService ?? serviceText).trim();
+    // The Shop input is name-only; the Service input is the smart service filter. Price and distance
+    // filters are preserved. A legacy homepage "q" query must not quietly AND with a new search.
     params.delete("q");
     if (shopName) params.set("shopName", shopName);
     else params.delete("shopName");
+    if (serviceName) params.set("service", serviceName);
+    else params.delete("service");
     // A new city/name search starts from the whole city again, not a previously searched map area.
     for (const key of ["minLat", "maxLat", "minLng", "maxLng"]) params.delete(key);
     if (selectedCity) {
@@ -400,13 +413,77 @@ export default function SearchClient({ basePath = "/search", enableMap = false, 
           </p>
         </div>
 
-        <form className={styles.searchForm} onSubmit={handleSubmit} role="search">
+        <div className={styles.filterBar}>
+          <button
+            type="button"
+            className={styles.filterButton}
+            aria-haspopup="dialog"
+            aria-expanded={filtersOpen}
+            aria-controls="discovery-filters"
+            onClick={() => setFiltersOpen(true)}
+          >
+            <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 5h18l-7 8.5V19l-4 2v-7.5L3 5z" />
+            </svg>
+            <span>Filters</span>
+            {totalFilterCount > 0 && <span className={styles.filterBadge}>{totalFilterCount}</span>}
+          </button>
+          <span className={styles.filterHint}>Service · Shop · City · Distance · Price and more</span>
+        </div>
+        {locationError && <p className={styles.locationNotice}>{locationError}</p>}
+        {!nearMeActive && !viewer && !locationError && results.some((salon) => salon.lat !== null && salon.lng !== null) && (
+          <Button type="button" variant="outline" className={styles.outlineOnDark} onClick={showDistances} disabled={locating}>
+            {locating ? "Locating…" : "📍 Show how far each shop is"}
+          </Button>
+        )}
+      </section>
+
+      {filtersOpen && (
+        <div className={styles.filterBackdrop} onClick={() => setFiltersOpen(false)} aria-hidden="true" />
+      )}
+      <div
+        id="discovery-filters"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="filters-heading"
+        className={`${styles.filterSheet} ${filtersOpen ? styles.filterSheetOpen : ""}`}
+        hidden={!filtersOpen}
+      >
+        <div className={styles.filterSheetHeader}>
+          <h2 id="filters-heading">All filters</h2>
+          <button type="button" className={styles.filterClose} onClick={() => setFiltersOpen(false)} aria-label="Close filters">
+            ×
+          </button>
+        </div>
+        <form
+          className={styles.filterSheetBody}
+          onSubmit={(event) => {
+            handleSubmit(event);
+            setFiltersOpen(false);
+          }}
+          role="search"
+        >
           <div className={styles.field}>
-            <span id="search-q-label">Shop</span>
+            <span id="search-service-label">Filter by service</span>
+            <ShopServiceSearchField
+              value={serviceText}
+              onChange={setServiceText}
+              onSubmit={(serviceName) => {
+                handleSubmit(undefined, undefined, serviceName);
+                setFiltersOpen(false);
+              }}
+              labelledBy="search-service-label"
+            />
+          </div>
+          <div className={styles.field}>
+            <span id="search-q-label">Filter by shop</span>
             <ShopNameSearchField
               value={q}
               onChange={setQ}
-              onSubmit={(shopName) => handleSubmit(undefined, shopName)}
+              onSubmit={(shopName) => {
+                handleSubmit(undefined, shopName);
+                setFiltersOpen(false);
+              }}
               labelledBy="search-q-label"
             />
           </div>
@@ -431,38 +508,33 @@ export default function SearchClient({ basePath = "/search", enableMap = false, 
               <input type="search" placeholder="Loading cities…" disabled />
             )}
           </div>
-          <Button type="button" variant="outline" className={styles.outlineOnDark} onClick={nearMeActive ? clearNearMe : handleNearMe} disabled={locating} aria-pressed={nearMeActive}>
-            {locating ? "Locating…" : nearMeActive ? "Near me ✓" : "Near me"}
-          </Button>
-          <Button type="submit" variant="primary">
-            Find salons
-          </Button>
+          {/* Distance (with Near me), price, salon type, popular services, live queue and "show only"
+              apply as soon as they are picked; the text fields above apply with "Show results". */}
+          <FiltersPanel
+            state={discovery}
+            onChange={applyChanges}
+            onClearAll={() => {
+              clearAllFilters();
+              setQ("");
+              setServiceText("");
+              setSelectedCity(null);
+            }}
+            activeCount={totalFilterCount}
+            location={{
+              nearMe: nearMeActive,
+              radiusKm: activeRadiusKm,
+              locating,
+              onRadius: selectRadius,
+              onNearMe: (on) => (on ? handleNearMe() : clearNearMe()),
+            }}
+          />
+          <div className={styles.filterSheetFooter}>
+            <Button type="submit" variant="primary">
+              Show results
+            </Button>
+          </div>
         </form>
-        {locationError && <p className={styles.locationNotice}>{locationError}</p>}
-        {!nearMeActive && !viewer && !locationError && results.some((salon) => salon.lat !== null && salon.lng !== null) && (
-          <Button type="button" variant="outline" className={styles.outlineOnDark} onClick={showDistances} disabled={locating}>
-            {locating ? "Locating…" : "📍 Show how far each shop is"}
-          </Button>
-        )}
-
-        <div className={styles.serviceStrip} role="group" aria-label="Popular services">
-          <span className={styles.serviceStripLabel}>Popular services:</span>
-          {POPULAR_SERVICES.map((service) => {
-            const on = discovery.popularService === service.id;
-            return (
-              <button
-                key={service.id}
-                type="button"
-                aria-pressed={on}
-                className={`${styles.serviceChip} ${on ? styles.serviceChipOn : ""}`}
-                onClick={() => applyChanges({ __popularService: on ? null : service.id })}
-              >
-                {service.label}
-              </button>
-            );
-          })}
-        </div>
-      </section>
+      </div>
 
       {styleName && (
         <aside className={styles.styleNotice}>
@@ -475,27 +547,6 @@ export default function SearchClient({ basePath = "/search", enableMap = false, 
       )}
 
       <div className={`${styles.discoveryLayout} ${mapView ? styles.discoveryLayoutMap : ""}`}>
-      <aside
-        id="discovery-filters"
-        ref={asideRef}
-        style={{ top: asideTop }}
-        className={`${styles.filtersAside} ${filtersOpen ? styles.filtersAsideOpen : ""}`}
-        aria-label="Search filters"
-      >
-        <FiltersPanel
-          state={discovery}
-          onChange={applyChanges}
-          onClearAll={clearAllFilters}
-          activeCount={filterCount}
-          location={{
-            nearMe: nearMeActive,
-            radiusKm: activeRadiusKm,
-            locating,
-            onRadius: selectRadius,
-            onNearMe: (on) => (on ? handleNearMe() : clearNearMe()),
-          }}
-        />
-      </aside>
       <section className={styles.results} aria-labelledby="results-heading" aria-live="polite">
         {(activeService || ((activePriceMin !== null || activePriceMax !== null) && !comparedService)) && (
           <div className={styles.activeChips} aria-label="Other active filters">
@@ -535,9 +586,6 @@ export default function SearchClient({ basePath = "/search", enableMap = false, 
                 )}
           </h2>
           <div className={styles.resultsTools}>
-            <button type="button" className={styles.filtersToggle} aria-expanded={filtersOpen} aria-controls="discovery-filters" onClick={() => setFiltersOpen((open) => !open)}>
-              Filters{filterCount > 0 ? ` (${filterCount})` : ""}
-            </button>
             <SortControl state={discovery} onChange={selectSort} />
             {enableMap && (
               <div className={styles.viewToggle} role="group" aria-label="List or map">

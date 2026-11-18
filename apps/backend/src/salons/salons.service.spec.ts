@@ -196,16 +196,87 @@ describe('SalonsService', () => {
         where: {
           isActive: true,
           salon: { status: 'ACTIVE' },
-          OR: [
+          OR: expect.arrayContaining([
             { name: { contains: 'hair', mode: 'insensitive' } },
             { category: { contains: 'hair', mode: 'insensitive' } },
-          ],
+            { name: { contains: 'hair cutting', mode: 'insensitive' } },
+          ]),
         },
         select: { name: true, category: true },
         distinct: ['name'],
         orderBy: { name: 'asc' },
-        take: 8,
+        take: 500,
       });
+    });
+
+    // Owner report (18 Nov): smart search while typing — typos, Hinglish and Hindi.
+    it('suggests one merged line per service the text may mean, typos and Hinglish included', async () => {
+      const catalog = [
+        { name: '(L\'Oreal) Hair Colour (Male)', category: 'Hair' },
+        { name: 'Advance Hair Cut', category: 'Hair' },
+        { name: 'Gents Haircut', category: 'Hair' },
+        { name: 'Hair Cutting', category: null },
+        { name: 'Hair Spa', category: 'Hair' },
+        { name: 'Saree Draping', category: 'Bridal' },
+      ];
+      // Applies the query's OR of "contains" terms like the database would.
+      prisma.service.findMany.mockImplementation(
+        (args: { where: { OR: Record<string, { contains: string }>[] } }) =>
+          Promise.resolve(
+            catalog.filter((row) =>
+              args.where.OR.some((cond) => {
+                const [field, { contains }] = Object.entries(cond)[0];
+                const value = (row as Record<string, string | null>)[field] ?? '';
+                return value.toLowerCase().includes(contains.toLowerCase());
+              }),
+            ),
+          ),
+      );
+      const names = async (q: string) =>
+        (await service.searchServiceSuggestions(q, 8)).map((s) => s.name);
+      // "hiar" (slip), "baal" (Hinglish): only the services shops really sell, each ONCE.
+      expect(await names('hiar')).toEqual(['Haircut', 'Hair Colour', 'Hair Spa']);
+      expect(await names('baal')).toEqual(['Haircut', 'Hair Colour']);
+      expect(await names('hair')).toEqual(['Haircut', 'Hair Colour', 'Hair Spa']);
+      expect(await names('saree')).toEqual(['Saree Draping']);
+    });
+
+    it('never offers a row that only came in through a synonym it is not ("Head Shave" for "dadhi")', async () => {
+      const catalog = [
+        { name: 'Clean Shave', category: null },
+        { name: 'Head Shave', category: null },
+        { name: 'Beard Styling / Trim', category: null },
+      ];
+      prisma.service.findMany.mockImplementation(
+        (args: { where: { OR: Record<string, { contains: string }>[] } }) =>
+          Promise.resolve(
+            catalog.filter((row) =>
+              args.where.OR.some((cond) => {
+                const [field, { contains }] = Object.entries(cond)[0];
+                const value = (row as Record<string, string | null>)[field] ?? '';
+                return value.toLowerCase().includes(contains.toLowerCase());
+              }),
+            ),
+          ),
+      );
+      const names = async (q: string) =>
+        (await service.searchServiceSuggestions(q, 8)).map((s) => s.name);
+      expect(await names('dadhi')).toEqual(['Shave', 'Beard Trim']);
+      // Typing "shave" itself still lists Head Shave as its own service.
+      expect(await names('shave')).toEqual(['Shave', 'Head Shave']);
+    });
+
+    it('never offers a service no active shop sells, and respects the limit', async () => {
+      prisma.service.findMany.mockResolvedValue([{ name: 'Hair Spa', category: 'Hair' }]);
+      expect(
+        (await service.searchServiceSuggestions('hair', 8)).map((s) => s.name),
+      ).toEqual(['Hair Spa']);
+      prisma.service.findMany.mockResolvedValue([
+        { name: 'Haircut', category: 'Hair' },
+        { name: 'Hair Spa', category: 'Hair' },
+        { name: 'Hair Colour', category: 'Hair' },
+      ]);
+      await expect(service.searchServiceSuggestions('hair', 2)).resolves.toHaveLength(2);
     });
 
     it('does not query the database until at least two service characters are typed', async () => {
@@ -302,10 +373,12 @@ describe('SalonsService', () => {
             services: {
               some: {
                 isActive: true,
-                OR: [
+                // Smart search: "bear" (typed so far) also covers Beard Trim's names.
+                OR: expect.arrayContaining([
                   { name: { contains: 'bear', mode: 'insensitive' } },
+                  { name: { contains: 'beard trim', mode: 'insensitive' } },
                   { category: { contains: 'bear', mode: 'insensitive' } },
-                ],
+                ]),
               },
             },
           },
@@ -370,15 +443,18 @@ describe('SalonsService', () => {
           const { where } = prisma.salon.findMany.mock.calls[0][0] as {
             where: { services?: unknown; AND?: unknown };
           };
+          // Smart search: the relevance OR also carries Haircut's synonyms ("hair cutting", Hindi).
           expect(where.services).toEqual({
             some: {
               isActive: true,
               AND: [
                 {
-                  OR: [
+                  OR: expect.arrayContaining([
                     { name: { contains: 'Haircut', mode: 'insensitive' } },
+                    { name: { contains: 'hair cutting', mode: 'insensitive' } },
+                    { name: { contains: 'हेयरकट', mode: 'insensitive' } },
                     { category: { contains: 'Haircut', mode: 'insensitive' } },
-                  ],
+                  ]),
                 },
                 { price: { gte: 200, lte: 800 } },
               ],
@@ -403,10 +479,11 @@ describe('SalonsService', () => {
                     isActive: true,
                     AND: [
                       {
-                        OR: [
+                        OR: expect.arrayContaining([
                           { name: { contains: 'Haircut', mode: 'insensitive' } },
+                          { name: { contains: 'hair cutting', mode: 'insensitive' } },
                           { category: { contains: 'Haircut', mode: 'insensitive' } },
-                        ],
+                        ]),
                       },
                       { price: { lte: 300 } },
                     ],
@@ -441,6 +518,12 @@ describe('SalonsService', () => {
         }
 
         function evalServiceCond(cond: Record<string, unknown>, s: FakeService): boolean {
+          if (cond.AND) {
+            return (cond.AND as Record<string, unknown>[]).every((c) => evalServiceCond(c, s));
+          }
+          if (cond.NOT) {
+            return !evalServiceCond(cond.NOT as Record<string, unknown>, s);
+          }
           if (cond.OR) {
             return (cond.OR as Record<string, unknown>[]).some((c) => evalServiceCond(c, s));
           }
