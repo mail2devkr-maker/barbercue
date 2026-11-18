@@ -25,6 +25,7 @@ import {
 } from '../../lib/arrival-alert-sound';
 import { Button } from '../ui';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 const SAFETY_REFRESH_MS = 30_000;
 const SNOOZE_MS = 2 * 60_000;
@@ -104,6 +105,7 @@ function copyFor(language: Language) {
  * - Arrived and No Show remain two-step actions; notification buttons never mutate business state.
  */
 export function OwnerArrivalPromptCoordinator() {
+  const styles = useThemedStyles(makeStyles);
   const { language } = useLanguage();
   const { selectedSalonId, workplaces, selectSalon } = useSalon();
   const [active, setActive] = useState<ArrivalAlertDto | null>(null);
@@ -363,7 +365,7 @@ export function OwnerArrivalPromptCoordinator() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color, resolved, surface }: ThemeTokens) => StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: color.surface },
   content: {
     flex: 1,
@@ -394,5 +396,5 @@ const styles = StyleSheet.create({
     backgroundColor: color.accentSoft,
   },
   actions: { gap: space[3], marginTop: space[3] },
-  error: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: '#b42318' },
+  error: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: resolved === 'designed' ? '#b42318' : surface.errorText },
 });

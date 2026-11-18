@@ -19,6 +19,7 @@ import {
 } from '../../lib/location-proposal';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 import { Button, Card, InlineError } from '../ui';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 /**
  * Website parity for apps/web/components/owner/ShopLocation.tsx: what customers see now, the last
@@ -29,6 +30,7 @@ import { Button, Card, InlineError } from '../ui';
 const GPS_TIMEOUT_MS = 15_000;
 
 export function ShopLocationPanel({ salonId, language }: { salonId: string; language: Language }) {
+  const styles = useThemedStyles(makeStyles);
   const hi = language === Language.HI;
   const path = `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.location}`;
   const [view, setView] = useState<LocationView | null>(null);
@@ -182,7 +184,7 @@ export function ShopLocationPanel({ salonId, language }: { salonId: string; lang
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   wrap: { gap: space[3] },
   heading: { fontFamily: font.bodyBold, color: color.ink, fontSize: fontSize.base, marginBottom: space[1] },
   strong: { fontFamily: font.bodySemiBold, color: color.ink, fontSize: fontSize.sm, marginVertical: space[1] },

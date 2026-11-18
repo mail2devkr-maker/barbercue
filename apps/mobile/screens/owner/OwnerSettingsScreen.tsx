@@ -6,6 +6,7 @@ import { useSalon } from '../../lib/salon-context';
 import { useLanguage } from '../../lib/language-context';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 import { Button, Card, EmptyState, InlineError, Screen, SectionHeader, Skeleton } from '../../components/ui';
+import { useThemedStyles, useThemeTokens, type ThemeTokens } from '../../lib/theme-mode';
 
 const salonPath = (salonId: string, resource: string) =>
   `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${resource}`;
@@ -19,6 +20,7 @@ function message(error: unknown, fallback: string) {
 
 /** Native owner shop profile/timezone settings; both endpoints are owner-authorized and salon-scoped. */
 export default function OwnerSettingsScreen() {
+  const styles = useThemedStyles(makeStyles);
   const { selectedSalonId, selectedSalon } = useSalon();
   const { language } = useLanguage();
   const copy = language === 'HI' ? {
@@ -177,6 +179,8 @@ export default function OwnerSettingsScreen() {
 }
 
 function Field(props: { label: string; value: string; onChangeText: (value: string) => void; keyboardType?: 'default' | 'email-address' | 'phone-pad'; autoCapitalize?: 'none' | 'sentences'; multiline?: boolean; placeholder?: string }) {
+  const { color } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   return (
     <View style={styles.field}>
       <Text style={styles.label}>{props.label}</Text>
@@ -195,16 +199,16 @@ function Field(props: { label: string; value: string; onChangeText: (value: stri
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color, resolved, surface }: ThemeTokens) => StyleSheet.create({
   card: { marginTop: space[4] },
   heading: { color: color.ink, fontFamily: font.bodyBold, fontSize: fontSize.lg, marginBottom: space[3] },
   field: { marginBottom: space[3] },
   label: { color: color.ink, fontFamily: font.bodyBold, fontSize: fontSize.sm, marginBottom: space[1] },
-  input: { minHeight: 48, borderWidth: 1, borderColor: color.border, borderRadius: radius.sm, color: color.ink, paddingHorizontal: space[3], paddingVertical: space[2], backgroundColor: '#fff' },
+  input: { minHeight: 48, borderWidth: 1, borderColor: color.border, borderRadius: radius.sm, color: color.ink, paddingHorizontal: space[3], paddingVertical: space[2], backgroundColor: surface.card },
   multiline: { minHeight: 96, textAlignVertical: 'top' },
   help: { color: color.muted, fontSize: fontSize.sm, lineHeight: 21, marginBottom: space[3] },
   suggestion: { gap: space[2], marginBottom: space[3] },
-  error: { color: '#a11b3a', marginBottom: space[3] },
-  notice: { color: '#176b46', marginBottom: space[3] },
+  error: { color: resolved === 'designed' ? '#a11b3a' : surface.errorText, marginBottom: space[3] },
+  notice: { color: resolved === 'designed' ? '#176b46' : color.success, marginBottom: space[3] },
   skeleton: { height: 280, borderRadius: radius.lg, marginBottom: space[3] },
 });

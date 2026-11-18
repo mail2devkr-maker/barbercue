@@ -194,3 +194,16 @@ export function themedStyles<T>(factory: (tokens: ThemeTokens) => T, tokens: The
 export function useThemedStyles<T>(factory: (tokens: ThemeTokens) => T): T {
   return themedStyles(factory, useThemeTokens());
 }
+
+/**
+ * Status bar text colour: "As designed" keeps each screen's own choice (`designed`); Light uses dark
+ * text and Dark uses light text everywhere, so the clock/battery stay readable.
+ */
+export function statusBarStyleFor(resolved: ResolvedTheme, designed: 'light' | 'dark'): 'light' | 'dark' {
+  if (resolved === 'designed') return designed;
+  return resolved === 'dark' ? 'light' : 'dark';
+}
+
+export function useStatusBarStyle(designed: 'light' | 'dark'): 'light' | 'dark' {
+  return statusBarStyleFor(useThemeTokens().resolved, designed);
+}

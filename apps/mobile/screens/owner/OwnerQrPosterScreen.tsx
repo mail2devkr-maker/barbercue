@@ -14,6 +14,7 @@ import { QrMatrixView } from '../../components/owner/QrMatrixView';
 import { PremiumQueueQr } from '../../components/owner/PremiumQueueQr';
 import { Button, Card, InlineError, Screen, SectionHeader } from '../../components/ui';
 import { color, font, fontSize, space } from '../../lib/theme';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 type LoadState =
   | { kind: 'loading'; salonId: string }
@@ -24,6 +25,7 @@ type PosterAction = 'share' | 'image' | null;
 const MESSAGE_MAX = 300;
 
 export default function OwnerQrPosterScreen() {
+  const styles = useThemedStyles(makeStyles);
   const { selectedSalonId, selectedSalon } = useSalon();
   const { language } = useLanguage();
   const [load, setLoad] = useState<LoadState | null>(null);
@@ -158,7 +160,7 @@ export default function OwnerQrPosterScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   posterCard: { alignItems: 'center', backgroundColor: '#171314', borderColor: '#ff3e57' },
   brand: { color: '#ff7190', fontFamily: font.bodyBold, fontSize: fontSize.lg, letterSpacing: 2 },
   shopName: { color: '#ffffff', fontFamily: font.bodyBold, fontSize: fontSize.xl, lineHeight: 30, textAlign: 'center', marginTop: space[2], maxWidth: '100%' },

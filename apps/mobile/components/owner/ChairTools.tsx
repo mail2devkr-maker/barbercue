@@ -20,6 +20,7 @@ import {
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 import { Button, InlineError } from '../ui';
 import { PermanentDeletePanel } from './StaffAdmin';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 /**
  * Website parity for apps/web/components/dashboard/ChairBulkActions.tsx (+ the chairs page's
@@ -40,6 +41,7 @@ export function ChairBulkRemoval({ salonId, chairs, language, onChanged }: {
   language: Language;
   onChanged: () => void;
 }) {
+  const styles = useThemedStyles(makeStyles);
   const hi = language === Language.HI;
   const base = `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.chairs}`;
   const selectable = chairs.filter((c) => c.status === ChairStatus.ACTIVE);
@@ -127,6 +129,7 @@ export function ChairBulkRemoval({ salonId, chairs, language, onChanged }: {
 }
 
 export function ChairDeleteAction({ salonId, chair, language, onDeleted }: { salonId: string; chair: SalonChairDto; language: Language; onDeleted: () => void }) {
+  const styles = useThemedStyles(makeStyles);
   const [open, setOpen] = useState(false);
   const hi = language === Language.HI;
   return open
@@ -134,7 +137,7 @@ export function ChairDeleteAction({ salonId, chair, language, onDeleted }: { sal
     : <Pressable accessibilityRole="button" accessibilityLabel={`${hi ? 'स्थायी रूप से हटाएँ' : 'Delete permanently'} ${chair.label}`} onPress={() => setOpen(true)}><Text style={styles.link}>{hi ? 'स्थायी रूप से हटाएँ' : 'Delete permanently'}</Text></Pressable>;
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   box: { gap: space[2], marginTop: space[3], padding: space[3], borderRadius: radius.sm, borderWidth: 1, borderColor: color.border },
   strong: { fontFamily: font.bodyBold, color: color.ink, fontSize: fontSize.sm },
   label: { fontFamily: font.bodySemiBold, color: color.ink, fontSize: fontSize.sm },

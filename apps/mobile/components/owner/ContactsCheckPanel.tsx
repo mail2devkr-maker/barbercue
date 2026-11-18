@@ -22,6 +22,7 @@ import { hasExpoNativeModule } from '../../lib/native-availability';
 import * as FileSystem from 'expo-file-system/legacy';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 import { Button, Card, InlineError } from '../ui';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 /**
  * Website parity for apps/web/components/owner/ContactListCheck.tsx (Contacts page): paste a phone
@@ -44,6 +45,7 @@ function loadDocumentPicker(): typeof DocumentPickerModule | null {
 }
 
 export function ContactsCheckPanel({ salonId }: { salonId: string }) {
+  const styles = useThemedStyles(makeStyles);
   const path = `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.contacts}/preview`;
   const [text, setText] = useState('');
   const [batch, setBatch] = useState<BatchConsent>({ attested: false, source: 'OWNER_ATTESTED', date: todayIso() });
@@ -222,7 +224,7 @@ export function ContactsCheckPanel({ salonId }: { salonId: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   fileError: { fontFamily: font.bodyMedium, color: color.ink, fontSize: fontSize.sm, marginVertical: space[1] },
   heading: { fontFamily: font.bodyBold, color: color.ink, fontSize: fontSize.base, marginVertical: space[1] },
   label: { fontFamily: font.bodyMedium, color: color.muted, fontSize: fontSize.xs, marginTop: space[2] },

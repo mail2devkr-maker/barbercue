@@ -1,6 +1,7 @@
 import { useMemo, type ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { createQrMatrix } from '../../lib/qr-poster';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 export interface QrCenterExcavation {
   /** Fraction of the full QR width (quiet zone included) cleared for the centre mark. */
@@ -47,6 +48,7 @@ export function QrMatrixView({
   /** Rendered over the excavated centre (for example the FastQue mark). */
   center?: ReactNode;
 }) {
+  const styles = useThemedStyles(makeStyles);
   const matrix = useMemo(() => createQrMatrix(value), [value]);
   const widthRatio = excavation?.widthRatio;
   const heightRatio = excavation?.heightRatio;
@@ -89,7 +91,7 @@ export function QrMatrixView({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (_tokens: ThemeTokens) => StyleSheet.create({
   frame: {
     maxWidth: '100%',
     aspectRatio: 1,

@@ -5,6 +5,7 @@ import { apiFetch, ApiError } from '../../lib/api';
 import { buildOfferBody, buildOfferPatch, canEditOffer, emptyOfferForm, formFromOffer, type OfferErrors, type OfferForm } from '../../lib/offers';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 import { Button, Card, EmptyState, InlineError } from '../ui';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 export type MobileOffersCopy = {
   noOffers: string;
@@ -72,6 +73,7 @@ export function OffersPanel({ enabled, items, busyId, onAction, timeZone, servic
   onSave: (offer: OfferDto | null, form: OfferForm, onErrors: (errors: OfferErrors) => void) => void;
   c: MobileOffersCopy;
 }) {
+  const styles = useThemedStyles(makeStyles);
   if (!enabled) return <EmptyState title={c.offersUnavailable} />;
   return <View style={styles.stack}>
     <Card>
@@ -115,6 +117,7 @@ function OfferEditor({ offer, base, timeZone, services, busy, onCancel, onSave, 
   onSave: (form: OfferForm, setErrors: (errors: OfferErrors) => void) => void;
   c: MobileOffersCopy;
 }) {
+  const styles = useThemedStyles(makeStyles);
   const [form, setForm] = useState<OfferForm>(() => offer ? formFromOffer(offer, timeZone) : emptyOfferForm(timeZone));
   const [errors, setErrors] = useState<OfferErrors>({});
   const [preview, setPreview] = useState<OfferPreviewDto | null>(null);
@@ -190,6 +193,7 @@ function Field({ label, value, onChange, error, placeholder, maxLength, multilin
   multiline?: boolean;
   keyboardType?: 'default' | 'decimal-pad' | 'number-pad';
 }) {
+  const styles = useThemedStyles(makeStyles);
   return <View style={styles.field}>
     <Text style={styles.lineStrong}>{label}</Text>
     <TextInput accessibilityLabel={label} placeholder={placeholder ?? label} value={value} onChangeText={onChange} maxLength={maxLength} multiline={multiline} keyboardType={keyboardType} autoCapitalize="sentences" style={styles.input} />
@@ -198,6 +202,7 @@ function Field({ label, value, onChange, error, placeholder, maxLength, multilin
 }
 
 function ChoiceRow({ label, value, choices, onSelect }: { label: string; value: string; choices: Array<[string, string]>; onSelect: (value: string) => void }) {
+  const styles = useThemedStyles(makeStyles);
   return <View style={styles.choiceGroup}>
     <Text style={styles.lineStrong}>{label}</Text>
     <View style={styles.choiceRow}>{choices.map(([key, title]) => <Pressable key={key} accessibilityRole="button" accessibilityState={{ selected: value === key }} onPress={() => onSelect(key)} style={[styles.choice, value === key && styles.choiceSelected]}>
@@ -207,6 +212,7 @@ function ChoiceRow({ label, value, choices, onSelect }: { label: string; value: 
 }
 
 function SavedOfferPreview({ offer, services, timeZone, base, c }: { offer: OfferDto; services: SalonServiceDto[]; timeZone: string | null; base: string; c: MobileOffersCopy }) {
+  const styles = useThemedStyles(makeStyles);
   const [preview, setPreview] = useState<OfferPreviewDto | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -231,6 +237,7 @@ function SavedOfferPreview({ offer, services, timeZone, base, c }: { offer: Offe
 }
 
 function PricePreview({ preview, c, note }: { preview: OfferPreviewDto; c: MobileOffersCopy; note?: string }) {
+  const styles = useThemedStyles(makeStyles);
   return <Card style={styles.preview}>
     <Text style={styles.heading}>{c.previewPrices}</Text>
     <Text style={styles.muted}>{c.offerSafetyNote}</Text>
@@ -256,7 +263,7 @@ function dateLabel(value: string, timeZone: string | null): string {
   catch { return date.toLocaleString(); }
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   stack: { gap: space[3] },
   heading: { fontFamily: font.bodyBold, color: color.ink, fontSize: fontSize.base, marginBottom: space[2] },
   line: { fontFamily: font.bodyRegular, color: color.ink, fontSize: fontSize.sm, marginVertical: space[1] },

@@ -24,6 +24,7 @@ import {
 } from '../../lib/demo-workspace-web';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 import { Button, Card, InlineError } from '../ui';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 /**
  * Website parity for apps/web/components/owner/DemoWorkspace.tsx and DemoDashboard.tsx: sample data in
@@ -32,6 +33,7 @@ import { Button, Card, InlineError } from '../ui';
  * customers, bookings, revenue or reports. Shown only where the server reports demoData as usable.
  */
 export function DemoWorkspacePanel({ salonId }: { salonId: string }) {
+  const styles = useThemedStyles(makeStyles);
   const root = `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}`;
   const base = `${root}/demo`;
   const [caps, setCaps] = useState<CapabilityMap | null | undefined>(undefined);
@@ -160,6 +162,7 @@ export function DemoWorkspacePanel({ salonId }: { salonId: string }) {
 }
 
 function DemoViewer({ view }: { view: DemoView }) {
+  const styles = useThemedStyles(makeStyles);
   const money = (minor: number) => minorText(minor, view.currency);
   return (
     <Card>
@@ -176,7 +179,7 @@ function DemoViewer({ view }: { view: DemoView }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   heading: { fontFamily: font.bodyBold, color: color.ink, fontSize: fontSize.base, marginBottom: space[1] },
   sub: { fontFamily: font.bodySemiBold, color: color.ink, fontSize: fontSize.sm, marginTop: space[3] },
   muted: { fontFamily: font.bodyRegular, color: color.muted, fontSize: fontSize.xs, marginVertical: space[1] },

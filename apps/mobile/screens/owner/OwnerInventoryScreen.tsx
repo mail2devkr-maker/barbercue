@@ -25,6 +25,7 @@ import { useSalon } from '../../lib/salon-context';
 import { useLanguage } from '../../lib/language-context';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 import { Button, Card, EmptyState, InlineError, Screen, SectionHeader, Skeleton } from '../../components/ui';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 const COPY = {
   en: {
@@ -75,6 +76,7 @@ function errorMessage(error: unknown, fallback: string): string {
 }
 
 export default function OwnerInventoryScreen() {
+  const styles = useThemedStyles(makeStyles);
   const { selectedSalonId } = useSalon();
   const { language } = useLanguage();
   const copy = COPY[language === Language.HI ? 'hi' : 'en'];
@@ -407,7 +409,7 @@ export default function OwnerInventoryScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color, surface }: ThemeTokens) => StyleSheet.create({
   content: { padding: space[5] },
   skeleton: { height: 110, borderRadius: radius.lg, marginBottom: space[3] },
   metrics: { gap: space[3], marginBottom: space[4] },
@@ -417,7 +419,7 @@ const styles = StyleSheet.create({
   form: { marginBottom: space[4] },
   sectionTitle: { color: color.ink, fontFamily: font.bodyBold, fontSize: fontSize.base, marginBottom: space[3] },
   label: { color: color.ink, fontFamily: font.bodyMedium, fontSize: fontSize.sm, marginBottom: space[2] },
-  input: { minHeight: 48, borderWidth: 1, borderColor: color.border, borderRadius: radius.sm, paddingHorizontal: space[3], marginBottom: space[3], color: color.ink, backgroundColor: '#fff' },
+  input: { minHeight: 48, borderWidth: 1, borderColor: color.border, borderRadius: radius.sm, paddingHorizontal: space[3], marginBottom: space[3], color: color.ink, backgroundColor: surface.card },
   wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2], marginBottom: space[3] },
   choice: { minHeight: 40, paddingHorizontal: space[3] },
   action: { marginTop: space[3] },
@@ -430,7 +432,7 @@ const styles = StyleSheet.create({
   productName: { color: color.ink, fontFamily: font.bodyBold, fontSize: fontSize.base },
   meta: { color: color.muted, fontFamily: font.bodyRegular, fontSize: fontSize.xs, marginTop: space[1] },
   stock: { color: color.ink, fontFamily: font.bodyMedium, fontSize: fontSize.sm, marginTop: space[2] },
-  lowBadge: { color: '#8f302d', backgroundColor: color.accentSoft, borderRadius: radius.sm, overflow: 'hidden', paddingHorizontal: space[2], paddingVertical: space[1], fontFamily: font.bodyBold, fontSize: fontSize.xs },
+  lowBadge: { color: surface.errorText, backgroundColor: color.accentSoft, borderRadius: radius.sm, overflow: 'hidden', paddingHorizontal: space[2], paddingVertical: space[1], fontFamily: font.bodyBold, fontSize: fontSize.xs },
   movementForm: { backgroundColor: color.surface, borderRadius: radius.md, padding: space[3], marginTop: space[3] },
   history: { backgroundColor: color.surface, borderRadius: radius.md, padding: space[3], marginTop: space[3] },
   historyRow: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: color.border, paddingVertical: space[2] },

@@ -12,6 +12,7 @@ import { apiFetch, ApiError } from '../../lib/api';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 import { Button, Card, InlineError } from '../ui';
 import { BookingActions, nextDays, shopDay } from './BookingActions';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 /**
  * Website parity for apps/web/components/dashboard/DayScheduler.tsx, laid out for a phone: ONE day of
@@ -49,6 +50,7 @@ export function DaySchedule({ salonId, timeZone, language, onOpenInvoice }: {
   language: Language;
   onOpenInvoice: (invoice: InvoiceDetailDto) => void;
 }) {
+  const styles = useThemedStyles(makeStyles);
   const hi = language === Language.HI;
   const [date, setDate] = useState(() => shopDay(new Date(), timeZone));
   const [staff, setStaff] = useState<SalonStaffDto[]>([]);
@@ -137,7 +139,7 @@ export function DaySchedule({ salonId, timeZone, language, onOpenInvoice }: {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   toolbar: { flexDirection: 'row', alignItems: 'center', gap: space[2], marginBottom: space[2] },
   navBtn: { flexShrink: 0 },
   dateBox: { flex: 1, alignItems: 'center' },

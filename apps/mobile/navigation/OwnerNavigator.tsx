@@ -24,7 +24,7 @@ import { navigationRef } from './navigation-ref';
 import { subscribeToOwnerBookingPushNavigation } from '../lib/push-navigation';
 import { subscribeQueueArrivalNavigation } from '../lib/queue-push-navigation';
 import { OwnerArrivalPromptCoordinator } from '../components/owner/OwnerArrivalPromptCoordinator';
-import { useThemedStyles, useThemeTokens, type ThemeTokens } from '../lib/theme-mode';
+import { statusBarStyleFor, useThemedStyles, useThemeTokens, type ThemeTokens } from '../lib/theme-mode';
 
 export type OwnerTabParamList = {
   OwnerDashboardTab: undefined;
@@ -105,6 +105,7 @@ function OwnerTabs() {
   // The app-wide status bar is light (white text) for the dark customer screens. Every owner tab
   // except the dark Dashboard sits on the cream surface with no header, so white clock/battery
   // icons were invisible there. Switch per focused tab; restore light when the owner shell closes.
+  const { resolved } = useThemeTokens();
   useEffect(() => () => setStatusBarStyle('light'), []);
   return (
     <>
@@ -112,7 +113,7 @@ function OwnerTabs() {
       // Owner (18 Nov): Back (the new in-app button and the phone's own) returns to the PREVIOUS tab.
       backBehavior="history"
       screenListeners={({ route }) => ({
-        focus: () => setStatusBarStyle(route.name === 'OwnerDashboardTab' ? 'light' : 'dark'),
+        focus: () => setStatusBarStyle(statusBarStyleFor(resolved, route.name === 'OwnerDashboardTab' ? 'light' : 'dark')),
       })}
       screenOptions={{
         headerShown: false,

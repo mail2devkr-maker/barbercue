@@ -1,5 +1,5 @@
 import { color, fastQue } from '../theme';
-import { colorOnDark, fastQueOnLight, resolveTheme, themedStyles, tokensFor } from '../theme-mode';
+import { colorOnDark, fastQueOnLight, resolveTheme, statusBarStyleFor, themedStyles, tokensFor } from '../theme-mode';
 
 describe('theme foundation', () => {
   it('each twin palette has exactly the same keys as the palette it mirrors', () => {
@@ -38,5 +38,12 @@ describe('theme foundation', () => {
     expect(a).not.toBe(c);
     expect(factory).toHaveBeenCalledTimes(2);
     expect((a as { text: { color: string } }).text.color).toBe(colorOnDark.ink);
+  });
+
+  it('keeps the clock and battery readable: designed per screen, dark text in Light, light text in Dark', () => {
+    expect(statusBarStyleFor('designed', 'light')).toBe('light');
+    expect(statusBarStyleFor('designed', 'dark')).toBe('dark');
+    expect(statusBarStyleFor('light', 'light')).toBe('dark');
+    expect(statusBarStyleFor('dark', 'dark')).toBe('light');
   });
 });

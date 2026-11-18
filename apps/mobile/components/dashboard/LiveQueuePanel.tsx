@@ -25,6 +25,7 @@ import { ServiceUsageSheet } from '../owner/ServiceUsageSheet';
 import type { UiStrings } from '@barbercue/shared';
 import { ChairModeRow, type ChairOccupancy } from './ChairModeRow';
 import { AddOnServicesRow, visitServiceLabel } from './AddOnServicesRow';
+import { useThemedStyles, useThemeTokens, type ThemeTokens } from '../../lib/theme-mode';
 
 function dashboardBase(salonId: string): string {
   return `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.queue}`;
@@ -68,6 +69,7 @@ function EntryRow({
   services: ServiceOptionDto[];
   onAction: () => void;
 }) {
+  const styles = useThemedStyles(makeStyles);
   const { t, language } = useLanguage();
   const [assigning, setAssigning] = useState(false);
   // Part 7 — an appointment booked with a specific barber locks normal assignment to that barber
@@ -302,6 +304,8 @@ export const LiveQueuePanel = forwardRef<LiveQueuePanelHandle, { salonId: string
   { salonId, ownerTools = false },
   ref,
 ) {
+  const { color } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const { t, language } = useLanguage();
   const hi = language === Language.HI;
   const [data, setData] = useState<DashboardQueueDto | null>(null);
@@ -605,7 +609,7 @@ export const LiveQueuePanel = forwardRef<LiveQueuePanelHandle, { salonId: string
 
 type QueueView = 'active' | 'completed' | 'noShow' | 'history';
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   bufferBox: { marginBottom: space[3], gap: space[2] },
   tabRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2], marginBottom: space[3] },
   skeleton: { height: 100, borderRadius: radius.lg, marginBottom: space[3] },

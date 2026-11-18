@@ -3,6 +3,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useOnlineStatus } from '../lib/network-status';
 import { useLanguage } from '../lib/language-context';
 import { color, font, fontSize, space } from '../lib/theme';
+import { useThemedStyles, type ThemeTokens } from '../lib/theme-mode';
 
 /**
  * Phase 15 (Low-Network / Resilience Mode). Mounted once, app-wide, in App.tsx above every
@@ -12,6 +13,7 @@ import { color, font, fontSize, space } from '../lib/theme';
  * NETWORK_OFFLINE message on individual failed requests in the meantime.
  */
 export function OfflineBanner() {
+  const styles = useThemedStyles(makeStyles);
   const online = useOnlineStatus();
   const insets = useSafeAreaInsets();
   const { t } = useLanguage();
@@ -23,7 +25,7 @@ export function OfflineBanner() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   bar: {
     backgroundColor: color.warn,
     paddingBottom: space[2],

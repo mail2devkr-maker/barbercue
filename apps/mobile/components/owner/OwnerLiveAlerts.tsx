@@ -10,6 +10,7 @@ import { useSalon } from '../../lib/salon-context';
 import { speakBooking } from '../../lib/voice-announce';
 import { navigationRef } from '../../navigation/navigation-ref';
 import { fastQue, font, fontSize, radius, space } from '../../lib/theme';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 /** Realtime payload for a new Live Queue join (backend `queue.entry.joined`). Ids + token only. */
 export interface QueueJoinedPayload {
@@ -40,6 +41,7 @@ function currentRouteName(): string | undefined {
  * in the background or closed, the OS push sent by the backend carries the alert instead.
  */
 export function OwnerLiveAlerts() {
+  const styles = useThemedStyles(makeStyles);
   const { selectedSalonId } = useSalon();
   const { language } = useLanguage();
   const insets = useSafeAreaInsets();
@@ -144,7 +146,7 @@ export function OwnerLiveAlerts() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ fastQue }: ThemeTokens) => StyleSheet.create({
   layer: { position: 'absolute', left: space[3], right: space[3], zIndex: 50, elevation: 50 },
   banner: {
     flexDirection: 'row',

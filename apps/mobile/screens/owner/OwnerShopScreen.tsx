@@ -30,7 +30,7 @@ import {
   PhotosSection,
   PaymentQrSection,
   EditStaffProfile,
-  styles as sectionStyles,
+  useSectionStyles,
 } from '../../components/owner/ShopSetupSections';
 import { StaffWorkingHoursEditor } from '../../components/owner/StaffWorkingHoursEditor';
 import { canPermanentlyDelete, StaffManageActions } from '../../components/owner/StaffAdmin';
@@ -40,11 +40,14 @@ import { ServiceCategoryManager } from '../../components/owner/ServiceCategoryMa
 import { useAuth } from '../../lib/auth-context';
 import type { OwnerShopStackParamList } from '../../navigation/OwnerShopStack';
 import { TabBackButton } from '../../components/TabBackButton';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 // Owner's day-to-day shop management (post-onboarding). Every form here is shared with
 // OwnerOnboardingScreen (Mobile Shop Owner Onboarding mission) via ShopSetupSections — this
 // screen only composes them for an already-established shop, it does not own their logic.
 export default function OwnerShopScreen() {
+  const sectionStyles = useSectionStyles();
+  const styles = useThemedStyles(makeStyles);
   const navigation = useNavigation<NativeStackNavigationProp<OwnerShopStackParamList>>();
   const { selectedSalonId, selectedSalon } = useSalon();
   const { t, language } = useLanguage();
@@ -240,7 +243,7 @@ export default function OwnerShopScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (_tokens: ThemeTokens) => StyleSheet.create({
   screenContent: { padding: space[5] },
   skeleton: { height: 100, borderRadius: radius.lg, marginBottom: space[3] },
 });
