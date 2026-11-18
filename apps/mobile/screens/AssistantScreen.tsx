@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { AppState, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { readResults, VoiceConversation, type Heard, type RecognizerLike, type TurnOutcome, type VoiceSnapshot } from '../lib/voice-conversation';
-import { createNativeRecognizer, ensureVoicePermission, VOICE_LANGS, voiceRecognitionAvailable, type VoiceLang } from '../lib/native-voice';
+import { createNativeRecognizer, requestVoicePermission, VOICE_LANGS, voiceModulePresent, voiceRecognitionAvailable, type VoiceLang } from '../lib/native-voice';
 import { createNativeSpeaker, SPEAK_FAILURE_TEXT } from '../lib/speech-output';
 import * as Speech from 'expo-speech';
 import {
@@ -106,6 +106,8 @@ export default function AssistantScreen({ route }: { route?: { params?: Assistan
   const [listeningOnce, setListeningOnce] = useState(false);
   const [pushInterim, setPushInterim] = useState('');
   const [pushSpeechError, setPushSpeechError] = useState<string | null>(null);
+  const [voiceStarting, setVoiceStarting] = useState(false);
+  const [voiceStartError, setVoiceStartError] = useState<string | null>(null);
   const [speakerChecked, setSpeakerChecked] = useState<boolean | null>(null);
   const [voiceSettingsOpen, setVoiceSettingsOpen] = useState(false);
   const pushRecognizer = useRef<RecognizerLike | null>(null);
@@ -257,20 +259,42 @@ export default function AssistantScreen({ route }: { route?: { params?: Assistan
     return () => sub.remove();
   }, [conversation]);
 
+  // Owner report (18 Nov): "Start voice conversation does nothing". Every start now shows
+  // "Starting…" at once, and any problem is written right under the voice button (not only at the
+  // top of the screen), naming the real cause.
   async function withVoicePermission(): Promise<boolean> {
-    if (!voiceRecognitionAvailable()) {
-      setError('Speech recognition is not available on this phone. You can type instead.');
+    setVoiceStartError(null);
+    if (!voiceModulePresent()) {
+      setVoiceStartError('This version of the FastQue app does not include voice yet. Update FastQue from the Play Store / App Store, or type instead.');
       return false;
     }
-    const ok = await ensureVoicePermission();
-    if (!ok) setError('Microphone permission is off for FastQue. Allow it in the phone settings to talk, or type instead.');
-    return ok;
+    const permission = await requestVoicePermission();
+    if (permission === 'timeout') {
+      setVoiceStartError('The microphone permission did not answer. Tap again, or allow the microphone for FastQue in the phone settings.');
+      return false;
+    }
+    if (permission !== 'granted') {
+      setVoiceStartError('Microphone permission is off for FastQue. Allow it in the phone settings to talk, or type instead.');
+      return false;
+    }
+    // Some phones report "no speech service" although one works: try anyway and only warn. A real
+    // failure then arrives from the recognizer itself and is shown below the button.
+    if (!voiceRecognitionAvailable()) {
+      setVoiceStartError('Your phone reports no speech service (Google speech services may be off). Trying anyway…');
+    }
+    return true;
   }
 
   async function startConversation() {
-    if (!(await withVoicePermission())) return;
-    speaker.cancel();
-    conversation.start(voiceLang);
+    if (voiceStarting) return;
+    setVoiceStarting(true);
+    try {
+      if (!(await withVoicePermission())) return;
+      speaker.cancel();
+      conversation.start(voiceLang);
+    } finally {
+      setVoiceStarting(false);
+    }
   }
 
   /** Push-to-talk: one phrase per tap, sent once, then (optionally) the reply is spoken. */
@@ -433,7 +457,11 @@ export default function AssistantScreen({ route }: { route?: { params?: Assistan
             ) : null}
             <View style={styles.voicePanel}>
               {!inConversation ? (
-                <PremiumButton title="🎤  Start voice conversation" onPress={() => void startConversation()} disabled={sending || listeningOnce} />
+                <PremiumButton
+                  title={voiceStarting ? 'Starting…' : '🎤  Start voice conversation'}
+                  onPress={() => void startConversation()}
+                  disabled={sending || listeningOnce || voiceStarting}
+                />
               ) : (
                 <View style={styles.voiceLive} accessibilityLiveRegion="polite">
                   <Text style={styles.voiceState}>{voice.state === 'listening' && voice.ready ? 'Speak now' : VOICE_STATE_TEXT[voice.state]}</Text>
@@ -450,6 +478,7 @@ export default function AssistantScreen({ route }: { route?: { params?: Assistan
               {voice.state === 'error' && voice.note ? <Text accessibilityRole="alert" style={styles.error}>{voice.note}</Text> : null}
               {voice.speechError ? <Text accessibilityRole="alert" style={styles.error}>{voice.speechError}</Text> : null}
               {pushSpeechError ? <Text accessibilityRole="alert" style={styles.error}>{pushSpeechError}</Text> : null}
+              {voiceStartError ? <Text accessibilityRole="alert" style={styles.error}>{voiceStartError}</Text> : null}
               <Pressable accessibilityRole="button" onPress={() => setVoiceSettingsOpen((v) => !v)} style={styles.voiceLink}>
                 <Text style={styles.listenText}>{voiceSettingsOpen ? 'Hide voice settings' : 'Voice settings & speaker test'}</Text>
               </Pressable>

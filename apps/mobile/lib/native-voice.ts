@@ -93,16 +93,45 @@ export function createNativeRecognizer(module: Module | null = speechModule()): 
   return recognizer;
 }
 
-/** Microphone + speech-recognition permission, asked only after the user tapped a voice button. */
-export async function ensureVoicePermission(): Promise<boolean> {
+/** Whether this installed app binary contains the phone speech module at all (OTA safety). */
+export function voiceModulePresent(): boolean {
+  return speechModule() !== null;
+}
+
+/** How long the permission prompt may take before the Assistant stops waiting (never a stuck button). */
+export const VOICE_PERMISSION_TIMEOUT_MS = 30_000;
+
+export type VoicePermission = 'granted' | 'denied' | 'missing-module' | 'timeout';
+
+/**
+ * Microphone + speech-recognition permission, asked only after the user tapped a voice button.
+ * Owner report (18 Nov): "Start voice conversation does nothing" — every outcome is now named, and a
+ * prompt that never answers ends after VOICE_PERMISSION_TIMEOUT_MS instead of leaving the tap silent.
+ */
+export async function requestVoicePermission(
+  timeoutMs: number = VOICE_PERMISSION_TIMEOUT_MS,
+  native: Pick<typeof SpeechModule, 'requestPermissionsAsync'> | null = speechModule(),
+): Promise<VoicePermission> {
+  if (!native) return 'missing-module';
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    const native = speechModule();
-    if (!native) return false;
-    const result = await native.requestPermissionsAsync();
-    return result.granted === true;
+    const timeout = new Promise<'timeout'>((resolve) => {
+      timer = setTimeout(() => resolve('timeout'), timeoutMs);
+    });
+    const asked = native
+      .requestPermissionsAsync()
+      .then((result): VoicePermission => (result.granted === true ? 'granted' : 'denied'));
+    return await Promise.race([asked, timeout]);
   } catch {
-    return false;
+    return 'denied';
+  } finally {
+    if (timer) clearTimeout(timer);
   }
+}
+
+/** Microphone + speech-recognition permission (true only when granted). */
+export async function ensureVoicePermission(): Promise<boolean> {
+  return (await requestVoicePermission()) === 'granted';
 }
 
 export function voiceRecognitionAvailable(): boolean {
