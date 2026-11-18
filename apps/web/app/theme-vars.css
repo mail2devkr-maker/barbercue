@@ -151,6 +151,8 @@ html[data-theme="light"] {
   --tv-fg-rgba-255-255-255-a0_96: rgba(28, 26, 23, 0.96);
 }
 html[data-theme="dark"] {
+  --background: #09090c;
+  --foreground: #f7f5f4;
   --tv-bg-8a8088: #80767e;
   --tv-bg-98a2b3: #4f5a6b;
   --tv-bg-9d6572: #9a626f;
