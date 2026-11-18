@@ -32,7 +32,7 @@ import { Screen, SectionHeader, Card, Button, EmptyState, Skeleton, InlineError 
 import type { OwnerTabParamList } from '../../navigation/OwnerNavigator';
 import type { OwnerShopStackParamList } from '../../navigation/OwnerShopStack';
 import { TabBackButton } from '../../components/TabBackButton';
-import { useThemedStyles, useThemeTokens, type ThemeTokens } from '../../lib/theme-mode';
+import { ON_ACCENT, useThemedStyles, useThemeTokens, type ThemeTokens } from '../../lib/theme-mode';
 
 type Props = BottomTabScreenProps<OwnerTabParamList, 'OwnerBookingsTab'>;
 
@@ -510,7 +510,7 @@ const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   cardHeadRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   cardHeadText: { flex: 1, paddingRight: space[2] },
   serviceName: { fontFamily: font.displaySemiBold, fontSize: fontSize.base, lineHeight: lineHeightFor(fontSize.base), color: color.ink },
-  newBadge: { fontFamily: font.bodyBold, fontSize: 10, color: color.surface, backgroundColor: '#2e7d32' },
+  newBadge: { fontFamily: font.bodyBold, fontSize: 10, color: ON_ACCENT, backgroundColor: '#2e7d32' },
   meta: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, lineHeight: lineHeightFor(fontSize.sm), color: color.muted, marginTop: 2 },
   statusBadge: {
     fontFamily: font.bodyBold,

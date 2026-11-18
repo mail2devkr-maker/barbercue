@@ -18,7 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useKeyboardAwareScroll } from '../../lib/keyboard-aware';
 import { fastQue, font, fontSize, lineHeightFor, premiumShadow, radius, space } from '../../lib/theme';
 import { GradientView } from './GradientView';
-import { useThemedStyles, useThemeTokens, type ThemeTokens } from '../../lib/theme-mode';
+import { ON_ACCENT, useThemedStyles, useThemeTokens, type ThemeTokens } from '../../lib/theme-mode';
 
 export function PremiumScreen({
   children,
@@ -82,7 +82,7 @@ export function PremiumButton({ title, onPress, variant = 'primary', loading, di
   const { fastQue } = useThemeTokens();
   const styles = useThemedStyles(makeStyles);
   const inactive = Boolean(loading || disabled);
-  const content = loading ? <ActivityIndicator color={fastQue.text} /> : <Text style={[styles.buttonText, variant !== 'primary' && styles.secondaryButtonText]}>{title}</Text>;
+  const content = loading ? <ActivityIndicator color={variant === 'primary' ? ON_ACCENT : fastQue.text} /> : <Text style={[styles.buttonText, variant !== 'primary' && styles.secondaryButtonText]}>{title}</Text>;
   return (
     <Pressable onPress={onPress} disabled={inactive} accessibilityRole="button" style={({ pressed }) => [styles.buttonHit, inactive && styles.disabled, pressed && styles.pressed, style]}>
       {variant === 'primary' ? (
@@ -115,7 +115,8 @@ const makeStyles = ({ fastQue }: ThemeTokens) => StyleSheet.create({
   primaryButton: { flex: 1, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, paddingHorizontal: space[4] },
   secondaryButton: { flex: 1, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, borderWidth: 1, borderColor: fastQue.borderStrong, backgroundColor: fastQue.glassStrong, paddingHorizontal: space[4] },
   quietButton: { borderColor: fastQue.border, backgroundColor: 'transparent' },
-  buttonText: { color: fastQue.text, fontFamily: font.bodyBold, fontSize: fontSize.base, lineHeight: lineHeightFor(fontSize.base) },
+  // Primary text sits on the brand gradient: light in every theme. Other variants override it below.
+  buttonText: { color: ON_ACCENT, fontFamily: font.bodyBold, fontSize: fontSize.base, lineHeight: lineHeightFor(fontSize.base) },
   secondaryButtonText: { color: fastQue.textSecondary },
   disabled: { opacity: 0.55 },
   pressed: { opacity: 0.82 },

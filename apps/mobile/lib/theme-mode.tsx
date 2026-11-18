@@ -67,6 +67,13 @@ export const fastQueOnLight: DarkTokens = {
   glassStrong: 'rgba(255,253,249,0.96)',
 };
 
+/**
+ * Text and icons drawn ON a photo, the brand gradient or a coloured pill/button. The designs used the
+ * cream background colour (`color.surface`) for this; it must stay light in every theme, so it is a
+ * constant (exactly the designed cream).
+ */
+export const ON_ACCENT = '#fffdf9';
+
 /** Surfaces that were hard-coded hex values in components (e.g. Card's white). */
 export interface SurfaceTokens {
   /** A card on a light-designed screen (#ffffff by design). */

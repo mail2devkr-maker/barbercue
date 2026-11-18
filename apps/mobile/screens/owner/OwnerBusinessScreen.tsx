@@ -33,7 +33,7 @@ import { useLanguage } from '../../lib/language-context';
 import { useSalon } from '../../lib/salon-context';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 import { Button, Card, EmptyState, InlineError, Screen, SectionHeader } from '../../components/ui';
-import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
+import { ON_ACCENT, useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 type Panel = 'analytics' | 'report' | 'sources' | 'team' | 'contacts' | 'demo' | 'cancellations' | 'invoices' | 'payments' | 'reviews' | 'offers' | 'verification';
 type OfferPage = { items: OfferDto[]; nextCursor: string | null };
@@ -508,7 +508,7 @@ const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   tab: { borderWidth: 1, borderColor: color.border, borderRadius: radius.sm, paddingHorizontal: space[3], paddingVertical: space[2], backgroundColor: color.surface },
   tabSelected: { backgroundColor: color.ink, borderColor: color.ink },
   tabText: { color: color.ink, fontFamily: font.bodySemiBold, fontSize: fontSize.xs },
-  tabTextSelected: { color: color.surface },
+  tabTextSelected: { color: ON_ACCENT },
   rangeRow: { flexDirection: 'row', gap: space[2] },
   range: { borderWidth: 1, borderColor: color.border, borderRadius: 16, paddingHorizontal: space[3], paddingVertical: space[2] },
   rangeSelected: { borderColor: color.accent, backgroundColor: color.accentSoft },
