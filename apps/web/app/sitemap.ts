@@ -18,6 +18,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const entries: MetadataRoute.Sitemap = [
     { url: SITE_URL, lastModified: now, changeFrequency: "daily", priority: 1 },
     { url: `${SITE_URL}/search`, lastModified: now, changeFrequency: "weekly", priority: 0.5 },
+    { url: `${SITE_URL}/shop`, lastModified: now, changeFrequency: "daily", priority: 0.8 },
+    { url: `${SITE_URL}/shop/browse`, lastModified: now, changeFrequency: "daily", priority: 0.6 },
     { url: `${SITE_URL}/about-us`, lastModified: now, changeFrequency: "monthly", priority: 0.5 },
     { url: `${SITE_URL}/contact-us`, lastModified: now, changeFrequency: "monthly", priority: 0.5 },
     { url: `${SITE_URL}/careers`, lastModified: now, changeFrequency: "weekly", priority: 0.6 },
@@ -26,6 +28,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${SITE_URL}/privacy-policy`, lastModified: now, changeFrequency: "yearly", priority: 0.3 },
     { url: `${SITE_URL}/account-deletion`, lastModified: now, changeFrequency: "yearly", priority: 0.3 },
   ];
+
+  // Marketplace product pages: verified, public, non-test products only (decided by the backend).
+  try {
+    const products = await fetchDiscovery<Array<{ id: string; updatedAt: string }>>("shop/sitemap-products", revalidate);
+    for (const p of products)
+      entries.push({ url: `${SITE_URL}/shop/p/${p.id}`, lastModified: new Date(p.updatedAt), changeFrequency: "daily", priority: 0.5 });
+  } catch {
+    // Shop unavailable: keep the rest of the sitemap.
+  }
 
   let cities: CityDto[] = [];
   try {

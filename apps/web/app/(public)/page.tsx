@@ -153,6 +153,10 @@ export default async function HomePage() {
                 </span>
               </p>
             )}
+            <Link href="/shop" className={styles.glowShopLink}>
+              <span aria-hidden="true">✨</span> Marketplace <span className={styles.glowShopNew}>New</span>
+              <span className={styles.glowShopSub}>Beauty from salons near you · no login needed</span>
+            </Link>
             <p className={styles.ownerPrompt}>
               Run a barbershop? <Link href="/owner/register">Register your shop</Link>
             </p>
@@ -423,6 +427,7 @@ export default async function HomePage() {
           <p>Find a barbershop and choose the way you want to walk in.</p>
           <div className={styles.finalActions}>
             <Link href="/search" className={styles.finalPrimary}>Find a barber</Link>
+            <Link href="/shop" className={styles.finalSecondary}>✨ Marketplace</Link>
             <Link href="/login" className={styles.finalSecondary}>Sign in</Link>
           </div>
         </div>

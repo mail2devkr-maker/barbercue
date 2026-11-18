@@ -248,6 +248,41 @@ enum InventoryUploadIssueSeverity {
   REVIEW
 }
 
+enum ShopListingStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  PAUSED
+}
+
+enum ShopOrderStatus {
+  PLACED
+  ACCEPTED
+  PREPARING
+  READY_FOR_PICKUP
+  COMPLETED
+  CANCELLED
+  EXPIRED
+}
+
+enum ShopFulfillment {
+  PICKUP
+  DELIVERY
+}
+
+enum ShopPaymentMethod {
+  PAY_AT_SALON
+  ONLINE
+}
+
+enum ShopPaymentStatus {
+  UNPAID
+  PAID_AT_SALON
+  PAID_ONLINE
+  REFUNDED
+}
+
 enum CatalogChangeRequestStatus {
   OPEN
   RESOLVED
@@ -506,6 +541,10 @@ model User {
   inventoryUploadJobs    InventoryUploadJob[]
   catalogChangeRequests  CatalogChangeRequest[] @relation("CatalogChangeRequester")
   catalogChangeResolved  CatalogChangeRequest[] @relation("CatalogChangeResolver")
+  shopListingsReviewed   ShopListing[]          @relation("ShopListingReviewer")
+  shopOrders             ShopOrder[]            @relation("ShopOrderCustomer")
+  shopOrderEvents        ShopOrderEvent[]
+  shopWishlist           ShopWishlistItem[]
   serviceUsagesRecorded  ServiceUsage[]  @relation("ServiceUsageRecordedBy")
   serviceUsagesReversed  ServiceUsage[]  @relation("ServiceUsageReversedBy")
   otpRequests                   OtpRequest[]             @relation("OtpRequestSubject")
@@ -1075,6 +1114,8 @@ model Salon {
   globalProductSubmissions GlobalProduct[] @relation("GlobalProductSubmissions")
   shopCatalogProducts      GlobalProduct[] @relation("GlobalProductOwnerSalon")
   catalogChangeRequests    CatalogChangeRequest[]
+  shopListings             ShopListing[]
+  shopOrders               ShopOrder[]
   serviceProductRules      ServiceProductRule[]
   serviceUsages            ServiceUsage[]
   inventorySettings        InventorySettings?
@@ -2182,6 +2223,8 @@ model InventoryProduct {
   contentUnit          InventoryUnit?
 
   movements         InventoryMovement[]
+  shopListing       ShopListing?
+  shopOrderItems    ShopOrderItem[]
   recipeDefaults    ServiceProductRule[]
   serviceUsageItems ServiceUsageItem[]
   alerts            InventoryAlert[]
@@ -2285,6 +2328,9 @@ model GlobalProduct {
   images            GlobalProductImage[]
   inventoryProducts InventoryProduct[]
   changeRequests    CatalogChangeRequest[]
+  shopListings      ShopListing[]
+  shopOrderItems    ShopOrderItem[]
+  wishlistedBy      ShopWishlistItem[]
 
   @@index([verificationStatus, createdAt])
   @@index([normalizedName])
@@ -2406,6 +2452,135 @@ model CatalogChangeRequest {
   @@index([status, createdAt])
   @@index([salonId, createdAt])
   @@map("catalog_change_requests")
+}
+
+// ---------- FastQue Marketplace ----------
+// A salon sells one of ITS inventory products (which must be linked to a master catalog product).
+// Listing ≠ stock: quantities always come from inventory_products; an order reserves stock while it
+// is open and the sale leaves stock through the normal ledger when the customer collects it.
+model ShopListing {
+  id                 String            @id @default(uuid()) @db.Uuid
+  salonId            String
+  salon              Salon             @relation(fields: [salonId], references: [id], onDelete: Restrict)
+  inventoryProductId String            @unique
+  inventoryProduct   InventoryProduct  @relation(fields: [inventoryProductId], references: [id], onDelete: Restrict)
+  globalProductId    String
+  globalProduct      GlobalProduct     @relation(fields: [globalProductId], references: [id], onDelete: Restrict)
+  price              Decimal           @db.Decimal(12, 2)
+  compareAtPrice     Decimal?          @db.Decimal(12, 2)
+  pickupEnabled      Boolean           @default(true)
+  deliveryEnabled    Boolean           @default(false)
+  maxPerOrder        Int               @default(5)
+  status             ShopListingStatus @default(PENDING_APPROVAL)
+  reviewNote         String?           @db.VarChar(300)
+  reviewedByUserId   String?
+  reviewedBy         User?             @relation("ShopListingReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  reviewedAt         DateTime?         @db.Timestamptz(6)
+  createdAt          DateTime          @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime          @updatedAt @db.Timestamptz(6)
+
+  orderItems ShopOrderItem[]
+
+  @@index([globalProductId, status])
+  @@index([salonId, status])
+  @@index([status, updatedAt])
+  @@map("shop_listings")
+}
+
+model ShopOrder {
+  id               String             @id @default(uuid()) @db.Uuid
+  orderNumber      String             @unique @db.VarChar(20)
+  salonId          String
+  salon            Salon              @relation(fields: [salonId], references: [id], onDelete: Restrict)
+  customerUserId   String?
+  customer         User?              @relation("ShopOrderCustomer", fields: [customerUserId], references: [id], onDelete: SetNull)
+  contactName      String             @db.VarChar(120)
+  contactPhone     String             @db.VarChar(20)
+  contactEmail     String?            @db.VarChar(254)
+  note             String?            @db.VarChar(300)
+  // SHA-256 of the secret in a guest's order link; the secret itself is never stored.
+  accessTokenHash  String             @db.VarChar(64)
+  idempotencyKey   String             @unique @db.VarChar(128)
+  status           ShopOrderStatus    @default(PLACED)
+  fulfillment      ShopFulfillment    @default(PICKUP)
+  paymentMethod    ShopPaymentMethod  @default(PAY_AT_SALON)
+  paymentStatus    ShopPaymentStatus  @default(UNPAID)
+  currency         String             @default("INR") @db.VarChar(3)
+  subtotal         Decimal            @db.Decimal(12, 2)
+  discountTotal    Decimal            @default(0) @db.Decimal(12, 2)
+  total            Decimal            @db.Decimal(12, 2)
+  // A PLACED order the salon has not accepted by then stops holding stock and expires.
+  acceptBy         DateTime           @db.Timestamptz(6)
+  placedAt         DateTime           @default(now()) @db.Timestamptz(6)
+  acceptedAt       DateTime?          @db.Timestamptz(6)
+  readyAt          DateTime?          @db.Timestamptz(6)
+  completedAt      DateTime?          @db.Timestamptz(6)
+  cancelledAt      DateTime?          @db.Timestamptz(6)
+  cancelReason     String?            @db.VarChar(300)
+  updatedAt        DateTime           @updatedAt @db.Timestamptz(6)
+
+  items  ShopOrderItem[]
+  events ShopOrderEvent[]
+
+  @@index([salonId, status, placedAt])
+  @@index([customerUserId, placedAt])
+  @@index([status, acceptBy])
+  @@map("shop_orders")
+}
+
+// Snapshot of what was bought: later listing/catalog edits never change a past order.
+model ShopOrderItem {
+  id                 String           @id @default(uuid()) @db.Uuid
+  orderId            String           @db.Uuid
+  order              ShopOrder        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  listingId          String           @db.Uuid
+  listing            ShopListing      @relation(fields: [listingId], references: [id], onDelete: Restrict)
+  inventoryProductId String
+  inventoryProduct   InventoryProduct @relation(fields: [inventoryProductId], references: [id], onDelete: Restrict)
+  globalProductId    String
+  globalProduct      GlobalProduct    @relation(fields: [globalProductId], references: [id], onDelete: Restrict)
+  quantity           Int
+  unitPrice          Decimal          @db.Decimal(12, 2)
+  compareAtPrice     Decimal?         @db.Decimal(12, 2)
+  lineTotal          Decimal          @db.Decimal(12, 2)
+  productName        String           @db.VarChar(160)
+  brand              String?          @db.VarChar(120)
+  variant            String?          @db.VarChar(80)
+  barcode            String?          @db.VarChar(64)
+  // The ledger entry that took this line off the salon's stock when it was collected.
+  stockMovementId    String?          @unique
+
+  @@index([orderId])
+  @@index([inventoryProductId])
+  @@index([globalProductId])
+  @@map("shop_order_items")
+}
+
+model ShopOrderEvent {
+  id          String           @id @default(uuid()) @db.Uuid
+  orderId     String           @db.Uuid
+  order       ShopOrder        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  fromStatus  ShopOrderStatus?
+  toStatus    ShopOrderStatus
+  actorUserId String?
+  actor       User?            @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+  actorKind   String           @db.VarChar(12)
+  note        String?          @db.VarChar(300)
+  createdAt   DateTime         @default(now()) @db.Timestamptz(6)
+
+  @@index([orderId, createdAt])
+  @@map("shop_order_events")
+}
+
+model ShopWishlistItem {
+  userId          String
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  globalProductId String
+  globalProduct   GlobalProduct @relation(fields: [globalProductId], references: [id], onDelete: Cascade)
+  createdAt       DateTime      @default(now()) @db.Timestamptz(6)
+
+  @@id([userId, globalProductId])
+  @@map("shop_wishlist_items")
 }
 
 // ---------- Subscription (inactive in V1 — see ARCHITECTURE.md §16) ----------

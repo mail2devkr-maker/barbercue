@@ -38,6 +38,7 @@ import { OwnerOpsModule } from './owner-ops/owner-ops.module';
 import { AssistantModule } from './assistant/assistant.module';
 import { SalonDescriptionModule } from './salon-description/salon-description.module';
 import { InventoryModule } from './inventory/inventory.module';
+import { ShopModule } from './shop/shop.module';
 
 @Module({
   imports: [
@@ -71,6 +72,7 @@ import { InventoryModule } from './inventory/inventory.module';
     AssistantModule,
     SalonDescriptionModule,
     InventoryModule,
+    ShopModule,
     SalonsModule,
     RealtimeModule,
     PremiumModule,

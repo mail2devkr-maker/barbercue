@@ -20,6 +20,7 @@ export const PRIMARY_NAV: NavItem[] = [
   { href: "/account", label: "Dashboard", icon: "home" },
   { href: "/account/discover", label: "Discover Salons", icon: "search" },
   { href: "/account/bookings", label: "My Appointments", icon: "calendar" },
+  { href: "/account/shop", label: "Marketplace", icon: "sparkle" },
   { href: "/account/favorites", label: "My Favourites", icon: "heart" },
   { href: "/account/rewards", label: "Rewards & Gifts", icon: "gift", also: ["/account/credits"] },
   { href: "/account/reviews", label: "My Reviews", icon: "star" },
@@ -40,6 +41,7 @@ const MOBILE_NAV: NavItem[] = [
 ];
 
 const MORE_NAV: NavItem[] = [
+  { href: "/account/shop", label: "Marketplace", icon: "sparkle" },
   { href: "/account/rewards", label: "Rewards & Gifts", icon: "gift" },
   { href: "/account/reviews", label: "My Reviews", icon: "star" },
   { href: "/account/invoices", label: "My Invoices", icon: "invoice" },

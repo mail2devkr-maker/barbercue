@@ -110,6 +110,9 @@ export const ADMIN_NAV_ITEMS: ReadonlyArray<AdminNavItem> = [
   { id: "catalog-review", label: "Catalog Review", group: "INVENTORY", href: "/dashboard/admin/inventory/catalog", query: "status=PENDING", status: "live" },
   { id: "catalog-change-requests", label: "Owner Change Requests", group: "INVENTORY", href: "/dashboard/admin/inventory/change-requests", status: "live" },
   { id: "catalog-import", label: "Catalog CSV Import (basic)", group: "INVENTORY", href: "/dashboard/admin/inventory/catalog", query: "view=import", status: "live" },
+  { id: "marketplace", label: "Marketplace", group: "INVENTORY", href: "/dashboard/admin/marketplace", status: "live" },
+  { id: "marketplace-approvals", label: "Listing Approvals", group: "INVENTORY", href: "/dashboard/admin/marketplace", query: "tab=listings", status: "live" },
+  { id: "marketplace-orders", label: "Shop Orders", group: "INVENTORY", href: "/dashboard/admin/marketplace", query: "tab=orders", status: "live" },
 
   { id: "quiet-shops", label: "Open, No Bookings", group: "ALERTS", href: STATUS, query: "filter=quiet", status: "live" },
   planned("ALERTS", "inactive-alerts", "Inactive Shop Alerts", "Alert rules, alert records and assignable follow-ups."),
