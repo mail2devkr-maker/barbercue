@@ -521,7 +521,8 @@
 /* ---- Discovery upgrade: filter sidebar + results (docs/discovery-upgrade/PLAN.md) ---- */
 .discoveryLayout {
   display: grid;
-  grid-template-columns: 290px minmax(0, 1fr);
+  /* Owner (18 Nov): filters live in the one Filters panel, so results use the full width. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 28px;
   align-items: start;
   width: min(1180px, calc(100% - 40px));
@@ -759,4 +760,50 @@
 @media (prefers-reduced-motion: reduce) {
   .mapPreview { animation: none; }
   .mapResult { transition: none; }
+}
+
+/* ---- One Filters button (owner, 18 Nov): service, shop, city, distance, price and the rest ---- */
+.filterBar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; margin-top: 28px; }
+.filterButton {
+  display: inline-flex; align-items: center; gap: 10px;
+  min-height: 52px; padding: 0 22px;
+  border: 0; border-radius: 999px;
+  background: var(--fq-gradient); color: #fff;
+  font: 700 1rem var(--font-body); cursor: pointer;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+}
+.filterButton:focus-visible { outline: 2px solid var(--fq-orange); outline-offset: 3px; }
+.filterBadge {
+  display: inline-grid; place-items: center; min-width: 24px; height: 24px; padding: 0 7px;
+  border-radius: 999px; background: #fff; color: var(--fq-void, #111); font-size: 0.8rem; font-weight: 800;
+}
+.filterHint { color: var(--fq-text-muted); font-size: 0.9rem; }
+.filterBackdrop { position: fixed; inset: 0; z-index: 60; background: rgba(0, 0, 0, 0.55); }
+.filterSheet {
+  position: fixed; z-index: 61; top: 0; right: 0; bottom: 0;
+  display: flex; flex-direction: column;
+  width: min(440px, 100%);
+  background: var(--fq-charcoal); color: var(--fq-text);
+  border-left: 1px solid var(--fq-hairline);
+  box-shadow: -20px 0 50px rgba(0, 0, 0, 0.45);
+}
+.filterSheet[hidden] { display: none; }
+.filterSheetHeader {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 20px; border-bottom: 1px solid var(--fq-hairline);
+}
+.filterSheetHeader h2 { margin: 0; font-size: 1.25rem; }
+.filterClose {
+  width: 40px; height: 40px; border: 1px solid var(--fq-hairline); border-radius: 999px;
+  background: transparent; color: var(--fq-text); font-size: 1.5rem; line-height: 1; cursor: pointer;
+}
+.filterSheetBody { display: grid; gap: 18px; padding: 18px 20px 0; overflow-y: auto; flex: 1; }
+.filterSheetBody .citySelect { width: 100%; }
+.filterSheetFooter {
+  position: sticky; bottom: 0; display: grid;
+  margin: 0 -20px; padding: 14px 20px; background: var(--fq-charcoal); border-top: 1px solid var(--fq-hairline);
+}
+@media (max-width: 600px) {
+  .filterSheet { width: 100%; border-left: 0; }
+  .filterButton { width: 100%; justify-content: center; }
 }

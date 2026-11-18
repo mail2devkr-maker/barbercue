@@ -64,6 +64,29 @@ it('keeps the city from the link selected, and "All cities" clears it', async ()
   expect(push).toHaveBeenLastCalledWith('/search');
 });
 
+// Owner (18 Nov): every search option behind ONE Filters button.
+it('has one Filters button that opens one panel with service, shop, city, distance and price', async () => {
+  query = 'shopName=Royal&city=pune&countryCode=IN&priceMax=300';
+  window.location.search = `?${query}`;
+  const tree = await render();
+  const filterButtons = tree.root.findAll(
+    (n) => n.type === 'button' && n.props['aria-haspopup'] === 'dialog',
+  );
+  expect(filterButtons).toHaveLength(1);
+  // shop + city + price = 3 active filters on the badge.
+  expect(textOf(filterButtons[0])).toBe('Filters3');
+  const sheet = tree.root.find((n) => n.props.role === 'dialog');
+  expect(sheet.props.hidden).toBe(true);
+  await act(async () => filterButtons[0].props.onClick());
+  expect(tree.root.find((n) => n.props.role === 'dialog').props.hidden).toBe(false);
+  const text = textOf(tree.root.find((n) => n.props.role === 'dialog'));
+  for (const section of ['Filter by service', 'Filter by shop', 'City / location', 'Distance', 'Price']) {
+    expect(text).toContain(section);
+  }
+  // No second search form and no separate Filters toggle elsewhere on the page.
+  expect(tree.root.findAll((n) => n.props.role === 'search')).toHaveLength(1);
+});
+
 // Smart search (owner, 18 Nov): a Service field beside the Shop-name field; both can be used.
 it('searches by the Service field and keeps the Shop-name search', async () => {
   const tree = await render();
