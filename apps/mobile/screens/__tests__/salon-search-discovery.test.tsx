@@ -88,6 +88,15 @@ const press = (text: string) => {
   });
 };
 const searchCalls = () => mockedApi.mock.calls.map((call) => call[0]).filter((path: string) => path.startsWith('salons?'));
+// Owner (18 Nov): every search option sits in the panel behind the one Filters button.
+const filtersButton = () =>
+  tree.root.findAll(
+    (n: any) => typeof n.props.onPress === 'function' && /^Filters/.test(n.props.accessibilityLabel ?? '') && n.props.accessibilityState,
+  )[0];
+const openFilters = () =>
+  act(async () => {
+    if (!filtersButton().props.accessibilityState.expanded) await filtersButton().props.onPress();
+  });
 
 async function render() {
   await act(async () => {
@@ -119,6 +128,7 @@ it('sends the new filters and shows the compared service price and salon type', 
     Promise.resolve(path === 'favorites/ids' ? { salonIds: [] } : { items: [salon], nextCursor: null }),
   );
   await render();
+  await openFilters();
   await press('Salon type: Male');
   await press('Compare price: Haircut');
   await press('Sort by: Price');
@@ -138,6 +148,7 @@ it('saves a favorite from the heart, rolls back when refused, and searches favor
     return Promise.resolve({ items: [salon], nextCursor: null });
   });
   await render();
+  await openFilters();
   await press('Salon type: All salons');
   const heart = () => tree.root.findAll((n: any) => typeof n.props.onPress === 'function' && /favorites: Sharp Gents$/.test(n.props.accessibilityLabel ?? ''))[0];
   await act(async () => heart().props.onPress());
@@ -157,6 +168,7 @@ it('asks a signed-out visitor to sign in instead of searching favorites', async 
   mockedAuth.mockReturnValue({ user: null, status: 'unauthenticated' });
   mockedApi.mockResolvedValue({ items: [], nextCursor: null });
   await render();
+  await openFilters();
   await press('♥ Favorites');
   expect(searchCalls()).toHaveLength(0);
   expect(textOf(tree.root)).toContain('Sign in as a customer to save and see favorite salons.');
@@ -175,6 +187,7 @@ it('supplements an unrestricted GPS search with same-city shops and labels unkno
     return Promise.resolve({ items: [], nextCursor: null });
   });
   await render();
+  await openFilters();
   await press('Near me');
   expect(searchCalls()).toHaveLength(2);
   expect(searchCalls()[0]).toContain('lat=25.69');
@@ -182,3 +195,30 @@ it('supplements an unrestricted GPS search with same-city shops and labels unkno
   expect(searchCalls()[1]).toContain('countryCode=IN');
   expect(textOf(tree.root)).toContain('Distance unavailable (shop pin missing)');
 });
+
+it('shows ONE Filters button; its panel holds service, shop, city, distance and price, and Clear all resets', async () => {
+  mockedApi.mockImplementation((path: string) =>
+    Promise.resolve(path === 'favorites/ids' ? { salonIds: [] } : { items: [salon], nextCursor: null }),
+  );
+  await render();
+  const buttons = tree.root.findAll(
+    (n: any) => typeof n.props.onPress === 'function' && /^Filters/.test(n.props.accessibilityLabel ?? '') && n.props.accessibilityState,
+  );
+  expect(buttons).toHaveLength(1);
+  // Closed: no filter fields on screen.
+  expect(tree.root.findAll((n: any) => n.props.accessibilityLabel === 'Filter by shop')).toHaveLength(0);
+  await openFilters();
+  const text = textOf(tree.root);
+  for (const section of ['Filter by service', 'Filter by shop', 'City / location']) expect(text).toContain(section);
+  const shopField = tree.root.findAll((n: any) => n.props.accessibilityLabel === 'Filter by shop' && typeof n.props.onChangeText === 'function')[0];
+  await act(async () => shopField.props.onChangeText('Sharp'));
+  await press('Show results');
+  expect(searchCalls().at(-1)).toBe('salons?shopName=Sharp');
+  // The panel closed and the badge counts the shop filter.
+  expect(filtersButton().props.accessibilityState).toEqual({ expanded: false });
+  expect(filtersButton().props.accessibilityLabel).toBe('Filters (1)');
+  await openFilters();
+  await press('Clear all');
+  expect(searchCalls().at(-1)).toBe('salons?');
+  expect(filtersButton().props.accessibilityLabel).toBe('Filters');
+}, 15000);
