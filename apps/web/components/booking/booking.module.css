@@ -28,7 +28,7 @@
   font-size: 0.75rem;
   font-weight: 700;
   border: 1.5px solid var(--bc-border);
-  background: #ffffff;
+  background: var(--tv-bg-ffffff, #ffffff);
   color: var(--bc-muted);
   flex: 0 0 auto;
   transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
@@ -37,7 +37,7 @@
 .progressStepDone .progressDot {
   background: var(--bc-accent);
   border-color: var(--bc-accent);
-  color: #ffffff;
+  color: var(--tv-fg-ffffff, #ffffff);
 }
 
 .progressStepCurrent .progressDot {
@@ -81,7 +81,7 @@
 /* ---------- Step cards ---------- */
 
 .stepCard {
-  background: #ffffff;
+  background: var(--tv-bg-ffffff, #ffffff);
   border: 1px solid var(--bc-border);
   border-radius: var(--bc-radius-lg);
   padding: var(--bc-space-5);
@@ -138,7 +138,7 @@
   padding: 14px 16px;
   border-radius: var(--bc-radius-sm);
   border: 1.5px solid var(--bc-border);
-  background: #ffffff;
+  background: var(--tv-bg-ffffff, #ffffff);
   cursor: pointer;
   transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
 }
@@ -198,7 +198,7 @@
 .optionRowSelected .optionCheck {
   background: var(--bc-accent);
   border-color: var(--bc-accent);
-  color: #ffffff;
+  color: var(--tv-fg-ffffff, #ffffff);
 }
 
 .optionRowHeadWithCheck {
@@ -252,7 +252,7 @@
   padding: 9px 16px;
   border-radius: 999px;
   border: 1.5px solid var(--bc-border);
-  background: #ffffff;
+  background: var(--tv-bg-ffffff, #ffffff);
   color: var(--bc-ink);
   font-size: var(--bc-text-sm);
   font-weight: 600;
@@ -272,7 +272,7 @@
 
 .chip:disabled {
   cursor: not-allowed;
-  color: #b4ac9c;
+  color: var(--tv-fg-b4ac9c, #b4ac9c);
   background: var(--bc-surface);
 }
 
@@ -295,7 +295,7 @@
   padding: 12px;
   border-radius: var(--bc-radius-md);
   border: 1.5px solid var(--bc-border);
-  background: #ffffff;
+  background: var(--tv-bg-ffffff, #ffffff);
   cursor: pointer;
   transition: border-color 0.15s ease, background-color 0.15s ease;
 }
@@ -326,7 +326,7 @@
 
 .staffCardBio {
   font-size: 0.75rem;
-  color: #6b6357;
+  color: var(--tv-fg-6b6357, #6b6357);
   line-height: 1.4;
 }
 
@@ -339,7 +339,7 @@
   padding: 10px 16px;
   border-radius: var(--bc-radius-sm);
   border: 1.5px solid var(--bc-border);
-  background: #ffffff;
+  background: var(--tv-bg-ffffff, #ffffff);
   cursor: pointer;
   min-width: 76px;
   transition: border-color 0.15s ease, background-color 0.15s ease;
@@ -375,12 +375,12 @@
 
 .dateChip:disabled .dateChipDay,
 .dateChip:disabled .dateChipWeekday {
-  color: #b4ac9c;
+  color: var(--tv-fg-b4ac9c, #b4ac9c);
 }
 
 .dateChipClosed {
   font-size: 0.65rem;
-  color: #b4ac9c;
+  color: var(--tv-fg-b4ac9c, #b4ac9c);
 }
 
 .slotGrid {
@@ -394,7 +394,7 @@
   padding: 10px 6px;
   border-radius: var(--bc-radius-sm);
   border: 1.5px solid var(--bc-border);
-  background: #ffffff;
+  background: var(--tv-bg-ffffff, #ffffff);
   color: var(--bc-ink);
   font-size: var(--bc-text-sm);
   font-weight: 600;
@@ -415,7 +415,7 @@
 .slotChipOccupied,
 .slotChip:disabled {
   cursor: not-allowed;
-  color: #ffffff;
+  color: var(--tv-fg-ffffff, #ffffff);
   background: var(--bc-ink);
   border-color: var(--bc-ink);
 }
@@ -440,11 +440,11 @@
   width: 10px;
   height: 10px;
   border-radius: 3px;
-  background: #ffffff;
+  background: var(--tv-bg-ffffff, #ffffff);
   border: 1px solid var(--bc-border);
 }
 
-.legendAvailable { background: #ffffff; }
+.legendAvailable { background: var(--tv-bg-ffffff, #ffffff); }
 .legendSelected { background: #2f7d4a; border-color: #2f7d4a; }
 .legendOccupied { background: var(--bc-ink); border-color: var(--bc-ink); }
 
@@ -459,7 +459,7 @@
   list-style: none;
   border: 1px solid var(--bc-border);
   border-radius: var(--bc-radius-sm);
-  background: #fafafa;
+  background: var(--tv-bg-fafafa, #fafafa);
 }
 
 .serviceBreakdownItem {
@@ -495,7 +495,7 @@
 /* ---------- Confirmed booking ---------- */
 
 .confirmedCard {
-  background: #ffffff;
+  background: var(--tv-bg-ffffff, #ffffff);
   border: 1px solid var(--bc-border);
   border-radius: var(--bc-radius-md);
   padding: var(--bc-space-5);
@@ -593,7 +593,7 @@
 }
 
 .dialogCard {
-  background: #ffffff;
+  background: var(--tv-bg-ffffff, #ffffff);
   border-radius: var(--bc-radius-md);
   padding: var(--bc-space-5);
   max-width: 380px;

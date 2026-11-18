@@ -7,10 +7,9 @@
   margin-bottom: 40px;
   padding: clamp(28px, 5vw, 44px);
   border-radius: 20px;
-  background:
-    radial-gradient(circle at 88% 10%, rgba(216, 181, 101, 0.24), transparent 30%),
-    linear-gradient(135deg, #211e1a 0%, #3c3328 100%);
-  color: #ffffff;
+  background: radial-gradient(circle at 88% 10%, rgba(216, 181, 101, 0.24), transparent 30%),
+    linear-gradient(135deg, var(--tv-bg-211e1a, #211e1a) 0%, var(--tv-bg-3c3328, #3c3328) 100%);
+  color: var(--tv-fg-ffffff, #ffffff);
   box-shadow: var(--bc-shadow-lg);
 }
 
@@ -25,7 +24,7 @@
 
 .balanceLabel {
   margin: 0 0 4px;
-  color: rgba(255, 255, 255, 0.65);
+  color: var(--tv-fg-rgba-255-255-255-a0_65, rgba(255, 255, 255, 0.65));
   font-size: 0.85rem;
 }
 
@@ -33,7 +32,7 @@
   font-family: var(--font-display);
   font-size: clamp(2.4rem, 6vw, 3.4rem);
   font-weight: 600;
-  color: #ffffff;
+  color: var(--tv-fg-ffffff, #ffffff);
   margin: 0;
 }
 
@@ -93,7 +92,7 @@
 .emptyState {
   text-align: center;
   padding: clamp(36px, 6vw, 56px) 24px;
-  background: linear-gradient(160deg, #ffffff 0%, #fbf6ed 100%);
+  background: linear-gradient(160deg, var(--tv-bg-ffffff, #ffffff) 0%, var(--tv-bg-fbf6ed, #fbf6ed) 100%);
 }
 
 .emptyTitle {
@@ -120,7 +119,7 @@
   border-radius: 14px;
   padding: 16px 18px;
   margin-bottom: 10px;
-  background: #ffffff;
+  background: var(--tv-bg-ffffff, #ffffff);
   box-shadow: var(--bc-shadow-sm);
 }
 

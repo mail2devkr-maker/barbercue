@@ -5,8 +5,8 @@
   padding: 28px;
   color: var(--bc-muted);
   text-align: center;
-  background: #fbf8f2;
-  border: 1px dashed #d8cebd;
+  background: var(--tv-bg-fbf8f2, #fbf8f2);
+  border: 1px dashed var(--tv-bg-d8cebd, #d8cebd);
   border-radius: var(--bc-radius-md);
 }
 
@@ -93,10 +93,10 @@
   height: 44px;
   display: grid;
   place-items: center;
-  color: #fff;
+  color: var(--tv-fg-ffffff, #fff);
   font-size: 1.6rem;
   line-height: 1;
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--tv-bg-rgba-255-255-255-a0_12, rgba(255, 255, 255, 0.12));
   border: 0;
   border-radius: 50%;
   cursor: pointer;
@@ -104,11 +104,11 @@
 
 .lightboxClose:hover,
 .lightboxClose:focus-visible {
-  background: rgba(255, 255, 255, 0.22);
+  background: var(--tv-bg-rgba-255-255-255-a0_22, rgba(255, 255, 255, 0.22));
 }
 
 .lightboxClose:focus-visible {
-  outline: 2px solid #fff;
+  outline: 2px solid var(--tv-bg-ffffff, #fff);
   outline-offset: 2px;
 }
 
@@ -120,10 +120,10 @@
   height: 52px;
   display: grid;
   place-items: center;
-  color: #fff;
+  color: var(--tv-fg-ffffff, #fff);
   font-size: 2.2rem;
   line-height: 1;
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--tv-bg-rgba-255-255-255-a0_12, rgba(255, 255, 255, 0.12));
   border: 0;
   border-radius: 50%;
   cursor: pointer;
@@ -131,11 +131,11 @@
 
 .lightboxNav:hover,
 .lightboxNav:focus-visible {
-  background: rgba(255, 255, 255, 0.22);
+  background: var(--tv-bg-rgba-255-255-255-a0_22, rgba(255, 255, 255, 0.22));
 }
 
 .lightboxNav:focus-visible {
-  outline: 2px solid #fff;
+  outline: 2px solid var(--tv-bg-ffffff, #fff);
   outline-offset: 2px;
 }
 
@@ -154,10 +154,10 @@
   transform: translateX(-50%);
   margin: 0;
   padding: 5px 14px;
-  color: #fff;
+  color: var(--tv-fg-ffffff, #fff);
   font-size: 0.8rem;
   font-weight: 600;
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--tv-bg-rgba-255-255-255-a0_12, rgba(255, 255, 255, 0.12));
   border-radius: 999px;
 }
 
@@ -266,7 +266,7 @@
 .comment {
   max-width: 650px;
   margin: 10px 0 0;
-  color: #48433c;
+  color: var(--tv-fg-48433c, #48433c);
   line-height: 1.65;
 }
 
@@ -301,7 +301,7 @@
 .teamBio {
   margin: 6px 0 0;
   font-size: 0.85rem;
-  color: #48433c;
+  color: var(--tv-fg-48433c, #48433c);
   line-height: 1.5;
 }
 

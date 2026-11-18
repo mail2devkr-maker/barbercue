@@ -38,7 +38,7 @@
   position: relative;
   flex: 0 0 56px;
   border-right: 1px solid var(--bc-border);
-  background: var(--bc-surface, #fffdf9);
+  background: var(--bc-surface, var(--tv-bg-fffdf9, #fffdf9));
 }
 
 .rulerLabel {

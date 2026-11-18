@@ -26,6 +26,6 @@
   font-size: 0.82rem; font-weight: 700; text-decoration: none;
 }
 .primary { background: var(--bc-brand-gradient); color: #fff; }
-.secondary { border: 1px solid var(--bc-brand-navy); color: var(--bc-brand-navy); background: #fff; }
+.secondary { border: 1px solid var(--bc-brand-navy); color: var(--bc-brand-navy); background: var(--tv-bg-ffffff, #fff); }
 .primary:focus-visible, .secondary:focus-visible { outline: 2px solid var(--bc-brand-coral); outline-offset: 2px; }
 .closed { font-size: 0.78rem; color: var(--bc-warn); font-weight: 600; }

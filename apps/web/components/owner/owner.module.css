@@ -4,11 +4,11 @@
  * Legacy --bc-* tokens are scoped to this shell so unrelated public pages are unaffected. */
 
 .root {
-  --os-bg: #101016;
-  --os-surface: #211e29;
-  --os-surface-2: #2d2735;
-  --os-border: #494050;
-  --os-border-strong: #786979;
+  --os-bg: var(--tv-bg-101016, #101016);
+  --os-surface: var(--tv-bg-211e29, #211e29);
+  --os-surface-2: var(--tv-bg-2d2735, #2d2735);
+  --os-border: var(--tv-bg-494050, #494050);
+  --os-border-strong: var(--tv-bg-786979, #786979);
   --os-ink: #faf6f8;
   --os-ink-2: #eee5ed;
   --os-muted: #c9bdc9;
@@ -21,10 +21,10 @@
   --os-navy-ink: #ffffff;
   --os-navy-muted: #ded4db;
   --os-chrome: #09090c;
-  --os-chrome-surface: #242126;
+  --os-chrome-surface: var(--tv-bg-242126, #242126);
   --os-chrome-ink: #f7f5f4;
   --os-chrome-muted: #d1cbd0;
-  --os-chrome-border: #747078;
+  --os-chrome-border: var(--tv-bg-747078, #747078);
   --os-ok-ink: #b1f1ce;
   --os-ok-bg: #173a2c;
   --os-warn-ink: #ffe0a1;
@@ -83,7 +83,7 @@
 .rail .railBtnActive:focus-visible,
 .sidebar .navLinkActive:focus-visible,
 .bottomBar .bottomLinkActive:focus-visible {
-  outline-color: #ffffff;
+  outline-color: var(--tv-bg-ffffff, #ffffff);
 }
 
 .srOnly {
@@ -101,7 +101,7 @@
   top: -48px;
   z-index: 100;
   background: var(--os-ink);
-  color: #fff;
+  color: var(--tv-fg-ffffff, #fff);
   padding: 10px 14px;
   border-radius: 10px;
   font-weight: 700;
@@ -316,8 +316,7 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  background:
-    radial-gradient(ellipse 75% 40% at 95% 0%, rgba(242, 41, 92, 0.13), transparent 70%),
+  background: radial-gradient(ellipse 75% 40% at 95% 0%, rgba(242, 41, 92, 0.13), transparent 70%),
     radial-gradient(ellipse 55% 45% at 0% 75%, rgba(128, 65, 126, 0.13), transparent 75%),
     var(--os-bg);
 }
@@ -347,7 +346,7 @@
   text-decoration: none;
 }
 .iconBtn:hover {
-  background: #383139;
+  background: var(--tv-bg-383139, #383139);
   color: var(--os-chrome-ink);
 }
 .menuBtn {
@@ -876,7 +875,7 @@
 .btnDanger {
   background: var(--os-surface);
   color: var(--os-bad-ink);
-  border-color: #9d6572;
+  border-color: var(--tv-bg-9d6572, #9d6572);
 }
 .btnDanger:hover:not(:disabled) {
   background: var(--os-bad-bg);
@@ -990,7 +989,7 @@
   text-align: center;
 }
 .tabActive .tabCount {
-  background: rgba(9, 9, 12, 0.12);
+  background: var(--tv-bg-rgba-9-9-12-a0_12, rgba(9, 9, 12, 0.12));
   color: var(--os-brand-ink);
 }
 
@@ -1025,7 +1024,7 @@
   border-bottom: 0;
 }
 .table tbody tr:nth-child(even) {
-  background: rgba(255, 255, 255, 0.025);
+  background: var(--tv-bg-rgba-255-255-255-a0_025, rgba(255, 255, 255, 0.025));
 }
 .table tbody tr:hover {
   background: rgba(242, 41, 92, 0.085);
@@ -1109,7 +1108,7 @@
   background: #e0891a;
 }
 .dotOff {
-  background: #98a2b3;
+  background: var(--tv-bg-98a2b3, #98a2b3);
 }
 .dotInfo {
   background: #3b6df0;
@@ -1261,7 +1260,7 @@
 }
 .skeleton {
   border-radius: 12px;
-  background: linear-gradient(90deg, #292431 25%, #39303e 37%, #292431 63%);
+  background: linear-gradient(90deg, var(--tv-bg-292431, #292431) 25%, var(--tv-bg-39303e, #39303e) 37%, var(--tv-bg-292431, #292431) 63%);
   background-size: 400% 100%;
   animation: shimmer 1.3s ease infinite;
 }
@@ -1325,7 +1324,7 @@
   fill: #ff789f;
 }
 .chartBarAlt {
-  fill: #9d7198;
+  fill: var(--tv-fg-9d7198, #9d7198);
 }
 .legend {
   display: flex;
@@ -1351,7 +1350,7 @@
   gap: 18px;
   padding: 20px 22px;
   border-radius: var(--os-radius);
-  background: linear-gradient(120deg, #09090c 0%, #211722 55%, #592039 100%);
+  background: linear-gradient(120deg, var(--tv-bg-09090c, #09090c) 0%, var(--tv-bg-211722, #211722) 55%, #592039 100%);
   color: var(--os-navy-ink);
   margin-bottom: 16px;
   overflow: hidden;
@@ -1362,7 +1361,7 @@
   font-family: var(--font-display), Georgia, serif;
   font-size: 26px;
   font-weight: 600;
-  color: #fff;
+  color: var(--tv-fg-ffffff, #fff);
 }
 .welcomeSub {
   margin: 0;
@@ -1374,19 +1373,19 @@
   flex-wrap: wrap;
 }
 .welcomeBtn {
-  background: #f7e6ee;
-  color: #171019;
+  background: var(--tv-bg-f7e6ee, #f7e6ee);
+  color: var(--tv-fg-171019, #171019);
 }
 .welcomeBtn:hover:not(:disabled) {
-  background: #ffe4ee;
+  background: var(--tv-bg-ffe4ee, #ffe4ee);
 }
 .welcomeBtnGhost {
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
-  border-color: rgba(255, 255, 255, 0.28);
+  background: var(--tv-bg-rgba-255-255-255-a0_12, rgba(255, 255, 255, 0.12));
+  color: var(--tv-fg-ffffff, #fff);
+  border-color: var(--tv-bg-rgba-255-255-255-a0_28, rgba(255, 255, 255, 0.28));
 }
 .welcomeBtnGhost:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--tv-bg-rgba-255-255-255-a0_2, rgba(255, 255, 255, 0.2));
 }
 @media (max-width: 767px) {
   .welcome {
@@ -1474,7 +1473,7 @@
   border-left-color: #71dc9c;
 }
 .entryDone {
-  border-left-color: #b3a6b8;
+  border-left-color: var(--tv-bg-b3a6b8, #b3a6b8);
 }
 .entryNew {
   box-shadow: 0 0 0 3px rgba(200, 16, 77, 0.15);
@@ -1627,7 +1626,7 @@
 }
 .chairBusy {
   background: var(--os-ok-bg);
-  border-color: #497862;
+  border-color: var(--tv-bg-497862, #497862);
 }
 .chairName {
   font-weight: 800;
@@ -1649,7 +1648,7 @@
   height: 26px;
   border-radius: 999px;
   border: 0;
-  background: #98a2b3;
+  background: var(--tv-bg-98a2b3, #98a2b3);
   cursor: pointer;
   flex: none;
 }
@@ -1661,7 +1660,7 @@
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--tv-bg-ffffff, #fff);
   transition: transform 0.15s ease;
 }
 .switchOn {
@@ -1829,11 +1828,10 @@
   align-items: end;
   margin-bottom: 16px;
   padding: 22px;
-  border: 1px solid #5b3a51;
+  border: 1px solid var(--tv-bg-5b3a51, #5b3a51);
   border-radius: var(--os-radius);
-  background:
-    radial-gradient(circle at 75% 15%, rgba(255, 122, 61, 0.14), transparent 40%),
-    linear-gradient(120deg, #231824, #351e32 65%, #421e36);
+  background: radial-gradient(circle at 75% 15%, rgba(255, 122, 61, 0.14), transparent 40%),
+    linear-gradient(120deg, var(--tv-bg-231824, #231824), var(--tv-bg-351e32, #351e32) 65%, #421e36);
   box-shadow: var(--os-shadow);
 }
 .ovWelcome {
@@ -1880,8 +1878,8 @@
   padding: 14px 16px;
   text-decoration: none;
   color: inherit;
-  border-color: #765068;
-  background: #2b202e;
+  border-color: var(--tv-bg-765068, #765068);
+  background: var(--tv-bg-2b202e, #2b202e);
   background-image: linear-gradient(150deg, rgba(242, 41, 92, 0.11), transparent 70%);
 }
 .headlineTop {
@@ -2176,7 +2174,7 @@
   background: #71334d;
 }
 .branchBarLilac {
-  background: #514067;
+  background: var(--tv-bg-514067, #514067);
 }
 .branchBarGreen {
   background: #2e5944;
@@ -2216,12 +2214,12 @@
   stroke-linejoin: round;
 }
 .chartAverage {
-  stroke: #98a2b3;
+  stroke: var(--tv-fg-98a2b3, #98a2b3);
   stroke-width: 1.2;
   stroke-dasharray: 5 5;
 }
 .chartCursor {
-  stroke: #98a2b3;
+  stroke: var(--tv-fg-98a2b3, #98a2b3);
   stroke-width: 1;
   stroke-dasharray: 3 3;
 }

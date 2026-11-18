@@ -22,8 +22,7 @@
   gap: 6px;
   padding: 16px 12px;
   border-radius: var(--bc-radius-xl);
-  background:
-    radial-gradient(circle at 0% 100%, rgba(242, 41, 92, 0.28), transparent 60%),
+  background: radial-gradient(circle at 0% 100%, rgba(242, 41, 92, 0.28), transparent 60%),
     linear-gradient(180deg, var(--bc-brand-navy) 0%, #2a1d4f 100%);
   color: #fff;
   box-shadow: var(--bc-shadow-card);
@@ -39,21 +38,21 @@
   gap: 12px;
   padding: 10px 14px;
   border-radius: 12px;
-  color: rgba(255, 255, 255, 0.82);
+  color: var(--tv-fg-rgba-255-255-255-a0_82, rgba(255, 255, 255, 0.82));
   font-size: var(--bc-text-sm);
   font-weight: 600;
   text-decoration: none;
   transition: background-color 150ms ease, color 150ms ease;
 }
-.navLink:hover { background: rgba(255, 255, 255, 0.08); color: #fff; }
+.navLink:hover { background: var(--tv-bg-rgba-255-255-255-a0_08, rgba(255, 255, 255, 0.08)); color: var(--tv-fg-ffffff, #fff); }
 .navLink[aria-current="page"] {
   background: var(--bc-brand-gradient);
   color: #fff;
   box-shadow: 0 8px 18px rgba(242, 84, 45, 0.35);
 }
 .navLink:focus-visible { outline: 2px solid var(--bc-brand-orange); outline-offset: 2px; }
-.navLinkQuiet { min-height: 38px; font-weight: 500; color: rgba(255, 255, 255, 0.66); }
-.navDivider { height: 1px; margin: 8px 10px; background: rgba(255, 255, 255, 0.12); }
+.navLinkQuiet { min-height: 38px; font-weight: 500; color: var(--tv-fg-rgba-255-255-255-a0_66, rgba(255, 255, 255, 0.66)); }
+.navDivider { height: 1px; margin: 8px 10px; background: var(--tv-bg-rgba-255-255-255-a0_12, rgba(255, 255, 255, 0.12)); }
 
 .promo {
   margin-top: auto;
@@ -70,7 +69,7 @@
   margin-top: 6px;
   padding: 8px 14px;
   border-radius: 10px;
-  background: #fff;
+  background: var(--tv-bg-ffffff, #fff);
   color: var(--bc-brand-coral);
   font-weight: 700;
   font-size: 0.82rem;
@@ -90,7 +89,7 @@
   padding: 0 16px;
   border: 1px solid var(--bc-border);
   border-radius: 14px;
-  background: #fff;
+  background: var(--tv-bg-ffffff, #fff);
   color: var(--bc-muted);
   box-shadow: var(--bc-shadow-sm);
 }
@@ -104,7 +103,7 @@
   padding: 0 16px;
   border: 1px solid var(--bc-border);
   border-radius: 14px;
-  background: #fff;
+  background: var(--tv-bg-ffffff, #fff);
   color: var(--bc-brand-navy);
   font-weight: 600;
   font-size: var(--bc-text-sm);
@@ -166,7 +165,7 @@
     left: 0; right: 0; bottom: calc(64px + env(safe-area-inset-bottom));
     padding: 10px 12px;
     border-radius: 20px 20px 0 0;
-    background: #fff;
+    background: var(--tv-bg-ffffff, #fff);
     display: grid;
     gap: 2px;
   }

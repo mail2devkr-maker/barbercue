@@ -20,13 +20,13 @@
   height: auto !important;
   min-height: 0 !important;
   overflow: hidden;
-  background: linear-gradient(0deg, rgba(20, 16, 12, 0.72), rgba(20, 16, 12, 0));
+  background: linear-gradient(0deg, rgba(20, 16, 12, 0.72), var(--tv-bg-rgba-20-16-12-a0, rgba(20, 16, 12, 0)));
   padding: 22px 14px 10px;
 }
 
 .idleLabel {
   display: block;
-  color: #fff;
+  color: var(--tv-fg-ffffff, #fff);
   font-size: 0.78rem;
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -46,7 +46,7 @@
 
 .item {
   flex-shrink: 0;
-  color: #fff;
+  color: var(--tv-fg-ffffff, #fff);
   font-size: 0.78rem;
   font-weight: 600;
   letter-spacing: 0.02em;
