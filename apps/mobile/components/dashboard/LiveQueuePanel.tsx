@@ -304,7 +304,7 @@ export const LiveQueuePanel = forwardRef<LiveQueuePanelHandle, { salonId: string
   { salonId, ownerTools = false },
   ref,
 ) {
-  const { color } = useThemeTokens();
+  const { color, resolved, surface } = useThemeTokens();
   const styles = useThemedStyles(makeStyles);
   const { t, language } = useLanguage();
   const hi = language === Language.HI;
@@ -581,13 +581,13 @@ export const LiveQueuePanel = forwardRef<LiveQueuePanelHandle, { salonId: string
       <Modal transparent animationType="fade" visible={Boolean(arrivalEntry)}
         onRequestClose={() => undefined}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,.92)', justifyContent: 'center', padding: 22 }}>
-          <View style={{ backgroundColor: '#fff', borderRadius: 18, padding: 26 }}>
-            <Text style={{ fontSize: 23, fontWeight: 'bold', color: '#111' }}>Live Queue · Arrival check</Text>
-            <Text style={{ marginVertical: 14, color: '#111' }}>
+          <View style={{ backgroundColor: resolved === 'designed' ? '#fff' : surface.card, borderRadius: 18, padding: 26 }}>
+            <Text style={{ fontSize: 23, fontWeight: 'bold', color: resolved === 'designed' ? '#111' : color.ink }}>Live Queue · Arrival check</Text>
+            <Text style={{ marginVertical: 14, color: resolved === 'designed' ? '#111' : color.ink }}>
               Token #{arrivalEntry?.tokenNumber} · {arrivalEntry?.customerName ?? 'Customer'}.
               Estimated service time is around 10 minutes away. Has this customer physically arrived?
             </Text>
-            <Text style={{ color: '#222', marginBottom: 12 }}>
+            <Text style={{ color: resolved === 'designed' ? '#222' : color.muted, marginBottom: 12 }}>
               Customer response: {arrivalEntry?.customerArrivalResponse === true ? 'Yes, self-reported'
                 : arrivalEntry?.customerArrivalResponse === false ? 'Not yet' : 'Not answered'}
             </Text>

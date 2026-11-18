@@ -502,13 +502,13 @@ function DataLine({ title, value, note }: { title: string; value: string; note?:
   return <View style={styles.dataLine}><View style={styles.flex}><Text style={styles.lineStrong}>{title}</Text>{note ? <Text style={styles.muted}>{note}</Text> : null}</View><Text style={styles.lineStrong}>{value}</Text></View>;
 }
 
-const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
+const makeStyles = ({ color, resolved, surface }: ThemeTokens) => StyleSheet.create({
   screen: { gap: space[3] },
   tabs: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2], marginBottom: space[2] },
   tab: { borderWidth: 1, borderColor: color.border, borderRadius: radius.sm, paddingHorizontal: space[3], paddingVertical: space[2], backgroundColor: color.surface },
   tabSelected: { backgroundColor: color.ink, borderColor: color.ink },
   tabText: { color: color.ink, fontFamily: font.bodySemiBold, fontSize: fontSize.xs },
-  tabTextSelected: { color: ON_ACCENT },
+  tabTextSelected: { color: resolved === 'designed' ? ON_ACCENT : surface.inverseText },
   rangeRow: { flexDirection: 'row', gap: space[2] },
   range: { borderWidth: 1, borderColor: color.border, borderRadius: 16, paddingHorizontal: space[3], paddingVertical: space[2] },
   rangeSelected: { borderColor: color.accent, backgroundColor: color.accentSoft },

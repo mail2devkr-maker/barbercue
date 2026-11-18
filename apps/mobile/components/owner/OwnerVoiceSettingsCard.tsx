@@ -156,7 +156,7 @@ export function OwnerVoiceSettingsCard() {
   );
 }
 
-const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
+const makeStyles = ({ color, surface }: ThemeTokens) => StyleSheet.create({
   card: { marginBottom: space[4] },
   title: {
     fontFamily: font.displaySemiBold,
@@ -197,7 +197,7 @@ const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
     lineHeight: lineHeightFor(fontSize.xs),
     color: color.ink,
   },
-  pillTextActive: { color: color.accentContrast },
+  pillTextActive: { color: surface.inverseText },
   caption: {
     fontFamily: font.bodyRegular,
     fontSize: fontSize.xs,

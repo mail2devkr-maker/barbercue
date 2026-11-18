@@ -39,7 +39,7 @@ export function LanguageSwitcher({ compact = false }: { compact?: boolean }) {
   );
 }
 
-const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
+const makeStyles = ({ color, surface }: ThemeTokens) => StyleSheet.create({
   // flexShrink: 0 — a sibling in a flex row (e.g. Home's header title) must never compress this
   // control instead of wrapping/truncating itself; see HomeScreen's header layout for the other
   // half of the Part 7 cropping fix (the row that was pushing this off-screen, not this component).
@@ -57,5 +57,5 @@ const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   pillCompact: { minHeight: 28, paddingVertical: 4, paddingHorizontal: 8 },
   pillActive: { backgroundColor: color.ink, borderColor: color.ink },
   pillText: { fontFamily: font.bodySemiBold, fontSize: fontSize.xs, lineHeight: lineHeightFor(fontSize.xs), color: color.ink },
-  pillTextActive: { color: color.accentContrast },
+  pillTextActive: { color: surface.inverseText },
 });

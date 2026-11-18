@@ -114,8 +114,8 @@ export function PhotoGalleryViewer({
   );
 }
 
-const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: color.ink },
+const makeStyles = ({ color, surface }: ThemeTokens) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: surface.photoBackdrop },
   page: { alignItems: 'center', justifyContent: 'center' },
   image: { width: '100%', height: '100%' },
   topBar: {

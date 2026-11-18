@@ -108,7 +108,7 @@ export default function SlotSelectScreen({ route, navigation }: Props) {
   );
 }
 
-const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
+const makeStyles = ({ color, surface }: ThemeTokens) => StyleSheet.create({
   screenContent: { padding: space[5] },
   skeletonRow: { height: 44, borderRadius: radius.sm, marginBottom: space[2] },
   listContent: { paddingTop: space[2] },
@@ -126,7 +126,7 @@ const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   slotAvailable: { backgroundColor: color.surface },
   slotOccupied: { backgroundColor: color.ink, borderColor: color.ink },
   slotText: { fontFamily: font.bodySemiBold, fontSize: fontSize.xs, lineHeight: lineHeightFor(fontSize.xs), color: color.ink },
-  slotTextOccupied: { color: '#ffffff' },
+  slotTextOccupied: { color: surface.inverseText },
   legend: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted, marginTop: space[2] },
   legendAvailable: { color: color.muted },
   legendOccupied: { color: color.ink },

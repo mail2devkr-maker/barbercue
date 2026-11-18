@@ -63,7 +63,7 @@ export function SafeImage({
   );
 }
 
-const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
+const makeStyles = ({ color, surface }: ThemeTokens) => StyleSheet.create({
   placeholder: {
     backgroundColor: color.goldSoft,
     alignItems: 'center',
@@ -73,7 +73,7 @@ const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: color.ink,
+    backgroundColor: surface.photoBackdrop,
     alignItems: 'center',
     justifyContent: 'center',
   },

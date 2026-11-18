@@ -84,6 +84,10 @@ export interface SurfaceTokens {
   statusBarOn: 'light' | 'dark';
   /** Error text on an error-tinted card. */
   errorText: string;
+  /** Text on a selected pill/tab painted with the ink colour (inverts with the theme). */
+  inverseText: string;
+  /** Always-dark backdrop (photo viewer, image placeholder). */
+  photoBackdrop: string;
 }
 
 export interface ThemeTokens {
@@ -99,19 +103,19 @@ export interface ThemeTokens {
 const DESIGNED: ThemeTokens = {
   color: designedLight,
   fastQue: designedDark,
-  surface: { card: '#ffffff', onCard: designedLight.ink, statusBarOn: 'dark', errorText: '#8f302d' },
+  surface: { card: '#ffffff', onCard: designedLight.ink, statusBarOn: 'dark', errorText: '#8f302d', inverseText: '#ffffff', photoBackdrop: '#1c1a17' },
   resolved: 'designed',
 };
 const LIGHT: ThemeTokens = {
   color: designedLight,
   fastQue: fastQueOnLight,
-  surface: { card: '#ffffff', onCard: designedLight.ink, statusBarOn: 'dark', errorText: '#8f302d' },
+  surface: { card: '#ffffff', onCard: designedLight.ink, statusBarOn: 'dark', errorText: '#8f302d', inverseText: '#ffffff', photoBackdrop: '#1c1a17' },
   resolved: 'light',
 };
 const DARK: ThemeTokens = {
   color: colorOnDark,
   fastQue: designedDark,
-  surface: { card: '#171314', onCard: colorOnDark.ink, statusBarOn: 'light', errorText: '#ff8b9a' },
+  surface: { card: '#171314', onCard: colorOnDark.ink, statusBarOn: 'light', errorText: '#ff8b9a', inverseText: '#09090c', photoBackdrop: '#1c1a17' },
   resolved: 'dark',
 };
 

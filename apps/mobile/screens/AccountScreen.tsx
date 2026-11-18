@@ -377,7 +377,7 @@ const makeStyles = ({ color, surface }: ThemeTokens) => StyleSheet.create({
   },
   languagePillActive: { backgroundColor: color.ink, borderColor: color.ink },
   languagePillText: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, lineHeight: lineHeightFor(fontSize.sm), color: color.ink },
-  languagePillTextActive: { color: color.accentContrast },
+  languagePillTextActive: { color: surface.inverseText },
 
   shortcutGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: space[3], marginBottom: space[4] },
   shortcutCard: {
