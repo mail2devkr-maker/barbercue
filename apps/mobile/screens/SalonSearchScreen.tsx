@@ -44,6 +44,7 @@ import { cityQueryParams, getLocationChoice, locationChoiceLabel, setLocationCho
 import { LocationPickerModal } from '../components/location/LocationPickerModal';
 import { findCityForDeviceLocation, buildCityFallbackQuery, appendCityMatchesToNearby, getSearchGpsCoordinates, getViewerCoordinatesIfAllowed } from '../lib/nearby-city-fallback';
 import type { SearchStackParamList } from '../navigation/types';
+import { useThemedStyles, useThemeTokens, type ThemeTokens } from '../lib/theme-mode';
 
 type Props = NativeStackScreenProps<SearchStackParamList, 'SalonSearch'>;
 
@@ -159,6 +160,9 @@ function PriceFilterDropdown({
   activeMax: number | null;
   onApply: (min: number | null, max: number | null) => void;
 }) {
+  const { fastQue } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
+  const dropdownStyles = useThemedStyles(makeDropdownStyles);
   const { t } = useLanguage();
   const [open, setOpen] = useState(false);
   const [customOpen, setCustomOpen] = useState(false);
@@ -279,6 +283,8 @@ function PriceFilterDropdown({
 
 // Public discovery endpoint — no auth required, mirrors apps/web's search page.
 export default function SalonSearchScreen({ navigation, route }: Props) {
+  const { color, fastQue } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const { t, language } = useLanguage();
   const { width: windowWidth } = useWindowDimensions();
   const stackSearchRow = windowWidth < NARROW_SEARCH_ROW_WIDTH;
@@ -1038,7 +1044,7 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
   );
 }
 
-const dropdownStyles = StyleSheet.create({
+const makeDropdownStyles = ({ fastQue }: ThemeTokens) => StyleSheet.create({
   root: { flexBasis: '31%', flexGrow: 1, minWidth: 96 },
   label: {
     fontFamily: font.bodyBold,
@@ -1076,7 +1082,7 @@ const dropdownStyles = StyleSheet.create({
   optionCheck: { color: fastQue.pink, fontFamily: font.bodyBold, fontSize: fontSize.base },
 });
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color, fastQue }: ThemeTokens) => StyleSheet.create({
   screenContent: { padding: space[5] },
   // Owner (18 Nov): the one Filters button and the panel it opens (website parity).
   filterBarRow: { flexDirection: 'row', alignItems: 'flex-end', flexWrap: 'wrap', gap: space[2], marginBottom: space[2] },

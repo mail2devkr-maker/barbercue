@@ -11,6 +11,7 @@ import { useLanguage } from '../lib/language-context';
 import { color, fastQue, font, fontSize, lineHeightFor, radius, space } from '../lib/theme';
 import { EmptyState, InlineError, Screen, SectionHeader, Skeleton } from '../components/ui';
 import type { SearchStackParamList } from '../navigation/types';
+import { useThemedStyles, useThemeTokens, type ThemeTokens } from '../lib/theme-mode';
 
 type Props = NativeStackScreenProps<SearchStackParamList, 'Offers'>;
 type PublicOfferPage = { items: PublicOfferDto[]; nextCursor: string | null };
@@ -28,6 +29,8 @@ function offerKindLabel(kind: PublicOfferDto['kind']): string {
 }
 
 export default function OffersScreen({ navigation }: Props) {
+  const { color } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const { t, language } = useLanguage();
   const [items, setItems] = useState<PublicOfferDto[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -123,12 +126,12 @@ export default function OffersScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color, fastQue, surface }: ThemeTokens) => StyleSheet.create({
   screenContent: { padding: space[5] },
   skeletons: { gap: space[3] },
   skeleton: { height: 180, borderRadius: radius.lg },
   listContent: { paddingTop: space[2], paddingBottom: space[5] },
-  offerCard: { backgroundColor: '#fff', borderWidth: 1, borderColor: color.border, borderRadius: radius.lg, padding: space[4], marginBottom: space[3] },
+  offerCard: { backgroundColor: surface.card, borderWidth: 1, borderColor: color.border, borderRadius: radius.lg, padding: space[4], marginBottom: space[3] },
   offerCardPressed: { opacity: 0.82 },
   offerHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: space[2] },
   offerKind: { fontFamily: font.bodyBold, fontSize: fontSize.xs, color: color.gold, textTransform: 'uppercase', letterSpacing: 0.6 },

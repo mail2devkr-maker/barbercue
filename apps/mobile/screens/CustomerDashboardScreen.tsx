@@ -31,6 +31,7 @@ import { color, font, fontSize, radius, space } from '../lib/theme';
 import { Button, Card, SafeImage, Screen, SectionHeader, Skeleton } from '../components/ui';
 import { QueueStatusPanel } from '../components/QueueStatusPanel';
 import type { AccountStackParamList, TabParamList } from '../navigation/types';
+import { useThemedStyles, useThemeTokens, type ThemeTokens } from '../lib/theme-mode';
 
 type Nav = CompositeNavigationProp<NativeStackNavigationProp<AccountStackParamList, 'CustomerDashboard'>, BottomTabNavigationProp<TabParamList>>;
 type Load<T> = { state: 'loading' } | { state: 'error' } | { state: 'ready'; data: T };
@@ -42,6 +43,8 @@ type Load<T> = { state: 'loading' } | { state: 'error' } | { state: 'ready'; dat
  * native map and stays web-only; salons here open their directions in the maps app instead).
  */
 export default function CustomerDashboardScreen() {
+  const { color } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const navigation = useNavigation<Nav>();
   const { language } = useLanguage();
   const hi = language === Language.HI;
@@ -232,7 +235,7 @@ export default function CustomerDashboardScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   quickGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: space[3], marginBottom: space[4] },
   quickCard: { flexBasis: '47%', flexGrow: 1, backgroundColor: color.surface, borderWidth: 1, borderColor: color.border, borderRadius: radius.md, padding: space[4] },
   quickTitle: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: color.ink },

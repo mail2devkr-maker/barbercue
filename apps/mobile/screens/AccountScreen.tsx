@@ -27,6 +27,7 @@ import { AssistantEntry } from '../components/assistant/AssistantEntry';
 import { isCreditsEnabled } from '../lib/feature-flags';
 import type { AccountStackParamList, TabParamList } from '../navigation/types';
 import { TabBackButton } from '../components/TabBackButton';
+import { useThemedStyles, useThemeTokens, type ThemeTokens } from '../lib/theme-mode';
 
 type Nav = CompositeNavigationProp<
   NativeStackNavigationProp<AccountStackParamList, 'Account'>,
@@ -38,6 +39,8 @@ type Nav = CompositeNavigationProp<
 // page is read-only too); the one exception is preferredLanguage (Phase 14), which has its own
 // dedicated PATCH auth/language endpoint and switcher below, mirroring web's profile page.
 export default function AccountScreen() {
+  const { color } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const navigation = useNavigation<Nav>();
   const { user, logout, refreshMe } = useAuth();
   // Issue 9 (mobile launch mission) — this pill row and the direct pre-auth/Home switcher
@@ -343,7 +346,7 @@ export default function AccountScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color, surface }: ThemeTokens) => StyleSheet.create({
   card: { marginBottom: space[4] },
   cardTitle: { fontFamily: font.displaySemiBold, fontSize: fontSize.lg, color: color.ink, marginBottom: space[3] },
   privacyLink: { alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center', marginTop: space[2] },
@@ -377,7 +380,7 @@ const styles = StyleSheet.create({
   shortcutCard: {
     flexBasis: '47%',
     flexGrow: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: surface.card,
     borderWidth: 1,
     borderColor: color.border,
     borderRadius: radius.md,

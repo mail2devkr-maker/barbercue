@@ -11,11 +11,14 @@ import { lastViewedLabel, salonProfileParams } from '../lib/customer-dashboard';
 import { color, font, fontSize, radius, space } from '../lib/theme';
 import { Button, EmptyState, InlineError, SafeImage, Screen, SectionHeader, Skeleton } from '../components/ui';
 import type { AccountStackParamList, TabParamList } from '../navigation/types';
+import { useThemedStyles, useThemeTokens, type ThemeTokens } from '../lib/theme-mode';
 
 type Nav = CompositeNavigationProp<NativeStackNavigationProp<AccountStackParamList, 'RecentlyViewed'>, BottomTabNavigationProp<TabParamList>>;
 
 /** Recently viewed salons (website parity: /account/discover?tab=recent). Remove one or clear all. */
 export default function RecentlyViewedScreen() {
+  const { color } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const navigation = useNavigation<Nav>();
   const { language } = useLanguage();
   const hi = language === Language.HI;
@@ -119,7 +122,7 @@ export default function RecentlyViewedScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   skeleton: { height: 84, borderRadius: radius.md, marginBottom: space[3] },
   row: { flexDirection: 'row', alignItems: 'center', backgroundColor: color.surface, borderWidth: 1, borderColor: color.border, borderRadius: radius.md, marginBottom: space[3], paddingRight: space[2] },
   main: { flex: 1, flexDirection: 'row', alignItems: 'center', padding: space[3], gap: space[3] },

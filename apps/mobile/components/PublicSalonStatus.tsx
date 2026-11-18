@@ -2,8 +2,10 @@ import { StyleSheet, Text, View } from 'react-native';
 import type { PublicSalonStatusDto } from '@barbercue/shared';
 import { color, font, fontSize, radius, space } from '../lib/theme';
 import { useLanguage } from '../lib/language-context';
+import { useThemedStyles, type ThemeTokens } from '../lib/theme-mode';
 
 export function PublicSalonStatus({ status }: { status: PublicSalonStatusDto }) {
+  const styles = useThemedStyles(makeStyles);
   const { t } = useLanguage();
   return (
     <View style={styles.card} accessibilityLabel={t.liveShopSnapshotLabel}>
@@ -26,7 +28,7 @@ export function PublicSalonStatus({ status }: { status: PublicSalonStatusDto }) 
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   card: { backgroundColor: color.surfaceTint, borderWidth: 1, borderColor: color.border, borderRadius: radius.lg, padding: space[4], marginBottom: space[4] },
   headingRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: space[3] },
   headingCopy: { flex: 1 },

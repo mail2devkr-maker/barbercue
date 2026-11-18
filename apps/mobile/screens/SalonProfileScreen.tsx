@@ -11,6 +11,7 @@ import { Skeleton, ErrorState, SafeImage, PhotoGalleryViewer, PremiumButton, Pre
 import { PublicSalonStatus } from '../components/PublicSalonStatus';
 import { useLanguage } from '../lib/language-context';
 import type { SearchStackParamList } from '../navigation/types';
+import { useThemedStyles, useThemeTokens, type ThemeTokens } from '../lib/theme-mode';
 
 type Props = NativeStackScreenProps<SearchStackParamList, 'SalonProfile'>;
 
@@ -25,6 +26,7 @@ const PHOTO_TILE_HEIGHT = 174;
 // SafeImage so a broken photoUrl degrades to the same initial-letter placeholder shown when there
 // was never a photo at all, not a generic mark.
 function TeamPhoto({ url, displayName }: { url: string | null; displayName: string }) {
+  const styles = useThemedStyles(makeStyles);
   const [failed, setFailed] = useState(false);
   if (url && !failed) {
     return (
@@ -45,6 +47,8 @@ function TeamPhoto({ url, displayName }: { url: string | null; displayName: stri
 
 // Public discovery endpoint — same GET /salons/:countryCode/:citySlug/:salonSlug apps/web uses (B9).
 export default function SalonProfileScreen({ route, navigation }: Props) {
+  const { color } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const { t } = useLanguage();
   const { countryCode, citySlug, salonSlug, selectedStyleName, offerId, offerTitle } = route.params;
   const [salon, setSalon] = useState<SalonProfileDto | null>(null);
@@ -330,7 +334,7 @@ export default function SalonProfileScreen({ route, navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color, fastQue }: ThemeTokens) => StyleSheet.create({
   screenContent: { paddingHorizontal: space[4] },
   scrollContent: { paddingBottom: space[8] },
   heroSkeleton: { height: 180, borderRadius: radius.lg, marginBottom: space[4] },

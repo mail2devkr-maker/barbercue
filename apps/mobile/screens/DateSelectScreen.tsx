@@ -12,12 +12,14 @@ import { Screen, SectionHeader } from '../components/ui';
 import { dateLocaleFor } from '../lib/date-locale';
 import { useLanguage } from '../lib/language-context';
 import type { SearchStackParamList } from '../navigation/types';
+import { useThemedStyles, type ThemeTokens } from '../lib/theme-mode';
 
 type Props = NativeStackScreenProps<SearchStackParamList, 'DateSelect'>;
 
 const DAYS_AHEAD = 30;
 
 export default function DateSelectScreen({ route, navigation }: Props) {
+  const styles = useThemedStyles(makeStyles);
   const { t, language } = useLanguage();
   const { operatingHours, salonTimezone, ...rest } = route.params;
 
@@ -64,11 +66,11 @@ export default function DateSelectScreen({ route, navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color, surface }: ThemeTokens) => StyleSheet.create({
   screenContent: { padding: space[5] },
   listContent: { paddingTop: space[2] },
   card: {
-    backgroundColor: '#ffffff',
+    backgroundColor: surface.card,
     borderWidth: 1,
     borderColor: color.border,
     borderRadius: radius.md,

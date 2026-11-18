@@ -8,6 +8,7 @@ import { color, font, fontSize, radius, space } from '../lib/theme';
 import { Screen, SectionHeader, Skeleton, InlineError } from '../components/ui';
 import { useLanguage } from '../lib/language-context';
 import type { SearchStackParamList } from '../navigation/types';
+import { useThemedStyles, type ThemeTokens } from '../lib/theme-mode';
 
 type Props = NativeStackScreenProps<SearchStackParamList, 'StaffSelect'>;
 
@@ -15,6 +16,7 @@ type Props = NativeStackScreenProps<SearchStackParamList, 'StaffSelect'>;
 // component with real onError handling so a broken photoUrl degrades to the same initial-letter
 // placeholder shown when there was never a photo at all, not a permanently-broken image icon.
 function StaffPhoto({ url, displayName }: { url: string | null; displayName: string }) {
+  const styles = useThemedStyles(makeStyles);
   const [failed, setFailed] = useState(false);
   if (url && !failed) {
     return (
@@ -34,6 +36,7 @@ function StaffPhoto({ url, displayName }: { url: string | null; displayName: str
 }
 
 export default function StaffSelectScreen({ route, navigation }: Props) {
+  const styles = useThemedStyles(makeStyles);
   const { t } = useLanguage();
   const { salonId, services, ...rest } = route.params;
   const [options, setOptions] = useState<StaffOptionDto[]>([]);
@@ -115,12 +118,12 @@ export default function StaffSelectScreen({ route, navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color, surface }: ThemeTokens) => StyleSheet.create({
   screenContent: { padding: space[5] },
   skeletonCard: { height: 60, borderRadius: radius.md, marginBottom: space[3] },
   listContent: { paddingTop: space[3] },
   card: {
-    backgroundColor: '#ffffff',
+    backgroundColor: surface.card,
     borderWidth: 1,
     borderColor: color.border,
     borderRadius: radius.md,

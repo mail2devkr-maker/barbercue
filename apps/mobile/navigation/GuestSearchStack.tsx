@@ -7,7 +7,7 @@ import SlotSelectScreen from '../screens/SlotSelectScreen';
 import ConfirmBookingScreen from '../screens/ConfirmBookingScreen';
 import WalkInJoinScreen from '../screens/WalkInJoinScreen';
 import OffersScreen from '../screens/OffersScreen';
-import { lightStackOptions } from './screenOptions';
+import { useStackOptions } from './screenOptions';
 import { useLanguage } from '../lib/language-context';
 import type { SearchStackParamList } from './types';
 
@@ -23,9 +23,10 @@ const Stack = createNativeStackNavigator<SearchStackParamList>();
  * there is no customer Home tab to jump to before authentication.
  */
 export default function GuestSearchStack() {
+  const stackOptions = useStackOptions();
   const { t } = useLanguage();
   return (
-    <Stack.Navigator initialRouteName="SalonSearch" screenOptions={lightStackOptions}>
+    <Stack.Navigator initialRouteName="SalonSearch" screenOptions={stackOptions}>
       <Stack.Screen name="SalonSearch" component={SalonSearchScreen} options={{ title: t.findASalonTitle }} />
       <Stack.Screen name="Offers" component={OffersScreen} options={{ title: t.trustOffersLabel }} />
       <Stack.Screen name="SalonProfile" component={SalonProfileScreen} options={{ title: t.salonTitle }} />

@@ -7,8 +7,10 @@ import { useAuth } from '../lib/auth-context';
 import { useLanguage } from '../lib/language-context';
 import { fastQue, font, fontSize, space } from '../lib/theme';
 import { BrandLockup, InlineError, PremiumButton, PremiumScreen, PremiumSectionHeader, PremiumTextField } from '../components/ui';
+import { useThemedStyles, type ThemeTokens } from '../lib/theme-mode';
 
 export default function EmployeeLoginScreen() {
+  const styles = useThemedStyles(makeStyles);
   const { employeeLogin } = useAuth();
   const { t } = useLanguage();
   const [employeeCode, setEmployeeCode] = useState('');
@@ -95,7 +97,7 @@ export default function EmployeeLoginScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ fastQue }: ThemeTokens) => StyleSheet.create({
   passwordWrap: { position: 'relative' },
   content: { paddingHorizontal: space[5] },
   brand: { alignSelf: 'center', marginBottom: space[5] },

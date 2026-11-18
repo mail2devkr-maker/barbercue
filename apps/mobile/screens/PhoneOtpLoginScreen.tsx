@@ -10,6 +10,7 @@ import { useLanguage } from '../lib/language-context';
 import { color, fastQue, font, fontSize, radius, space } from '../lib/theme';
 import { BrandLockup, GradientView } from '../components/ui';
 import { AppleSignInButton } from '../components/auth/AppleSignInButton';
+import { useThemedStyles, useThemeTokens, type ThemeTokens } from '../lib/theme-mode';
 
 // Exact website 3-stop brand gradient (pink 0% -> coral 55% -> orange 100%, matching
 // apps/web/components/landing/landing.module.css's `--fq-gradient` on master).
@@ -19,6 +20,8 @@ const GRADIENT_STOPS = [0, 0.55, 1] as const;
 type Step = 'phone' | 'otp';
 
 function GoogleSignInButton() {
+  const { fastQue } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const { googleLogin } = useAuth();
   const { t } = useLanguage();
   const [submitting, setSubmitting] = useState(false);
@@ -69,6 +72,8 @@ function GoogleSignInButton() {
 
 // Customer-only per ARCHITECTURE.md §2 — staff/owner/admin use the web dashboard, not this app.
 export default function PhoneOtpLoginScreen() {
+  const { color, fastQue } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const { verifyCustomerOtp } = useAuth();
   const { t } = useLanguage();
   const [step, setStep] = useState<Step>('phone');
@@ -294,7 +299,7 @@ export default function PhoneOtpLoginScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color, fastQue }: ThemeTokens) => StyleSheet.create({
   root: { flex: 1, backgroundColor: fastQue.background },
   flex: { flex: 1 },
   scrollContent: {

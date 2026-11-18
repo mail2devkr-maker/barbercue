@@ -6,12 +6,14 @@ import { apiFetch } from '../lib/api';
 import { getItem } from '../lib/secure-storage';
 import { QueueStatusPanel } from '../components/QueueStatusPanel';
 import type { AuthStackParamList } from '../navigation/AuthStack';
+import { useThemedStyles, type ThemeTokens } from '../lib/theme-mode';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'GuestQueueStatus'>;
 
 /** Signed-out arrival push destination: a push alone never grants access to a queue ticket.
  * The locally stored, unguessable capability must still match this exact entry on the server. */
 export default function GuestQueueStatusScreen({ route, navigation }: Props) {
+  const styles = useThemedStyles(makeStyles);
   const { salonId, entryId } = route.params;
   const [entry, setEntry] = useState<QueueEntryDetailDto | null>(null);
   const [token, setToken] = useState<string | null>(null);
@@ -54,10 +56,10 @@ export default function GuestQueueStatusScreen({ route, navigation }: Props) {
     </View>
   );
 }
-const styles = StyleSheet.create({
-  root: { flex: 1, padding: 22, backgroundColor: '#fff' },
-  title: { fontSize: 24, fontWeight: 'bold', marginVertical: 18, color: '#141414' },
-  message: { marginVertical: 24, lineHeight: 22, color: '#333' },
-  back: { marginTop: 26, padding: 12, borderRadius: 10, backgroundColor: '#eee', alignItems: 'center' },
-  backText: { color: '#111', fontWeight: '600' },
+const makeStyles = ({ color, resolved, surface }: ThemeTokens) => StyleSheet.create({
+  root: { flex: 1, padding: 22, backgroundColor: resolved === 'designed' ? '#fff' : surface.card },
+  title: { fontSize: 24, fontWeight: 'bold', marginVertical: 18, color: (resolved === 'designed' ? '#141414' : color.ink) },
+  message: { marginVertical: 24, lineHeight: 22, color: (resolved === 'designed' ? '#333' : color.muted) },
+  back: { marginTop: 26, padding: 12, borderRadius: 10, backgroundColor: (resolved === 'designed' ? '#eee' : color.border), alignItems: 'center' },
+  backText: { color: (resolved === 'designed' ? '#111' : color.ink), fontWeight: '600' },
 });

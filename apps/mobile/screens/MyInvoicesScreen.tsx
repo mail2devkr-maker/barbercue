@@ -11,6 +11,7 @@ import { useLanguage } from '../lib/language-context';
 import { color, font, fontSize, lineHeightFor, radius, space } from '../lib/theme';
 import { EmptyState, InlineError, Screen, SectionHeader, Skeleton } from '../components/ui';
 import type { BookingsStackParamList } from '../navigation/types';
+import { useThemedStyles, useThemeTokens, type ThemeTokens } from '../lib/theme-mode';
 
 type Props = NativeStackScreenProps<BookingsStackParamList, 'MyInvoices'>;
 
@@ -25,6 +26,8 @@ function paymentLabel(status: InvoiceSummaryDto['paymentStatus']): string {
 }
 
 export default function MyInvoicesScreen({ navigation }: Props) {
+  const { color } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const { t, language } = useLanguage();
   const [items, setItems] = useState<InvoiceSummaryDto[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -112,12 +115,12 @@ export default function MyInvoicesScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color, surface }: ThemeTokens) => StyleSheet.create({
   screenContent: { padding: space[5] },
   skeletons: { gap: space[3] },
   skeleton: { height: 88, borderRadius: radius.lg },
   listContent: { paddingTop: space[2], paddingBottom: space[5] },
-  invoiceCard: { backgroundColor: '#fff', borderWidth: 1, borderColor: color.border, borderRadius: radius.lg, padding: space[4], marginBottom: space[3] },
+  invoiceCard: { backgroundColor: surface.card, borderWidth: 1, borderColor: color.border, borderRadius: radius.lg, padding: space[4], marginBottom: space[3] },
   pressed: { opacity: 0.82 },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: space[2] },
   number: { flex: 1, fontFamily: font.bodySemiBold, fontSize: fontSize.sm, lineHeight: lineHeightFor(fontSize.sm), color: color.ink },

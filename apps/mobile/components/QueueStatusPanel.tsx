@@ -7,6 +7,7 @@ import { useAuth } from '../lib/auth-context';
 import { useLanguage } from '../lib/language-context';
 import { getRealtimeSocket, joinSalonRoom, onReconnect } from '../lib/realtime';
 import { fastQue, font, fontSize, premiumShadow, radius, space } from '../lib/theme';
+import { useThemedStyles, type ThemeTokens } from '../lib/theme-mode';
 
 const ACTIVE_STATUSES = new Set(['WAITING', 'CALLED', 'IN_SERVICE']);
 
@@ -34,6 +35,7 @@ export function QueueStatusPanel({
   onEntryChange: (entry: QueueEntryDetailDto | null) => void;
   guestAccessToken?: string | null;
 }) {
+  const styles = useThemedStyles(makeStyles);
   const { user } = useAuth();
   const { t, language } = useLanguage();
   const [turnAlert, setTurnAlert] = useState(false);
@@ -246,7 +248,7 @@ export function QueueStatusPanel({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ fastQue }: ThemeTokens) => StyleSheet.create({
   card: {
     backgroundColor: fastQue.cardStrong,
     borderRadius: radius.lg,

@@ -18,10 +18,12 @@ import { QueueStatusPanel } from '../components/QueueStatusPanel';
 import { color, font, fontSize, radius, space } from '../lib/theme';
 import { Screen, SectionHeader, Button, Skeleton, InlineError } from '../components/ui';
 import type { SearchStackParamList } from '../navigation/types';
+import { useThemedStyles, type ThemeTokens } from '../lib/theme-mode';
 
 type Props = NativeStackScreenProps<SearchStackParamList, 'WalkInJoin'>;
 
 export default function WalkInJoinScreen({ route }: Props) {
+  const styles = useThemedStyles(makeStyles);
   const { salonId, services } = route.params;
   const { status, user } = useAuth();
   const { t } = useLanguage();
@@ -213,13 +215,13 @@ export default function WalkInJoinScreen({ route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color, surface }: ThemeTokens) => StyleSheet.create({
   screenContent: { padding: space[5] },
   loadingSkeleton: { height: 140, borderRadius: radius.lg },
   subtitle: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, color: color.muted, lineHeight: 20 },
   serviceList: { gap: space[2], marginBottom: space[4] },
   serviceOption: {
-    backgroundColor: '#ffffff',
+    backgroundColor: surface.card,
     borderRadius: radius.sm,
     padding: space[4],
     borderWidth: 1,
@@ -233,7 +235,7 @@ const styles = StyleSheet.create({
   fieldHint: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted, marginTop: space[1] },
   input: {
     minHeight: 48,
-    backgroundColor: '#ffffff',
+    backgroundColor: surface.card,
     borderWidth: 1,
     borderColor: color.border,
     borderRadius: radius.sm,

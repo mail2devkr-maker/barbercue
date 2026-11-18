@@ -24,6 +24,7 @@ import { TabIcon } from '../components/ui/TabIcon';
 import { EDITORIAL_ASSET_URL } from '../lib/editorial';
 import { AllServicesModal } from '../components/AllServicesModal';
 import type { AuthStackParamList } from '../navigation/AuthStack';
+import { useThemedStyles, useThemeTokens, type ThemeTokens } from '../lib/theme-mode';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'RoleSelect'>;
 
@@ -51,6 +52,8 @@ const POPULAR_SERVICE_CATEGORIES = [
  * screen with a role chooser.
  */
 export default function RoleSelectScreen({ navigation }: Props) {
+  const { color, fastQue } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const insets = useSafeAreaInsets();
   const keyboardAware = useKeyboardAwareScroll();
   const { width: windowWidth } = useWindowDimensions();
@@ -419,7 +422,7 @@ export default function RoleSelectScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color, fastQue }: ThemeTokens) => StyleSheet.create({
   root: { flex: 1, backgroundColor: fastQue.background },
   scroll: { flex: 1 },
 

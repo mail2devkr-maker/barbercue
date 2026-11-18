@@ -18,6 +18,7 @@ import { fastQue, font } from '../lib/theme';
 import { TabIcon, type TabIconName } from '../components/ui/TabIcon';
 import { AssistantFab } from '../components/assistant/AssistantFab';
 import type { TabParamList } from './types';
+import { useThemeTokens } from '../lib/theme-mode';
 
 const Tab = createBottomTabNavigator<TabParamList>();
 
@@ -104,6 +105,7 @@ function CustomerQueueArrivalPushNavigationBridge() {
 // Text-only tab labels (no icon library added) — active tab reads via color + weight, matching
 // the app's restrained, editorial visual language rather than a generic icon-driven tab bar.
 export default function RootNavigator() {
+  const { fastQue } = useThemeTokens();
   const unreadCount = useUnreadNotificationCount();
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();

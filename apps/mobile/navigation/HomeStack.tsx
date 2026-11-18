@@ -2,7 +2,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import HomeScreen from '../screens/HomeScreen';
 import CustomerDashboardScreen from '../screens/CustomerDashboardScreen';
 import StyleAdvisorScreen from '../screens/StyleAdvisorScreen';
-import { styleAdvisorHeaderOptions } from './screenOptions';
+import { useStackOptions } from './screenOptions';
 import { HomeHeaderButton } from './HomeHeaderButton';
 import { useLanguage } from '../lib/language-context';
 import type { HomeStackParamList } from './types';
@@ -10,6 +10,7 @@ import type { HomeStackParamList } from './types';
 const Stack = createNativeStackNavigator<HomeStackParamList>();
 
 export default function HomeStack() {
+  const stackOptions = useStackOptions();
   const { t } = useLanguage();
   return (
     <Stack.Navigator initialRouteName="CustomerDashboard">
@@ -22,7 +23,7 @@ export default function HomeStack() {
       <Stack.Screen
         name="StyleAdvisor"
         component={StyleAdvisorScreen}
-        options={{ ...styleAdvisorHeaderOptions, title: t.aiStyleAdvisor, headerRight: () => <HomeHeaderButton /> }}
+        options={{ ...stackOptions, title: t.aiStyleAdvisor, headerRight: () => <HomeHeaderButton /> }}
       />
     </Stack.Navigator>
   );

@@ -13,6 +13,7 @@ import { fastQue, font, fontSize, radius, space } from '../lib/theme';
 import { BrandLockup, InlineError, PremiumButton, PremiumScreen, PremiumSectionHeader } from '../components/ui';
 import type { UiStrings } from '@barbercue/shared';
 import type { AuthStackParamList } from '../navigation/AuthStack';
+import { useThemedStyles, useThemeTokens, type ThemeTokens } from '../lib/theme-mode';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'OwnerStaffLogin'>;
 
@@ -25,6 +26,8 @@ function copyFor(t: UiStrings, role: 'OWNER' | 'STAFF'): { eyebrow: string; titl
 // This screen never invents a password-reset or 2FA step the backend doesn't have; forgot-password
 // exists (auth/forgot-password) and could be wired in later the same way web's page does it.
 export default function OwnerStaffLoginScreen({ route, navigation }: Props) {
+  const { fastQue } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const { role } = route.params;
   const { staffLogin, staffGoogleLogin } = useAuth();
   const { t } = useLanguage();
@@ -156,7 +159,7 @@ export default function OwnerStaffLoginScreen({ route, navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ fastQue }: ThemeTokens) => StyleSheet.create({
   screenContent: { padding: space[5] },
   brandLockup: { alignSelf: 'center', marginBottom: space[5] },
   field: { marginBottom: space[4] },

@@ -46,6 +46,7 @@ import { TabIcon } from '../components/ui/TabIcon';
 import { EDITORIAL_ASSET_URL } from '../lib/editorial';
 import { AllServicesModal } from '../components/AllServicesModal';
 import type { HomeStackParamList, TabParamList } from '../navigation/types';
+import { useThemedStyles, useThemeTokens, type ThemeTokens } from '../lib/theme-mode';
 
 type Props = CompositeScreenProps<
   NativeStackScreenProps<HomeStackParamList, 'Home'>,
@@ -89,6 +90,8 @@ function formatSlot(iso: string, language: Language): string {
 }
 
 export default function HomeScreen({ navigation }: Props) {
+  const { color, fastQue } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const insets = useSafeAreaInsets();
   const keyboardAware = useKeyboardAwareScroll();
   const { width: windowWidth } = useWindowDimensions();
@@ -609,7 +612,7 @@ export default function HomeScreen({ navigation }: Props) {
 // eyebrow/headline/subcopy/benefit-row stack with room to spare.
 const HERO_HEIGHT = 336;
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color, fastQue }: ThemeTokens) => StyleSheet.create({
   dashboardCard: { marginHorizontal: space[4], marginTop: space[3], marginBottom: space[2], padding: space[4], borderRadius: radius.lg, backgroundColor: fastQue.card, borderWidth: 1, borderColor: fastQue.borderStrong },
   dashboardCardTitle: { fontFamily: font.bodyBold, fontSize: fontSize.base, color: fastQue.text },
   dashboardCardHint: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, color: fastQue.textSecondary, marginTop: 2 },

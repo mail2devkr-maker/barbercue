@@ -32,6 +32,7 @@ import { useAuth } from '../lib/auth-context';
 import { useOptionalSalon } from '../lib/salon-context';
 import { fastQue, font, fontSize, radius, space } from '../lib/theme';
 import { PremiumButton, PremiumCard, PremiumScreen, PremiumSectionHeader, PremiumTextField } from '../components/ui';
+import { useThemedStyles, type ThemeTokens } from '../lib/theme-mode';
 
 export interface AssistantScreenParams {
   salonId?: string;
@@ -70,6 +71,7 @@ interface ConversationTurn {
 }
 
 export default function AssistantScreen({ route }: { route?: { params?: AssistantScreenParams } } = {}) {
+  const styles = useThemedStyles(makeStyles);
   const { user } = useAuth();
   const salonContext = useOptionalSalon();
   const routeSalonId = route?.params?.salonId;
@@ -619,7 +621,7 @@ export default function AssistantScreen({ route }: { route?: { params?: Assistan
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ fastQue }: ThemeTokens) => StyleSheet.create({
   voicePanel: { gap: space[2], marginBottom: space[2] },
   voiceLive: { gap: space[2], padding: space[3], borderRadius: radius.md, borderWidth: 1, borderColor: fastQue.borderStrong, backgroundColor: fastQue.card },
   voiceState: { color: fastQue.text, fontFamily: font.bodyBold, fontSize: fontSize.base },

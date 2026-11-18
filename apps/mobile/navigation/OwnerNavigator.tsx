@@ -24,6 +24,7 @@ import { navigationRef } from './navigation-ref';
 import { subscribeToOwnerBookingPushNavigation } from '../lib/push-navigation';
 import { subscribeQueueArrivalNavigation } from '../lib/queue-push-navigation';
 import { OwnerArrivalPromptCoordinator } from '../components/owner/OwnerArrivalPromptCoordinator';
+import { useThemedStyles, useThemeTokens, type ThemeTokens } from '../lib/theme-mode';
 
 export type OwnerTabParamList = {
   OwnerDashboardTab: undefined;
@@ -69,6 +70,8 @@ export default function OwnerNavigator() {
  * - Otherwise: every workplace is already ACTIVE/SUSPENDED — the normal tab shell.
  */
 function OwnerNavigatorGate() {
+  const { fastQue } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const { workplaces, loading, reload } = useSalon();
 
   if (loading) {
@@ -92,6 +95,7 @@ function OwnerNavigatorGate() {
 }
 
 function OwnerTabs() {
+  const { fastQue } = useThemeTokens();
   const unreadCount = useUnreadNotificationCount();
   const { t } = useLanguage();
   const { selectedSalonId } = useSalon();
@@ -206,6 +210,6 @@ function tabOptions(label: string, icon: TabIconName) {
   };
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ fastQue }: ThemeTokens) => StyleSheet.create({
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: fastQue.background },
 });

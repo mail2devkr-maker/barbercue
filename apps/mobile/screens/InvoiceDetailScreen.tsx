@@ -10,10 +10,12 @@ import { useLanguage } from '../lib/language-context';
 import { color, font, fontSize, lineHeightFor, radius, space } from '../lib/theme';
 import { Card, InlineError, Screen, SectionHeader, Skeleton } from '../components/ui';
 import type { BookingsStackParamList } from '../navigation/types';
+import { useThemedStyles, type ThemeTokens } from '../lib/theme-mode';
 
 type Props = NativeStackScreenProps<BookingsStackParamList, 'InvoiceDetail'>;
 
 export default function InvoiceDetailScreen({ route }: Props) {
+  const styles = useThemedStyles(makeStyles);
   const { invoiceId } = route.params;
   const { language } = useLanguage();
   const [invoice, setInvoice] = useState<InvoiceDetailDto | null>(null);
@@ -76,7 +78,7 @@ export default function InvoiceDetailScreen({ route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   screenContent: { padding: space[5] },
   skeleton: { height: 260, borderRadius: radius.lg },
   card: { marginBottom: space[4] },
