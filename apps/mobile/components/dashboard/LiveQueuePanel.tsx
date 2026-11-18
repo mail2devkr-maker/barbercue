@@ -502,11 +502,6 @@ export const LiveQueuePanel = forwardRef<LiveQueuePanelHandle, { salonId: string
   const bufferRow = !ownerTools || typeof data.serviceBufferMinutes !== 'number' ? null : (
     <View style={styles.bufferBox}>
       <Text style={styles.autoLabel}>{hi ? 'हर सेवा के बाद बफ़र' : 'Buffer after each service'}</Text>
-      <Text style={styles.meta}>
-        {hi
-          ? 'हर सेवा के बाद इतने मिनट खाली रखे जाते हैं ताकि ग्राहक की जोड़ी गई सेवा से अगली बुकिंग लेट न हो।'
-          : 'Minutes kept free after every service, so an extra service never delays the next appointment.'}
-      </Text>
       <View style={styles.chipRow}>
         {SERVICE_BUFFER_CHOICES.map((minutes) => {
           const selected = data.serviceBufferMinutes === minutes;

@@ -7,6 +7,7 @@ import { EmptyState, Skeleton, ErrorState, PremiumScreen, PremiumSectionHeader }
 import { QueueStatusPanel } from '../components/QueueStatusPanel';
 import { useLanguage } from '../lib/language-context';
 import type { TabParamList } from '../navigation/types';
+import { TabBackButton } from '../components/TabBackButton';
 
 const ACTIVE_QUEUE_STATUSES = new Set(['WAITING', 'CALLED', 'IN_SERVICE']);
 
@@ -40,6 +41,7 @@ export default function QueueScreen() {
 
   return (
     <PremiumScreen refreshing={refreshing} onRefresh={() => void load(true)}>
+      <TabBackButton />
       <PremiumSectionHeader eyebrow={t.liveQueue} title={t.queueStatusTitle} />
 
       {loading ? (

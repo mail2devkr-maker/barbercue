@@ -115,6 +115,8 @@ export default function RootNavigator() {
       <CustomerBookingPushNavigationBridge />
       <CustomerQueueArrivalPushNavigationBridge />
       <Tab.Navigator
+        // Owner (18 Nov): Back (the new in-app button and the phone's own) returns to the PREVIOUS tab.
+        backBehavior="history"
         screenOptions={{
         headerShown: false,
         tabBarHideOnKeyboard: true,
@@ -144,7 +146,7 @@ export default function RootNavigator() {
         tabBarIconStyle: { marginTop: 2 },
       }}
     >
-      <Tab.Screen name="HomeTab" component={HomeStack} options={tabOptions(t.tabHome, 'home')} />
+      <Tab.Screen name="HomeTab" component={HomeStack} options={tabOptions(t.tabDashboard, 'home')} />
       <Tab.Screen name="SearchTab" component={SearchStack} options={tabOptions(t.tabSearch, 'search')} />
       <Tab.Screen name="BookingsTab" component={BookingsStack} options={tabOptions(t.tabBookings, 'bookings')} />
       <Tab.Screen name="QueueTab" component={QueueStack} options={tabOptions(t.tabQueue, 'queue')} />

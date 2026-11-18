@@ -19,12 +19,12 @@ export function HomeHeaderButton() {
 
   function goHome() {
     navigation.popToTop();
-    navigation.getParent<BottomTabNavigationProp<TabParamList>>()?.navigate('HomeTab', { screen: 'Home' });
+    navigation.getParent<BottomTabNavigationProp<TabParamList>>()?.navigate('HomeTab', { screen: 'CustomerDashboard' });
   }
 
   return (
     <Pressable onPress={goHome} hitSlop={8} style={styles.button}>
-      <Text style={styles.text}>{t.homeButtonLabel}</Text>
+      <Text style={styles.text}>{t.tabDashboard}</Text>
     </Pressable>
   );
 }

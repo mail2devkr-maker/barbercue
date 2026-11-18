@@ -105,6 +105,8 @@ function OwnerTabs() {
   return (
     <>
     <Tab.Navigator
+      // Owner (18 Nov): Back (the new in-app button and the phone's own) returns to the PREVIOUS tab.
+      backBehavior="history"
       screenListeners={({ route }) => ({
         focus: () => setStatusBarStyle(route.name === 'OwnerDashboardTab' ? 'light' : 'dark'),
       })}

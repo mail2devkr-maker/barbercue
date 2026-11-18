@@ -7,6 +7,7 @@ import { lightStackOptions } from './screenOptions';
 import { HomeHeaderButton } from './HomeHeaderButton';
 import { useLanguage } from '../lib/language-context';
 import type { BookingsStackParamList } from './types';
+import { TabBackButton } from '../components/TabBackButton';
 
 const Stack = createNativeStackNavigator<BookingsStackParamList>();
 
@@ -14,7 +15,7 @@ export default function BookingsStack() {
   const { t } = useLanguage();
   return (
     <Stack.Navigator initialRouteName="MyBookings" screenOptions={lightStackOptions}>
-      <Stack.Screen name="MyBookings" component={MyBookingsScreen} options={{ title: t.myBookingsTitle }} />
+      <Stack.Screen name="MyBookings" component={MyBookingsScreen} options={{ title: t.myBookingsTitle, headerLeft: () => <TabBackButton compact /> }} />
       <Stack.Screen
         name="BookingDetail"
         component={BookingDetailScreen}

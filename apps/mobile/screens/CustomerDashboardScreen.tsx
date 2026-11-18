@@ -98,7 +98,7 @@ export default function CustomerDashboardScreen() {
       onPress: () => navigation.navigate('BookingsTab', { screen: 'MyBookings', initial: false }),
     },
     ...(creditsOn
-      ? [{ key: 'rewards', title: hi ? 'मेरे रिवॉर्ड' : 'My Rewards', hint: 'FastQue Credits', onPress: () => navigation.navigate('CreditsHistory') }]
+      ? [{ key: 'rewards', title: hi ? 'मेरे रिवॉर्ड' : 'My Rewards', hint: 'FastQue Credits', onPress: () => navigation.navigate('AccountTab', { screen: 'CreditsHistory', initial: false }) }]
       : []),
   ];
 
@@ -170,7 +170,7 @@ export default function CustomerDashboardScreen() {
                 <Text style={styles.meta}>{hi ? 'FastQue क्रेडिट उपलब्ध' : 'FastQue Credits available'}</Text>
               </>
             )}
-            <Button title={hi ? 'रिवॉर्ड देखें' : 'View Rewards'} variant="outline" onPress={() => navigation.navigate('CreditsHistory')} style={styles.action} />
+            <Button title={hi ? 'रिवॉर्ड देखें' : 'View Rewards'} variant="outline" onPress={() => navigation.navigate('AccountTab', { screen: 'CreditsHistory', initial: false })} style={styles.action} />
           </Card>
         )}
 
@@ -191,7 +191,7 @@ export default function CustomerDashboardScreen() {
               </View>
             </Pressable>
           ))}
-          <Button title={hi ? 'सारे हाल में देखे गए' : 'All recently viewed'} variant="outline" onPress={() => navigation.navigate('RecentlyViewed')} style={styles.action} />
+          <Button title={hi ? 'सारे हाल में देखे गए' : 'All recently viewed'} variant="outline" onPress={() => navigation.navigate('AccountTab', { screen: 'RecentlyViewed', initial: false })} style={styles.action} />
         </Card>
 
         <Card style={styles.card}>
@@ -208,7 +208,7 @@ export default function CustomerDashboardScreen() {
               {r.comment ? <Text style={styles.meta} numberOfLines={2}>{r.comment}</Text> : null}
             </View>
           ))}
-          <Button title={hi ? 'सारी समीक्षाएँ' : 'All reviews'} variant="outline" onPress={() => navigation.navigate('MyReviews')} style={styles.action} />
+          <Button title={hi ? 'सारी समीक्षाएँ' : 'All reviews'} variant="outline" onPress={() => navigation.navigate('AccountTab', { screen: 'MyReviews', initial: false })} style={styles.action} />
         </Card>
 
         <Card style={styles.card}>
@@ -224,7 +224,7 @@ export default function CustomerDashboardScreen() {
               <Text style={styles.meta}>{lastViewedLabel(n.createdAt, language)}</Text>
             </View>
           ))}
-          <Button title={hi ? 'सारी सूचनाएँ' : 'All notifications'} variant="outline" onPress={() => navigation.navigate('Notifications')} style={styles.action} />
+          <Button title={hi ? 'सारी सूचनाएँ' : 'All notifications'} variant="outline" onPress={() => navigation.navigate('AccountTab', { screen: 'Notifications', initial: false })} style={styles.action} />
         </Card>
         <View style={styles.bottom} />
       </ScrollView>
