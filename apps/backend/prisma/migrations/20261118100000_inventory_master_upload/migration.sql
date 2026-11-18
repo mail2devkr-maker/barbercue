@@ -60,7 +60,7 @@ CREATE TABLE "inventory_upload_errors" (
     "createdAt" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "inventory_upload_errors_pkey" PRIMARY KEY ("id"),
-    CONSTRAINT "inventory_upload_errors_phase_check" CHECK ("phase" IN ('PREVIEW', 'COMMIT'))
+    CONSTRAINT "inventory_upload_errors_phase_check" CHECK ("phase"::text IN ('PREVIEW'::text, 'COMMIT'::text))
 );
 
 CREATE TABLE "catalog_change_requests" (
