@@ -7,6 +7,7 @@ import { useLanguage } from '../lib/language-context';
 import { fastQue, font, fontSize, radius, space } from '../lib/theme';
 import { InlineError, PremiumButton, PremiumScreen, PremiumSectionHeader } from '../components/ui';
 import type { AuthStackParamList } from '../navigation/AuthStack';
+import { useThemedStyles, useThemeTokens, type ThemeTokens } from '../lib/theme-mode';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'PasswordRecovery'>;
 
@@ -16,6 +17,8 @@ type Props = NativeStackScreenProps<AuthStackParamList, 'PasswordRecovery'>;
  * surfaces, so native does not create a second token-handling implementation.
  */
 export default function OwnerStaffPasswordRecoveryScreen({ navigation, route }: Props) {
+  const { fastQue } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const { audience } = route.params;
   const { t } = useLanguage();
   const [email, setEmail] = useState('');
@@ -101,7 +104,7 @@ export default function OwnerStaffPasswordRecoveryScreen({ navigation, route }: 
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ fastQue }: ThemeTokens) => StyleSheet.create({
   screenContent: { padding: space[5] },
   field: { marginBottom: space[4] },
   label: { fontFamily: font.bodySemiBold, fontSize: fontSize.xs, color: fastQue.text, marginBottom: space[2] },

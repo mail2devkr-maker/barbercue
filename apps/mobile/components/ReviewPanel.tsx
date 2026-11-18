@@ -6,8 +6,10 @@ import { apiFetch, ApiError } from '../lib/api';
 import { useLanguage } from '../lib/language-context';
 import { color, font, fontSize, radius, space } from '../lib/theme';
 import { Button, Card, InlineError } from './ui';
+import { useThemedStyles, useThemeTokens, type ThemeTokens } from '../lib/theme-mode';
 
 function StarPicker({ value, onChange }: { value: number; onChange: (rating: number) => void }) {
+  const styles = useThemedStyles(makeStyles);
   return (
     <View style={styles.starRow}>
       {[1, 2, 3, 4, 5].map((star) => (
@@ -20,6 +22,7 @@ function StarPicker({ value, onChange }: { value: number; onChange: (rating: num
 }
 
 function StarDisplay({ rating }: { rating: number }) {
+  const styles = useThemedStyles(makeStyles);
   return (
     <Text style={styles.starDisplay}>
       <Text style={styles.starFilled}>{'★'.repeat(rating)}</Text>
@@ -40,6 +43,8 @@ export function ReviewPanel({
   booking: BookingDetailDto;
   onReviewed: (bookingId: string) => void;
 }) {
+  const { color } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const { t } = useLanguage();
   const [review, setReview] = useState<ReviewDetailDto | null>(null);
   const [loaded, setLoaded] = useState(!booking.hasReview);
@@ -148,7 +153,7 @@ export function ReviewPanel({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   card: { marginBottom: space[4] },
   title: { fontFamily: font.displaySemiBold, fontSize: fontSize.base, color: color.ink, marginBottom: space[2] },
   starRow: { flexDirection: 'row', gap: space[1] },

@@ -12,6 +12,7 @@ import { newIdempotencyKey } from '../../lib/idempotency';
 import { useLanguage } from '../../lib/language-context';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 import { Button, InlineError } from '../ui';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 /**
  * Live-visit add-on mission (17 Nov 2026) — Android and iOS share this exact component (no Platform
@@ -28,6 +29,7 @@ export function AddOnServicesRow({
   services: ServiceOptionDto[];
   onChanged: () => void;
 }) {
+  const styles = useThemedStyles(makeStyles);
   const { language } = useLanguage();
   const hi = language === Language.HI;
   const [picking, setPicking] = useState(false);
@@ -147,7 +149,7 @@ export function visitServiceLabel(entry: QueueEntryDetailDto): string | null {
   return parts.length ? parts.join(' + ') : null;
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   wrap: { marginTop: space[2], gap: space[2] },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2] },
   addOnChip: {

@@ -13,6 +13,7 @@ import {
 import { color, font, fontSize, space } from '../../lib/theme';
 import { useLanguage } from '../../lib/language-context';
 import { SafeImage } from './SafeImage';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 export type GalleryPhoto = { id: string; url: string; altText: string | null };
 
@@ -36,6 +37,7 @@ export function PhotoGalleryViewer({
   visible: boolean;
   onClose: () => void;
 }) {
+  const styles = useThemedStyles(makeStyles);
   const { t } = useLanguage();
   const [index, setIndex] = useState(initialIndex);
   // Reactive width: tablets and unfolded foldables can rotate while the viewer is open.
@@ -112,8 +114,8 @@ export function PhotoGalleryViewer({
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: color.ink },
+const makeStyles = ({ color, surface }: ThemeTokens) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: surface.photoBackdrop },
   page: { alignItems: 'center', justifyContent: 'center' },
   image: { width: '100%', height: '100%' },
   topBar: {

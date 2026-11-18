@@ -1,14 +1,13 @@
 .page {
   min-height: 100vh;
   padding: 24px 16px 64px;
-  color: #f8f4ef;
-  background:
-    radial-gradient(
+  color: var(--tv-fg-f8f4ef, #f8f4ef);
+  background: radial-gradient(
       circle at 15% 0,
       rgba(242, 10, 131, 0.1),
       transparent 25rem
     ),
-    #0d0c10;
+    var(--tv-bg-0d0c10, #0d0c10);
 }
 .shell {
   width: min(980px, 100%);
@@ -43,15 +42,15 @@
 }
 .sub,
 .muted {
-  color: rgba(248, 244, 239, 0.63);
+  color: var(--tv-fg-rgba-248-244-239-a0_63, rgba(248, 244, 239, 0.63));
   line-height: 1.6;
 }
 .panel {
   margin: 16px 0;
   padding: clamp(14px, 3vw, 22px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--tv-bg-rgba-255-255-255-a0_1, rgba(255, 255, 255, 0.1));
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.035);
+  background: var(--tv-bg-rgba-255-255-255-a0_035, rgba(255, 255, 255, 0.035));
 }
 .panelHeader {
   display: flex;
@@ -66,7 +65,7 @@
 }
 .panelHeader span,
 .panelHeader time {
-  color: rgba(248, 244, 239, 0.55);
+  color: var(--tv-fg-rgba-248-244-239-a0_55, rgba(248, 244, 239, 0.55));
   font-size: 0.78rem;
 }
 .voiceBar {
@@ -80,7 +79,7 @@
   display: grid;
   flex: 1 1 190px;
   gap: 6px;
-  color: rgba(248, 244, 239, 0.82);
+  color: var(--tv-fg-rgba-248-244-239-a0_82, rgba(248, 244, 239, 0.82));
   font-size: 0.8rem;
   font-weight: 700;
 }
@@ -90,10 +89,10 @@
   width: 100%;
   min-height: 44px;
   box-sizing: border-box;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid var(--tv-bg-rgba-255-255-255-a0_14, rgba(255, 255, 255, 0.14));
   border-radius: 10px;
-  background: #121116;
-  color: #f8f4ef;
+  background: var(--tv-bg-121116, #121116);
+  color: var(--tv-fg-f8f4ef, #f8f4ef);
   padding: 10px 12px;
   font: inherit;
   font-size: 0.9rem;
@@ -110,7 +109,7 @@
   outline-offset: 1px;
 }
 .privacy {
-  color: rgba(248, 244, 239, 0.55);
+  color: var(--tv-fg-rgba-248-244-239-a0_55, rgba(248, 244, 239, 0.55));
   font-size: 0.76rem;
   line-height: 1.55;
 }
@@ -137,8 +136,8 @@
 }
 .secondary,
 .smallButton {
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  color: #f8f4ef;
+  border: 1px solid var(--tv-bg-rgba-255-255-255-a0_16, rgba(255, 255, 255, 0.16));
+  color: var(--tv-fg-f8f4ef, #f8f4ef);
   background: transparent;
 }
 .smallButton {
@@ -169,7 +168,7 @@
 }
 .extractRow span,
 .actions span {
-  color: rgba(248, 244, 239, 0.5);
+  color: var(--tv-fg-rgba-248-244-239-a0_5, rgba(248, 244, 239, 0.5));
   font-size: 0.76rem;
 }
 .fields {
@@ -182,7 +181,7 @@
   margin: 18px 0;
   padding: 14px;
   border-radius: 14px;
-  background: rgba(0, 0, 0, 0.18);
+  background: var(--tv-bg-rgba-0-0-0-a0_18, rgba(0, 0, 0, 0.18));
 }
 .serviceRow {
   display: grid;
@@ -196,7 +195,7 @@
   align-items: flex-start;
   gap: 10px;
   margin: 18px 0;
-  color: rgba(248, 244, 239, 0.8);
+  color: var(--tv-fg-rgba-248-244-239-a0_8, rgba(248, 244, 239, 0.8));
   font-size: 0.82rem;
   line-height: 1.45;
 }
@@ -237,9 +236,9 @@
   display: grid;
   gap: 8px;
   padding: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--tv-bg-rgba-255-255-255-a0_08, rgba(255, 255, 255, 0.08));
   border-radius: 13px;
-  background: rgba(0, 0, 0, 0.16);
+  background: var(--tv-bg-rgba-0-0-0-a0_16, rgba(0, 0, 0, 0.16));
 }
 .historyCard > div {
   display: flex;
@@ -248,7 +247,7 @@
 }
 .historyCard time,
 .historyCard small {
-  color: rgba(248, 244, 239, 0.55);
+  color: var(--tv-fg-rgba-248-244-239-a0_55, rgba(248, 244, 239, 0.55));
   font-size: 0.76rem;
 }
 .historyCard p {

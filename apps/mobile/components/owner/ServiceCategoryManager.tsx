@@ -5,6 +5,7 @@ import { apiFetch, ApiError } from '../../lib/api';
 import { existingNode, parseServiceTree, serviceCounts, sortedTree, taxonomyErrorText, validateNodeName, type ServiceTree } from '../../lib/service-taxonomy-web';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 import { Button, InlineError } from '../ui';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 /**
  * Website parity for apps/web/components/dashboard/ServiceCategoryManager.tsx: add, rename and delete
@@ -16,6 +17,7 @@ import { Button, InlineError } from '../ui';
 type Editing = { kind: 'category'; id: string; name: string } | { kind: 'sub'; id: string; categoryId: string; name: string } | null;
 
 export function ServiceCategoryManager({ salonId, onChanged }: { salonId: string; onChanged?: () => void }) {
+  const styles = useThemedStyles(makeStyles);
   const root = `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}`;
   const treePath = `${root}/service-categories`;
   const [tree, setTree] = useState<ServiceTree | null>(null);
@@ -151,7 +153,7 @@ export function ServiceCategoryManager({ salonId, onChanged }: { salonId: string
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   wrap: { gap: space[2] },
   row: { flexDirection: 'row', alignItems: 'center', gap: space[2], flexWrap: 'wrap' },
   flex: { flex: 1, minWidth: 140 },

@@ -3,6 +3,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SERVICE_CATALOG, type ServiceCatalogItem } from '../lib/service-catalog';
 import { fastQue, font, fontSize, lineHeightFor, radius, space } from '../lib/theme';
 import { SafeImage } from './ui';
+import { useThemedStyles, type ThemeTokens } from '../lib/theme-mode';
 
 /**
  * Owner report (14 Nov): "View all" under Popular Services jumped straight to search. It now opens
@@ -19,6 +20,7 @@ export function AllServicesModal({
   onClose: () => void;
   onPick: (value: string) => void;
 }) {
+  const styles = useThemedStyles(makeStyles);
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const columns = width >= 600 ? 4 : 3;
@@ -66,7 +68,7 @@ export function AllServicesModal({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ fastQue }: ThemeTokens) => StyleSheet.create({
   root: { flex: 1, backgroundColor: fastQue.background },
   header: {
     flexDirection: 'row',

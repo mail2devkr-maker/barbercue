@@ -25,6 +25,7 @@ import { ServiceUsageSheet } from '../owner/ServiceUsageSheet';
 import type { UiStrings } from '@barbercue/shared';
 import { ChairModeRow, type ChairOccupancy } from './ChairModeRow';
 import { AddOnServicesRow, visitServiceLabel } from './AddOnServicesRow';
+import { useThemedStyles, useThemeTokens, type ThemeTokens } from '../../lib/theme-mode';
 
 function dashboardBase(salonId: string): string {
   return `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.queue}`;
@@ -68,6 +69,7 @@ function EntryRow({
   services: ServiceOptionDto[];
   onAction: () => void;
 }) {
+  const styles = useThemedStyles(makeStyles);
   const { t, language } = useLanguage();
   const [assigning, setAssigning] = useState(false);
   // Part 7 — an appointment booked with a specific barber locks normal assignment to that barber
@@ -302,6 +304,8 @@ export const LiveQueuePanel = forwardRef<LiveQueuePanelHandle, { salonId: string
   { salonId, ownerTools = false },
   ref,
 ) {
+  const { color, resolved, surface } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const { t, language } = useLanguage();
   const hi = language === Language.HI;
   const [data, setData] = useState<DashboardQueueDto | null>(null);
@@ -577,13 +581,13 @@ export const LiveQueuePanel = forwardRef<LiveQueuePanelHandle, { salonId: string
       <Modal transparent animationType="fade" visible={Boolean(arrivalEntry)}
         onRequestClose={() => undefined}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,.92)', justifyContent: 'center', padding: 22 }}>
-          <View style={{ backgroundColor: '#fff', borderRadius: 18, padding: 26 }}>
-            <Text style={{ fontSize: 23, fontWeight: 'bold', color: '#111' }}>Live Queue · Arrival check</Text>
-            <Text style={{ marginVertical: 14, color: '#111' }}>
+          <View style={{ backgroundColor: resolved === 'designed' ? '#fff' : surface.card, borderRadius: 18, padding: 26 }}>
+            <Text style={{ fontSize: 23, fontWeight: 'bold', color: resolved === 'designed' ? '#111' : color.ink }}>Live Queue · Arrival check</Text>
+            <Text style={{ marginVertical: 14, color: resolved === 'designed' ? '#111' : color.ink }}>
               Token #{arrivalEntry?.tokenNumber} · {arrivalEntry?.customerName ?? 'Customer'}.
               Estimated service time is around 10 minutes away. Has this customer physically arrived?
             </Text>
-            <Text style={{ color: '#222', marginBottom: 12 }}>
+            <Text style={{ color: resolved === 'designed' ? '#222' : color.muted, marginBottom: 12 }}>
               Customer response: {arrivalEntry?.customerArrivalResponse === true ? 'Yes, self-reported'
                 : arrivalEntry?.customerArrivalResponse === false ? 'Not yet' : 'Not answered'}
             </Text>
@@ -605,7 +609,7 @@ export const LiveQueuePanel = forwardRef<LiveQueuePanelHandle, { salonId: string
 
 type QueueView = 'active' | 'completed' | 'noShow' | 'history';
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   bufferBox: { marginBottom: space[3], gap: space[2] },
   tabRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2], marginBottom: space[3] },
   skeleton: { height: 100, borderRadius: radius.lg, marginBottom: space[3] },

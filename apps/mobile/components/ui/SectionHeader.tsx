@@ -1,5 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { color, font, fontSize, lineHeightFor, space } from '../../lib/theme';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 interface SectionHeaderProps {
   eyebrow?: string;
@@ -10,6 +11,7 @@ interface SectionHeaderProps {
 /** Gold eyebrow (decorative only) + Fraunces title + muted Work Sans subtitle — the recurring
  * copy hierarchy from the login screen, reused for every section/screen header. */
 export function SectionHeader({ eyebrow, title, subtitle }: SectionHeaderProps) {
+  const styles = useThemedStyles(makeStyles);
   return (
     <View style={styles.container}>
       {eyebrow && <Text style={styles.eyebrow}>{eyebrow}</Text>}
@@ -19,7 +21,7 @@ export function SectionHeader({ eyebrow, title, subtitle }: SectionHeaderProps) 
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   container: { marginBottom: space[4] },
   eyebrow: {
     fontFamily: font.bodyBold,

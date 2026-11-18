@@ -46,6 +46,7 @@ import { TabIcon } from '../components/ui/TabIcon';
 import { EDITORIAL_ASSET_URL } from '../lib/editorial';
 import { AllServicesModal } from '../components/AllServicesModal';
 import type { HomeStackParamList, TabParamList } from '../navigation/types';
+import { ON_ACCENT, useThemedStyles, useThemeTokens, type ThemeTokens } from '../lib/theme-mode';
 
 type Props = CompositeScreenProps<
   NativeStackScreenProps<HomeStackParamList, 'Home'>,
@@ -89,6 +90,8 @@ function formatSlot(iso: string, language: Language): string {
 }
 
 export default function HomeScreen({ navigation }: Props) {
+  const { color, fastQue } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const insets = useSafeAreaInsets();
   const keyboardAware = useKeyboardAwareScroll();
   const { width: windowWidth } = useWindowDimensions();
@@ -333,7 +336,7 @@ export default function HomeScreen({ navigation }: Props) {
                 hitSlop={8}
               >
                 <View style={styles.benefitIconWrap}>
-                  <TabIcon name="bookings" color={color.surface} size={18} />
+                  <TabIcon name="bookings" color={ON_ACCENT} size={18} />
                 </View>
                 <Text style={styles.benefitLabel}>{t.bookAheadKicker}</Text>
               </Pressable>
@@ -345,7 +348,7 @@ export default function HomeScreen({ navigation }: Props) {
                 hitSlop={8}
               >
                 <View style={styles.benefitIconWrap}>
-                  <TabIcon name="queue" color={color.surface} size={18} />
+                  <TabIcon name="queue" color={ON_ACCENT} size={18} />
                 </View>
                 <Text style={styles.benefitLabel}>{t.joinLiveKicker}</Text>
               </Pressable>
@@ -357,7 +360,7 @@ export default function HomeScreen({ navigation }: Props) {
                 hitSlop={8}
               >
                 <View style={styles.benefitIconWrap}>
-                  <TabIcon name="offer" color={color.surface} size={18} />
+                  <TabIcon name="offer" color={ON_ACCENT} size={18} />
                 </View>
                 <Text style={styles.benefitLabel}>{t.trustOffersLabel}</Text>
               </Pressable>
@@ -375,7 +378,7 @@ export default function HomeScreen({ navigation }: Props) {
             >
               {searchMode === 'barber' ? (
                 <GradientView colors={GRADIENT_COLORS} stops={GRADIENT_STOPS} style={styles.segment}>
-                  <TabIcon name="scissors" color={color.surface} size={15} />
+                  <TabIcon name="scissors" color={ON_ACCENT} size={15} />
                   <Text style={[styles.segmentText, styles.segmentTextActive]} numberOfLines={1}>
                     {t.searchModeBarber}
                   </Text>
@@ -397,7 +400,7 @@ export default function HomeScreen({ navigation }: Props) {
             >
               {searchMode === 'salon' ? (
                 <GradientView colors={GRADIENT_COLORS} stops={GRADIENT_STOPS} style={styles.segment}>
-                  <TabIcon name="salon" color={color.surface} size={15} />
+                  <TabIcon name="salon" color={ON_ACCENT} size={15} />
                   <Text style={[styles.segmentText, styles.segmentTextActive]} numberOfLines={1}>
                     {t.searchModeSalon}
                   </Text>
@@ -545,7 +548,7 @@ export default function HomeScreen({ navigation }: Props) {
             <Text style={styles.queueBannerSubcopy}>{t.queuePromoSubcopy}</Text>
           </View>
           <GradientView colors={GRADIENT_COLORS} stops={GRADIENT_STOPS} style={styles.queueBannerIconWrap}>
-            <TabIcon name="queue" color={color.surface} size={24} />
+            <TabIcon name="queue" color={ON_ACCENT} size={24} />
           </GradientView>
         </Pressable>
 
@@ -609,7 +612,7 @@ export default function HomeScreen({ navigation }: Props) {
 // eyebrow/headline/subcopy/benefit-row stack with room to spare.
 const HERO_HEIGHT = 336;
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color, fastQue }: ThemeTokens) => StyleSheet.create({
   dashboardCard: { marginHorizontal: space[4], marginTop: space[3], marginBottom: space[2], padding: space[4], borderRadius: radius.lg, backgroundColor: fastQue.card, borderWidth: 1, borderColor: fastQue.borderStrong },
   dashboardCardTitle: { fontFamily: font.bodyBold, fontSize: fontSize.base, color: fastQue.text },
   dashboardCardHint: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, color: fastQue.textSecondary, marginTop: 2 },
@@ -670,7 +673,7 @@ const styles = StyleSheet.create({
     fontFamily: font.displaySemiBold,
     fontSize: 34,
     lineHeight: lineHeightFor(34),
-    color: color.surface,
+    color: ON_ACCENT,
   },
   heroHeadlineAccent: { color: color.brandGradientEnd },
   heroSubcopy: {
@@ -692,7 +695,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  benefitLabel: { fontFamily: font.bodyMedium, fontSize: 11, lineHeight: lineHeightFor(11), color: color.surface },
+  benefitLabel: { fontFamily: font.bodyMedium, fontSize: 11, lineHeight: lineHeightFor(11), color: ON_ACCENT },
 
   searchCard: {
     backgroundColor: fastQue.glassStrong,
@@ -716,7 +719,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: space[2],
   },
   segmentText: { fontFamily: font.bodySemiBold, fontSize: 12.5, lineHeight: lineHeightFor(12.5), color: fastQue.textMuted },
-  segmentTextActive: { color: color.surface },
+  segmentTextActive: { color: ON_ACCENT },
   fieldLabel: {
     fontFamily: font.bodyBold,
     fontSize: 10,
@@ -766,7 +769,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
     marginTop: space[1],
   },
-  ctaButtonText: { fontFamily: font.bodyBold, fontSize: fontSize.base, lineHeight: lineHeightFor(fontSize.base), color: color.surface },
+  ctaButtonText: { fontFamily: font.bodyBold, fontSize: fontSize.base, lineHeight: lineHeightFor(fontSize.base), color: ON_ACCENT },
 
   section: { paddingHorizontal: space[5], marginTop: space[6] },
   sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
@@ -809,7 +812,7 @@ const styles = StyleSheet.create({
     padding: space[4],
   },
   queueBannerText: { flexShrink: 1, gap: 2 },
-  queueBannerHeadline: { fontFamily: font.displaySemiBold, fontSize: fontSize.base, lineHeight: lineHeightFor(fontSize.base), color: color.surface },
+  queueBannerHeadline: { fontFamily: font.displaySemiBold, fontSize: fontSize.base, lineHeight: lineHeightFor(fontSize.base), color: ON_ACCENT },
   queueBannerSubcopy: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, lineHeight: lineHeightFor(fontSize.xs), color: 'rgba(255,255,255,0.7)', marginTop: space[1] },
   queueBannerIconWrap: {
     width: 52,

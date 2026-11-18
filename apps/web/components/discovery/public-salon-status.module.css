@@ -1,7 +1,7 @@
 .card {
-  border: 1px solid var(--bc-border, #e5ded2);
+  border: 1px solid var(--bc-border, var(--tv-bg-e5ded2, #e5ded2));
   border-radius: var(--bc-radius-xl, 26px);
-  background: linear-gradient(145deg, #ffffff 0%, var(--bc-surface-tint, #f8f1e6) 100%);
+  background: linear-gradient(145deg, var(--tv-bg-ffffff, #ffffff) 0%, var(--bc-surface-tint, var(--tv-bg-f8f1e6, #f8f1e6)) 100%);
   padding: 24px;
   margin: 24px 0;
   box-shadow: var(--bc-shadow-card);
@@ -30,7 +30,7 @@
 
 .headingRow h2 {
   margin: 0;
-  color: var(--bc-ink, #211d1a);
+  color: var(--bc-ink, var(--tv-fg-211d1a, #211d1a));
   font-family: var(--font-fraunces, Georgia, serif);
   font-size: clamp(20px, 2vw, 28px);
   line-height: 1.08;
@@ -40,7 +40,7 @@
   flex: none;
   border: 1px solid rgba(242, 84, 45, 0.34);
   border-radius: 999px;
-  color: var(--bc-ink, #211d1a);
+  color: var(--bc-ink, var(--tv-fg-211d1a, #211d1a));
   padding: 8px 12px;
   font-size: 12px;
   white-space: nowrap;
@@ -62,7 +62,7 @@
   align-items: center;
   min-width: 0;
   gap: 8px;
-  border-bottom: 1px solid color-mix(in srgb, var(--bc-border, #e5ded2) 75%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--bc-border, var(--tv-bg-e5ded2, #e5ded2)) 75%, transparent);
   padding: 10px 0;
 }
 
@@ -76,7 +76,7 @@
 
 .name {
   overflow: hidden;
-  color: var(--bc-ink, #211d1a);
+  color: var(--bc-ink, var(--tv-fg-211d1a, #211d1a));
   font-weight: 650;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -84,14 +84,14 @@
 
 .queueCount {
   margin-left: auto;
-  color: var(--bc-muted, #716960);
+  color: var(--bc-muted, var(--tv-fg-716960, #716960));
   font-size: 12px;
   text-align: right;
   white-space: nowrap;
 }
 
 .empty, .note {
-  color: var(--bc-muted, #716960);
+  color: var(--bc-muted, var(--tv-fg-716960, #716960));
   font-size: 13px;
 }
 

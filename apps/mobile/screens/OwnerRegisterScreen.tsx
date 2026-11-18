@@ -8,10 +8,13 @@ import { stashPendingShopRegistrationIntent } from '../lib/shop-registration-int
 import { fastQue, font, fontSize, radius, space } from '../lib/theme';
 import { BrandLockup, InlineError, PremiumButton, PremiumScreen, PremiumSectionHeader } from '../components/ui';
 import type { AuthStackParamList } from '../navigation/AuthStack';
+import { useThemedStyles, useThemeTokens, type ThemeTokens } from '../lib/theme-mode';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'OwnerRegister'>;
 
 export default function OwnerRegisterScreen({ navigation }: Props) {
+  const { fastQue } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const { ownerSignup } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -121,7 +124,7 @@ export default function OwnerRegisterScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ fastQue }: ThemeTokens) => StyleSheet.create({
   screenContent: { padding: space[5] },
   brandLockup: { alignSelf: 'center', marginBottom: space[5] },
   field: { marginBottom: space[4] },

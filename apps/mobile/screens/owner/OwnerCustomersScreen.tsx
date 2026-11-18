@@ -10,6 +10,7 @@ import { Screen, SectionHeader, Button, EmptyState, Skeleton, InlineError } from
 import { useLanguage } from '../../lib/language-context';
 import type { UiStrings } from '@barbercue/shared';
 import type { OwnerShopStackParamList } from '../../navigation/OwnerShopStack';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 function segmentLabel(t: UiStrings, segment: string): string {
   const labels: Record<string, string> = { new: t.segmentNew, repeat: t.segmentRepeat, frequent: t.segmentFrequent };
@@ -31,6 +32,7 @@ function formatDate(iso: string | null): string {
  * reimplemented. List here, waive/restore lives on the detail screen (OwnerCustomerDetailScreen).
  */
 export default function OwnerCustomersScreen() {
+  const styles = useThemedStyles(makeStyles);
   const navigation = useNavigation<NativeStackNavigationProp<OwnerShopStackParamList>>();
   const { selectedSalonId } = useSalon();
   const { t } = useLanguage();
@@ -117,13 +119,13 @@ export default function OwnerCustomersScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color, surface }: ThemeTokens) => StyleSheet.create({
   skeleton: { height: 90, borderRadius: 12 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#ffffff',
+    backgroundColor: surface.card,
     borderWidth: 1,
     borderColor: color.border,
     borderRadius: 12,

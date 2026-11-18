@@ -7,6 +7,7 @@ import { useAuth } from '../lib/auth-context';
 import { useLanguage } from '../lib/language-context';
 import { getRealtimeSocket, joinSalonRoom, onReconnect } from '../lib/realtime';
 import { fastQue, font, fontSize, premiumShadow, radius, space } from '../lib/theme';
+import { useThemedStyles, type ThemeTokens, useThemeTokens } from '../lib/theme-mode';
 
 const ACTIVE_STATUSES = new Set(['WAITING', 'CALLED', 'IN_SERVICE']);
 
@@ -34,6 +35,8 @@ export function QueueStatusPanel({
   onEntryChange: (entry: QueueEntryDetailDto | null) => void;
   guestAccessToken?: string | null;
 }) {
+  const styles = useThemedStyles(makeStyles);
+  const { fastQue, resolved } = useThemeTokens();
   const { user } = useAuth();
   const { t, language } = useLanguage();
   const [turnAlert, setTurnAlert] = useState(false);
@@ -172,9 +175,9 @@ export function QueueStatusPanel({
     <View style={styles.card}>
       <Modal visible={arrivalOpen} transparent animationType="fade" onRequestClose={() => undefined}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,.92)', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-          <View style={{ backgroundColor: '#fff', borderRadius: 18, padding: 26, width: '100%' }}>
-            <Text style={{ fontSize: 23, fontWeight: 'bold', color: '#111' }}>Have you arrived at the shop?</Text>
-            <Text style={{ marginTop: 12, marginBottom: 18, color: '#222' }}>Your estimated service time is around 10 minutes away.</Text>
+          <View style={{ backgroundColor: resolved === 'designed' ? '#fff' : fastQue.card, borderRadius: 18, padding: 26, width: '100%' }}>
+            <Text style={{ fontSize: 23, fontWeight: 'bold', color: resolved === 'designed' ? '#111' : fastQue.text }}>Have you arrived at the shop?</Text>
+            <Text style={{ marginTop: 12, marginBottom: 18, color: resolved === 'designed' ? '#222' : fastQue.textSecondary }}>Your estimated service time is around 10 minutes away.</Text>
             <Pressable accessibilityRole="button" disabled={responding}
               onPress={() => void replyArrival(true)} style={styles.cancelQueueButton}>
               <Text style={styles.cancelQueueText}>Yes, I am here</Text>
@@ -246,7 +249,7 @@ export function QueueStatusPanel({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ fastQue }: ThemeTokens) => StyleSheet.create({
   card: {
     backgroundColor: fastQue.cardStrong,
     borderRadius: radius.lg,

@@ -1,0 +1,18 @@
+.root { position: fixed; left: 16px; bottom: 16px; z-index: 900; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.toggle {
+  min-height: 40px; padding: 0 14px; border-radius: 999px; cursor: pointer;
+  border: 1px solid rgba(127, 127, 127, 0.45); background: rgba(20, 18, 18, 0.88); color: #fff;
+  font: 600 0.85rem var(--font-body); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+html[data-theme="light"] .toggle { background: rgba(255, 253, 249, 0.95); color: #1c1a17; }
+.menu {
+  display: grid; gap: 4px; padding: 6px; border-radius: 14px; min-width: 170px;
+  background: #fff; border: 1px solid #e7e0d3; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+}
+html[data-theme="dark"] .menu { background: #171314; border-color: rgba(255, 255, 255, 0.14); }
+.option { text-align: left; padding: 10px 12px; border: 0; border-radius: 10px; background: transparent; color: #1c1a17; font: 600 0.9rem var(--font-body); cursor: pointer; }
+html[data-theme="dark"] .option { color: #f7f5f4; }
+.optionOn { background: rgba(176, 65, 62, 0.12); color: #b0413e; }
+html[data-theme="dark"] .optionOn { background: rgba(255, 62, 87, 0.16); color: #ff3e57; }
+.toggle:focus-visible, .option:focus-visible { outline: 2px solid #ff7a45; outline-offset: 2px; }
+@media print { .root { display: none; } }

@@ -13,6 +13,7 @@ import { newIdempotencyKey } from '../../lib/idempotency';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 import { Button, InlineError } from '../ui';
 import { CreateInvoiceButton } from './InvoiceTools';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 /**
  * Website parity for apps/web/components/owner/ShopBookingActions.tsx: per-booking Call customer,
@@ -84,6 +85,7 @@ export function BookingActions({ booking, language, onChanged, onOpenInvoice }: 
   onChanged: (message: string) => void;
   onOpenInvoice: (invoice: InvoiceDetailDto) => void;
 }) {
+  const styles = useThemedStyles(makeStyles);
   const c: Copy = language === Language.HI ? (COPY.hi as unknown as Copy) : COPY.en;
   const base = `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${booking.salonId}`;
   const [mode, setMode] = useState<'cancel' | 'move' | null>(null);
@@ -115,6 +117,7 @@ export function BookingActions({ booking, language, onChanged, onOpenInvoice }: 
 }
 
 function CancelForm({ base, booking, c, onClose, onDone }: { base: string; booking: OwnerBookingDetailDto; c: Copy; onClose: () => void; onDone: (m: string) => void }) {
+  const styles = useThemedStyles(makeStyles);
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -158,6 +161,7 @@ function CancelForm({ base, booking, c, onClose, onDone }: { base: string; booki
 }
 
 function MoveForm({ base, booking, c, onClose, onDone }: { base: string; booking: OwnerBookingDetailDto; c: Copy; onClose: () => void; onDone: (m: string) => void }) {
+  const styles = useThemedStyles(makeStyles);
   const tz = booking.salonTimezone ?? null;
   const days = useMemo(() => nextDays(shopDay(new Date(), tz), 14), [tz]);
   const [day, setDay] = useState(days[0]);
@@ -226,7 +230,7 @@ function MoveForm({ base, booking, c, onClose, onDone }: { base: string; booking
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   wrap: { marginTop: space[3], gap: space[2] },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2] },
   btn: { flexGrow: 1 },

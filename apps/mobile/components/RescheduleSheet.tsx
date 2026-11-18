@@ -19,6 +19,7 @@ import { newIdempotencyKey } from '../lib/idempotency';
 import { useLanguage } from '../lib/language-context';
 import { color, font, fontSize, lineHeightFor, radius, space } from '../lib/theme';
 import { Button, Card, InlineError } from './ui';
+import { useThemedStyles, useThemeTokens, type ThemeTokens } from '../lib/theme-mode';
 
 const DAYS_AHEAD = 14;
 
@@ -50,6 +51,8 @@ export function RescheduleSheet({
   onRescheduled: (updated: BookingDetailDto) => void;
   onClose: () => void;
 }) {
+  const { color } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const { t, language } = useLanguage();
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<AvailabilitySlotDto | null>(null);
@@ -195,7 +198,7 @@ export function RescheduleSheet({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   card: { marginTop: space[3] },
   title: { fontFamily: font.displaySemiBold, fontSize: fontSize.base, lineHeight: lineHeightFor(fontSize.base), color: color.ink, marginBottom: space[1] },
   subtitle: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, lineHeight: lineHeightFor(fontSize.sm), color: color.muted },

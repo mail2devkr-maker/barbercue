@@ -18,12 +18,14 @@ import {
 import { speakBooking } from '../../lib/voice-announce';
 import { color, font, fontSize, lineHeightFor, radius, space } from '../../lib/theme';
 import { Button, Card } from '../ui';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 function primarySubtag(locale: string | undefined): string {
   return locale?.split(/[-_]/)[0]?.toLowerCase() ?? '';
 }
 
 export function OwnerVoiceSettingsCard() {
+  const styles = useThemedStyles(makeStyles);
   const { language } = useLanguage();
   const profile = useMobileOwnerVoiceProfile();
   const [voices, setVoices] = useState<Speech.Voice[]>([]);
@@ -154,7 +156,7 @@ export function OwnerVoiceSettingsCard() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color, surface }: ThemeTokens) => StyleSheet.create({
   card: { marginBottom: space[4] },
   title: {
     fontFamily: font.displaySemiBold,
@@ -195,7 +197,7 @@ const styles = StyleSheet.create({
     lineHeight: lineHeightFor(fontSize.xs),
     color: color.ink,
   },
-  pillTextActive: { color: color.accentContrast },
+  pillTextActive: { color: surface.inverseText },
   caption: {
     fontFamily: font.bodyRegular,
     fontSize: fontSize.xs,

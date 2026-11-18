@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { fastQue, font, fontSize, radius, space } from '../../lib/theme';
 import { FilterSheet } from './FilterSheet';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 export interface FilterDropdownOption {
   id: string;
@@ -28,6 +29,7 @@ interface FilterDropdownProps {
  * just a flat option list, but shares this same trigger visual language.
  */
 export function FilterDropdown({ label, valueLabel, options, selectedId, onSelect, disabled, closeLabel, style }: FilterDropdownProps) {
+  const styles = useThemedStyles(makeStyles);
   const [open, setOpen] = useState(false);
 
   return (
@@ -69,7 +71,7 @@ export function FilterDropdown({ label, valueLabel, options, selectedId, onSelec
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ fastQue }: ThemeTokens) => StyleSheet.create({
   root: { flexBasis: '31%', flexGrow: 1, minWidth: 96 },
   label: {
     fontFamily: font.bodyBold,

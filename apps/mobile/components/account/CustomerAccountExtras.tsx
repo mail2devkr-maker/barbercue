@@ -24,6 +24,7 @@ import { apiDownloadFile, apiFetch, ApiError } from '../../lib/api';
 import { useAuth } from '../../lib/auth-context';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 import { Button, Card, InlineError } from '../ui';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 /**
  * Website parity for the customer account pages: My invoices with PDF (account/invoices),
@@ -46,6 +47,7 @@ function money(value: number, currency: string): string {
 }
 
 export function CustomerInvoicesCard({ language }: { language: Language }) {
+  const styles = useThemedStyles(makeStyles);
   const hi = hiOf(language);
   const [items, setItems] = useState<InvoiceSummaryDto[] | null>(null);
   const [next, setNext] = useState<string | null>(null);
@@ -93,6 +95,7 @@ export function CustomerInvoicesCard({ language }: { language: Language }) {
 }
 
 export function NotificationPreferencesCard({ language }: { language: Language }) {
+  const styles = useThemedStyles(makeStyles);
   const hi = hiOf(language);
   const path = `${NOTIFICATION_PATHS.notifications}/${NOTIFICATION_PATHS.preferences}`;
   const [preferences, setPreferences] = useState<NotificationPreferencesDto | null>(null);
@@ -135,6 +138,7 @@ export function NotificationPreferencesCard({ language }: { language: Language }
 }
 
 export function PhoneLinkCard({ language }: { language: Language }) {
+  const styles = useThemedStyles(makeStyles);
   const hi = hiOf(language);
   const { user, applySession } = useAuth();
   const [available, setAvailable] = useState<boolean | null>(null);
@@ -216,6 +220,7 @@ export function PhoneLinkCard({ language }: { language: Language }) {
 }
 
 export function PremiumPlansCard({ language }: { language: Language }) {
+  const styles = useThemedStyles(makeStyles);
   const hi = hiOf(language);
   const [plans, setPlans] = useState<CustomerPremiumPlanDto[] | null>(null);
   const [entitlement, setEntitlement] = useState<PremiumEntitlementDto | null>(null);
@@ -258,7 +263,7 @@ export function PremiumPlansCard({ language }: { language: Language }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   card: { marginTop: space[4] },
   heading: { fontFamily: font.bodyBold, color: color.ink, fontSize: fontSize.base, marginBottom: space[1] },
   muted: { fontFamily: font.bodyRegular, color: color.muted, fontSize: fontSize.xs, marginVertical: space[1] },

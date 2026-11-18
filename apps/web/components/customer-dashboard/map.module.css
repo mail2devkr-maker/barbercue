@@ -27,7 +27,7 @@
 .searchArea {
   position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 600;
   padding: 10px 18px; border: 0; border-radius: 999px;
-  background: var(--bc-brand-navy); color: #fff; font-weight: 700; font-size: 0.85rem;
+  background: var(--bc-brand-navy); color: var(--tv-fg-ffffff, #fff); font-weight: 700; font-size: 0.85rem;
   box-shadow: 0 8px 20px rgba(26, 21, 51, 0.3);
   cursor: pointer;
 }
@@ -59,18 +59,18 @@
   border-radius: 50% 50% 50% 0;
   transform: rotate(-45deg);
   background: var(--bc-brand-navy);
-  border: 2px solid #fff;
+  border: 2px solid var(--tv-bg-ffffff, #fff);
   box-shadow: 0 4px 10px rgba(26, 21, 51, 0.35);
-  color: #fff; font-size: 0.62rem; font-weight: 800;
+  color: var(--tv-fg-ffffff, #fff); font-size: 0.62rem; font-weight: 800;
   cursor: pointer;
 }
-.pinHead em { width: 10px; height: 10px; border-radius: 50%; background: #fff; }
+.pinHead em { width: 10px; height: 10px; border-radius: 50%; background: var(--tv-bg-ffffff, #fff); }
 .pinHead i { transform: rotate(45deg); font-style: normal; }
 .pinSelected .pinHead { background: var(--bc-brand-coral); transform: rotate(-45deg) scale(1.15); }
 
 .originIcon { background: transparent; border: 0; }
 .originIcon span {
   display: block; width: 18px; height: 18px; border-radius: 50%;
-  background: #2f7cf6; border: 3px solid #fff;
+  background: #2f7cf6; border: 3px solid var(--tv-bg-ffffff, #fff);
   box-shadow: 0 0 0 6px rgba(47, 124, 246, 0.25);
 }

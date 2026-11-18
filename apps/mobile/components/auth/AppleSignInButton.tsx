@@ -12,6 +12,7 @@ import { ApiError, apiFetch } from "../../lib/api";
 import { useAuth } from "../../lib/auth-context";
 import { useLanguage } from "../../lib/language-context";
 import { color, font, fontSize, space } from "../../lib/theme";
+import { useThemedStyles, useThemeTokens, type ThemeTokens } from '../../lib/theme-mode';
 
 type Audience = "customer" | "staff";
 
@@ -23,6 +24,8 @@ export function AppleSignInButton({
   audience: Audience;
   onBeforeSignIn?: () => void;
 }) {
+  const { color } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const { appleLogin, staffAppleLogin } = useAuth();
   const { t } = useLanguage();
   const [available, setAvailable] = useState(false);
@@ -117,13 +120,13 @@ export function AppleSignInButton({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ surface }: ThemeTokens) => StyleSheet.create({
   container: { marginTop: space[3] },
   button: { width: "100%", height: 52 },
   loading: { position: "absolute", right: 16, top: 16, zIndex: 1 },
   error: {
     marginTop: space[2],
-    color: "#8f302d",
+    color: surface.errorText,
     fontFamily: font.bodyMedium,
     fontSize: fontSize.xs,
   },

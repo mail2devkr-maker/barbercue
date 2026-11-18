@@ -23,7 +23,7 @@
   padding: 14px 10px;
   border: 1px solid var(--bc-border);
   border-radius: var(--bc-radius-lg);
-  background: #fff;
+  background: var(--tv-bg-ffffff, #fff);
   color: var(--bc-brand-navy);
   text-align: center;
   text-decoration: none;
@@ -37,7 +37,7 @@
 .quickIcon {
   width: 46px; height: 46px; display: grid; place-items: center;
   border-radius: 14px;
-  background: color-mix(in srgb, var(--bc-brand-coral) 10%, #fff);
+  background: color-mix(in srgb, var(--bc-brand-coral) 10%, var(--tv-bg-ffffff, #fff));
   color: var(--bc-brand-coral);
 }
 

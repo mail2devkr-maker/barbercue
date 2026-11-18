@@ -16,6 +16,7 @@ import { inventoryBase, loadAll } from '../../lib/use-inventory-lookups';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 import { Button, Card, InlineError } from '../ui';
 import { ServiceUsageSheet } from './ServiceUsageSheet';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 /**
  * Website parity for apps/web/components/owner/inventory/ServiceUsageViews.tsx: service recipes
@@ -42,6 +43,7 @@ function useResource<T>(path: string) {
 const usageText = (u: UsageRecordDto) => u.items.map((i) => `${i.productName} ${trimDecimal(i.enteredQuantity)} ${unitShort(i.enteredUnit)}`).join(', ');
 
 function Chips<T extends string>({ options, value, onPick, label }: { options: ReadonlyArray<{ value: T; label: string; disabled?: boolean }>; value: T; onPick: (v: T) => void; label: string }) {
+  const styles = useThemedStyles(makeStyles);
   return (
     <View style={styles.chips} accessibilityLabel={label}>
       {options.map((o) => (
@@ -60,6 +62,7 @@ function RecipeEditor({ salonId, recipe, categories, products, onCategoryCreated
   products: InventoryProductDto[];
   onCategoryCreated: (c: InventoryCategoryDto) => void;
 }) {
+  const styles = useThemedStyles(makeStyles);
   const [lines, setLines] = useState<Line[]>(recipe.lines.map((l) => ({ inventoryCategoryId: l.inventoryCategoryId, quantity: trimDecimal(l.quantity), unit: l.unit, defaultProductId: l.defaultProductId ?? '', autoDeduct: l.autoDeduct })));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -144,6 +147,7 @@ function RecipeEditor({ salonId, recipe, categories, products, onCategoryCreated
 }
 
 export function RecipesPanel({ salonId }: { salonId: string }) {
+  const styles = useThemedStyles(makeStyles);
   const recipes = useResource<ServiceRecipeDto[]>(`${inventoryBase(salonId)}/${SERVICE_USAGE_PATHS.recipes}`);
   const [categories, setCategories] = useState<InventoryCategoryDto[]>([]);
   const [products, setProducts] = useState<InventoryProductDto[]>([]);
@@ -171,6 +175,7 @@ export function RecipesPanel({ salonId }: { salonId: string }) {
 }
 
 export function ProductUsagePanel({ salonId }: { salonId: string }) {
+  const styles = useThemedStyles(makeStyles);
   const [filter, setFilter] = useState<'all' | 'missing' | 'recorded'>('all');
   const visits = useResource<ServiceVisitsDto>(`${inventoryBase(salonId)}/${SERVICE_USAGE_PATHS.visits}?filter=${filter}`);
   const [recordFor, setRecordFor] = useState<string | null>(null);
@@ -236,7 +241,7 @@ export function ProductUsagePanel({ salonId }: { salonId: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   card: { marginTop: space[3] },
   heading: { fontFamily: font.bodyBold, color: color.ink, fontSize: fontSize.base, marginBottom: space[1] },
   label: { fontFamily: font.bodyMedium, color: color.muted, fontSize: fontSize.xs, marginTop: space[2] },

@@ -30,6 +30,7 @@ import { ReviewPanel } from '../components/ReviewPanel';
 import { color, font, fontSize, radius, space } from '../lib/theme';
 import { Screen, SectionHeader, Card, Button, Skeleton, ErrorState, InlineError } from '../components/ui';
 import type { BookingsStackParamList } from '../navigation/types';
+import { useThemedStyles, useThemeTokens, type ThemeTokens, type LightTokens } from '../lib/theme-mode';
 
 type Props = NativeStackScreenProps<BookingsStackParamList, 'BookingDetail'>;
 
@@ -44,7 +45,7 @@ function canCheckIn(booking: BookingDetailDto): boolean {
   return isBookingSlotInFuture(booking.slotStart) && minutesUntilSlot <= EARLY_CHECKIN_WINDOW_MINUTES;
 }
 
-function statusColor(status: string): string {
+function statusColor(color: LightTokens, status: string): string {
   if (status === 'CONFIRMED') return color.success;
   if (status === 'PENDING_PAYMENT') return color.gold;
   if (status === 'CANCELLED') return color.muted;
@@ -52,6 +53,8 @@ function statusColor(status: string): string {
 }
 
 export default function BookingDetailScreen({ route }: Props) {
+  const { color } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const { bookingId } = route.params;
   const { t, language } = useLanguage();
   const { rebook, rebookingId, rebookError } = useRebook();
@@ -205,7 +208,7 @@ export default function BookingDetailScreen({ route }: Props) {
       <SectionHeader eyebrow={t.bookingTitle} title={booking.serviceName} subtitle={booking.salonName} />
 
       <Card style={styles.card}>
-        <Text style={[styles.status, { color: statusColor(booking.status) }]}>{t.statusLabelPrefix}{booking.status}</Text>
+        <Text style={[styles.status, { color: statusColor(color, booking.status) }]}>{t.statusLabelPrefix}{booking.status}</Text>
         {/* Part 5 (show arrival time after booking): converted through the salon's own timezone,
             never the device's — a customer booking a shop outside their own city/timezone must
             never be shown a silently-wrong arrival time. */}
@@ -378,7 +381,7 @@ export default function BookingDetailScreen({ route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   heroSkeleton: { height: 90, borderRadius: radius.lg, marginBottom: space[3] },
   lineSkeleton: { height: 16, borderRadius: 6, width: '60%' },
   card: { marginBottom: space[4] },

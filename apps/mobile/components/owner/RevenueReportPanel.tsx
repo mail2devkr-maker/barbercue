@@ -31,6 +31,7 @@ import {
 import { sourceLabel } from '../../lib/booking-sources';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 import { Button, Card, EmptyState, InlineError } from '../ui';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 /**
  * Website parity for apps/web/components/owner/RevenueReport.tsx: a revenue report for ANY date range
@@ -58,6 +59,7 @@ function money(value: number, currency: string | null): string {
 }
 
 export function RevenueReportPanel({ salonId, language }: { salonId: string; language: Language }) {
+  const styles = useThemedStyles(makeStyles);
   const hi = language === Language.HI;
   const base = `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}`;
   const [zone, setZone] = useState<string | null>(null);
@@ -218,6 +220,7 @@ export function RevenueReportPanel({ salonId, language }: { salonId: string; lan
 }
 
 function Breakdown({ title, rows, cur, hi }: { title: string; rows: ReadonlyArray<OwnerRevenueReportMetricDto & { key?: string; label: string }>; cur: string | null; hi: boolean }) {
+  const styles = useThemedStyles(makeStyles);
   return (
     <Card>
       <Text style={styles.heading}>{title}</Text>
@@ -230,6 +233,7 @@ function Breakdown({ title, rows, cur, hi }: { title: string; rows: ReadonlyArra
 }
 
 function Line({ title, value, note, strong }: { title: string; value: string; note?: string; strong?: boolean }) {
+  const styles = useThemedStyles(makeStyles);
   return (
     <View style={styles.line}>
       <View style={styles.flex}>
@@ -241,7 +245,7 @@ function Line({ title, value, note, strong }: { title: string; value: string; no
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   heading: { fontFamily: font.bodyBold, color: color.ink, fontSize: fontSize.base, marginBottom: space[1] },
   label: { fontFamily: font.bodyMedium, color: color.muted, fontSize: fontSize.xs, marginTop: space[2] },
   muted: { fontFamily: font.bodyRegular, color: color.muted, fontSize: fontSize.xs, marginVertical: space[1] },

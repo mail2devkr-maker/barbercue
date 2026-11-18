@@ -19,6 +19,7 @@ import { color, font, fontSize, lineHeightFor, space } from '../../lib/theme';
 import { Screen, SectionHeader, Card, Button, Skeleton, InlineError } from '../../components/ui';
 import type { UiStrings } from '@barbercue/shared';
 import type { OwnerShopStackParamList } from '../../navigation/OwnerShopStack';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 type Props = NativeStackScreenProps<OwnerShopStackParamList, 'OwnerCustomerDetail'>;
 
@@ -52,6 +53,7 @@ function reasonLabel(t: UiStrings, reason: string): string {
  * amounts locally — backend stays authoritative, this only renders what it returns.
  */
 export default function OwnerCustomerDetailScreen({ route }: Props) {
+  const styles = useThemedStyles(makeStyles);
   const { customerId } = route.params;
   const { selectedSalonId } = useSalon();
   const { t, language } = useLanguage();
@@ -220,7 +222,7 @@ export default function OwnerCustomerDetailScreen({ route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color, surface }: ThemeTokens) => StyleSheet.create({
   skeleton: { height: 140, borderRadius: 12 },
   statsLine: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, color: color.muted, marginBottom: space[4] },
   warningCard: { backgroundColor: color.goldSoft, marginBottom: space[4] },
@@ -245,7 +247,7 @@ const styles = StyleSheet.create({
   dueMeta: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted, marginTop: 2 },
   dueAction: { marginTop: space[3], alignSelf: 'flex-start' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(20,16,12,0.45)', alignItems: 'center', justifyContent: 'center', padding: space[5] },
-  modalCard: { backgroundColor: '#ffffff', borderRadius: 16, padding: space[5], width: '100%', maxWidth: 380 },
+  modalCard: { backgroundColor: surface.card, borderRadius: 16, padding: space[5], width: '100%', maxWidth: 380 },
   modalText: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.ink, lineHeight: 20, marginBottom: space[3] },
   modalActions: { flexDirection: 'row', gap: space[2], marginTop: space[2] },
   modalButton: { flex: 1 },

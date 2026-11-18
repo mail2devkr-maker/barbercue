@@ -13,6 +13,7 @@ import { apiDownloadFile, apiFetch, ApiError } from '../../lib/api';
 import { newIdempotencyKey } from '../../lib/idempotency';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 import { Button, Card, InlineError } from '../ui';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 /**
  * Website parity for Billing & invoices (apps/web/components/owner/InvoicesPanel.tsx and
@@ -79,6 +80,7 @@ export function InvoiceDetailActions({ base, invoice, language, onChanged }: {
   language: Language;
   onChanged: (message: string) => void;
 }) {
+  const styles = useThemedStyles(makeStyles);
   const c = copyFor(language);
   const path = `${base}/invoices/${invoice.id}`;
   const [mode, setMode] = useState<'payment' | 'refund' | 'void' | null>(null);
@@ -141,6 +143,7 @@ function PaymentForm({ path, kind, defaultAmount, currency, c, onCancel, onDone 
   onCancel: () => void;
   onDone: (message: string) => void;
 }) {
+  const styles = useThemedStyles(makeStyles);
   const [amount, setAmount] = useState(defaultAmount > 0 ? String(defaultAmount) : '');
   const [method, setMethod] = useState<Method>('CASH');
   const [reference, setReference] = useState('');
@@ -193,6 +196,7 @@ function PaymentForm({ path, kind, defaultAmount, currency, c, onCancel, onDone 
 }
 
 function VoidForm({ path, c, onCancel, onDone }: { path: string; c: Copy; onCancel: () => void; onDone: () => void }) {
+  const styles = useThemedStyles(makeStyles);
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -267,6 +271,7 @@ export function parseProfileForm(form: ProfileForm) {
 }
 
 export function BillingProfileEditor({ base, language }: { base: string; language: Language }) {
+  const styles = useThemedStyles(makeStyles);
   const c = copyFor(language);
   const [profile, setProfile] = useState<BillingProfileDto | null>(null);
   const [form, setForm] = useState<ProfileForm | null>(null);
@@ -405,7 +410,7 @@ export function CreateInvoiceButton({ base, bookingId, queueEntryId, language, o
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2], marginTop: space[3] },
   action: { flexGrow: 1 },
   form: { marginTop: space[3], gap: space[1] },

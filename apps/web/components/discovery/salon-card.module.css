@@ -4,7 +4,7 @@
   height: 100%;
   overflow: hidden;
   flex-direction: column;
-  background: #fff;
+  background: var(--tv-bg-ffffff, #fff);
   border: 1px solid var(--bc-border);
   border-radius: var(--bc-radius-lg);
   box-shadow: var(--bc-shadow-card);
@@ -117,7 +117,7 @@
   margin: 12px 0 0;
   padding: 9px 11px;
   color: #7a2f12;
-  background: #fff0e7;
+  background: var(--tv-bg-fff0e7, #fff0e7);
   border: 1px solid rgba(242, 84, 45, 0.28);
   border-radius: var(--bc-radius-sm);
   font-size: 0.82rem;
@@ -156,7 +156,7 @@
 .secondaryAction {
   color: var(--bc-brand-coral);
   border-color: rgba(242, 84, 45, 0.38);
-  background: #fff;
+  background: var(--tv-bg-ffffff, #fff);
 }
 
 .primaryAction:hover {
@@ -165,7 +165,7 @@
 }
 
 .secondaryAction:hover {
-  color: #fff;
+  color: var(--tv-fg-ffffff, #fff);
   background: var(--bc-accent);
   border-color: var(--bc-accent);
 }
@@ -234,5 +234,5 @@
   font-weight: 700;
   letter-spacing: 0.02em;
 }
-.typeChip { color: var(--bc-ink); background: color-mix(in srgb, var(--bc-accent, #e5195f) 10%, #fff); border: 1px solid color-mix(in srgb, var(--bc-accent, #e5195f) 25%, transparent); }
-.typeChipUnset { color: var(--bc-muted, #6b6560); background: #f4f1ec; border: 1px dashed var(--bc-border); }
+.typeChip { color: var(--bc-ink); background: color-mix(in srgb, var(--bc-accent, #e5195f) 10%, var(--tv-bg-ffffff, #fff)); border: 1px solid color-mix(in srgb, var(--bc-accent, #e5195f) 25%, transparent); }
+.typeChipUnset { color: var(--bc-muted, var(--tv-fg-6b6560, #6b6560)); background: var(--tv-bg-f4f1ec, #f4f1ec); border: 1px dashed var(--bc-border); }

@@ -4,9 +4,11 @@ import { useAuth } from '../lib/auth-context';
 import { useLanguage } from '../lib/language-context';
 import { fastQue } from '../lib/theme';
 import { PremiumButton, PremiumScreen, PremiumSectionHeader } from '../components/ui';
+import { useThemeTokens } from '../lib/theme-mode';
 
 /** Unknown or unsupported roles are never routed into the customer marketplace. */
 export default function RestrictedSessionScreen() {
+  const { fastQue } = useThemeTokens();
   const { logout } = useAuth();
   const { t } = useLanguage();
   const [signingOut, setSigningOut] = useState(false);

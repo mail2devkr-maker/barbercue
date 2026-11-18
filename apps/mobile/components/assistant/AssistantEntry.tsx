@@ -4,9 +4,11 @@ import { Pressable, StyleSheet, Text } from 'react-native';
 import { ASSISTANT_PATHS, type AssistantAccessDto } from '@barbercue/shared';
 import { apiFetch } from '../../lib/api';
 import { fastQue, font, fontSize, space } from '../../lib/theme';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 /** Fail closed: entry is rendered only after the authenticated API says the rollout is enabled. */
 export function AssistantEntry({ onPress }: { onPress: () => void }) {
+  const styles = useThemedStyles(makeStyles);
   const [enabled, setEnabled] = useState(false);
 
   useFocusEffect(
@@ -39,7 +41,7 @@ export function AssistantEntry({ onPress }: { onPress: () => void }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ fastQue }: ThemeTokens) => StyleSheet.create({
   entry: { minHeight: 64, justifyContent: 'center', paddingHorizontal: space[4], paddingVertical: space[3], borderRadius: 16, borderWidth: 1, borderColor: fastQue.borderStrong, backgroundColor: fastQue.cardStrong },
   pressed: { opacity: 0.8 },
   title: { color: fastQue.text, fontFamily: font.bodySemiBold, fontSize: fontSize.base },

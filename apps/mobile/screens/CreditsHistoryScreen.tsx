@@ -13,6 +13,7 @@ import { dateLocaleFor } from '../lib/date-locale';
 import { useLanguage } from '../lib/language-context';
 import { color, fastQue, font, fontSize, lineHeightFor, premiumShadow, radius, space } from '../lib/theme';
 import { Skeleton, EmptyState, InlineError, PremiumButton, PremiumCard, PremiumScreen, PremiumSectionHeader } from '../components/ui';
+import { useThemedStyles, useThemeTokens, type ThemeTokens } from '../lib/theme-mode';
 
 function loadPage(cursor?: string): Promise<PaginatedResult<CustomerCreditTransactionDto>> {
   const query = cursor ? `?cursor=${cursor}` : '';
@@ -43,6 +44,8 @@ function isCredit(type: CustomerCreditTransactionDto['type']): boolean {
 }
 
 function TransactionRow({ item }: { item: CustomerCreditTransactionDto }) {
+  const { fastQue } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const { t, language } = useLanguage();
   const credit = isCredit(item.type);
   return (
@@ -67,6 +70,8 @@ function TransactionRow({ item }: { item: CustomerCreditTransactionDto }) {
 }
 
 export default function CreditsHistoryScreen() {
+  const { color } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const { t } = useLanguage();
   const [balance, setBalance] = useState<CustomerCreditBalanceDto | null>(null);
   const [items, setItems] = useState<CustomerCreditTransactionDto[]>([]);
@@ -141,7 +146,7 @@ export default function CreditsHistoryScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ fastQue }: ThemeTokens) => StyleSheet.create({
   screenContent: { padding: space[5] },
   skeletonStack: { gap: space[3] },
   skeletonCard: { height: 72, borderRadius: radius.lg },

@@ -16,6 +16,7 @@ import {
 import { apiFetch, ApiError } from '../../lib/api';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 import { Button, InlineError } from '../ui';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 /**
  * Website parity for the owner Staff page (apps/web .../staff/page.tsx): working / not working,
@@ -39,6 +40,7 @@ export function StaffManageActions({ salonId, member, language, canDelete, onCha
   canDelete: boolean;
   onChanged: (message: string) => void;
 }) {
+  const styles = useThemedStyles(makeStyles);
   const hi = language === Language.HI;
   const base = `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.staff}/${member.id}`;
   const [busy, setBusy] = useState<string | null>(null);
@@ -119,6 +121,7 @@ export function StaffManageActions({ salonId, member, language, canDelete, onCha
 }
 
 export function StaffVerification({ salonId, staffId, language }: { salonId: string; staffId: string; language: Language }) {
+  const styles = useThemedStyles(makeStyles);
   const hi = language === Language.HI;
   const path = `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.staff}/${staffId}/${DASHBOARD_PATHS.verification}`;
   const [current, setCurrent] = useState<VerificationRequestDto | null | undefined>(undefined);
@@ -180,6 +183,7 @@ export function PermanentDeletePanel({ kind, salonId, targetId, language, onClos
   onClose: () => void;
   onDeleted: (result: PermanentDeletionResultDto) => void;
 }) {
+  const styles = useThemedStyles(makeStyles);
   const hi = language === Language.HI;
   const base = `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${PATH[kind]}/${targetId}`;
   const [preview, setPreview] = useState<PermanentDeletionPreviewDto | null>(null);
@@ -251,7 +255,7 @@ export function PermanentDeletePanel({ kind, salonId, targetId, language, onClos
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   wrap: { marginTop: space[2], gap: space[2] },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2] },
   btn: { flexGrow: 1 },

@@ -11,6 +11,7 @@ import { color, font, fontSize, lineHeightFor, radius, space } from '../../lib/t
 import { Screen, SectionHeader, Button, EmptyState, Skeleton, InlineError, NotificationBell } from '../../components/ui';
 import { LiveQueuePanel, type LiveQueuePanelHandle } from '../../components/dashboard/LiveQueuePanel';
 import type { StaffTabParamList } from '../../navigation/StaffNavigator';
+import { useThemedStyles, useThemeTokens, type ThemeTokens } from '../../lib/theme-mode';
 
 function meePath(salonId: string): string {
   return `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.staff}/${DASHBOARD_PATHS.me}`;
@@ -24,6 +25,8 @@ function statusPath(staffId: string): string {
 // dashboard/salons/:salonId/staff/me lookup, then reuses the existing self-status PATCH
 // (staff-status.service.ts already lets a SALON_STAFF update their own row with no owner check).
 function SelfStatusCard({ salonId }: { salonId: string }) {
+  const { color } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const [me, setMe] = useState<StaffStatusDto | null | undefined>(undefined);
   const [updating, setUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -93,6 +96,7 @@ function SelfStatusCard({ salonId }: { salonId: string }) {
 // Dashboard tab (shop open/close) or a Shop tab (services/chairs/staff/hours management) — those
 // stay owner-only by simply not existing in StaffNavigator's tab set.
 export default function StaffTodayScreen() {
+  const styles = useThemedStyles(makeStyles);
   const navigation = useNavigation<BottomTabNavigationProp<StaffTabParamList>>();
   const { workplaces, loading, error, selectedSalonId, selectedSalon, selectSalon } = useSalon();
   const panelRef = useRef<LiveQueuePanelHandle>(null);
@@ -158,7 +162,7 @@ export default function StaffTodayScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color, surface }: ThemeTokens) => StyleSheet.create({
   headerRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: space[2] },
   skeleton: { height: 140, borderRadius: radius.lg },
   pickerRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2], marginBottom: space[4] },
@@ -179,7 +183,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#ffffff',
+    backgroundColor: surface.card,
     borderWidth: 1,
     borderColor: color.border,
     borderRadius: radius.lg,

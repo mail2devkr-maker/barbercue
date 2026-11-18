@@ -6,6 +6,7 @@ import { getGoogleIdToken } from '../../lib/google-signin';
 import { useLanguage } from '../../lib/language-context';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 import { AppleSignInButton } from './AppleSignInButton';
+import { useThemedStyles, useThemeTokens, type ThemeTokens } from '../../lib/theme-mode';
 
 /**
  * Issue 2 (mobile launch mission) — the mobile equivalent of apps/web's BookingFlow.tsx inline
@@ -16,6 +17,8 @@ import { AppleSignInButton } from './AppleSignInButton';
  * inevitably swaps the whole navigator tree out from under this screen.
  */
 export function GoogleSignInGate({ label, onBeforeSignIn }: { label: string; onBeforeSignIn: () => void }) {
+  const { color } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const { googleLogin } = useAuth();
   const { t } = useLanguage();
   const [submitting, setSubmitting] = useState(false);
@@ -55,7 +58,7 @@ export function GoogleSignInGate({ label, onBeforeSignIn }: { label: string; onB
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color, surface }: ThemeTokens) => StyleSheet.create({
   hint: {
     fontFamily: font.bodyRegular,
     fontSize: fontSize.sm,
@@ -65,7 +68,7 @@ const styles = StyleSheet.create({
   errorText: {
     fontFamily: font.bodyMedium,
     fontSize: fontSize.xs,
-    color: '#8f302d',
+    color: surface.errorText,
     marginBottom: space[3],
   },
   button: {

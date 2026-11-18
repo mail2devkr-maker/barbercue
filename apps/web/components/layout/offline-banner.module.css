@@ -3,7 +3,7 @@
   top: 0;
   z-index: 40;
   background: var(--bc-warn);
-  color: #ffffff;
+  color: var(--tv-fg-ffffff, #ffffff);
   text-align: center;
   padding: var(--bc-space-2) var(--bc-space-4);
   font-size: var(--bc-text-sm);

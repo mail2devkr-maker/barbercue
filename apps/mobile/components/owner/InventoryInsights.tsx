@@ -15,6 +15,7 @@ import { inventoryBase } from '../../lib/use-inventory-lookups';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 import { Button, Card, InlineError } from '../ui';
 import { setForegroundInterval } from '../../lib/foreground-interval';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 /**
  * Website parity for the inventory home (ServiceUsageViews InventoryDashboard) and Reports
@@ -38,10 +39,12 @@ function useResource<T>(path: string) {
 }
 
 function Line({ title, value, note }: { title: string; value: string | number; note?: string }) {
+  const styles = useThemedStyles(makeStyles);
   return <View style={styles.line}><View style={styles.flex}><Text style={styles.small}>{title}</Text>{note ? <Text style={styles.muted}>{note}</Text> : null}</View><Text style={styles.strong}>{String(value)}</Text></View>;
 }
 
 export function InventoryDashboardPanel({ salonId, onOpenUsage }: { salonId: string; onOpenUsage?: () => void }) {
+  const styles = useThemedStyles(makeStyles);
   const { data, error, loading, reload } = useResource<InventoryDashboardDto>(`${inventoryBase(salonId)}/${SERVICE_USAGE_PATHS.dashboard}`);
   // Refresh every minute while open, as the website does (the server computes everything).
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -109,6 +112,7 @@ export function InventoryDashboardPanel({ salonId, onOpenUsage }: { salonId: str
 }
 
 export function InventoryAnalyticsPanel({ salonId }: { salonId: string }) {
+  const styles = useThemedStyles(makeStyles);
   const [days, setDays] = useState(30);
   // The server counts back from the shop's own today (its time zone), not this phone's date.
   const { data, error, loading } = useResource<InventoryAnalyticsDto>(`${inventoryBase(salonId)}/${FORECAST_PATHS.analytics}?days=${days}`);
@@ -160,7 +164,7 @@ export function InventoryAnalyticsPanel({ salonId }: { salonId: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   heading: { fontFamily: font.bodyBold, color: color.ink, fontSize: fontSize.base, marginBottom: space[1] },
   sub: { fontFamily: font.bodySemiBold, color: color.ink, fontSize: fontSize.sm, marginTop: space[3] },
   muted: { fontFamily: font.bodyRegular, color: color.muted, fontSize: fontSize.xs, marginVertical: space[1] },

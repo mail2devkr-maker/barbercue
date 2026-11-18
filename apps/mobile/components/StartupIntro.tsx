@@ -2,6 +2,7 @@ import { Component, useEffect, useRef, type ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { INTRO_SAFETY_TIMEOUT_MS } from '../lib/startup-intro';
+import { useThemedStyles, type ThemeTokens } from '../lib/theme-mode';
 
 const INTRO_SOURCE = require('../assets/video/fastque-startup-intro.mp4');
 
@@ -20,6 +21,7 @@ const INTRO_BACKDROP_COLOR = '#000000';
  * through too, not just an async playback error.
  */
 export function StartupIntro({ onFinish }: { onFinish: () => void }) {
+  const styles = useThemedStyles(makeStyles);
   const finishedRef = useRef(false);
 
   function finish() {
@@ -93,7 +95,7 @@ export class StartupIntroErrorBoundary extends Component<BoundaryProps, Boundary
   }
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (_tokens: ThemeTokens) => StyleSheet.create({
   root: { flex: 1, backgroundColor: INTRO_BACKDROP_COLOR },
   video: { flex: 1 },
 });

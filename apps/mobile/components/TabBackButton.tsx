@@ -2,6 +2,7 @@ import { Pressable, StyleSheet, Text, type StyleProp, type ViewStyle } from 'rea
 import { useNavigation, type NavigationProp, type ParamListBase } from '@react-navigation/native';
 import { font, fontSize, fastQue } from '../lib/theme';
 import { useLanguage } from '../lib/language-context';
+import { useThemedStyles, type ThemeTokens } from '../lib/theme-mode';
 
 type Nav = NavigationProp<ParamListBase>;
 
@@ -22,6 +23,7 @@ function tabNavigatorOf(navigation: Nav): Nav | null {
  * the first tab (the Dashboard). Android and iOS identical.
  */
 export function TabBackButton({ style, compact = false }: { style?: StyleProp<ViewStyle>; compact?: boolean }) {
+  const styles = useThemedStyles(makeStyles);
   const navigation = useNavigation<Nav>();
   const { language } = useLanguage();
   const label = language === 'HI' ? 'पीछे' : 'Back';
@@ -49,7 +51,7 @@ export function TabBackButton({ style, compact = false }: { style?: StyleProp<Vi
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ fastQue }: ThemeTokens) => StyleSheet.create({
   button: { alignSelf: 'flex-start', minHeight: 40, justifyContent: 'center', paddingRight: 12, marginBottom: 4 },
   compact: { paddingHorizontal: 4, paddingVertical: 4 },
   text: { fontFamily: font.bodySemiBold, fontSize: fontSize.base, color: fastQue.pink },

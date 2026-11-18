@@ -25,6 +25,7 @@ import { OwnerShopHero } from '../../components/owner/OwnerShopHero';
 import { showDashboardPanelLink } from '../../lib/owner-dashboard-layout';
 import { CapacitySummaryPanel } from '../../components/dashboard/CapacitySummaryPanel';
 import type { OwnerTabParamList } from '../../navigation/OwnerNavigator';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 const SUMMARY_COUNT_LIMIT = 50;
 
@@ -79,6 +80,7 @@ function formatCount(count: number, capped: boolean): string {
 // workplaces list already carries it, and PATCH .../status returns the fresh value which this
 // screen applies locally, matching the pattern the rest of the app uses (no redundant re-fetch).
 export default function OwnerDashboardScreen() {
+  const styles = useThemedStyles(makeStyles);
   const navigation = useNavigation<BottomTabNavigationProp<OwnerTabParamList>>();
   const { workplaces, loading, error, selectedSalonId, selectedSalon, selectSalon, reload } = useSalon();
   const [status, setStatus] = useState<string | null>(null);
@@ -419,7 +421,7 @@ export default function OwnerDashboardScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ fastQue }: ThemeTokens) => StyleSheet.create({
   headerRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: space[2] },
   skeleton: { height: 140, borderRadius: radius.lg },
   summaryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2], marginBottom: space[4] },

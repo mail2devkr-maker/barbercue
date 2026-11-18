@@ -17,12 +17,15 @@ import { dateLocaleFor } from "../../lib/date-locale";
 import { useLanguage } from "../../lib/language-context";
 import { color, font, fontSize, space } from "../../lib/theme";
 import { Card, Button, InlineError } from "../ui";
+import { useThemedStyles, useThemeTokens, type ThemeTokens } from '../../lib/theme-mode';
 
 /**
  * Non-destructive request surface for accounts with staff, owner, administrator, or mixed roles.
  * The signed-in server identity is authoritative; this card never asks for a target account ID.
  */
 export function AccountDeletionRequestCard() {
+  const { color } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const { t, language } = useLanguage();
   const [status, setStatus] = useState<AccountDeletionRequestDto | null>(null);
   const [loading, setLoading] = useState(true);
@@ -242,7 +245,7 @@ export function AccountDeletionRequestCard() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   card: { marginBottom: space[4] },
   cardTitle: {
     fontFamily: font.displaySemiBold,

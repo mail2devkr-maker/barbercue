@@ -10,6 +10,7 @@ import type { EmployeeStackParamList } from '../../navigation/EmployeeNavigator'
 import { useLanguage } from '../../lib/language-context';
 import { fastQue, font, fontSize, space } from '../../lib/theme';
 import { PremiumButton, PremiumCard, PremiumScreen, PremiumSectionHeader } from '../../components/ui';
+import { useThemedStyles, useThemeTokens, type ThemeTokens } from '../../lib/theme-mode';
 
 const DASHBOARD_PATH = `${EMPLOYEE_PATHS.employee}/${EMPLOYEE_PATHS.dashboard}`;
 const EMPLOYEE_ME_PATH = `${EMPLOYEE_PATHS.employee}/${EMPLOYEE_PATHS.me}`;
@@ -27,6 +28,8 @@ async function fetchEmployeeDashboard(): Promise<EmployeeCrmDashboardDto> {
 }
 
 export default function EmployeeDashboardScreen() {
+  const { fastQue } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const { logout } = useAuth();
   const navigation = useNavigation<NativeStackNavigationProp<EmployeeStackParamList>>();
   const { t } = useLanguage();
@@ -159,6 +162,7 @@ export default function EmployeeDashboardScreen() {
 }
 
 function Metric({ label, value }: { label: string; value: number }) {
+  const styles = useThemedStyles(makeStyles);
   return (
     <PremiumCard style={styles.metric}>
       <Text style={styles.metricValue}>{value}</Text>
@@ -167,7 +171,7 @@ function Metric({ label, value }: { label: string; value: number }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ fastQue }: ThemeTokens) => StyleSheet.create({
   content: { paddingHorizontal: space[4] },
   topRow: { flexDirection: 'row', alignItems: 'flex-start', gap: space[2] },
   heading: { flex: 1 },

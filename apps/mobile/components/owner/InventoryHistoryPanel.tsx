@@ -6,6 +6,7 @@ import { inventoryBase } from '../../lib/use-inventory-lookups';
 import { kindLabel, moneyText, MOVEMENT_KINDS, signedQuantity, trimDecimal, type MovementKind } from '../../lib/inventory-shared';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 import { Button, Card, InlineError } from '../ui';
+import { useThemedStyles, useThemeTokens, type ThemeTokens } from '../../lib/theme-mode';
 
 /**
  * Website parity for apps/web/components/owner/inventory/StockViews.tsx → HistoryView: every stock
@@ -13,6 +14,8 @@ import { Button, Card, InlineError } from '../ui';
  * shown as recorded and cannot be changed; a mistake is corrected with an adjustment.
  */
 export function InventoryHistoryPanel({ salonId, currency }: { salonId: string; currency: string | null }) {
+  const { color } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const [kind, setKind] = useState<MovementKind | ''>('');
   const [productText, setProductText] = useState('');
   const list = useCursorList<InventoryMovementDto>(`${inventoryBase(salonId)}/${INVENTORY_PATHS.movements}`, { kind });
@@ -62,7 +65,7 @@ export function InventoryHistoryPanel({ salonId, currency }: { salonId: string; 
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   heading: { fontFamily: font.bodyBold, color: color.ink, fontSize: fontSize.base },
   label: { fontFamily: font.bodySemiBold, color: color.ink, fontSize: fontSize.sm, marginTop: space[2] },
   muted: { fontFamily: font.bodyRegular, color: color.muted, fontSize: fontSize.sm, marginVertical: space[1] },

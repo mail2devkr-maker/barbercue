@@ -8,11 +8,11 @@
   grid-template-columns: 1fr;
   gap: 14px;
   padding: 12px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.015)), var(--fq-charcoal, #0d0d12);
-  border: 1px solid var(--fq-hairline, rgba(255, 255, 255, 0.1));
+  background: linear-gradient(180deg, var(--tv-bg-rgba-255-255-255-a0_035, rgba(255, 255, 255, 0.035)), var(--tv-bg-rgba-255-255-255-a0_015, rgba(255, 255, 255, 0.015))), var(--fq-charcoal, var(--tv-bg-0d0d12, #0d0d12));
+  border: 1px solid var(--fq-hairline, var(--tv-bg-rgba-255-255-255-a0_1, rgba(255, 255, 255, 0.1)));
   border-radius: 18px;
   box-shadow: 0 18px 40px rgba(0, 0, 0, 0.32);
-  color: var(--fq-text, #f7f5f4);
+  color: var(--fq-text, var(--tv-fg-f7f5f4, #f7f5f4));
 }
 
 .card:hover {
@@ -62,7 +62,7 @@
   position: relative;
   overflow: hidden;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--tv-bg-rgba-255-255-255-a0_04, rgba(255, 255, 255, 0.04));
 }
 
 .mediaLink {
@@ -100,7 +100,7 @@ a.mediaLink {
   border: 0;
   border-radius: 50%;
   background: rgba(0, 0, 0, 0.5);
-  color: #fff;
+  color: var(--tv-fg-ffffff, #fff);
   font-size: 1.2rem;
   line-height: 1;
   cursor: pointer;
@@ -123,7 +123,7 @@ a.mediaLink {
   padding: 3px 9px;
   border-radius: 999px;
   background: rgba(0, 0, 0, 0.6);
-  color: #fff;
+  color: var(--tv-fg-ffffff, #fff);
   font-size: 0.75rem;
   font-weight: 700;
 }
@@ -193,7 +193,7 @@ a.mediaLink {
 .typeChip {
   padding: 3px 10px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--tv-bg-rgba-255-255-255-a0_08, rgba(255, 255, 255, 0.08));
   border: 1px solid var(--fq-hairline);
   font-size: 0.75rem;
   font-weight: 700;
@@ -266,7 +266,7 @@ a.mediaLink {
   border: 1px solid rgba(255, 62, 87, 0.65);
   border-radius: 14px;
   background: linear-gradient(135deg, rgba(242, 10, 131, 0.28), rgba(110, 8, 36, 0.55));
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04), 0 8px 22px rgba(242, 10, 131, 0.18);
+  box-shadow: inset 0 0 0 1px var(--tv-bg-rgba-255-255-255-a0_04, rgba(255, 255, 255, 0.04)), 0 8px 22px rgba(242, 10, 131, 0.18);
   color: var(--fq-text);
   font: inherit;
   text-align: left;
@@ -307,7 +307,7 @@ a.mediaLink {
 
 .offerChevron {
   flex: 0 0 auto;
-  color: #fff;
+  color: var(--tv-fg-ffffff, #fff);
   font-size: 1.6rem;
   line-height: 1;
 }
@@ -468,7 +468,7 @@ a.mediaLink {
 }
 
 .profile {
-  border: 1px solid rgba(255, 255, 255, 0.28);
+  border: 1px solid var(--tv-bg-rgba-255-255-255-a0_28, rgba(255, 255, 255, 0.28));
   color: var(--fq-text);
 }
 
@@ -493,7 +493,7 @@ a.mediaLink {
 .queue {
   border: 1px solid var(--fq-pink);
   background: rgba(242, 10, 131, 0.12);
-  color: #fff;
+  color: var(--tv-fg-ffffff, #fff);
 }
 
 .queue:hover {
@@ -513,7 +513,7 @@ a.mediaLink {
 }
 
 .queueClosed {
-  border: 1px dashed rgba(255, 255, 255, 0.2);
+  border: 1px dashed var(--tv-bg-rgba-255-255-255-a0_2, rgba(255, 255, 255, 0.2));
   color: var(--fq-text-faint);
   font-weight: 700;
 }
@@ -543,8 +543,8 @@ a.mediaLink {
   padding: 18px;
   border: 1px solid var(--fq-hairline);
   border-radius: 16px;
-  background: #141016;
-  color: #f7f5f4;
+  background: var(--tv-bg-141016, #141016);
+  color: var(--tv-fg-f7f5f4, #f7f5f4);
 }
 
 .dialogHead {
@@ -583,7 +583,7 @@ a.mediaLink {
 
 .dialogList p {
   margin: 4px 0 0;
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--tv-fg-rgba-255-255-255-a0_72, rgba(255, 255, 255, 0.72));
   font-size: 0.82rem;
 }
 
@@ -593,6 +593,6 @@ a.mediaLink {
 
 .dialogNote {
   margin: 14px 0 0;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--tv-fg-rgba-255-255-255-a0_5, rgba(255, 255, 255, 0.5));
   font-size: 0.78rem;
 }

@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { color, font, fontSize, lineHeightFor, space } from '../../lib/theme';
 import { Button } from './Button';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 interface EmptyStateProps {
   title: string;
@@ -12,6 +13,7 @@ interface EmptyStateProps {
 /** A polished "nothing here yet" state — never a raw blank screen or a bare line of text. Used
  * for empty search results, no bookings, no active queue, etc. */
 export function EmptyState({ title, message, actionLabel, onAction }: EmptyStateProps) {
+  const styles = useThemedStyles(makeStyles);
   return (
     <View style={styles.container}>
       <View style={styles.badge} />
@@ -22,7 +24,7 @@ export function EmptyState({ title, message, actionLabel, onAction }: EmptyState
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   container: { alignItems: 'center', paddingVertical: space[7], paddingHorizontal: space[4] },
   badge: {
     width: 44,

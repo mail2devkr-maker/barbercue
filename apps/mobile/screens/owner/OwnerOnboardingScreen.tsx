@@ -32,9 +32,10 @@ import {
   HoursEditor,
   PhotosSection,
   PaymentQrSection,
-  styles as sectionStyles,
+  useSectionStyles,
 } from '../../components/owner/ShopSetupSections';
 import { ServiceCatalogPicker } from '../../components/owner/ServiceCatalogPicker';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 const TOTAL_STEPS = ONBOARDING_TOTAL_STEPS;
 
@@ -57,6 +58,8 @@ const SALON_TYPE_OPTIONS = [
  * never re-shown as step 1 and a returning owner always lands where they left off.
  */
 export default function OwnerOnboardingScreen({ salonId }: { salonId: string }) {
+  const sectionStyles = useSectionStyles();
+  const styles = useThemedStyles(makeStyles);
   const { reload } = useSalon();
   const { t } = useLanguage();
   const [services, setServices] = useState<ServiceDto[]>([]);
@@ -364,7 +367,7 @@ const STEP_TITLES: Record<number, (t: ReturnType<typeof useLanguage>['t']) => st
   7: (t) => t.onboardingGoLiveStepTitle,
 };
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   screenContent: { padding: space[5] },
   skeleton: { height: 100, borderRadius: radius.lg, marginBottom: space[3] },
   resumeBanner: {

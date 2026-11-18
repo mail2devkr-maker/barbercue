@@ -8,6 +8,7 @@ import { fastQue, font } from '../../lib/theme';
 import { GradientView } from '../ui/GradientView';
 import { clampFabOffset, parseFabOffset, type FabOffset } from '../../lib/assistant-fab-position';
 import { getItem, setItem } from '../../lib/secure-storage';
+import { useThemedStyles, useThemeTokens, type ThemeTokens } from '../../lib/theme-mode';
 
 const POSITION_KEY = 'assistant_fab_offset_v1';
 const FAB_WIDTH = 132;
@@ -29,6 +30,8 @@ export function AssistantFab({ onOpen, tabBarHeight = TAB_BAR_HEIGHT, includeBot
   /** The customer tab bar already adds the bottom inset to its own height; the owner/staff bars do not. */
   includeBottomInset?: boolean;
 }) {
+  const { fastQue } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const insets = useSafeAreaInsets();
   const [enabled, setEnabled] = useState(false);
   const [routeName, setRouteName] = useState<string | undefined>(undefined);
@@ -113,7 +116,7 @@ export function AssistantFab({ onOpen, tabBarHeight = TAB_BAR_HEIGHT, includeBot
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ fastQue }: ThemeTokens) => StyleSheet.create({
   layer: { position: 'absolute', right: 16 },
   hit: { borderRadius: 28, overflow: 'hidden', shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 10 },
   button: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, height: 48, borderRadius: 28 },

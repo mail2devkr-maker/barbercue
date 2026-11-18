@@ -5,6 +5,7 @@ import { apiFetch, ApiError } from '../../lib/api';
 import { ledgerPath, parseErase, parseSummary, parseWithdraw } from '../../lib/contact-ledger';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 import { Button, Card, InlineError } from '../ui';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 /**
  * Website parity for apps/web/components/owner/ContactLedgerPanel.tsx: counts of saved agreement records,
@@ -13,6 +14,7 @@ import { Button, Card, InlineError } from '../ui';
  * number back. Shown only where the agreement ledger is SANDBOX-enabled (same gate as the website).
  */
 export function ContactLedgerPanel({ salonId, refreshKey = 0 }: { salonId: string; refreshKey?: number }) {
+  const styles = useThemedStyles(makeStyles);
   const [summary, setSummary] = useState<ContactLedgerSummaryDto | null>(null);
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [phone, setPhone] = useState('');
@@ -122,7 +124,7 @@ export function ContactLedgerPanel({ salonId, refreshKey = 0 }: { salonId: strin
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   heading: { fontFamily: font.bodyBold, color: color.ink, fontSize: fontSize.base, marginBottom: space[1] },
   muted: { fontFamily: font.bodyRegular, color: color.muted, fontSize: fontSize.sm, marginVertical: space[1] },
   small: { fontFamily: font.bodyRegular, color: color.ink, fontSize: fontSize.sm, flex: 1 },
