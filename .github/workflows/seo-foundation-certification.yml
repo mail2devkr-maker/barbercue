@@ -1,0 +1,126 @@
+name: SEO Foundation Certification
+
+on:
+  pull_request:
+    paths:
+      - "apps/web/**"
+      - "lighthouserc.cjs"
+      - ".github/workflows/seo-foundation-certification.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: seo-foundation-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  web-seo:
+    name: Search SSR, crawl and Lighthouse
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      NEXT_PUBLIC_SITE_URL: https://fastque.com
+      NEXT_PUBLIC_API_BASE_URL: http://127.0.0.1:4000/api/v1
+      BACKEND_INTERNAL_URL: http://127.0.0.1:4000
+      SEO_CRAWL_BASE_URL: http://127.0.0.1:3001
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install lockfile dependencies
+        run: npm ci
+
+      - name: Build shared contracts
+        run: npm run build --workspace=@barbercue/shared
+
+      - name: Run SEO route, sitemap and SSR regression tests
+        run: >-
+          npm run test --workspace=@barbercue/web -- --runInBand --silent
+          app/__tests__/seo-metadata.test.jsx
+          app/__tests__/seo-guides-sitemap.test.jsx
+          app/__tests__/seo-search-ssr.test.jsx
+          app/__tests__/seo-proxy.test.jsx
+
+      - name: Start isolated synthetic discovery API
+        run: node apps/web/scripts/seo-fixture-api.mjs > /tmp/fastque-seo-fixture.log 2>&1 &
+
+      - name: Wait for synthetic discovery API
+        run: |
+          for attempt in $(seq 1 20); do
+            if curl --fail --silent http://127.0.0.1:4000/healthz | grep -q '"synthetic":true'; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/fastque-seo-fixture.log
+          exit 1
+
+      - name: Lint changed SEO implementation files
+        working-directory: apps/web
+        run: >-
+          npx eslint
+          app/robots.ts
+          app/sitemap-guides.xml/route.ts
+          proxy.ts
+          'app/(public)/search/page.tsx'
+          'app/(public)/search/SearchClient.tsx'
+          'app/(public)/how-to-book/page.tsx'
+          'app/(public)/how-live-queue-works/page.tsx'
+          'app/(public)/salon-management-software/page.tsx'
+          components/layout/SiteFooter.tsx
+          lib/canonical-host.ts
+          lib/brand-social-image.tsx
+          app/opengraph-image.tsx
+          app/twitter-image.tsx
+          app/__tests__/seo-metadata.test.jsx
+          app/__tests__/seo-guides-sitemap.test.jsx
+          app/__tests__/seo-search-ssr.test.jsx
+          app/__tests__/seo-proxy.test.jsx
+          scripts/seo-crawl-smoke.mjs
+          scripts/seo-fixture-api.mjs
+
+      - name: Check Lighthouse configuration syntax
+        run: node --check lighthouserc.cjs
+
+      - name: Run web TypeScript checks
+        run: npm run typecheck --workspace=@barbercue/web
+
+      - name: Build production web app
+        run: npm run build --workspace=@barbercue/web
+
+      - name: Start the release-candidate build
+        run: npm run start --workspace=@barbercue/web > /tmp/fastque-next.log 2>&1 &
+
+      - name: Wait for the built site
+        run: |
+          for attempt in $(seq 1 45); do
+            if curl --fail --silent http://127.0.0.1:3001/robots.txt > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/fastque-next.log
+          exit 1
+
+      - name: Crawl sitemaps and representative public pages
+        run: node apps/web/scripts/seo-crawl-smoke.mjs
+
+      - name: Install pinned Lighthouse CI
+        run: npm install --global @lhci/cli@0.16.1
+
+      - name: Run Lighthouse CI on candidate routes with synthetic discovery data
+        run: lhci autorun --config=./lighthouserc.cjs
+
+      - name: Preserve Lighthouse lab reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: seo-lighthouse-lab-reports
+          path: apps/web/.next/lighthouse-reports
+          if-no-files-found: ignore
+          retention-days: 14
