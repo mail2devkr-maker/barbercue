@@ -2,7 +2,8 @@ import type { ReactNode } from 'react';
 import { KeyboardAvoidingView, Platform, RefreshControl, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useKeyboardAwareScroll } from '../../lib/keyboard-aware';
-import { color, space } from '../../lib/theme';
+import { space } from '../../lib/theme';
+import { useThemedStyles, useThemeTokens, type ThemeTokens } from '../../lib/theme-mode';
 
 interface ScreenProps {
   children: ReactNode;
@@ -23,6 +24,8 @@ interface ScreenProps {
  */
 export function Screen({ children, scroll = true, refreshing, onRefresh, contentStyle, edges = ['top', 'bottom'] }: ScreenProps) {
   const insets = useSafeAreaInsets();
+  const { color } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const keyboardAware = useKeyboardAwareScroll({ padAndroid: false });
   const padding = {
     paddingTop: edges.includes('top') ? insets.top : 0,
@@ -55,7 +58,8 @@ export function Screen({ children, scroll = true, refreshing, onRefresh, content
   ) : content;
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: color.surface },
-  scrollContent: { flexGrow: 1, padding: space[5] },
-});
+const makeStyles = ({ color }: ThemeTokens) =>
+  StyleSheet.create({
+    root: { flex: 1, backgroundColor: color.surface },
+    scrollContent: { flexGrow: 1, padding: space[5] },
+  });

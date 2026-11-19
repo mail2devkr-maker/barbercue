@@ -12,6 +12,7 @@ import { quantityText } from '../../lib/inventory-shared';
 import { inventoryBase } from '../../lib/use-inventory-lookups';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 import { Button, Card, InlineError } from '../ui';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 /**
  * Website parity for apps/web/components/owner/inventory/ForecastViews.tsx (PredictionsView): the
@@ -25,6 +26,7 @@ const CONFIDENCE: Record<ProductPredictionDto['confidence'], string> = { NOT_ENO
 const TREND: Record<ProductPredictionDto['trend'], string> = { UP: '↑ rising', DOWN: '↓ falling', STEADY: '→ steady', UNKNOWN: '' };
 
 function Settings({ salonId, data, onSaved }: { salonId: string; data: InventoryPredictionsDto; onSaved: () => void }) {
+  const styles = useThemedStyles(makeStyles);
   const [form, setForm] = useState({ leadTimeDays: String(data.settings.leadTimeDays), safetyDays: String(data.settings.safetyDays), coverDays: String(data.settings.coverDays), alertsEnabled: data.settings.alertsEnabled });
   const [leadTimes, setLeadTimes] = useState<Record<string, string>>(Object.fromEntries(data.suppliers.map((s) => [s.id, s.leadTimeDays == null ? '' : String(s.leadTimeDays)])));
   const [busy, setBusy] = useState(false);
@@ -84,6 +86,7 @@ function Settings({ salonId, data, onSaved }: { salonId: string; data: Inventory
 }
 
 export function PredictionsPanel({ salonId }: { salonId: string }) {
+  const styles = useThemedStyles(makeStyles);
   const [data, setData] = useState<InventoryPredictionsDto | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [version, setVersion] = useState(0);
@@ -171,10 +174,11 @@ export function PredictionsPanel({ salonId }: { salonId: string }) {
 }
 
 function Line({ title, value }: { title: string; value: string }) {
+  const styles = useThemedStyles(makeStyles);
   return <View style={styles.line}><Text style={styles.small}>{title}</Text><Text style={styles.strong}>{value}</Text></View>;
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   heading: { fontFamily: font.bodyBold, color: color.ink, fontSize: fontSize.base, marginBottom: space[1] },
   label: { fontFamily: font.bodyMedium, color: color.muted, fontSize: fontSize.xs, marginTop: space[2] },
   muted: { fontFamily: font.bodyRegular, color: color.muted, fontSize: fontSize.xs, marginVertical: space[1] },

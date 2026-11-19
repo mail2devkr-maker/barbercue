@@ -4,8 +4,10 @@ import { Alert, Linking, Modal, Pressable, StyleSheet, Switch, Text, View } from
 import {
   DASHBOARD_PATHS,
   Language,
+  SERVICE_BUFFER_CHOICES,
   telHrefFor,
   type ChairOptionDto,
+  type ServiceOptionDto,
   type DashboardQueueDto,
   type QueueEntryDetailDto,
   type StaffStatusDto,
@@ -22,6 +24,8 @@ import { openOwnerInvoice } from '../../lib/owner-invoice-link';
 import { ServiceUsageSheet } from '../owner/ServiceUsageSheet';
 import type { UiStrings } from '@barbercue/shared';
 import { ChairModeRow, type ChairOccupancy } from './ChairModeRow';
+import { AddOnServicesRow, visitServiceLabel } from './AddOnServicesRow';
+import { useThemedStyles, useThemeTokens, type ThemeTokens } from '../../lib/theme-mode';
 
 function dashboardBase(salonId: string): string {
   return `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.queue}`;
@@ -56,13 +60,16 @@ function EntryRow({
   entry,
   chairs,
   activeStaff,
+  services,
   onAction,
 }: {
   entry: QueueEntryDetailDto;
   chairs: ChairOptionDto[];
   activeStaff: StaffStatusDto[];
+  services: ServiceOptionDto[];
   onAction: () => void;
 }) {
+  const styles = useThemedStyles(makeStyles);
   const { t, language } = useLanguage();
   const [assigning, setAssigning] = useState(false);
   // Part 7 — an appointment booked with a specific barber locks normal assignment to that barber
@@ -164,7 +171,7 @@ function EntryRow({
         )}
       </View>
 
-      {entry.serviceName && <Text style={styles.meta}>{entry.serviceName}</Text>}
+      {visitServiceLabel(entry) && <Text style={styles.meta}>{visitServiceLabel(entry)}</Text>}
       <Text style={[styles.arrivalState, arrived ? styles.arrivalYes : styles.arrivalNo]}>
         {arrived ? t.arrivedStatus : t.notYetArrivedStatus}
       </Text>
@@ -175,6 +182,10 @@ function EntryRow({
         </Text>
       )}
       {error && <InlineError message={error} />}
+
+      {(entry.status === 'WAITING' || entry.status === 'CALLED' || entry.status === 'IN_SERVICE') && (
+        <AddOnServicesRow entry={entry} services={services} onChanged={onAction} />
+      )}
 
       {active && !arrived && (
         <Button title={t.markArrivedAction} onPress={() => void markArrived()} loading={submitting === 'arrive'} style={styles.fullButton} />
@@ -293,6 +304,8 @@ export const LiveQueuePanel = forwardRef<LiveQueuePanelHandle, { salonId: string
   { salonId, ownerTools = false },
   ref,
 ) {
+  const { color, resolved, surface } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const { t, language } = useLanguage();
   const hi = language === Language.HI;
   const [data, setData] = useState<DashboardQueueDto | null>(null);
@@ -476,11 +489,54 @@ export const LiveQueuePanel = forwardRef<LiveQueuePanelHandle, { salonId: string
     </View>
   );
 
-  const autoAssign = !ownerTools || data.autoAssignEnabled === undefined ? null : (
-    <View style={styles.autoRow}>
-      <Text style={styles.autoLabel} numberOfLines={1}>{hi ? 'स्वचालित असाइनमेंट' : 'Automatic assignment'}</Text>
-      <Switch accessibilityLabel={hi ? 'स्वचालित असाइनमेंट' : 'Automatic assignment'} value={data.autoAssignEnabled === true} disabled={autoBusy} onValueChange={(next) => void toggleAutoAssign(next)} />
+  async function setBuffer(minutes: number) {
+    if (minutes === data?.serviceBufferMinutes) return;
+    setAutoBusy(true);
+    setError(null);
+    try {
+      await apiFetch(`${base}/${DASHBOARD_PATHS.serviceBuffer}`, { method: 'PATCH', body: JSON.stringify({ serviceBufferMinutes: minutes }) });
+      await load(true);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t.couldNotCompleteAction);
+    } finally {
+      setAutoBusy(false);
+    }
+  }
+
+  const bufferRow = !ownerTools || typeof data.serviceBufferMinutes !== 'number' ? null : (
+    <View style={styles.bufferBox}>
+      <Text style={styles.autoLabel}>{hi ? 'हर सेवा के बाद बफ़र' : 'Buffer after each service'}</Text>
+      <View style={styles.chipRow}>
+        {SERVICE_BUFFER_CHOICES.map((minutes) => {
+          const selected = data.serviceBufferMinutes === minutes;
+          return (
+            <Pressable
+              key={minutes}
+              accessibilityRole="button"
+              accessibilityState={{ selected, disabled: autoBusy }}
+              accessibilityLabel={minutes === 0 ? (hi ? 'कोई बफ़र नहीं' : 'No buffer') : `${minutes} min`}
+              disabled={autoBusy}
+              onPress={() => void setBuffer(minutes)}
+              style={[styles.chip, selected && styles.chipActive]}
+            >
+              <Text style={[styles.chipText, selected && styles.chipTextActive]}>
+                {minutes === 0 ? (hi ? 'कोई नहीं' : 'None') : `${minutes} min`}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
     </View>
+  );
+
+  const autoAssign = !ownerTools || data.autoAssignEnabled === undefined ? null : (
+    <>
+      <View style={styles.autoRow}>
+        <Text style={styles.autoLabel} numberOfLines={1}>{hi ? 'स्वचालित असाइनमेंट' : 'Automatic assignment'}</Text>
+        <Switch accessibilityLabel={hi ? 'स्वचालित असाइनमेंट' : 'Automatic assignment'} value={data.autoAssignEnabled === true} disabled={autoBusy} onValueChange={(next) => void toggleAutoAssign(next)} />
+      </View>
+      {bufferRow}
+    </>
   );
 
   if (view !== 'active') {
@@ -495,7 +551,7 @@ export const LiveQueuePanel = forwardRef<LiveQueuePanelHandle, { salonId: string
               <Text style={styles.statusBadge}>{statusLabel(t, entry.status)}</Text>
             </View>
             <Text style={styles.customerName}>{entry.customerName?.trim() || `${hi ? 'ग्राहक' : 'Customer'} #${entry.tokenNumber}`}</Text>
-            <Text style={styles.meta}>{[entry.serviceName, entry.assignedStaffName].filter(Boolean).join(' · ')}</Text>
+            <Text style={styles.meta}>{[visitServiceLabel(entry), entry.assignedStaffName].filter(Boolean).join(' · ')}</Text>
             {ownerTools && entry.status === 'COMPLETED' && (
               <View style={styles.fullButton}>
                 <CreateInvoiceButton
@@ -525,13 +581,13 @@ export const LiveQueuePanel = forwardRef<LiveQueuePanelHandle, { salonId: string
       <Modal transparent animationType="fade" visible={Boolean(arrivalEntry)}
         onRequestClose={() => undefined}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,.92)', justifyContent: 'center', padding: 22 }}>
-          <View style={{ backgroundColor: '#fff', borderRadius: 18, padding: 26 }}>
-            <Text style={{ fontSize: 23, fontWeight: 'bold', color: '#111' }}>Live Queue · Arrival check</Text>
-            <Text style={{ marginVertical: 14, color: '#111' }}>
+          <View style={{ backgroundColor: resolved === 'designed' ? '#fff' : surface.card, borderRadius: 18, padding: 26 }}>
+            <Text style={{ fontSize: 23, fontWeight: 'bold', color: resolved === 'designed' ? '#111' : color.ink }}>Live Queue · Arrival check</Text>
+            <Text style={{ marginVertical: 14, color: resolved === 'designed' ? '#111' : color.ink }}>
               Token #{arrivalEntry?.tokenNumber} · {arrivalEntry?.customerName ?? 'Customer'}.
               Estimated service time is around 10 minutes away. Has this customer physically arrived?
             </Text>
-            <Text style={{ color: '#222', marginBottom: 12 }}>
+            <Text style={{ color: resolved === 'designed' ? '#222' : color.muted, marginBottom: 12 }}>
               Customer response: {arrivalEntry?.customerArrivalResponse === true ? 'Yes, self-reported'
                 : arrivalEntry?.customerArrivalResponse === false ? 'Not yet' : 'Not answered'}
             </Text>
@@ -545,7 +601,7 @@ export const LiveQueuePanel = forwardRef<LiveQueuePanelHandle, { salonId: string
         </View>
       </Modal>
       {activeEntries.map((entry) => (
-        <EntryRow key={entry.id} entry={entry} chairs={data.chairs} activeStaff={activeStaff} onAction={() => void load(true)} />
+        <EntryRow key={entry.id} entry={entry} chairs={data.chairs} activeStaff={activeStaff} services={data.services ?? []} onAction={() => void load(true)} />
       ))}
     </>
   );
@@ -553,7 +609,8 @@ export const LiveQueuePanel = forwardRef<LiveQueuePanelHandle, { salonId: string
 
 type QueueView = 'active' | 'completed' | 'noShow' | 'history';
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
+  bufferBox: { marginBottom: space[3], gap: space[2] },
   tabRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2], marginBottom: space[3] },
   skeleton: { height: 100, borderRadius: radius.lg, marginBottom: space[3] },
   entryCard: { marginBottom: space[3] },

@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { color, font, fontSize, space } from '../../lib/theme';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 export type ChairOccupancy = 'FREE' | 'LOCAL' | 'ONLINE';
 
@@ -18,6 +19,7 @@ export function ChairModeRow({ label, occupancy, tokenNumber, busy, hi, onGoOffl
   onGoOffline: () => void;
   onGoOnline: () => void;
 }) {
+  const styles = useThemedStyles(makeStyles);
   const state = occupancy === 'FREE' ? 'FREE' : occupancy === 'LOCAL' ? (hi ? 'सिर्फ़ लोकल' : 'LOCAL ONLY') : `Token #${tokenNumber ?? '?'}`;
   return (
     <View style={styles.line}>
@@ -37,7 +39,7 @@ export function ChairModeRow({ label, occupancy, tokenNumber, busy, hi, onGoOffl
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   line: { flexDirection: 'row', alignItems: 'center', gap: space[2], paddingVertical: space[2], borderTopWidth: 1, borderTopColor: color.border },
   name: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: color.ink },
   state: { flex: 1, fontFamily: font.bodyRegular, fontSize: fontSize.sm, color: color.muted },

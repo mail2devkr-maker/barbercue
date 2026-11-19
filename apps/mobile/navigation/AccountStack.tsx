@@ -2,10 +2,13 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import AccountScreen from '../screens/AccountScreen';
 import StyleAdvisorScreen from '../screens/StyleAdvisorScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
+import CustomerDashboardScreen from '../screens/CustomerDashboardScreen';
+import RecentlyViewedScreen from '../screens/RecentlyViewedScreen';
+import MyReviewsScreen from '../screens/MyReviewsScreen';
 import CreditsHistoryScreen from '../screens/CreditsHistoryScreen';
 import RegisterShopScreen from '../screens/RegisterShopScreen';
 import AssistantScreen from '../screens/AssistantScreen';
-import { lightStackOptions, styleAdvisorHeaderOptions } from './screenOptions';
+import { useStackOptions } from './screenOptions';
 import { HomeHeaderButton } from './HomeHeaderButton';
 import { useLanguage } from '../lib/language-context';
 import { isCreditsEnabled } from '../lib/feature-flags';
@@ -14,6 +17,7 @@ import type { AccountStackParamList } from './types';
 const Stack = createNativeStackNavigator<AccountStackParamList>();
 
 export default function AccountStack() {
+  const stackOptions = useStackOptions();
   const { t } = useLanguage();
   return (
     <Stack.Navigator>
@@ -22,9 +26,12 @@ export default function AccountStack() {
       <Stack.Screen
         name="StyleAdvisor"
         component={StyleAdvisorScreen}
-        options={{ ...styleAdvisorHeaderOptions, title: t.aiStyleAdvisor, headerRight: () => <HomeHeaderButton /> }}
+        options={{ ...stackOptions, title: t.aiStyleAdvisor, headerRight: () => <HomeHeaderButton /> }}
       />
       <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ title: t.notifications }} />
+      <Stack.Screen name="CustomerDashboard" component={CustomerDashboardScreen} options={{ title: t.tabAccount === 'Account' ? 'Dashboard' : t.tabAccount }} />
+      <Stack.Screen name="RecentlyViewed" component={RecentlyViewedScreen} options={{ title: 'Recently viewed' }} />
+      <Stack.Screen name="MyReviews" component={MyReviewsScreen} options={{ title: 'My reviews' }} />
       {/* Google Play release gate (see lib/feature-flags.ts): the route itself is unregistered in
           the production build, not just hidden from menus — navigation.navigate('CreditsHistory')
           from anywhere (a stray link, a queued notification replay) has nowhere to go.
@@ -33,7 +40,7 @@ export default function AccountStack() {
           a dark screen (Notifications/RegisterShop keep the default here since their bodies are
           still the legacy cream Screen wrapper, unchanged in this pass). */}
       {isCreditsEnabled() && (
-        <Stack.Screen name="CreditsHistory" component={CreditsHistoryScreen} options={{ ...lightStackOptions, title: t.fastQueCreditsLabel }} />
+        <Stack.Screen name="CreditsHistory" component={CreditsHistoryScreen} options={{ ...stackOptions, title: t.fastQueCreditsLabel }} />
       )}
       <Stack.Screen name="RegisterShop" component={RegisterShopScreen} options={{ title: t.registerShopTitle }} />
     </Stack.Navigator>

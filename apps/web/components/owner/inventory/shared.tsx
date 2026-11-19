@@ -14,6 +14,7 @@ import ui from "../owner.module.css";
 
 export const INVENTORY_SECTIONS: ReadonlyArray<{ path: string; label: string }> = [
   { path: "", label: "Overview" },
+  { path: "catalog", label: "Product catalog" },
   { path: "scan", label: "Scan / Add stock" },
   { path: "products", label: "Products" },
   { path: "recipes", label: "Service recipes" },

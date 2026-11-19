@@ -31,7 +31,7 @@
 
 .gateCard {
   max-width: 480px;
-  background: #ffffff;
+  background: var(--tv-bg-ffffff, #ffffff);
   border: 1px solid var(--bc-border);
   border-radius: var(--bc-radius-md);
   padding: var(--bc-space-5);
@@ -68,7 +68,7 @@
 
 .uploadCard {
   max-width: 480px;
-  background: #ffffff;
+  background: var(--tv-bg-ffffff, #ffffff);
   border: 1px solid var(--bc-border);
   border-radius: var(--bc-radius-md);
   padding: var(--bc-space-5);
@@ -90,7 +90,7 @@
   display: inline-block;
   padding: 11px 18px;
   min-height: 44px;
-  background: #ffffff;
+  background: var(--tv-bg-ffffff, #ffffff);
   border: 1px solid var(--bc-ink);
   border-radius: var(--bc-radius-sm);
   font-family: var(--font-body);
@@ -161,7 +161,7 @@
   border: 1px solid var(--bc-border);
   border-radius: var(--bc-radius-md);
   overflow: hidden;
-  background: #ffffff;
+  background: var(--tv-bg-ffffff, #ffffff);
   transition: box-shadow 0.2s ease, border-color 0.2s ease;
 }
 

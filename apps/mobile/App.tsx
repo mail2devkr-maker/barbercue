@@ -15,6 +15,12 @@ import {
 import type { MeResponse } from '@barbercue/shared';
 import { AuthProvider, useAuth } from './lib/auth-context';
 import { LanguageProvider } from './lib/language-context';
+import { ThemeProvider, useStatusBarStyle } from './lib/theme-mode';
+
+/** The app-wide status bar, following the theme ("As designed": light text, as before). */
+function ThemedStatusBar() {
+  return <StatusBar style={useStatusBarStyle('light')} />;
+}
 import { hasIntroPlayed, markIntroPlayed } from './lib/startup-intro';
 import { color } from './lib/theme';
 import { OfflineBanner } from './components/OfflineBanner';
@@ -145,6 +151,7 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
+      <ThemeProvider>
       <AuthProvider>
         <LanguageProvider>
           {!introDone ? (
@@ -164,11 +171,12 @@ export default function App() {
             <>
               <PushNotificationCoordinator />
               <Root />
-              <StatusBar style="light" />
+              <ThemedStatusBar />
             </>
           )}
         </LanguageProvider>
       </AuthProvider>
+      </ThemeProvider>
     </SafeAreaProvider>
   );
 }

@@ -13,6 +13,7 @@ import { color, font, fontSize, lineHeightFor, radius, space } from '../lib/them
 import { Screen, SectionHeader, Skeleton, EmptyState, InlineError, Button } from '../components/ui';
 import type { UiStrings } from '@barbercue/shared';
 import type { BookingsStackParamList } from '../navigation/types';
+import { useThemedStyles, useThemeTokens, type ThemeTokens, type LightTokens } from '../lib/theme-mode';
 
 type Props = NativeStackScreenProps<BookingsStackParamList, 'MyBookings'>;
 
@@ -32,14 +33,14 @@ function statusLabel(t: UiStrings, status: string): string {
   return labels[status] ?? status;
 }
 
-function statusColor(status: string): string {
+function statusColor(color: LightTokens, status: string): string {
   if (status === 'CONFIRMED') return color.success;
   if (status === 'PENDING_PAYMENT') return color.gold;
   if (status === 'CANCELLED') return color.muted;
   return color.ink;
 }
 
-function statusBg(status: string): string {
+function statusBg(color: LightTokens, status: string): string {
   if (status === 'CONFIRMED') return color.successSoft;
   if (status === 'PENDING_PAYMENT') return color.goldSoft;
   if (status === 'CANCELLED') return color.border;
@@ -62,7 +63,7 @@ function queueStatusLabel(status: string, hi: boolean): string {
   return pair ? pair[hi ? 1 : 0] : status;
 }
 
-function queueStatusColors(status: string): { fg: string; bg: string } {
+function queueStatusColors(color: LightTokens, status: string): { fg: string; bg: string } {
   if (status === 'WAITING' || status === 'CALLED' || status === 'IN_SERVICE') return { fg: color.success, bg: color.successSoft };
   if (status === 'COMPLETED') return { fg: color.ink, bg: color.goldSoft };
   return { fg: color.muted, bg: color.border };
@@ -70,9 +71,11 @@ function queueStatusColors(status: string): { fg: string; bg: string } {
 
 /** One Live Queue visit (owner report 14 Nov: customers had no Live Queue history). */
 function QueueVisitCard({ visit }: { visit: CustomerQueueHistoryItemDto }) {
+  const { color } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const { language } = useLanguage();
   const hi = language === Language.HI;
-  const colors = queueStatusColors(visit.status);
+  const colors = queueStatusColors(color, visit.status);
   const joined = formatZonedDateTime(visit.joinedAt, visit.salonTimezone ?? 'Asia/Kolkata', dateLocaleFor(language), {
     day: 'numeric',
     month: 'short',
@@ -108,6 +111,8 @@ function BookingCard({
   onRebook: () => void;
   rebooking: boolean;
 }) {
+  const { color } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const { t, language } = useLanguage();
   // Part 5 (show arrival time after booking): converted through the salon's own timezone, never
   // the device's — a customer booking a shop outside their own city/timezone must never be shown
@@ -119,8 +124,8 @@ function BookingCard({
         <Text style={styles.cardTitle} numberOfLines={1}>
           {booking.serviceName}
         </Text>
-        <View style={[styles.statusPill, { backgroundColor: statusBg(booking.status) }]}>
-          <Text style={[styles.statusPillText, { color: statusColor(booking.status) }]}>
+        <View style={[styles.statusPill, { backgroundColor: statusBg(color, booking.status) }]}>
+          <Text style={[styles.statusPillText, { color: statusColor(color, booking.status) }]}>
             {statusLabel(t, booking.status)}
           </Text>
         </View>
@@ -182,6 +187,8 @@ function BookingCard({
 }
 
 export default function MyBookingsScreen({ navigation }: Props) {
+  const { color } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const { t, language } = useLanguage();
   const hi = language === Language.HI;
   const { rebook, rebookingId, rebookError } = useRebook();
@@ -312,13 +319,13 @@ export default function MyBookingsScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color, surface }: ThemeTokens) => StyleSheet.create({
   screenContent: { padding: space[5] },
   skeletonStack: { gap: space[3] },
   skeletonCard: { height: 72, borderRadius: radius.lg },
   listContent: { paddingTop: space[2] },
   card: {
-    backgroundColor: '#ffffff',
+    backgroundColor: surface.card,
     borderWidth: 1,
     borderColor: color.border,
     borderRadius: radius.lg,

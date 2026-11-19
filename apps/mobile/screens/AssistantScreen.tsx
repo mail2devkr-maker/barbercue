@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { AppState, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { readResults, VoiceConversation, type Heard, type RecognizerLike, type TurnOutcome, type VoiceSnapshot } from '../lib/voice-conversation';
-import { createNativeRecognizer, ensureVoicePermission, VOICE_LANGS, voiceRecognitionAvailable, type VoiceLang } from '../lib/native-voice';
+import { createNativeRecognizer, requestVoicePermission, VOICE_LANGS, voiceModulePresent, voiceRecognitionAvailable, type VoiceLang } from '../lib/native-voice';
 import { createNativeSpeaker, SPEAK_FAILURE_TEXT } from '../lib/speech-output';
 import * as Speech from 'expo-speech';
 import {
@@ -32,6 +32,7 @@ import { useAuth } from '../lib/auth-context';
 import { useOptionalSalon } from '../lib/salon-context';
 import { fastQue, font, fontSize, radius, space } from '../lib/theme';
 import { PremiumButton, PremiumCard, PremiumScreen, PremiumSectionHeader, PremiumTextField } from '../components/ui';
+import { useThemedStyles, type ThemeTokens } from '../lib/theme-mode';
 
 export interface AssistantScreenParams {
   salonId?: string;
@@ -70,6 +71,7 @@ interface ConversationTurn {
 }
 
 export default function AssistantScreen({ route }: { route?: { params?: AssistantScreenParams } } = {}) {
+  const styles = useThemedStyles(makeStyles);
   const { user } = useAuth();
   const salonContext = useOptionalSalon();
   const routeSalonId = route?.params?.salonId;
@@ -106,6 +108,8 @@ export default function AssistantScreen({ route }: { route?: { params?: Assistan
   const [listeningOnce, setListeningOnce] = useState(false);
   const [pushInterim, setPushInterim] = useState('');
   const [pushSpeechError, setPushSpeechError] = useState<string | null>(null);
+  const [voiceStarting, setVoiceStarting] = useState(false);
+  const [voiceStartError, setVoiceStartError] = useState<string | null>(null);
   const [speakerChecked, setSpeakerChecked] = useState<boolean | null>(null);
   const [voiceSettingsOpen, setVoiceSettingsOpen] = useState(false);
   const pushRecognizer = useRef<RecognizerLike | null>(null);
@@ -257,20 +261,42 @@ export default function AssistantScreen({ route }: { route?: { params?: Assistan
     return () => sub.remove();
   }, [conversation]);
 
+  // Owner report (18 Nov): "Start voice conversation does nothing". Every start now shows
+  // "Starting…" at once, and any problem is written right under the voice button (not only at the
+  // top of the screen), naming the real cause.
   async function withVoicePermission(): Promise<boolean> {
-    if (!voiceRecognitionAvailable()) {
-      setError('Speech recognition is not available on this phone. You can type instead.');
+    setVoiceStartError(null);
+    if (!voiceModulePresent()) {
+      setVoiceStartError('This version of the FastQue app does not include voice yet. Update FastQue from the Play Store / App Store, or type instead.');
       return false;
     }
-    const ok = await ensureVoicePermission();
-    if (!ok) setError('Microphone permission is off for FastQue. Allow it in the phone settings to talk, or type instead.');
-    return ok;
+    const permission = await requestVoicePermission();
+    if (permission === 'timeout') {
+      setVoiceStartError('The microphone permission did not answer. Tap again, or allow the microphone for FastQue in the phone settings.');
+      return false;
+    }
+    if (permission !== 'granted') {
+      setVoiceStartError('Microphone permission is off for FastQue. Allow it in the phone settings to talk, or type instead.');
+      return false;
+    }
+    // Some phones report "no speech service" although one works: try anyway and only warn. A real
+    // failure then arrives from the recognizer itself and is shown below the button.
+    if (!voiceRecognitionAvailable()) {
+      setVoiceStartError('Your phone reports no speech service (Google speech services may be off). Trying anyway…');
+    }
+    return true;
   }
 
   async function startConversation() {
-    if (!(await withVoicePermission())) return;
-    speaker.cancel();
-    conversation.start(voiceLang);
+    if (voiceStarting) return;
+    setVoiceStarting(true);
+    try {
+      if (!(await withVoicePermission())) return;
+      speaker.cancel();
+      conversation.start(voiceLang);
+    } finally {
+      setVoiceStarting(false);
+    }
   }
 
   /** Push-to-talk: one phrase per tap, sent once, then (optionally) the reply is spoken. */
@@ -405,9 +431,9 @@ export default function AssistantScreen({ route }: { route?: { params?: Assistan
       case 'owner-verification': navigationRef.navigate('OwnerShopTab', { screen: 'OwnerBusiness', params: { initialPanel: 'verification' } }); break;
       case 'owner-inventory': navigationRef.navigate('OwnerShopTab', { screen: 'OwnerInventory' }); break;
       case 'owner-customers': navigationRef.navigate('OwnerShopTab', { screen: 'OwnerCustomers' }); break;
-      case 'owner-notifications': navigationRef.navigate('OwnerAccountTab', { screen: 'Notifications' }); break;
+      case 'owner-notifications': navigationRef.navigate('OwnerAccountTab', { screen: 'Notifications', initial: false }); break;
       case 'staff-today': navigationRef.navigate('StaffTodayTab'); break;
-      case 'staff-notifications': navigationRef.navigate('StaffAccountTab', { screen: 'Notifications' }); break;
+      case 'staff-notifications': navigationRef.navigate('StaffAccountTab', { screen: 'Notifications', initial: false }); break;
       case 'employee-dashboard': navigationRef.navigate('EmployeeDashboard'); break;
     }
   }
@@ -433,7 +459,11 @@ export default function AssistantScreen({ route }: { route?: { params?: Assistan
             ) : null}
             <View style={styles.voicePanel}>
               {!inConversation ? (
-                <PremiumButton title="🎤  Start voice conversation" onPress={() => void startConversation()} disabled={sending || listeningOnce} />
+                <PremiumButton
+                  title={voiceStarting ? 'Starting…' : '🎤  Start voice conversation'}
+                  onPress={() => void startConversation()}
+                  disabled={sending || listeningOnce || voiceStarting}
+                />
               ) : (
                 <View style={styles.voiceLive} accessibilityLiveRegion="polite">
                   <Text style={styles.voiceState}>{voice.state === 'listening' && voice.ready ? 'Speak now' : VOICE_STATE_TEXT[voice.state]}</Text>
@@ -450,6 +480,7 @@ export default function AssistantScreen({ route }: { route?: { params?: Assistan
               {voice.state === 'error' && voice.note ? <Text accessibilityRole="alert" style={styles.error}>{voice.note}</Text> : null}
               {voice.speechError ? <Text accessibilityRole="alert" style={styles.error}>{voice.speechError}</Text> : null}
               {pushSpeechError ? <Text accessibilityRole="alert" style={styles.error}>{pushSpeechError}</Text> : null}
+              {voiceStartError ? <Text accessibilityRole="alert" style={styles.error}>{voiceStartError}</Text> : null}
               <Pressable accessibilityRole="button" onPress={() => setVoiceSettingsOpen((v) => !v)} style={styles.voiceLink}>
                 <Text style={styles.listenText}>{voiceSettingsOpen ? 'Hide voice settings' : 'Voice settings & speaker test'}</Text>
               </Pressable>
@@ -590,7 +621,7 @@ export default function AssistantScreen({ route }: { route?: { params?: Assistan
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ fastQue }: ThemeTokens) => StyleSheet.create({
   voicePanel: { gap: space[2], marginBottom: space[2] },
   voiceLive: { gap: space[2], padding: space[3], borderRadius: radius.md, borderWidth: 1, borderColor: fastQue.borderStrong, backgroundColor: fastQue.card },
   voiceState: { color: fastQue.text, fontFamily: font.bodyBold, fontSize: fontSize.base },

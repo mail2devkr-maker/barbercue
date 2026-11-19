@@ -106,7 +106,7 @@
   border: 1px solid var(--bc-border);
   border-left-width: 4px;
   border-radius: 12px;
-  background: #fff;
+  background: var(--tv-bg-ffffff, #fff);
 }
 .ok {
   border-left-color: var(--bc-success);
@@ -202,7 +202,7 @@
   padding: 9px 16px;
   border: 1px solid var(--bc-border);
   border-radius: 10px;
-  background: #fff;
+  background: var(--tv-bg-ffffff, #fff);
   cursor: pointer;
 }
 .chip {
@@ -258,7 +258,7 @@
   padding: 4px 6px;
   border: 1px solid var(--bc-border);
   border-radius: 8px;
-  background: #fff;
+  background: var(--tv-bg-ffffff, #fff);
 }
 .toggle {
   display: inline-flex;
@@ -289,12 +289,12 @@
   width: 44px;
   border: 1px solid var(--bc-border);
   border-radius: 10px;
-  background: #fff;
+  background: var(--tv-bg-ffffff, #fff);
   cursor: pointer;
   font-size: 18px;
 }
 .micOn {
-  background: var(--bc-accent);
+  background: var(--bc-accent-solid);
   color: #fff;
   animation: pulse 1.2s ease-in-out infinite;
 }
@@ -430,7 +430,7 @@
   padding: 6px 12px;
   border: 1px solid var(--bc-border);
   border-radius: 999px;
-  background: #fff;
+  background: var(--tv-bg-ffffff, #fff);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -467,7 +467,7 @@
   background: var(--bc-gold);
 }
 .dot_error {
-  background: var(--bc-accent);
+  background: var(--bc-accent-solid);
 }
 .editHeard {
   margin-left: 8px;
@@ -585,7 +585,7 @@
   padding: 10px 12px;
   border: 1px solid var(--bc-border);
   border-radius: 12px;
-  background: #fff;
+  background: var(--tv-bg-ffffff, #fff);
 }
 .voiceRow {
   display: flex;
@@ -607,7 +607,7 @@
   padding: 4px 6px;
   border: 1px solid var(--bc-border);
   border-radius: 8px;
-  background: #fff;
+  background: var(--tv-bg-ffffff, #fff);
 }
 .voiceStatus {
   margin: 0;

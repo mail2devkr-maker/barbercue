@@ -31,6 +31,7 @@ import {
 import { color, font, fontSize, space } from '../../lib/theme';
 import { Button, Card, InlineError } from '../ui';
 import { QrMatrixView } from './QrMatrixView';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 const LOGO = require('../../assets/brand/fastque-clean-lockup.png');
 const MARK = require('../../assets/brand/fastque-clean-mark.png');
@@ -44,6 +45,7 @@ type Action = 'image' | 'link' | null;
  * "Save / share poster" captures exactly what is on screen as a PNG.
  */
 export function PremiumQueueQr({ salonId, salonName, hindi }: { salonId: string; salonName: string; hindi: boolean }) {
+  const styles = useThemedStyles(makeStyles);
   const [queueUrl, setQueueUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [address, setAddress] = useState<string | null>(null);
@@ -149,7 +151,7 @@ export function PremiumQueueQr({ salonId, salonName, hindi }: { salonId: string;
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   heading: { fontFamily: font.bodyBold, color: color.ink, fontSize: fontSize.base, marginBottom: space[1] },
   muted: { fontFamily: font.bodyRegular, color: color.muted, fontSize: fontSize.sm, marginBottom: space[3] },
   poster: {

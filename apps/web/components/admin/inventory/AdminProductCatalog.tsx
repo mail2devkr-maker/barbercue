@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
@@ -14,6 +15,7 @@ import {
 } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../../lib/api";
 import { useAuth } from "../../../lib/auth-context";
+import { ProductCodes } from "../../inventory/ProductCodes";
 import ui from "../../owner/owner.module.css";
 import css from "./admin-inventory.module.css";
 
@@ -67,16 +69,54 @@ export function AdminProductCatalog() {
           <div className={ui.rowWrap}>
             <button type="button" className={`${css.tab} ${view === "list" ? css.tabOn : ""}`} onClick={() => setParam("view", null)}>Products</button>
             <button type="button" className={`${css.tab} ${view === "import" ? css.tabOn : ""}`} onClick={() => setParam("view", "import")}>Import CSV</button>
+            <Link className={css.verify} style={{ display: "inline-flex", alignItems: "center" }} href="/dashboard/admin/inventory/upload">Upload Product Database</Link>
           </div>
         )}
       </div>
-      {view === "import" ? <CatalogImport /> : <CatalogList status={status} onStatus={(s) => setParam("status", s)} canManage={canManage} />}
+      {view === "import" ? (
+        <CatalogImport />
+      ) : (
+        <CatalogList
+          status={status}
+          onStatus={(s) => setParam("status", s)}
+          canManage={canManage}
+          visibility={params.get("visibility") ?? ""}
+          onVisibility={(v) => setParam("visibility", v || null)}
+          testData={params.get("testData") ?? ""}
+          onTestData={(v) => setParam("testData", v || null)}
+          missingBarcode={params.get("missingBarcode") === "true"}
+          onMissingBarcode={(v) => setParam("missingBarcode", v ? "true" : null)}
+          autoFocusSearch={params.get("focus") === "search"}
+        />
+      )}
     </main>
   );
 }
 
-function CatalogList({ status, onStatus, canManage }: { status: ProductVerificationStatus | ""; onStatus: (s: string) => void; canManage: boolean }) {
+type ListFilters = {
+  visibility: string;
+  onVisibility: (v: string) => void;
+  testData: string;
+  onTestData: (v: string) => void;
+  missingBarcode: boolean;
+  onMissingBarcode: (v: boolean) => void;
+  autoFocusSearch: boolean;
+};
+
+function CatalogList({
+  status,
+  onStatus,
+  canManage,
+  visibility,
+  onVisibility,
+  testData,
+  onTestData,
+  missingBarcode,
+  onMissingBarcode,
+  autoFocusSearch,
+}: { status: ProductVerificationStatus | ""; onStatus: (s: string) => void; canManage: boolean } & ListFilters) {
   const [q, setQ] = useState("");
+  const [codesFor, setCodesFor] = useState<string | null>(null);
   const [items, setItems] = useState<AdminCatalogProductDto[] | null>(null);
   const [cursor, setCursor] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -84,7 +124,15 @@ function CatalogList({ status, onStatus, canManage }: { status: ProductVerificat
 
   const load = useCallback(
     async (after: string | null) => {
-      const query = new URLSearchParams({ limit: "25", ...(status ? { status } : {}), ...(q.trim() ? { q: q.trim() } : {}), ...(after ? { cursor: after } : {}) });
+      const query = new URLSearchParams({
+        limit: "25",
+        ...(status ? { status } : {}),
+        ...(visibility ? { visibility } : {}),
+        ...(testData ? { testData } : {}),
+        ...(missingBarcode ? { missingBarcode: "true" } : {}),
+        ...(q.trim() ? { q: q.trim() } : {}),
+        ...(after ? { cursor: after } : {}),
+      });
       try {
         const page = await apiFetch<InventoryPageDto<AdminCatalogProductDto>>(`${BASE}?${query}`);
         setItems((prev) => (after && prev ? [...prev, ...page.items] : page.items));
@@ -94,7 +142,7 @@ function CatalogList({ status, onStatus, canManage }: { status: ProductVerificat
         setError(errorText(err, "Could not load the catalog."));
       }
     },
-    [status, q],
+    [status, q, visibility, testData, missingBarcode],
   );
 
   useEffect(() => {
@@ -128,7 +176,29 @@ function CatalogList({ status, onStatus, canManage }: { status: ProductVerificat
             </button>
           ))}
         </div>
-        <input className={`${ui.input} ${css.search}`} placeholder="Search name, brand or barcode" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search catalog" />
+        <input
+          className={`${ui.input} ${css.search}`}
+          placeholder="Search name, brand, product code, or scan a barcode"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          aria-label="Search catalog"
+          autoFocus={autoFocusSearch}
+        />
+      </div>
+      <div className={css.filters} aria-label="Filters">
+        <select className={ui.input} style={{ maxWidth: 200 }} value={visibility} onChange={(e) => onVisibility(e.target.value)} aria-label="Visibility">
+          <option value="">Global and shop-only</option>
+          <option value="GLOBAL">Global products</option>
+          <option value="SHOP">Shop-specific products</option>
+        </select>
+        <select className={ui.input} style={{ maxWidth: 180 }} value={testData} onChange={(e) => onTestData(e.target.value)} aria-label="Test data">
+          <option value="">Real and test data</option>
+          <option value="false">Real products only</option>
+          <option value="true">Test data only</option>
+        </select>
+        <label className={css.checkField} style={{ flex: "0 0 auto" }}>
+          <input type="checkbox" checked={missingBarcode} onChange={(e) => onMissingBarcode(e.target.checked)} /> Missing barcode
+        </label>
       </div>
       {error && <p className={`${ui.banner} ${ui.bannerError}`} role="alert">{error}</p>}
       <div role="status" aria-live="polite">{notice && <p className={`${ui.banner} ${ui.bannerOk}`}>{notice}</p>}</div>
@@ -149,9 +219,12 @@ function CatalogList({ status, onStatus, canManage }: { status: ProductVerificat
                 )}
               </div>
               <div className={css.productInfo}>
-                <strong>{p.name}</strong>
+                <strong>
+                  {p.name} {p.isTestData && <span className={css.badgeTest}>TEST DATA</span>}{" "}
+                  {p.visibility === "SHOP" && <span className={css.badgeShop}>Shop-only{p.ownerSalon ? `: ${p.ownerSalon.name}` : ""}</span>}
+                </strong>
                 <span className={ui.cardSub}>
-                  {[p.brand, p.category, p.packSize && p.packUnit ? `${Number(p.packSize)} ${p.packUnit.toLowerCase()}` : null, p.mrp ? `MRP ₹${Number(p.mrp)}` : null].filter(Boolean).join(" · ")}
+                  {[p.brand, p.variant, p.category, p.externalRef ? `Code ${p.externalRef}` : null, p.packSize && p.packUnit ? `${Number(p.packSize)} ${p.packUnit.toLowerCase()}` : null, p.mrp ? `MRP ₹${Number(p.mrp)}` : null].filter(Boolean).join(" · ")}
                 </span>
                 <span className={ui.cardSub}>
                   Barcode {p.barcodes.map((b) => b.display).join(", ")} · {SOURCE_LABEL[p.dataSource] ?? p.dataSource}
@@ -159,6 +232,14 @@ function CatalogList({ status, onStatus, canManage }: { status: ProductVerificat
                   {p.sourceLicense ? ` · licence ${p.sourceLicense}` : ""} · stocked by {p.salonsStocking} shop{p.salonsStocking === 1 ? "" : "s"}
                 </span>
                 {p.reviewNote && <span className={ui.cardSub}>Note: {p.reviewNote}</span>}
+                <button type="button" className={ui.cardLink} style={{ justifySelf: "start" }} onClick={() => setCodesFor(codesFor === p.id ? null : p.id)} aria-expanded={codesFor === p.id}>
+                  {codesFor === p.id ? "Hide barcode & QR" : "Show barcode & QR"}
+                </button>
+                {codesFor === p.id && (
+                  <div className={css.codes}>
+                    <ProductCodes productId={p.id} barcodes={p.barcodes.map((b) => ({ display: b.display, symbology: b.format === "GTIN" ? ({ 8: "EAN-8", 12: "UPC-A", 13: "EAN-13", 14: "GTIN-14" } as Record<number, string>)[b.display.length] : "Other" }))} />
+                  </div>
+                )}
                 {p.possibleDuplicates.length > 0 && (
                   <span className={css.dupe}>Possible duplicate of: {p.possibleDuplicates.map((d) => d.name).join(", ")}</span>
                 )}

@@ -34,6 +34,7 @@ import { Screen, SectionHeader, Card, Button, InlineError } from '../components/
 import { isCreditsEnabled } from '../lib/feature-flags';
 import { includeOfferInBooking } from '../lib/customer-commerce';
 import type { SearchStackParamList, TabParamList } from '../navigation/types';
+import { useThemedStyles, type ThemeTokens } from '../lib/theme-mode';
 
 // FastQue Credits / Wallet V1: steps by a flat ₹5 — fine-grained enough to reach any cap value
 // (all multiples of 10, per computeMaxRedeemableCredits) without a control cluttered by 1-unit
@@ -57,6 +58,7 @@ function formatFreeCancellationWindow(minutes: number, t: UiStrings): string {
 }
 
 export default function ConfirmBookingScreen({ route, navigation }: Props) {
+  const styles = useThemedStyles(makeStyles);
   const {
     salonId,
     salonName,
@@ -402,7 +404,7 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   centeredContent: { justifyContent: 'center' },
   card: { marginBottom: space[4] },
   line: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, color: color.ink, marginBottom: space[1] },

@@ -1,7 +1,6 @@
 .page {
   padding: clamp(32px, 5vw, 72px) 24px clamp(56px, 8vw, 104px);
-  background:
-    radial-gradient(circle at 86% 6%, rgba(242, 41, 92, 0.12), transparent 24rem),
+  background: radial-gradient(circle at 86% 6%, rgba(242, 41, 92, 0.12), transparent 24rem),
     radial-gradient(circle at 7% 40%, rgba(255, 122, 61, 0.1), transparent 22rem),
     var(--bc-surface);
 }
@@ -31,7 +30,7 @@
 }
 
 .hero h1 {
-  color: var(--bc-brand-navy);
+  color: var(--bc-navy-text);
   font-size: clamp(2.35rem, 7vw, 4.3rem);
 }
 
@@ -76,7 +75,7 @@
 
 .article h2 {
   margin-bottom: 14px;
-  color: var(--bc-brand-navy);
+  color: var(--bc-navy-text);
   font-size: clamp(1.55rem, 4vw, 2.1rem);
 }
 
@@ -117,14 +116,14 @@
   padding: 18px;
   border: 1px solid var(--bc-border);
   border-radius: var(--bc-radius-md);
-  background: #fff;
+  background: var(--tv-bg-ffffff, #fff);
 }
 
 .notice {
   padding: 16px 18px;
   border-left: 4px solid var(--bc-brand-coral);
   border-radius: 0 var(--bc-radius-sm) var(--bc-radius-sm) 0;
-  background: color-mix(in srgb, var(--bc-brand-orange) 9%, #fff);
+  background: color-mix(in srgb, var(--bc-brand-orange) 9%, var(--tv-bg-ffffff, #fff));
 }
 
 .article a:not(.contents a) {

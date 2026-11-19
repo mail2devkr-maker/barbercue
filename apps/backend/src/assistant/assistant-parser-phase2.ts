@@ -161,6 +161,26 @@ function walkInName(text: string): string | null {
           'with',
           'phone',
           'mobile',
+          // "Pooja naam ka walk in", "Rahul naam se", "Ravi naam ke customer ko": the name marker is
+          // never part of the name (live bug 17 Nov: "Pooja Naam Ka").
+          'naam',
+          'name',
+          'named',
+          'ka',
+          'ki',
+          'ke',
+          'se',
+          'wala',
+          'wali',
+          'wale',
+          'daalo',
+          'dalo',
+          'jodo',
+          'नाम',
+          'का',
+          'की',
+          'के',
+          'से',
         ].includes(w),
     )
     .join(' ')

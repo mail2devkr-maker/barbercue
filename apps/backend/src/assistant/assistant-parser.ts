@@ -129,6 +129,12 @@ const ONBOARDING = W('registration|onboarding|application|रजिस्ट्�
 
 const NUMBER = /(?:₹\s*|rs\.?\s*|inr\s*)?(\d{1,7}(?:\.\d{1,2})?)(?!\d)/gu;
 
+// An amount immediately followed by the change verb, optionally with a currency word and "aur/more":
+// "20 rupay badha do", "₹50 badha do", "30 rupaye aur badha do", "25 ghata do", "40 rupees more",
+// "20 रुपये बढ़ा दो". Live bug 17 Nov: these were read as the NEW price (₹200 -> ₹20).
+const RELATIVE_AMOUNT =
+  /(?:^|\s)(?:₹\s*)?\d{1,7}(?:\.\d{1,2})?\s*(?:rupay|rupaye|rupaya|rupees|rupee|rs\.?|inr|रुपये|रुपए|रुपया)?\s+(?:(?:aur|more|extra|zyada|और|ज़्यादा|ज्यादा)\s+)?(?:badha|badhao|badhado|badhaa|ghata|ghatao|ghatado|kam|more|extra|zyada|बढ़ा|बढ़ाओ|बढाओ|बढ़ाएं|घटा|घटाओ|कम|ज़्यादा|ज्यादा)(?=\s|$)/u;
+
 function numbers(text: string): number[] {
   return [...text.matchAll(NUMBER)].map((m) => Number(m[1]));
 }
@@ -283,8 +289,14 @@ function parsePhase1(text: string, raw: string): ParsedIntent | null {
       }
       if (nums.length >= 1) {
         const value = nums[nums.length - 1];
-        // "by 50" with a direction is a relative change; otherwise the number is the new price.
-        if (direction && /(?:^|\s)(?:by|tak)\s+(?:₹\s*)?\d/u.test(text)) {
+        // "by 50" with a direction is a relative change; so is an amount followed straight by the
+        // change verb ("20 rupay badha do", "25 kam karo", "40 rupees more"). Otherwise the number is
+        // the new price ("300 kar do", "badha ke 300 kar do", "increase to 150").
+        if (
+          direction &&
+          (/(?:^|\s)(?:by|tak)\s+(?:₹\s*)?\d/u.test(text) ||
+            RELATIVE_AMOUNT.test(text))
+        ) {
           return {
             action: AssistantActionId.SERVICE_SET_PRICE,
             to: null,

@@ -66,6 +66,15 @@ export const EMPLOYEE_PATHS = {
   onboard: 'onboard',
   voiceVisitLogs: 'voice-visit-logs',
   shop: 'shop',
+  // Salon onboarding applications (see onboarding.ts for the full route map).
+  onboarding: 'onboarding',
+  counts: 'counts',
+  services: 'services',
+  media: 'media',
+  file: 'file',
+  extract: 'extract',
+  submit: 'submit',
+  analytics: 'analytics',
 } as const;
 
 export const EMPLOYEE_RESERVED_ID_MIN = 1;
@@ -121,6 +130,10 @@ export const ADMIN_PATHS = {
   leads: 'leads',
   visits: 'visits',
   followUps: 'follow-ups',
+  // Salon onboarding review queue: admin/onboarding-applications[/kpis|/analytics|/:id[/...]].
+  // (admin/onboarding is the separate New Shop Onboarding funnel report.)
+  onboardingApplications: 'onboarding-applications',
+  kpis: 'kpis',
 } as const;
 
 // Admin data permissions → the roles that hold them (enforced by the backend's RolesGuard on each
@@ -372,6 +385,10 @@ export const DASHBOARD_PATHS = {
   // Owner-operations corrective mission: assignment and the start of service are separate steps.
   startService: 'start-service',
   reassign: 'reassign',
+  // Live-visit add-on mission: POST/DELETE dashboard/queue-entries/:id/add-ons[/:serviceId] and
+  // PATCH dashboard/salons/:salonId/service-buffer.
+  addOns: 'add-ons',
+  serviceBuffer: 'service-buffer',
   noShow: 'no-show',
   cancel: 'cancel',
   complete: 'complete',

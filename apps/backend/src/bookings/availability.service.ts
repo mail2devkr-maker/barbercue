@@ -17,7 +17,7 @@ import {
 } from '@barbercue/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { AppException } from '../common/exceptions/app.exception';
-import { ReservationService } from './reservation.service';
+import { ReservationService, bufferMs } from './reservation.service';
 import {
   resolveSalonTimeZone,
   zonedDateToDayOfWeek,
@@ -89,6 +89,19 @@ export class AvailabilityService {
     ];
     items.sort((a, b) => (a.occurredAt < b.occurredAt ? 1 : -1));
     return items.slice(0, RECENT_ACTIVITY_LIMIT);
+  }
+
+  /**
+   * Live-visit add-on mission: the shop's planning gap kept after every service (minutes, 0 = none).
+   * Read on the caller's own transaction client so a booking decision and the value it used commit
+   * together.
+   */
+  async getServiceBufferMinutes(db: Db, salonId: string): Promise<number> {
+    const row = await db.salon.findUnique({
+      where: { id: salonId },
+      select: { serviceBufferMinutes: true },
+    });
+    return row?.serviceBufferMinutes ?? 0;
   }
 
   async getSalonOrThrow(salonId: string) {
@@ -472,7 +485,10 @@ export class AvailabilityService {
     date: string,
     staffId?: string,
   ): Promise<AvailabilitySlotDto[]> {
-    await this.getSalonOrThrow(salonId);
+    const salon = await this.getSalonOrThrow(salonId);
+    // Live-visit add-on mission: the shop's planning gap after every service (0 = none). Every other
+    // reservation is treated as [start - buffer, end + buffer) - see ReservationBufferOption.
+    const padMs = bufferMs({ bufferMinutes: salon.serviceBufferMinutes });
     // Multi-service booking core mission — the candidate interval a slot must fit is the SUM of
     // every selected service's duration, never just one of them. Loaded via getServicesOrThrow so
     // an unknown/foreign-salon/inactive/duplicate id is rejected here, before any slot math runs,
@@ -546,8 +562,8 @@ export class AvailabilityService {
       where: {
         salonId,
         ...this.reservations.reservingBookingWhere(),
-        slotStart: { lt: closeAt },
-        slotEnd: { gt: openAt },
+        slotStart: { lt: new Date(closeAt.getTime() + padMs) },
+        slotEnd: { gt: new Date(openAt.getTime() - padMs) },
       },
       select: { slotStart: true, slotEnd: true, preferredStaffId: true },
     });
@@ -564,7 +580,7 @@ export class AvailabilityService {
         staffId: true,
         startedAt: true,
         service: { select: { durationMinutes: true } },
-        queueEntry: { select: { bookingId: true } },
+        queueEntry: { select: { bookingId: true, addOnMinutes: true } },
       },
     });
     // A customer ASSIGNED to a barber but not yet started holds that barber exactly like an active
@@ -581,6 +597,7 @@ export class AvailabilityService {
         assignedAt: true,
         calledAt: true,
         bookingId: true,
+        addOnMinutes: true,
         service: { select: { durationMinutes: true } },
       },
     });
@@ -591,7 +608,10 @@ export class AvailabilityService {
         start: s.startedAt,
         end: this.reservations.projectedActiveSessionEnd(
           s.startedAt,
-          s.service.durationMinutes,
+          this.reservations.occupiedMinutes(
+            s.service.durationMinutes,
+            s.queueEntry.addOnMinutes,
+          ),
           now,
         ),
       })),
@@ -603,7 +623,10 @@ export class AvailabilityService {
           start: from,
           end: this.reservations.projectedActiveSessionEnd(
             from,
-            e.service?.durationMinutes ?? 30,
+            this.reservations.occupiedMinutes(
+              e.service?.durationMinutes,
+              e.addOnMinutes,
+            ),
             now,
           ),
         };
@@ -620,8 +643,12 @@ export class AvailabilityService {
     ) {
       if (slotStart <= now) continue;
       const slotEnd = new Date(slotStart.getTime() + durationMs);
+      // The candidate widened by the buffer on both sides (identical to slotStart/slotEnd when the
+      // shop's buffer is 0, i.e. exactly the previous behaviour).
+      const checkStart = new Date(slotStart.getTime() - padMs);
+      const checkEnd = new Date(slotEnd.getTime() + padMs);
       const overlappingBookings = overlapCandidates.filter(
-        (b) => b.slotStart < slotEnd && b.slotEnd > slotStart,
+        (b) => b.slotStart < checkEnd && b.slotEnd > checkStart,
       );
       // A genuine walk-in session (no linked booking) is a real pool unit not otherwise
       // represented above; an appointment's own check-in session is already counted via its
@@ -632,8 +659,8 @@ export class AvailabilityService {
           this.reservations.intervalsOverlap(
             s.start,
             s.end,
-            slotStart,
-            slotEnd,
+            checkStart,
+            checkEnd,
           ),
       );
       // Pool capacity governs "Any Staff" bookability regardless of who holds each overlapping
@@ -648,8 +675,8 @@ export class AvailabilityService {
               this.reservations.intervalsOverlap(
                 s.start,
                 s.end,
-                slotStart,
-                slotEnd,
+                checkStart,
+                checkEnd,
               ),
           ));
       const consumed =

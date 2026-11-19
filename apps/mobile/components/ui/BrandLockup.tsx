@@ -1,5 +1,6 @@
 import { Image, StyleSheet, View } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 // Brand closure mission (round 2): the web identity moved to a NEW clean, unboxed lockup — no
 // square/card/rim around the FQ monogram, see apps/web/components/ui/BrandLockup.tsx's
@@ -70,6 +71,7 @@ export function BrandLockup({
   variant = 'default',
   style,
 }: Props) {
+  const styles = useThemedStyles(makeStyles);
   void showTagline;
 
   if (variant === 'auth' && !markOnly) {
@@ -118,7 +120,11 @@ export function BrandLockup({
   );
 }
 
-const styles = StyleSheet.create({
+// Light theme: the lockup's "Fast" lettering is cream (made for dark headers), so it would vanish on a
+// light background. Seat it on a small charcoal tile (the same --fq-utility-bg as the designed header).
+const LIGHT_TILE = '#171314';
+
+const makeStyles = ({ resolved }: ThemeTokens) => StyleSheet.create({
   root: { alignItems: 'center', flexShrink: 1, minWidth: 0 },
   rootCompact: {},
   markOnly: { flexShrink: 0 },
@@ -131,7 +137,7 @@ const styles = StyleSheet.create({
   // space, and the clip box matches that same box exactly so rounding clips the image itself.
   lockupClipDefault: { width: 39 * LOCKUP_ASPECT_RATIO, height: 39, flexShrink: 1 },
   lockupClipCompact: { width: 33 * LOCKUP_ASPECT_RATIO, height: 33 },
-  lockupClip: { borderRadius: LOCKUP_RADIUS, overflow: 'hidden' },
+  lockupClip: { borderRadius: LOCKUP_RADIUS, overflow: 'hidden', ...(resolved === 'light' ? { backgroundColor: LIGHT_TILE, paddingHorizontal: 8, paddingVertical: 4 } : null) },
   lockupArt: { width: '100%', height: '100%' },
 
   // Auth (login-screen) presentation — width-percentage + aspectRatio rather than a JS-computed
@@ -143,6 +149,7 @@ const styles = StyleSheet.create({
     aspectRatio: LOCKUP_ASPECT_RATIO,
     borderRadius: AUTH_LOCKUP_RADIUS,
     overflow: 'hidden',
+    ...(resolved === 'light' ? { backgroundColor: LIGHT_TILE, padding: 10 } : null),
   },
   authArt: { width: '100%', height: '100%' },
 });

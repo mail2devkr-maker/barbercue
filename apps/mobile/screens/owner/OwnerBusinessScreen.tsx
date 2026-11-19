@@ -33,6 +33,7 @@ import { useLanguage } from '../../lib/language-context';
 import { useSalon } from '../../lib/salon-context';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 import { Button, Card, EmptyState, InlineError, Screen, SectionHeader } from '../../components/ui';
+import { ON_ACCENT, useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 type Panel = 'analytics' | 'report' | 'sources' | 'team' | 'contacts' | 'demo' | 'cancellations' | 'invoices' | 'payments' | 'reviews' | 'offers' | 'verification';
 type OfferPage = { items: OfferDto[]; nextCursor: string | null };
@@ -105,6 +106,7 @@ function shiftDate(date: string, days: number): string {
 }
 
 export default function OwnerBusinessScreen({ route }: { route?: { params?: { initialPanel?: Panel; openInvoiceId?: string } } } = {}) {
+  const styles = useThemedStyles(makeStyles);
   const { selectedSalonId, selectedSalon } = useSalon();
   const { language } = useLanguage();
   const c: Copy = language === Language.HI ? COPY.hi : COPY.en;
@@ -405,10 +407,12 @@ export default function OwnerBusinessScreen({ route }: { route?: { params?: { in
 type Copy = { [K in keyof typeof COPY.en]: string };
 
 function Metric({ label, value, note }: { label: string; value: string | number; note?: string }) {
+  const styles = useThemedStyles(makeStyles);
   return <Card style={styles.metric}><Text style={styles.metricLabel}>{label}</Text><Text style={styles.metricValue}>{value}</Text>{note ? <Text style={styles.muted}>{note}</Text> : null}</Card>;
 }
 
 function AnalyticsPanel({ data, revenue, c }: { data: OwnerAnalyticsDto; revenue: OwnerRevenueDto | null; c: Copy }) {
+  const styles = useThemedStyles(makeStyles);
   const unit = data.currency;
   return <>
     <View style={styles.metrics}>
@@ -429,10 +433,12 @@ function AnalyticsPanel({ data, revenue, c }: { data: OwnerAnalyticsDto; revenue
 }
 
 function RevenueSeries({ title, points, currency }: { title: string; points: OwnerRevenueDto['daily']; currency: string | null }) {
+  const styles = useThemedStyles(makeStyles);
   return <Card><Text style={styles.heading}>{title}</Text>{points.length ? points.map((point) => <DataLine key={point.date} title={point.date} value={money(point.amount, currency)} />) : <Text style={styles.muted}>—</Text>}</Card>;
 }
 
 function CancellationPanel({ data, c }: { data: CancellationAnalyticsDto; c: Copy }) {
+  const styles = useThemedStyles(makeStyles);
   return <>
     <View style={styles.metrics}>
       <Metric label={c.cancellationsInPeriod} value={data.totalCancellations} />
@@ -445,6 +451,7 @@ function CancellationPanel({ data, c }: { data: CancellationAnalyticsDto; c: Cop
 }
 
 function InvoicePanel({ items, invoice, onOpen, onBack, busyId, c, actions }: { items: InvoiceSummaryDto[]; invoice: InvoiceDetailDto | null; onOpen: (id: string) => void; onBack: () => void; busyId: string | null; c: Copy; actions?: ReactNode }) {
+  const styles = useThemedStyles(makeStyles);
   if (invoice) return <>
     <Button title={c.backToInvoices} variant="outline" onPress={onBack} />
     <Card><Text style={styles.heading}>{invoice.number}</Text><Text style={styles.line}>{invoice.customerName ?? c.anonymous} · {dateLabel(invoice.issuedAt)}</Text><Text style={styles.line}>{invoice.status} / {invoice.paymentStatus}</Text><Text style={styles.line}>{`${c.completed}: ${money(invoice.total, invoice.currency)} · ${c.amountPaid}: ${money(invoice.amountPaid, invoice.currency)} · ${c.balanceDue}: ${money(invoice.balanceDue, invoice.currency)}`}</Text></Card>
@@ -456,6 +463,7 @@ function InvoicePanel({ items, invoice, onOpen, onBack, busyId, c, actions }: { 
 }
 
 function PaymentsPanel({ data, c }: { data: RecordedPaymentListDto; c: Copy }) {
+  const styles = useThemedStyles(makeStyles);
   return <>
     <View style={styles.metrics}><Metric label={c.received} value={money(data.totals.received, data.currency)} /><Metric label={c.refunded} value={money(data.totals.refunded, data.currency)} /><Metric label={c.net} value={money(data.totals.net, data.currency)} /></View>
     {data.items.length === 0 ? <EmptyState title={c.noPaymentsRows} /> : <Card>{data.items.map((p) => <DataLine key={p.id} title={`${p.invoiceNumber} · ${p.customerName ?? c.anonymous}`} value={`${p.kind === 'REFUND' ? '−' : ''}${money(p.amount, data.currency)}`} note={`${p.method} · ${dateLabel(p.recordedAt)} · ${p.recordedBy}`} />)}</Card>}
@@ -463,6 +471,7 @@ function PaymentsPanel({ data, c }: { data: RecordedPaymentListDto; c: Copy }) {
 }
 
 function ReviewPanel({ data, replies, setReplies, onRespond, busyId, c }: { data: OwnerReviewsResponseDto | null; replies: Record<string, string>; setReplies: (value: (previous: Record<string, string>) => Record<string, string>) => void; onRespond: (id: string) => void; busyId: string | null; c: Copy }) {
+  const styles = useThemedStyles(makeStyles);
   if (!data || data.items.length === 0) return <EmptyState title={c.noReviews} />;
   return <>{data.items.map((review) => <Card key={review.id}>
     <Text style={styles.heading}>{'★'.repeat(review.rating)}{'☆'.repeat(5 - review.rating)} · {review.serviceName}</Text>
@@ -475,6 +484,7 @@ function ReviewPanel({ data, replies, setReplies, onRespond, busyId, c }: { data
 }
 
 function VerificationPanel({ request, notes, url, setNotes, setUrl, onSubmit, busy, c }: { request: VerificationRequestDto | null; notes: string; url: string; setNotes: (value: string) => void; setUrl: (value: string) => void; onSubmit: () => void; busy: boolean; c: Copy }) {
+  const styles = useThemedStyles(makeStyles);
   return <>
     {request ? <Card><Text style={styles.heading}>{request.status === 'SUBMITTED' ? c.verificationPending : request.status}</Text><Text style={styles.muted}>{dateLabel(request.submittedAt)}</Text>{request.reviewNotes ? <Text style={styles.line}>{request.reviewNotes}</Text> : null}{request.evidenceNotes ? <Text style={styles.line}>{request.evidenceNotes}</Text> : null}{request.evidenceUrls.map((item) => <Text key={item} style={styles.muted}>{item}</Text>)}</Card> : <EmptyState title={c.noVerification} />}
     {(!request || request.status === 'REJECTED') && <Card>
@@ -488,16 +498,17 @@ function VerificationPanel({ request, notes, url, setNotes, setUrl, onSubmit, bu
 }
 
 function DataLine({ title, value, note }: { title: string; value: string; note?: string }) {
+  const styles = useThemedStyles(makeStyles);
   return <View style={styles.dataLine}><View style={styles.flex}><Text style={styles.lineStrong}>{title}</Text>{note ? <Text style={styles.muted}>{note}</Text> : null}</View><Text style={styles.lineStrong}>{value}</Text></View>;
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color, resolved, surface }: ThemeTokens) => StyleSheet.create({
   screen: { gap: space[3] },
   tabs: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2], marginBottom: space[2] },
   tab: { borderWidth: 1, borderColor: color.border, borderRadius: radius.sm, paddingHorizontal: space[3], paddingVertical: space[2], backgroundColor: color.surface },
   tabSelected: { backgroundColor: color.ink, borderColor: color.ink },
   tabText: { color: color.ink, fontFamily: font.bodySemiBold, fontSize: fontSize.xs },
-  tabTextSelected: { color: color.surface },
+  tabTextSelected: { color: resolved === 'designed' ? ON_ACCENT : surface.inverseText },
   rangeRow: { flexDirection: 'row', gap: space[2] },
   range: { borderWidth: 1, borderColor: color.border, borderRadius: 16, paddingHorizontal: space[3], paddingVertical: space[2] },
   rangeSelected: { borderColor: color.accent, backgroundColor: color.accentSoft },

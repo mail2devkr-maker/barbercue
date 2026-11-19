@@ -18,6 +18,7 @@ export type AdminNavGroupId =
   | "SALES"
   | "OPERATIONS"
   | "INVENTORY"
+  | "FINANCE"
   | "ANALYTICS"
   | "ALERTS"
   | "REPORTS"
@@ -46,6 +47,7 @@ export const ADMIN_NAV_GROUPS: ReadonlyArray<{ id: AdminNavGroupId; label: strin
   { id: "SALES", label: "Regional Sales", icon: "trend" },
   { id: "OPERATIONS", label: "Operations", icon: "queue" },
   { id: "INVENTORY", label: "Inventory", icon: "tag" },
+  { id: "FINANCE", label: "Finance", icon: "card" },
   { id: "ANALYTICS", label: "Analytics", icon: "chart" },
   { id: "ALERTS", label: "Alerts", icon: "alert" },
   { id: "REPORTS", label: "Reports", icon: "receipt" },
@@ -89,6 +91,8 @@ export const ADMIN_NAV_ITEMS: ReadonlyArray<AdminNavItem> = [
   { id: "customer-overview", label: "Customer Overview", group: "CUSTOMERS", href: "/dashboard/admin/customers", status: "live" },
   { id: "customer-export", label: "Customer Data Export", group: "CUSTOMERS", href: "/dashboard/admin/customers", query: "view=export", status: "live" },
 
+  { id: "field-crm-2", label: "Field CRM 2.0", group: "SALES", href: "/dashboard/admin/field-crm", status: "live" },
+  { id: "onboarding-review", label: "Onboarding Review", group: "SALES", href: "/dashboard/admin/onboarding-review", status: "live" },
   { id: "field-crm", label: "Field CRM", group: "SALES", href: "/dashboard/admin/crm", status: "live" },
   { id: "crm-analytics", label: "Sales Executives", group: "SALES", href: "/dashboard/admin/crm/analytics", status: "live" },
   planned("SALES", "regions", "Regional Managers & Cities", "Sales territories, effective-dated assignments and targets."),
@@ -102,9 +106,27 @@ export const ADMIN_NAV_ITEMS: ReadonlyArray<AdminNavItem> = [
   { id: "chart-builder", label: "Chart Builder", group: "ANALYTICS", href: CHARTS, status: "live" },
   planned("ANALYTICS", "saved-reports", "Saved Reports", "Server-side saved chart preferences (stored per browser today)."),
 
-  { id: "inventory-overview", label: "Inventory Overview", group: "INVENTORY", href: "/dashboard/admin/inventory", status: "live" },
-  { id: "product-catalog", label: "Product Catalog", group: "INVENTORY", href: "/dashboard/admin/inventory/catalog", status: "live" },
-  { id: "catalog-import", label: "Catalog Import", group: "INVENTORY", href: "/dashboard/admin/inventory/catalog", query: "view=import", status: "live" },
+  { id: "inventory-overview", label: "Inventory Statistics", group: "INVENTORY", href: "/dashboard/admin/inventory", status: "live" },
+  { id: "product-catalog", label: "Product Master", group: "INVENTORY", href: "/dashboard/admin/inventory/catalog", query: "status=VERIFIED", status: "live" },
+  { id: "inventory-upload", label: "Upload Inventory", group: "INVENTORY", href: "/dashboard/admin/inventory/upload", status: "live" },
+  { id: "inventory-upload-history", label: "Upload History", group: "INVENTORY", href: "/dashboard/admin/inventory/uploads", status: "live" },
+  { id: "shop-products", label: "Shop-Specific Products", group: "INVENTORY", href: "/dashboard/admin/inventory/catalog", query: "status=&visibility=SHOP", status: "live" },
+  { id: "product-search", label: "Product Search", group: "INVENTORY", href: "/dashboard/admin/inventory/catalog", query: "status=&focus=search", status: "live" },
+  { id: "catalog-review", label: "Catalog Review", group: "INVENTORY", href: "/dashboard/admin/inventory/catalog", query: "status=PENDING", status: "live" },
+  { id: "catalog-change-requests", label: "Owner Change Requests", group: "INVENTORY", href: "/dashboard/admin/inventory/change-requests", status: "live" },
+  { id: "catalog-import", label: "Catalog CSV Import (basic)", group: "INVENTORY", href: "/dashboard/admin/inventory/catalog", query: "view=import", status: "live" },
+  { id: "marketplace", label: "Marketplace", group: "INVENTORY", href: "/dashboard/admin/marketplace", status: "live" },
+  { id: "marketplace-approvals", label: "Listing Approvals", group: "INVENTORY", href: "/dashboard/admin/marketplace", query: "tab=listings", status: "live" },
+  { id: "marketplace-orders", label: "Shop Orders", group: "INVENTORY", href: "/dashboard/admin/marketplace", query: "tab=orders", status: "live" },
+
+  { id: "finance-overview", label: "Overview", group: "FINANCE", href: "/dashboard/admin/finance", status: "live" },
+  { id: "finance-expenses", label: "Expenses", group: "FINANCE", href: "/dashboard/admin/finance", query: "tab=expenses", status: "live" },
+  { id: "finance-funding", label: "Contributions & Funding", group: "FINANCE", href: "/dashboard/admin/finance", query: "tab=funding", status: "live" },
+  { id: "finance-reimbursements", label: "Reimbursements", group: "FINANCE", href: "/dashboard/admin/finance", query: "tab=reimbursements", status: "live" },
+  planned("FINANCE", "finance-budgets", "Budgets", "Budget records by category, city and month, with revisions and 75/90/100% alerts (finance Phase 4)."),
+  { id: "finance-vendors", label: "Vendors & Payments", group: "FINANCE", href: "/dashboard/admin/finance", query: "tab=vendors", status: "live" },
+  planned("FINANCE", "finance-reports", "Reports & Analytics", "Excel/PDF statements, budget-vs-actual, forecasts and salon acquisition cost (finance Phases 4-5)."),
+  { id: "finance-settings", label: "Settings & Categories", group: "FINANCE", href: "/dashboard/admin/finance", query: "tab=settings", status: "live" },
 
   { id: "quiet-shops", label: "Open, No Bookings", group: "ALERTS", href: STATUS, query: "filter=quiet", status: "live" },
   planned("ALERTS", "inactive-alerts", "Inactive Shop Alerts", "Alert rules, alert records and assignable follow-ups."),

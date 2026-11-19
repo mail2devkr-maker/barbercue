@@ -6,6 +6,7 @@ import { apiFetch } from '../../lib/api';
 import { getRealtimeSocket, joinSalonRoom, onReconnect } from '../../lib/realtime';
 import { useLanguage } from '../../lib/language-context';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 function capacityPath(salonId: string): string {
   return `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.capacity}`;
@@ -17,6 +18,7 @@ function capacityPath(salonId: string): string {
  * this is a convenience widget, not something that should ever block the rest of the tab.
  */
 export function CapacitySummaryPanel({ salonId }: { salonId: string }) {
+  const styles = useThemedStyles(makeStyles);
   const { t } = useLanguage();
   const [data, setData] = useState<CapacitySummaryDto | null>(null);
 
@@ -84,12 +86,12 @@ export function CapacitySummaryPanel({ salonId }: { salonId: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color, surface }: ThemeTokens) => StyleSheet.create({
   row: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: space[3],
-    backgroundColor: '#ffffff',
+    backgroundColor: surface.card,
     borderWidth: 1,
     borderColor: color.border,
     borderRadius: radius.lg,

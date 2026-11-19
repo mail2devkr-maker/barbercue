@@ -24,6 +24,7 @@ import { navigationRef } from './navigation-ref';
 import { subscribeToOwnerBookingPushNavigation } from '../lib/push-navigation';
 import { subscribeQueueArrivalNavigation } from '../lib/queue-push-navigation';
 import { OwnerArrivalPromptCoordinator } from '../components/owner/OwnerArrivalPromptCoordinator';
+import { statusBarStyleFor, useThemedStyles, useThemeTokens, type ThemeTokens } from '../lib/theme-mode';
 
 export type OwnerTabParamList = {
   OwnerDashboardTab: undefined;
@@ -69,6 +70,8 @@ export default function OwnerNavigator() {
  * - Otherwise: every workplace is already ACTIVE/SUSPENDED — the normal tab shell.
  */
 function OwnerNavigatorGate() {
+  const { fastQue } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const { workplaces, loading, reload } = useSalon();
 
   if (loading) {
@@ -92,6 +95,7 @@ function OwnerNavigatorGate() {
 }
 
 function OwnerTabs() {
+  const { fastQue } = useThemeTokens();
   const unreadCount = useUnreadNotificationCount();
   const { t } = useLanguage();
   const { selectedSalonId } = useSalon();
@@ -101,12 +105,15 @@ function OwnerTabs() {
   // The app-wide status bar is light (white text) for the dark customer screens. Every owner tab
   // except the dark Dashboard sits on the cream surface with no header, so white clock/battery
   // icons were invisible there. Switch per focused tab; restore light when the owner shell closes.
+  const { resolved } = useThemeTokens();
   useEffect(() => () => setStatusBarStyle('light'), []);
   return (
     <>
     <Tab.Navigator
+      // Owner (18 Nov): Back (the new in-app button and the phone's own) returns to the PREVIOUS tab.
+      backBehavior="history"
       screenListeners={({ route }) => ({
-        focus: () => setStatusBarStyle(route.name === 'OwnerDashboardTab' ? 'light' : 'dark'),
+        focus: () => setStatusBarStyle(statusBarStyleFor(resolved, route.name === 'OwnerDashboardTab' ? 'light' : 'dark')),
       })}
       screenOptions={{
         headerShown: false,
@@ -148,7 +155,7 @@ function OwnerTabs() {
         }}
       />
     </Tab.Navigator>
-    <AssistantFab tabBarHeight={60 + insets.bottom} includeBottomInset onOpen={() => navigationRef.navigate('OwnerAccountTab', { screen: 'Assistant', params: { salonId: selectedSalonId ?? undefined } })} />
+    <AssistantFab tabBarHeight={60 + insets.bottom} includeBottomInset onOpen={() => navigationRef.navigate('OwnerAccountTab', { screen: 'Assistant', initial: false, params: { salonId: selectedSalonId ?? undefined } })} />
     <OwnerLiveAlerts />
     </>
   );
@@ -204,6 +211,6 @@ function tabOptions(label: string, icon: TabIconName) {
   };
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ fastQue }: ThemeTokens) => StyleSheet.create({
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: fastQue.background },
 });

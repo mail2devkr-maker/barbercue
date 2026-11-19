@@ -1,4 +1,5 @@
 import { StyleSheet, View } from 'react-native';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 export type TabIconName =
   | 'home'
@@ -25,6 +26,7 @@ interface TabIconProps {
  * visual and are hidden from the screen-reader tree.
  */
 export function TabIcon({ name, color, size = 22 }: TabIconProps) {
+  const styles = useThemedStyles(makeStyles);
   const stroke = Math.max(1.5, Math.round(size * 0.1));
   const base = { width: size, height: size };
 
@@ -139,7 +141,7 @@ export function TabIcon({ name, color, size = 22 }: TabIconProps) {
   }
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (_tokens: ThemeTokens) => StyleSheet.create({
   icon: { alignItems: 'center', justifyContent: 'center' },
   homeRoof: { position: 'absolute', top: 1, width: 0, height: 0, borderTopWidth: 0, borderLeftColor: 'transparent', borderRightColor: 'transparent' },
   homeBody: { position: 'absolute', bottom: 1, borderRadius: 2 },

@@ -38,6 +38,10 @@ import { OwnerOpsModule } from './owner-ops/owner-ops.module';
 import { AssistantModule } from './assistant/assistant.module';
 import { SalonDescriptionModule } from './salon-description/salon-description.module';
 import { InventoryModule } from './inventory/inventory.module';
+import { FinanceModule } from './finance/finance.module';
+import { ShopModule } from './shop/shop.module';
+import { OnboardingModule } from './onboarding/onboarding.module';
+import { CrmModule } from './crm/crm.module';
 import { WorkModule } from './work/work.module';
 
 @Module({
@@ -72,12 +76,17 @@ import { WorkModule } from './work/work.module';
     AssistantModule,
     SalonDescriptionModule,
     InventoryModule,
+    FinanceModule,
+    ShopModule,
     SalonsModule,
     RealtimeModule,
     PremiumModule,
     StyleAdvisorModule,
     PublicQueueModule,
     SalonSetupModule,
+    // Before AdminModule so admin/onboarding/* never meets a broader admin route first.
+    OnboardingModule,
+    CrmModule,
     AdminModule,
     DashboardBookingsModule,
     DashboardCustomersModule,

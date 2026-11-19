@@ -124,3 +124,17 @@
     max-width: 42px;
   }
 }
+
+/* Light theme: the lockup's "Fast" lettering is cream (made for dark chrome). On light surfaces it sits
+   on a small dark tile so the full wordmark stays legible; the artwork itself is unchanged. */
+:global(html[data-theme="light"]) .root:not(.markOnly):not(.headerArtwork) .art {
+  background: #120f16;
+  border-radius: 12px;
+  padding: 4px 10px;
+  box-sizing: content-box;
+}
+/* Dark-by-design sections (site footer etc.) already give the cream lettering its contrast. */
+:global(html[data-theme="light"] [data-keep-colors]) .root .art {
+  background: none;
+  padding: 0;
+}

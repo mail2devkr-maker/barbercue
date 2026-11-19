@@ -29,7 +29,7 @@ export default function OwnerShopStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="OwnerShop" component={OwnerShopScreen} />
-      <Stack.Screen name="OwnerInventory" component={OwnerInventoryScreen} />
+      <Stack.Screen name="OwnerInventory" component={OwnerInventoryScreen} options={{ headerShown: true, title: 'Inventory' }} />
       <Stack.Screen name="OwnerBusiness" component={OwnerBusinessScreen} options={{ headerShown: true, title: 'Business center' }} />
       <Stack.Screen name="OwnerSettings" component={OwnerSettingsScreen} options={{ headerShown: true, title: 'Shop settings' }} />
       <Stack.Screen name="OwnerQrPoster" component={OwnerQrPosterScreen} options={{ headerShown: true, title: 'Shop QR poster' }} />

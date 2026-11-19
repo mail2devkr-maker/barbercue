@@ -38,7 +38,7 @@ export function SiteFooter() {
   );
 
   return (
-    <footer id="site-footer" className={styles.footer}>
+    <footer id="site-footer" className={styles.footer} data-keep-colors>
       <div className={styles.footerInner}>
         <div className={styles.footerBrand}>
           <span className={styles.footerLogoFrame}>
@@ -54,6 +54,11 @@ export function SiteFooter() {
             <Link href="/search">Find a barber</Link>
             <Link href="/assistant">Find a time</Link>
             <Link href="/offers">Offers near you</Link>
+            <Link href="/services">All beauty services</Link>
+            <Link href="/services/haircut">Haircut near me</Link>
+            <Link href="/services/facial">Facial near me</Link>
+            <Link href="/services/bridal-makeup">Bridal makeup</Link>
+            <Link href="/shop">Marketplace</Link>
             <Link href="/app">Android app & QR</Link>
             <Link href="/account/bookings">My bookings</Link>
             <Link href="/style-advisor">Style Advisor</Link>

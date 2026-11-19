@@ -16,6 +16,7 @@ import { useLanguage } from '../lib/language-context';
 import { color, font, fontSize, radius, space } from '../lib/theme';
 import { Screen, SectionHeader, Card, Button, InlineError, Skeleton, SafeImage } from '../components/ui';
 import type { HomeStackParamList, TabParamList } from '../navigation/types';
+import { useThemedStyles, type ThemeTokens } from '../lib/theme-mode';
 
 // Registered in both HomeStack and AccountStack with the identical `StyleAdvisor: undefined`
 // route shape — HomeStackParamList used here as the stack half is arbitrary (AccountStackParamList
@@ -33,6 +34,7 @@ type PremiumStatus = 'checking' | 'locked' | 'no-credits' | 'ready';
 // billing we haven't enabled, no verified free alternative found) — disclosed via the
 // AI_PROVIDER_NOT_CONFIGURED branch below, never faked.
 export default function StyleAdvisorScreen({ navigation }: Props) {
+  const styles = useThemedStyles(makeStyles);
   const { t } = useLanguage();
   const [asset, setAsset] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const [status, setStatus] = useState<Status>('idle');
@@ -196,7 +198,7 @@ export default function StyleAdvisorScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   screenContent: { padding: space[5] },
   checkingContent: { justifyContent: 'center', alignItems: 'center' },
   checkingSkeleton: { width: 200, height: 20, borderRadius: 6 },

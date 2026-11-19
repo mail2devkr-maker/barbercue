@@ -31,6 +31,8 @@ import { color, font, fontSize, lineHeightFor, radius, space } from '../../lib/t
 import { Screen, SectionHeader, Card, Button, EmptyState, Skeleton, InlineError } from '../../components/ui';
 import type { OwnerTabParamList } from '../../navigation/OwnerNavigator';
 import type { OwnerShopStackParamList } from '../../navigation/OwnerShopStack';
+import { TabBackButton } from '../../components/TabBackButton';
+import { ON_ACCENT, useThemedStyles, useThemeTokens, type ThemeTokens } from '../../lib/theme-mode';
 
 type Props = BottomTabScreenProps<OwnerTabParamList, 'OwnerBookingsTab'>;
 
@@ -80,6 +82,7 @@ function formatSlot(iso: string, language: Language): string {
 }
 
 function BookingRow({ booking, isNew, onChanged }: { booking: OwnerBookingDetailDto; isNew: boolean; onChanged: (message: string) => void }) {
+  const styles = useThemedStyles(makeStyles);
   const { t, language } = useLanguage();
   return (
     <Card style={styles.card}>
@@ -115,6 +118,8 @@ function BookingRow({ booking, isNew, onChanged }: { booking: OwnerBookingDetail
  * work around, so a new booking speaks immediately while this screen is mounted.
  */
 export default function OwnerBookingsScreen({ route, navigation }: Props) {
+  const { color } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const { selectedSalonId } = useSalon();
   const { t, language } = useLanguage();
   const [filter, setFilter] = useState<OwnerBookingFilter>(route.params?.filter ?? 'today');
@@ -361,6 +366,7 @@ export default function OwnerBookingsScreen({ route, navigation }: Props) {
 
   return (
     <Screen scroll={false}>
+      <TabBackButton />
       <SectionHeader eyebrow={t.ownerEyebrow} title={t.bookingsTitle} />
       <Button title="New in-shop appointment" variant="secondary" onPress={() => setCreatingInShopAppointment(true)} />
       <View style={styles.viewToggle}>
@@ -468,7 +474,7 @@ export default function OwnerBookingsScreen({ route, navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   viewToggle: { flexDirection: 'row', gap: space[2], marginTop: space[3] },
   skeleton: { height: 90, borderRadius: radius.lg, marginBottom: space[3] },
   noticeBanner: {
@@ -504,7 +510,7 @@ const styles = StyleSheet.create({
   cardHeadRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   cardHeadText: { flex: 1, paddingRight: space[2] },
   serviceName: { fontFamily: font.displaySemiBold, fontSize: fontSize.base, lineHeight: lineHeightFor(fontSize.base), color: color.ink },
-  newBadge: { fontFamily: font.bodyBold, fontSize: 10, color: color.surface, backgroundColor: '#2e7d32' },
+  newBadge: { fontFamily: font.bodyBold, fontSize: 10, color: ON_ACCENT, backgroundColor: '#2e7d32' },
   meta: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, lineHeight: lineHeightFor(fontSize.sm), color: color.muted, marginTop: 2 },
   statusBadge: {
     fontFamily: font.bodyBold,

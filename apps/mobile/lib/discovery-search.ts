@@ -14,6 +14,8 @@ export interface DiscoveryFilters {
   minRating: number | null;
   openNow: boolean;
   favoritesOnly: boolean;
+  /** Website parity (owner, 18 Nov): "Filter by shop" — shop NAME only, the API's `shopName`. */
+  shopName?: string | null;
 }
 
 export const DEFAULT_DISCOVERY_FILTERS: DiscoveryFilters = {
@@ -58,6 +60,8 @@ export function buildDiscoveryQuery(input: {
   const typed = text.trim();
   if (typed) params.set('service', typed);
   else if (filters.service) params.set('service', filters.service);
+  const shopName = filters.shopName?.trim();
+  if (shopName) params.set('shopName', shopName);
   if (coords) {
     params.set('lat', String(coords.lat));
     params.set('lng', String(coords.lng));

@@ -64,6 +64,26 @@ export interface StaffReservationCheck {
   busyUntil: Date | null;
 }
 
+/**
+ * Live-visit add-on mission (17 Nov 2026). `bufferMinutes` is the shop's planning gap
+ * (Salon.serviceBufferMinutes): when set, every OTHER reservation is treated as occupying
+ * [start - buffer, end + buffer), which is exactly "the candidate must keep `buffer` minutes free
+ * before and after every other booking/session of the same pool or barber". Callers pass it ONLY
+ * for a NEW placement decision (a new booking, a reschedule, a walk-in being given a barber) - never
+ * when an already-booked customer is checked against their own reservation, so appointments made
+ * before the buffer existed keep working exactly as before. Omitted/0 = the previous behaviour.
+ */
+export interface ReservationBufferOption {
+  bufferMinutes?: number;
+}
+
+export function bufferMs(options?: ReservationBufferOption): number {
+  const minutes = options?.bufferMinutes ?? 0;
+  return Number.isFinite(minutes) && minutes > 0
+    ? Math.floor(minutes) * 60_000
+    : 0;
+}
+
 @Injectable()
 export class ReservationService {
   /** The Prisma where-fragment for "this booking can ever consume capacity" — callers still AND
@@ -103,6 +123,17 @@ export class ReservationService {
     return nominalEnd > now ? nominalEnd : now;
   }
 
+  /** A visit's real length: its service(s) plus any add-on services chosen at the shop. */
+  occupiedMinutes(
+    serviceMinutes: number | null | undefined,
+    addOnMinutes: number | null | undefined,
+    fallbackMinutes = ASSIGNED_HOLD_FALLBACK_MINUTES,
+  ): number {
+    const base = serviceMinutes ?? fallbackMinutes;
+    const extra = addOnMinutes && addOnMinutes > 0 ? addOnMinutes : 0;
+    return base + extra;
+  }
+
   /**
    * Pool capacity consumed for a candidate interval — used by "Any Staff" bookability (SLOT_FULL)
    * and by capacity/ETA math. Counts, without double-counting, the union of:
@@ -120,8 +151,13 @@ export class ReservationService {
     salonId: string,
     start: Date,
     end: Date,
-    options?: { excludeBookingId?: string },
+    options?: { excludeBookingId?: string } & ReservationBufferOption,
   ): Promise<number> {
+    // With a buffer, widening the candidate by the buffer on both sides is the same as widening
+    // every other reservation by it (see ReservationBufferOption).
+    const pad = bufferMs(options);
+    const windowStart = new Date(start.getTime() - pad);
+    const windowEnd = new Date(end.getTime() + pad);
     const [bookingCount, activeWalkInSessions, assignedWalkIns] =
       await Promise.all([
         db.booking.count({
@@ -131,8 +167,8 @@ export class ReservationService {
               ? { id: { not: options.excludeBookingId } }
               : {}),
             ...this.reservingBookingWhere(),
-            slotStart: { lt: end },
-            slotEnd: { gt: start },
+            slotStart: { lt: windowEnd },
+            slotEnd: { gt: windowStart },
           },
         }),
         db.serviceSession.findMany({
@@ -144,6 +180,7 @@ export class ReservationService {
           select: {
             startedAt: true,
             service: { select: { durationMinutes: true } },
+            queueEntry: { select: { addOnMinutes: true } },
           },
         }),
         // A walk-in who has been ASSIGNED a barber and chair but not started consumes a pool unit
@@ -158,6 +195,7 @@ export class ReservationService {
           select: {
             assignedAt: true,
             calledAt: true,
+            addOnMinutes: true,
             service: { select: { durationMinutes: true } },
           },
         }),
@@ -168,11 +206,14 @@ export class ReservationService {
         s.startedAt,
         this.projectedActiveSessionEnd(
           s.startedAt,
-          s.service.durationMinutes,
+          this.occupiedMinutes(
+            s.service.durationMinutes,
+            s.queueEntry?.addOnMinutes,
+          ),
           now,
         ),
-        start,
-        end,
+        windowStart,
+        windowEnd,
       ),
     ).length;
     const overlappingAssigned = assignedWalkIns.filter((e) => {
@@ -181,11 +222,11 @@ export class ReservationService {
         from,
         this.projectedActiveSessionEnd(
           from,
-          e.service?.durationMinutes ?? ASSIGNED_HOLD_FALLBACK_MINUTES,
+          this.occupiedMinutes(e.service?.durationMinutes, e.addOnMinutes),
           now,
         ),
-        start,
-        end,
+        windowStart,
+        windowEnd,
       );
     }).length;
     return bookingCount + overlappingWalkIns + overlappingAssigned;
@@ -205,8 +246,14 @@ export class ReservationService {
     staffId: string,
     start: Date,
     end: Date,
-    options?: { excludeBookingId?: string; excludeQueueEntryId?: string },
+    options?: {
+      excludeBookingId?: string;
+      excludeQueueEntryId?: string;
+    } & ReservationBufferOption,
   ): Promise<StaffReservationCheck> {
+    const pad = bufferMs(options);
+    const windowStart = new Date(start.getTime() - pad);
+    const windowEnd = new Date(end.getTime() + pad);
     const bookingConflictWhere: Prisma.BookingWhereInput = {
       salonId,
       preferredStaffId: staffId,
@@ -214,8 +261,8 @@ export class ReservationService {
         ? { id: { not: options.excludeBookingId } }
         : {}),
       ...this.reservingBookingWhere(),
-      slotStart: { lt: end },
-      slotEnd: { gt: start },
+      slotStart: { lt: windowEnd },
+      slotEnd: { gt: windowStart },
     };
     const [conflictingBookingCount, activeSession, assignedHold] =
       await Promise.all([
@@ -234,6 +281,7 @@ export class ReservationService {
           select: {
             startedAt: true,
             service: { select: { durationMinutes: true } },
+            queueEntry: { select: { addOnMinutes: true } },
           },
         }),
         // An ASSIGNED, not-yet-started customer holds this barber. The entry being (re)checked is
@@ -250,6 +298,7 @@ export class ReservationService {
           select: {
             assignedAt: true,
             calledAt: true,
+            addOnMinutes: true,
             service: { select: { durationMinutes: true } },
           },
         }),
@@ -269,10 +318,18 @@ export class ReservationService {
     if (activeSession) {
       const projectedEnd = this.projectedActiveSessionEnd(
         activeSession.startedAt,
-        activeSession.service.durationMinutes,
+        this.occupiedMinutes(
+          activeSession.service.durationMinutes,
+          activeSession.queueEntry?.addOnMinutes,
+        ),
       );
       if (
-        this.intervalsOverlap(activeSession.startedAt, projectedEnd, start, end)
+        this.intervalsOverlap(
+          activeSession.startedAt,
+          projectedEnd,
+          windowStart,
+          windowEnd,
+        )
       ) {
         return {
           free: false,
@@ -286,9 +343,12 @@ export class ReservationService {
         assignedHold.assignedAt ?? assignedHold.calledAt ?? new Date();
       const projectedEnd = this.projectedActiveSessionEnd(
         from,
-        assignedHold.service?.durationMinutes ?? ASSIGNED_HOLD_FALLBACK_MINUTES,
+        this.occupiedMinutes(
+          assignedHold.service?.durationMinutes,
+          assignedHold.addOnMinutes,
+        ),
       );
-      if (this.intervalsOverlap(from, projectedEnd, start, end)) {
+      if (this.intervalsOverlap(from, projectedEnd, windowStart, windowEnd)) {
         return {
           free: false,
           reason: 'ASSIGNED_CUSTOMER',

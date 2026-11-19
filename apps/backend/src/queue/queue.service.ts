@@ -11,6 +11,7 @@ import {
   OwnerOpsErrorCode,
   ServiceSessionStatus,
   StaffMemberStatus,
+  MAX_QUEUE_ADD_ONS,
   computeSlotCapacity,
   estimateWaitMinutes,
   estimateWaitRangeMinutes,
@@ -26,6 +27,7 @@ import {
   type CreateQueueCustomerInput,
   type CustomerQueueHistoryItemDto,
   type DashboardQueueDto,
+  type QueueEntryAddOnDto,
   type QueueEntryDetailDto,
   type QueueStatusDto,
 } from '@barbercue/shared';
@@ -35,7 +37,13 @@ import { SalonAccessService } from '../common/salon-access/salon-access.service'
 import { AvailabilityService } from '../bookings/availability.service';
 import { ReservationService } from '../bookings/reservation.service';
 import { resolveEffectiveBookingServices } from '../bookings/effective-booking-services';
-import { zonedDayBounds } from '../common/timezone/timezone';
+import {
+  utcToZonedDateStr,
+  zonedDateToDayOfWeek,
+  zonedDayAndMinutes,
+  zonedDayBounds,
+  zonedWallTimeToUtc,
+} from '../common/timezone/timezone';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PushDispatchService } from '../push-notifications/push-dispatch.service';
@@ -55,6 +63,18 @@ const TRANSACTION_OPTIONS = { timeout: 15_000 };
 // Used only when a queue entry has no service yet (an unspecified walk-in) — a reasonable
 // salon-wide default rather than leaving the ETA uncomputed.
 const DEFAULT_SERVICE_DURATION_MINUTES = 30;
+// Live-visit add-on mission: lifetime of the owner's "customer joined the Live Queue" push.
+const QUEUE_JOIN_PUSH_TTL_MINUTES = 30;
+
+/** "HH:mm" -> minutes after midnight, or null for anything malformed. */
+function wallClockMinutes(value: string): number | null {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(value ?? '');
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours > 23 || minutes > 59) return null;
+  return hours * 60 + minutes;
+}
 
 // Selected on any QueueEntry.booking include so the combined (not just primary) service
 // selection is always available for ETA/duration math and display — matches
@@ -92,7 +112,25 @@ export const queueEntryDetailInclude = {
       preferredStaff: { select: { displayName: true } },
     },
   },
+  // Live-visit add-on mission — services the customer added at the shop.
+  addOns: {
+    select: {
+      serviceId: true,
+      name: true,
+      durationMinutes: true,
+      price: true,
+      createdAt: true,
+    },
+    orderBy: { createdAt: 'asc' as const },
+  },
 } satisfies Prisma.QueueEntryInclude;
+
+// Statuses in which a visit is still live and may still gain or lose an add-on service.
+const ADD_ON_EDITABLE_STATUSES: readonly QueueEntryStatus[] = [
+  QueueEntryStatus.WAITING,
+  QueueEntryStatus.CALLED,
+  QueueEntryStatus.IN_SERVICE,
+];
 
 type QueueEntryWithDetails = Prisma.QueueEntryGetPayload<{
   include: typeof queueEntryDetailInclude;
@@ -129,11 +167,18 @@ export class QueueService {
       this.logger.warn(`Queue join realtime alert failed: ${err instanceof Error ? err.message : 'unknown'}`);
     }
     void this.pushDispatch
-      ?.dispatchLocalizedToUser(ownerUserId, 'queueJoined', entry.serviceName ?? null, {
-        type: 'queue.joined',
-        salonId: entry.salonId,
-        queueEntryId: entry.id,
-      })
+      ?.dispatchLocalizedToUser(
+        ownerUserId,
+        'queueJoined',
+        entry.serviceName ?? null,
+        {
+          type: 'queue.joined',
+          salonId: entry.salonId,
+          queueEntryId: entry.id,
+        },
+        // "A customer just joined" is stale after a while: never delivered late.
+        { expiresAt: new Date(Date.now() + QUEUE_JOIN_PUSH_TTL_MINUTES * 60_000) },
+      )
       .catch((err: unknown) =>
         this.logger.warn(`Queue join push failed: ${err instanceof Error ? err.message : 'unknown'}`),
       );
@@ -293,9 +338,17 @@ export class QueueService {
     contact?: { name?: string; phone?: string },
   ): Promise<QueueEntryDetailDto> {
     const salon = await this.availability.getSalonOrThrow(salonId);
-    if (serviceId)
-      await this.availability.getServiceOrThrow(salonId, serviceId);
+    const joinService = serviceId
+      ? await this.availability.getServiceOrThrow(salonId, serviceId)
+      : null;
     await this.assertNotAlreadyInQueue(customerId);
+    // Live-visit add-on mission: never accept a join outside opening hours, or one the shop
+    // cannot finish before today's closing time.
+    await this.assertQueueAcceptingJoins(
+      salonId,
+      joinService?.durationMinutes ?? null,
+      { projectFinish: true },
+    );
 
     // A queue entry must always be contactable by the shop. Prefer the number given with this join;
     // otherwise fall back to the account's own phone. Google-sign-in accounts have neither by
@@ -339,7 +392,8 @@ export class QueueService {
     await this.notifications.notify(
       salon.ownerUserId,
       'owner.walk_in.joined',
-      { salonId },
+      // queueEntryId lets the notification centre retire this alert once the visit is over.
+      { salonId, queueEntryId: entryId },
       `dashboard/salons/${salonId}/queue`,
     );
     const detail = await this.getDetailOrThrow(entryId);
@@ -359,7 +413,14 @@ export class QueueService {
     contactPhone: string,
   ): Promise<QueueEntryDetailDto & { guestAccessToken: string }> {
     const salon = await this.availability.getSalonOrThrow(salonId);
-    await this.availability.getServiceOrThrow(salonId, serviceId);
+    const joinService = await this.availability.getServiceOrThrow(
+      salonId,
+      serviceId,
+    );
+    // Live-visit add-on mission: same opening-hours / closing-time rule as an account join.
+    await this.assertQueueAcceptingJoins(salonId, joinService.durationMinutes, {
+      projectFinish: true,
+    });
     const guestAccessToken = randomBytes(32).toString('base64url');
     const guestAccessHash = createHash('sha256').update(guestAccessToken).digest('hex');
     const activeStatuses = [
@@ -417,7 +478,7 @@ export class QueueService {
       await this.notifications.notify(
         salon.ownerUserId,
         'owner.walk_in.joined',
-        { salonId },
+        { salonId, queueEntryId: entryId },
         `dashboard/salons/${salonId}/queue`,
       );
     } catch (err) {
@@ -706,6 +767,23 @@ export class QueueService {
   // this phase (see API.md's Discovery section).
   async getQueueStatus(salonId: string): Promise<QueueStatusDto> {
     await this.availability.getSalonOrThrow(salonId);
+    const { waitingCount, estimatedWaitMinutes } =
+      await this.estimateNewJoinerWait(salonId);
+    return {
+      salonId,
+      waitingCount,
+      estimatedWaitMinutes,
+      estimatedWaitRangeMinutes: estimateWaitRangeMinutes(estimatedWaitMinutes),
+    };
+  }
+
+  /**
+   * The wait a customer joining right now would see (same math getQueueStatus always used), with
+   * add-on services of the customers already in a chair included in their remaining time.
+   */
+  private async estimateNewJoinerWait(
+    salonId: string,
+  ): Promise<{ waitingCount: number; estimatedWaitMinutes: number | null }> {
     const waitingCount = await this.prisma.queueEntry.count({
       where: { salonId, status: QueueEntryStatus.WAITING },
     });
@@ -734,6 +812,7 @@ export class QueueService {
         select: {
           startedAt: true,
           service: { select: { durationMinutes: true } },
+          queueEntry: { select: { addOnMinutes: true } },
         },
       }),
     ]);
@@ -743,19 +822,89 @@ export class QueueService {
     );
     const avgServiceDurationMinutes =
       avgDuration._avg.durationMinutes ?? DEFAULT_SERVICE_DURATION_MINUTES;
-    const activeRemaining = this.averageRemainingMinutes(activeSessions);
+    const activeRemaining = this.averageRemainingMinutes(
+      activeSessions.map((s) => ({
+        startedAt: s.startedAt,
+        service: {
+          durationMinutes: this.reservations.occupiedMinutes(
+            s.service.durationMinutes,
+            s.queueEntry?.addOnMinutes,
+          ),
+        },
+      })),
+    );
     const estimatedWaitMinutes = estimateWaitMinutes(
       serverCount,
       waitingCount,
       avgServiceDurationMinutes,
       activeRemaining,
     );
-    return {
-      salonId,
-      waitingCount,
-      estimatedWaitMinutes,
-      estimatedWaitRangeMinutes: estimateWaitRangeMinutes(estimatedWaitMinutes),
-    };
+    return { waitingCount, estimatedWaitMinutes };
+  }
+
+  /**
+   * Live-visit add-on mission — the owner's rule "never accept a queue join beyond opening hours".
+   *  - Outside today's opening hours, or a day marked closed: QUEUE_CLOSED.
+   *  - `projectFinish`: open, but (current queue wait + this service) would end after today's
+   *    closing time: QUEUE_CLOSING.
+   * A shop with no opening hours configured, or no trustworthy time zone, keeps the previous
+   * behaviour (joins accepted) - an unknown is never turned into a guessed "closed". A closing time
+   * of 23:59 means "open until midnight" (24-hour shops: no closing projection), and hours whose
+   * close is not after their open (not supported by the booking grid either) count as unknown.
+   * isClosedForToday / inactive shops are already refused by getSalonOrThrow.
+   */
+  private async assertQueueAcceptingJoins(
+    salonId: string,
+    serviceMinutes: number | null,
+    options: { projectFinish: boolean },
+  ): Promise<void> {
+    const [timeZone, hours] = await Promise.all([
+      this.availability.getSalonTimeZone(salonId),
+      this.prisma.operatingHours.findMany({
+        where: { salonId },
+        select: {
+          dayOfWeek: true,
+          isClosed: true,
+          openTime: true,
+          closeTime: true,
+        },
+      }),
+    ]);
+    if (!timeZone || hours.length === 0) return;
+    const now = new Date();
+    const localDate = utcToZonedDateStr(now, timeZone);
+    const today = hours.find(
+      (h) => h.dayOfWeek === zonedDateToDayOfWeek(localDate),
+    );
+    if (!today) return;
+    const closed = () =>
+      new AppException(
+        QueueErrorCode.QUEUE_CLOSED,
+        'This shop is closed right now. You can join the Live Queue during its opening hours.',
+        HttpStatus.CONFLICT,
+      );
+    if (today.isClosed) throw closed();
+    const openMinute = wallClockMinutes(today.openTime);
+    const untilMidnight = today.closeTime === '23:59';
+    const closeMinute = untilMidnight ? 24 * 60 : wallClockMinutes(today.closeTime);
+    if (openMinute === null || closeMinute === null || closeMinute <= openMinute)
+      return;
+    const { minutes: nowMinute } = zonedDayAndMinutes(now, timeZone);
+    if (nowMinute < openMinute || nowMinute >= closeMinute) throw closed();
+    if (!options.projectFinish || untilMidnight) return;
+    const closeAt = zonedWallTimeToUtc(localDate, today.closeTime, timeZone);
+    if (!closeAt) return;
+    const { estimatedWaitMinutes } = await this.estimateNewJoinerWait(salonId);
+    const finishMinutes =
+      (estimatedWaitMinutes ?? 0) +
+      (serviceMinutes ?? DEFAULT_SERVICE_DURATION_MINUTES);
+    if (now.getTime() + finishMinutes * 60_000 > closeAt.getTime()) {
+      throw new AppException(
+        QueueErrorCode.QUEUE_CLOSING,
+        'The shop cannot finish this service before closing time today. Please book a slot for another day.',
+        HttpStatus.CONFLICT,
+      );
+    }
   }
 
 
@@ -948,7 +1097,7 @@ export class QueueService {
       }),
       this.prisma.salon.findUnique({
         where: { id: salonId },
-        select: { queueAutoAssignEnabled: true },
+        select: { queueAutoAssignEnabled: true, serviceBufferMinutes: true },
       }),
     ]);
     const completedToday = (completedRows ?? []).map((e) =>
@@ -1009,6 +1158,7 @@ export class QueueService {
         historyToday: historyToday.length,
       },
       autoAssignEnabled: salonFlags?.queueAutoAssignEnabled ?? true,
+      serviceBufferMinutes: salonFlags?.serviceBufferMinutes ?? 0,
       staffRoster: staffRoster.map((s, i) => ({
         id: s.id,
         displayName: s.displayName,
@@ -1037,8 +1187,222 @@ export class QueueService {
       services: services.map((s): ServiceOptionDto => ({
         id: s.id,
         name: s.name,
+        durationMinutes: s.durationMinutes ?? undefined,
+        price: s.price != null ? Number(s.price.toString()) : undefined,
       })),
     };
+  }
+
+  // ---------- Live-visit add-on services ----------
+
+  /**
+   * Live-visit add-on mission (17 Nov 2026) — the customer asks for one more service at the shop
+   * (beard, head massage...). Owner, any barber of the shop or a delegated admin records it on the
+   * live visit; the queue's waits, the barber's reservations and the bill all include it from then
+   * on. Only an active service of this shop, never the visit's own service(s), never twice.
+   */
+  async addAddOn(
+    userId: string,
+    entryId: string,
+    serviceId: string,
+  ): Promise<QueueEntryDetailDto> {
+    const entry = await this.getEntryOrThrow(entryId);
+    const actor = await this.salonAccess.assertAccessOrAdminAccess(
+      userId,
+      entry.salonId,
+    );
+    const service = await this.availability.getServiceOrThrow(
+      entry.salonId,
+      serviceId,
+    );
+    await this.prisma.$transaction(async (tx) => {
+      // Same per-salon lock every queue/booking mutation takes: the add-on changes reservations.
+      await tx.$executeRaw(
+        Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${entry.salonId}))`,
+      );
+      const current = await tx.queueEntry.findUnique({
+        where: { id: entryId },
+        select: {
+          status: true,
+          serviceId: true,
+          booking: { select: bookingServiceSnapshotSelect },
+          addOns: { select: { serviceId: true, durationMinutes: true } },
+        },
+      });
+      if (!current) {
+        throw new AppException(
+          QueueErrorCode.QUEUE_ENTRY_NOT_FOUND,
+          'Queue entry not found.',
+          HttpStatus.NOT_FOUND,
+        );
+      }
+      if (!ADD_ON_EDITABLE_STATUSES.includes(current.status)) {
+        throw new AppException(
+          QueueErrorCode.ADD_ON_NOT_ALLOWED,
+          'Services can only be added while the customer is waiting or in service.',
+          HttpStatus.CONFLICT,
+        );
+      }
+      const baseServiceIds = current.booking
+        ? resolveEffectiveBookingServices(current.booking).map(
+            (s) => s.serviceId,
+          )
+        : current.serviceId
+          ? [current.serviceId]
+          : [];
+      if (
+        baseServiceIds.includes(serviceId) ||
+        current.addOns.some((a) => a.serviceId === serviceId)
+      ) {
+        throw new AppException(
+          QueueErrorCode.ADD_ON_DUPLICATE,
+          'This service is already part of this visit.',
+          HttpStatus.CONFLICT,
+        );
+      }
+      if (current.addOns.length >= MAX_QUEUE_ADD_ONS) {
+        throw new AppException(
+          QueueErrorCode.ADD_ON_LIMIT,
+          `A visit can have at most ${MAX_QUEUE_ADD_ONS} added services.`,
+          HttpStatus.CONFLICT,
+        );
+      }
+      await tx.queueEntryAddOn.create({
+        data: {
+          queueEntryId: entryId,
+          serviceId,
+          name: service.name,
+          durationMinutes: service.durationMinutes,
+          price: service.price,
+          addedByUserId: userId,
+        },
+      });
+      const addOnMinutes =
+        current.addOns.reduce((sum, a) => sum + a.durationMinutes, 0) +
+        service.durationMinutes;
+      await tx.queueEntry.update({
+        where: { id: entryId },
+        data: { addOnMinutes },
+      });
+      await tx.auditLog.create({
+        data: {
+          actorUserId: userId,
+          action: 'QUEUE_ENTRY_ADD_ON_ADDED',
+          entityType: 'QueueEntry',
+          entityId: entryId,
+          metadata: {
+            salonId: entry.salonId,
+            actor,
+            serviceId,
+            durationMinutes: service.durationMinutes,
+            addOnMinutes,
+          },
+        },
+      });
+    }, TRANSACTION_OPTIONS);
+    await this.afterAddOnChange(entry.salonId);
+    return this.getDetailOrThrow(entryId);
+  }
+
+  /** Removes an add-on recorded by mistake (only while the visit is still live). */
+  async removeAddOn(
+    userId: string,
+    entryId: string,
+    serviceId: string,
+  ): Promise<QueueEntryDetailDto> {
+    const entry = await this.getEntryOrThrow(entryId);
+    const actor = await this.salonAccess.assertAccessOrAdminAccess(
+      userId,
+      entry.salonId,
+    );
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw(
+        Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${entry.salonId}))`,
+      );
+      const current = await tx.queueEntry.findUnique({
+        where: { id: entryId },
+        select: {
+          status: true,
+          addOns: { select: { serviceId: true, durationMinutes: true } },
+        },
+      });
+      if (!current) {
+        throw new AppException(
+          QueueErrorCode.QUEUE_ENTRY_NOT_FOUND,
+          'Queue entry not found.',
+          HttpStatus.NOT_FOUND,
+        );
+      }
+      if (!ADD_ON_EDITABLE_STATUSES.includes(current.status)) {
+        throw new AppException(
+          QueueErrorCode.ADD_ON_NOT_ALLOWED,
+          'Services can only be changed while the customer is waiting or in service.',
+          HttpStatus.CONFLICT,
+        );
+      }
+      if (!current.addOns.some((a) => a.serviceId === serviceId)) {
+        // Already removed (a double tap): nothing to do, answer with the current visit.
+        return;
+      }
+      await tx.queueEntryAddOn.delete({
+        where: { queueEntryId_serviceId: { queueEntryId: entryId, serviceId } },
+      });
+      const addOnMinutes = current.addOns
+        .filter((a) => a.serviceId !== serviceId)
+        .reduce((sum, a) => sum + a.durationMinutes, 0);
+      await tx.queueEntry.update({
+        where: { id: entryId },
+        data: { addOnMinutes },
+      });
+      await tx.auditLog.create({
+        data: {
+          actorUserId: userId,
+          action: 'QUEUE_ENTRY_ADD_ON_REMOVED',
+          entityType: 'QueueEntry',
+          entityId: entryId,
+          metadata: { salonId: entry.salonId, actor, serviceId, addOnMinutes },
+        },
+      });
+    }, TRANSACTION_OPTIONS);
+    await this.afterAddOnChange(entry.salonId);
+    return this.getDetailOrThrow(entryId);
+  }
+
+  /** Everyone's wait changes with an add-on: recompute, tell every screen, re-plan seating. */
+  private async afterAddOnChange(salonId: string): Promise<void> {
+    await this.recomputeEtas(salonId);
+    this.realtime.emitQueueUpdated(salonId);
+    this.triggerAutoAssign(salonId);
+  }
+
+  /** PATCH dashboard/salons/:salonId/service-buffer — owner (or delegated admin) only. */
+  async setServiceBuffer(
+    userId: string,
+    salonId: string,
+    serviceBufferMinutes: number,
+  ): Promise<{ serviceBufferMinutes: number }> {
+    const actor = await this.salonAccess.assertOwnerOrAdminAccess(
+      userId,
+      salonId,
+    );
+    await this.prisma.$transaction([
+      this.prisma.salon.update({
+        where: { id: salonId },
+        data: { serviceBufferMinutes },
+      }),
+      this.prisma.auditLog.create({
+        data: {
+          actorUserId: userId,
+          action: 'SALON_SERVICE_BUFFER_CHANGED',
+          entityType: 'Salon',
+          entityId: salonId,
+          metadata: { actor, serviceBufferMinutes },
+        },
+      }),
+    ]);
+    this.realtime.emitQueueUpdated(salonId);
+    this.triggerAutoAssign(salonId);
+    return { serviceBufferMinutes };
   }
 
   /**
@@ -1455,8 +1819,18 @@ export class QueueService {
       // own linked booking (an appointment assigned to its own preferredStaffId — Case O) and its
       // own not-yet-existing session are excluded so an appointment can never conflict with itself.
       const now = new Date();
+      // Live-visit add-on mission: a walk-in being given a barber is a NEW placement, so it must
+      // also fit its add-ons and keep the shop's buffer before that barber's next appointment.
+      // An appointment customer is checked exactly as before (their own reservation already holds
+      // the barber; add-ons are what the buffer absorbs).
+      const isWalkIn = !entry.bookingId;
+      const bufferMinutes = isWalkIn
+        ? await this.availability.getServiceBufferMinutes(tx, entry.salonId)
+        : 0;
+      const walkInAddOnMinutes =
+        isWalkIn && (entry.addOnMinutes ?? 0) > 0 ? entry.addOnMinutes : 0;
       const candidateEnd = new Date(
-        now.getTime() + service.durationMinutes * 60_000,
+        now.getTime() + (service.durationMinutes + walkInAddOnMinutes) * 60_000,
       );
       const staffCheck = await this.reservations.isStaffFreeForInterval(
         tx,
@@ -1467,6 +1841,7 @@ export class QueueService {
         {
           excludeBookingId: entry.bookingId ?? undefined,
           excludeQueueEntryId: entryId,
+          bufferMinutes,
         },
       );
       if (!staffCheck.free) {
@@ -2131,6 +2506,11 @@ export class QueueService {
     await this.availability.getSalonOrThrow(salonId);
     if (input.serviceId)
       await this.availability.getServiceOrThrow(salonId, input.serviceId);
+    // Live-visit add-on mission: the shop itself also cannot add someone to the Live Queue outside
+    // its opening hours (the closing-time projection is left to the owner's judgement here).
+    await this.assertQueueAcceptingJoins(salonId, null, {
+      projectFinish: false,
+    });
     if (input.preferredStaffId) {
       const staff = await this.prisma.salonStaff.findFirst({
         where: { id: input.preferredStaffId, salonId },
@@ -2505,6 +2885,8 @@ export class QueueService {
         booking: { select: bookingServiceSnapshotSelect },
       },
     });
+    // Live-visit add-on mission: from here on every duration includes the visit's add-on minutes,
+    // so a customer in the chair who adds a beard trim pushes everyone behind them accordingly.
     if (waiting.length === 0) return;
 
     const now = new Date();
@@ -2521,6 +2903,7 @@ export class QueueService {
           staffId: true,
           startedAt: true,
           service: { select: { durationMinutes: true } },
+          queueEntry: { select: { addOnMinutes: true } },
         },
       }),
       // An assigned (not yet started) customer keeps their barber busy for a whole service, exactly
@@ -2535,6 +2918,7 @@ export class QueueService {
           assignedStaffId: true,
           assignedAt: true,
           calledAt: true,
+          addOnMinutes: true,
           service: { select: { durationMinutes: true } },
         },
       }),
@@ -2561,13 +2945,25 @@ export class QueueService {
       }),
     ]);
     const activeSessions = [
-      ...liveSessions,
+      ...liveSessions.map((s) => ({
+        staffId: s.staffId,
+        startedAt: s.startedAt,
+        service: {
+          durationMinutes: this.reservations.occupiedMinutes(
+            s.service.durationMinutes,
+            s.queueEntry?.addOnMinutes,
+          ),
+        },
+      })),
       ...(assignedHolds ?? []).map((h) => ({
         staffId: h.assignedStaffId as string,
         startedAt: h.assignedAt ?? h.calledAt ?? now,
         service: {
-          durationMinutes:
-            h.service?.durationMinutes ?? DEFAULT_SERVICE_DURATION_MINUTES,
+          durationMinutes: this.reservations.occupiedMinutes(
+            h.service?.durationMinutes,
+            h.addOnMinutes,
+            DEFAULT_SERVICE_DURATION_MINUTES,
+          ),
         },
       })),
     ];
@@ -2651,6 +3047,9 @@ export class QueueService {
         );
         avgServiceDurationMinutes = DEFAULT_SERVICE_DURATION_MINUTES;
       }
+      // The waiting customer's own add-ons lengthen their own visit too.
+      avgServiceDurationMinutes +=
+        (entry.addOnMinutes ?? 0) > 0 ? entry.addOnMinutes : 0;
       const eta = estimateWaitMinutes(
         serverCount,
         peopleAhead,
@@ -2822,6 +3221,16 @@ export class QueueService {
       turnApproaching:
         entry.estimatedWaitMinutes !== null &&
         entry.estimatedWaitMinutes <= TURN_APPROACHING_THRESHOLD_MINUTES,
+      addOns: (entry.addOns ?? []).map(
+        (a): QueueEntryAddOnDto => ({
+          serviceId: a.serviceId,
+          name: a.name,
+          durationMinutes: a.durationMinutes,
+          price: Number(a.price.toString()),
+          addedAt: a.createdAt.toISOString(),
+        }),
+      ),
+      addOnMinutes: entry.addOnMinutes ?? 0,
     };
   }
 }

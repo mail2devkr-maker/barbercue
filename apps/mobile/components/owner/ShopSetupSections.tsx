@@ -29,6 +29,7 @@ import { useLanguage } from '../../lib/language-context';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 import { Button, InlineError, SafeImage } from '../ui';
 import { UpiRoutingStatus } from './UpiRoutingStatus';
+import { useThemedStyles, useThemeTokens, type ThemeTokens } from '../../lib/theme-mode';
 
 /**
  * Shared shop-management form pieces — originally OwnerShopScreen's own inline components,
@@ -58,6 +59,8 @@ export interface ServiceDtoLike {
 }
 
 export function ServiceRow({ salonId, service, categories = [], onChanged }: { salonId: string; service: ServiceDtoLike; categories?: SalonServiceCategoryDto[]; onChanged: () => void }) {
+  const { color } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const { t, language } = useLanguage();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(service.name);
@@ -138,6 +141,8 @@ export function ServiceRow({ salonId, service, categories = [], onChanged }: { s
 }
 
 export function AddServiceForm({ salonId, categories = [], onAdded }: { salonId: string; categories?: SalonServiceCategoryDto[]; onAdded: () => void }) {
+  const { color } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const { t, language } = useLanguage();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
@@ -193,6 +198,7 @@ function ServiceTaxonomyFields({ categories, value, onChange, language }: {
   onChange: (next: ServiceTaxonomySelection) => void;
   language: string;
 }) {
+  const styles = useThemedStyles(makeStyles);
   const hi = language === 'HI';
   const selectedCategory = categories.find((item) => item.id === value.categoryId);
   const categoryMode = selectedCategory ? 'tree' : value.category.trim() ? 'text' : 'none';
@@ -246,6 +252,7 @@ function ServiceTaxonomyFields({ categories, value, onChange, language }: {
 // ---------- Chairs ----------
 
 export function ChairRow({ salonId, chair, onChanged }: { salonId: string; chair: SalonChairDto; onChanged: () => void }) {
+  const styles = useThemedStyles(makeStyles);
   const { t } = useLanguage();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -282,6 +289,8 @@ export function ChairRow({ salonId, chair, onChanged }: { salonId: string; chair
 }
 
 export function AddChairForm({ salonId, onAdded }: { salonId: string; onAdded: () => void }) {
+  const { color } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const { t } = useLanguage();
   const [open, setOpen] = useState(false);
   const [label, setLabel] = useState('');
@@ -320,6 +329,7 @@ export function AddChairForm({ salonId, onAdded }: { salonId: string; onAdded: (
 // ---------- Photos ----------
 
 export function PhotoTile({ salonId, photo, onChanged }: { salonId: string; photo: PhotoDto; onChanged: () => void }) {
+  const styles = useThemedStyles(makeStyles);
   const [removing, setRemoving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -360,6 +370,7 @@ export function AddPhotoButton({
   label: string;
   onAdded: () => void;
 }) {
+  const styles = useThemedStyles(makeStyles);
   const { t } = useLanguage();
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -408,6 +419,7 @@ export function AddPhotoButton({
 }
 
 export function PhotosSection({ salonId, photos, onChanged }: { salonId: string; photos: PhotoDto[]; onChanged: () => void }) {
+  const styles = useThemedStyles(makeStyles);
   const { t } = useLanguage();
   const cover = photos.find((p) => p.type === PhotoType.COVER) ?? null;
   const gallery = photos.filter((p) => p.type === PhotoType.GALLERY);
@@ -445,6 +457,7 @@ export function PaymentQrSection({
   paymentQr: SalonPaymentQrDto | null;
   onChanged: () => void;
 }) {
+  const styles = useThemedStyles(makeStyles);
   const { t } = useLanguage();
   const [linkUrl, setLinkUrl] = useState('');
   const [saving, setSaving] = useState(false);
@@ -572,6 +585,8 @@ export function PaymentQrSection({
 // ---------- Hours ----------
 
 export function HoursEditor({ salonId, hours, onSaved }: { salonId: string; hours: OperatingHoursDto[]; onSaved: (h: OperatingHoursDto[]) => void }) {
+  const { color } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const { t } = useLanguage();
   const [days, setDays] = useState(() =>
     Array.from({ length: 7 }, (_, dayOfWeek) => {
@@ -653,6 +668,8 @@ export function HoursEditor({ salonId, hours, onSaved }: { salonId: string; hour
 // ---------- Staff ----------
 
 export function AddStaffForm({ salonId, onAdded }: { salonId: string; onAdded: () => void }) {
+  const { color } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const { t } = useLanguage();
   const [open, setOpen] = useState(false);
   const [displayName, setDisplayName] = useState('');
@@ -710,6 +727,7 @@ export function AddStaffForm({ salonId, onAdded }: { salonId: string; onAdded: (
 
 /** Owner-scoped edit form for the staff profile fields supported by the deployed API. */
 export function EditStaffProfile({ salonId, staff, onSaved }: { salonId: string; staff: SalonStaffDto; onSaved: () => void }) {
+  const styles = useThemedStyles(makeStyles);
   const { language } = useLanguage();
   const [open, setOpen] = useState(false);
   const [displayName, setDisplayName] = useState(staff.displayName);
@@ -761,7 +779,7 @@ export function EditStaffProfile({ salonId, staff, onSaved }: { salonId: string;
   );
 }
 
-export const styles = StyleSheet.create({
+const makeStyles = ({ color, surface }: ThemeTokens) => StyleSheet.create({
   sectionTitle: { fontFamily: font.displaySemiBold, fontSize: fontSize.base, color: color.ink, marginTop: space[5], marginBottom: space[3] },
   card: { marginBottom: space[2] },
   emptyText: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, color: color.muted },
@@ -780,7 +798,7 @@ export const styles = StyleSheet.create({
   editPanel: { paddingVertical: space[2] },
   input: {
     minHeight: 46,
-    backgroundColor: '#ffffff',
+    backgroundColor: surface.card,
     borderWidth: 1,
     borderColor: color.border,
     borderRadius: radius.sm,
@@ -806,7 +824,7 @@ export const styles = StyleSheet.create({
   timeInput: {
     flex: 1,
     minHeight: 40,
-    backgroundColor: '#ffffff',
+    backgroundColor: surface.card,
     borderWidth: 1,
     borderColor: color.border,
     borderRadius: radius.sm,
@@ -824,3 +842,8 @@ export const styles = StyleSheet.create({
   photoTypeLabel: { fontFamily: font.bodyBold, fontSize: 10, letterSpacing: 0.5, textTransform: 'uppercase', color: color.muted },
 });
 
+
+/** The shared shop-setup stylesheet for the theme in force (used by the Shop and Onboarding screens). */
+export function useSectionStyles() {
+  return useThemedStyles(makeStyles);
+}

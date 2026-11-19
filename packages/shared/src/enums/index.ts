@@ -144,6 +144,19 @@ export const CrmLeadStatus = {
   FOLLOW_UP: 'FOLLOW_UP',
   ONBOARDED: 'ONBOARDED',
   LOST: 'LOST',
+  // CRM 2.0 (labels and groups in crm.ts)
+  ASSIGNED: 'ASSIGNED',
+  CALL_PENDING: 'CALL_PENDING',
+  CONTACT_ATTEMPTED: 'CONTACT_ATTEMPTED',
+  NO_ANSWER: 'NO_ANSWER',
+  CALLBACK_REQUESTED: 'CALLBACK_REQUESTED',
+  MEETING_COMPLETED: 'MEETING_COMPLETED',
+  ONBOARDING_STARTED: 'ONBOARDING_STARTED',
+  PENDING_APPROVAL: 'PENDING_APPROVAL',
+  APPROVED: 'APPROVED',
+  REJECTED: 'REJECTED',
+  DUPLICATE: 'DUPLICATE',
+  INVALID_CONTACT: 'INVALID_CONTACT',
 } as const;
 export type CrmLeadStatus = (typeof CrmLeadStatus)[keyof typeof CrmLeadStatus];
 
@@ -508,6 +521,17 @@ export const QueueErrorCode = {
   // reassignment/override workflow is a deliberate follow-up (see PR description), not implemented
   // here; normal assignment to any other staff member is rejected outright.
   APPOINTMENT_STAFF_LOCKED: 'APPOINTMENT_STAFF_LOCKED',
+  // Live-visit add-on mission (17 Nov 2026). QUEUE_CLOSED: the shop is outside today's opening hours
+  // (or closed today) so a Live Queue join is refused. QUEUE_CLOSING: the shop is open, but the
+  // current queue plus this service cannot finish before today's closing time.
+  QUEUE_CLOSED: 'QUEUE_CLOSED',
+  QUEUE_CLOSING: 'QUEUE_CLOSING',
+  // An add-on can only be added to a visit that is still waiting, assigned or in service.
+  ADD_ON_NOT_ALLOWED: 'ADD_ON_NOT_ALLOWED',
+  // The add-on service is already part of this visit (as its main service or as an add-on).
+  ADD_ON_DUPLICATE: 'ADD_ON_DUPLICATE',
+  // A visit can carry at most MAX_QUEUE_ADD_ONS add-ons.
+  ADD_ON_LIMIT: 'ADD_ON_LIMIT',
 } as const;
 export type QueueErrorCode = (typeof QueueErrorCode)[keyof typeof QueueErrorCode];
 

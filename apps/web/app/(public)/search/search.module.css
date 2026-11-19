@@ -6,8 +6,7 @@
 .page {
   composes: page from "../../../components/landing/landing.module.css";
   min-height: 72vh;
-  background:
-    radial-gradient(circle at 86% 7%, rgba(242, 10, 131, 0.16), transparent 24rem),
+  background: radial-gradient(circle at 86% 7%, rgba(242, 10, 131, 0.16), transparent 24rem),
     radial-gradient(circle at 4% 42%, rgba(255, 122, 69, 0.1), transparent 22rem),
     var(--fq-void);
   color: var(--fq-text);
@@ -49,10 +48,11 @@
 
 .searchForm {
   display: grid;
-  grid-template-columns: minmax(220px, 1.3fr) minmax(190px, 0.8fr) auto;
+  /* Service | Shop | City, then Near me + Find salons on the next row. */
+  grid-template-columns: minmax(200px, 1.2fr) minmax(180px, 1fr) minmax(170px, 0.8fr);
   align-items: end;
   gap: 12px;
-  max-width: 900px;
+  max-width: 980px;
   margin-top: 36px;
   padding: 12px;
   background: var(--fq-charcoal);
@@ -141,7 +141,7 @@
   background: var(--fq-charcoal);
   border: 1px solid var(--fq-hairline);
   border-radius: var(--bc-radius-sm);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 2px 8px var(--tv-bg-rgba-0-0-0-a0_2, rgba(0, 0, 0, 0.2));
   font: inherit;
   font-size: 0.92rem;
   font-weight: 600;
@@ -210,7 +210,7 @@
 
 .filterDropdownOption:hover,
 .filterDropdownOption:focus-visible {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--tv-bg-rgba-255-255-255-a0_06, rgba(255, 255, 255, 0.06));
 }
 
 .filterDropdownOptionSelected {
@@ -371,7 +371,7 @@
 .skeleton span,
 .skeleton i {
   display: block;
-  background: linear-gradient(90deg, var(--fq-utility-bg) 20%, rgba(255, 255, 255, 0.08) 50%, var(--fq-utility-bg) 80%);
+  background: linear-gradient(90deg, var(--fq-utility-bg) 20%, var(--tv-bg-rgba-255-255-255-a0_08, rgba(255, 255, 255, 0.08)) 50%, var(--fq-utility-bg) 80%);
   background-size: 220% 100%;
   animation: shimmer 1.5s ease-in-out infinite;
 }
@@ -520,7 +520,8 @@
 /* ---- Discovery upgrade: filter sidebar + results (docs/discovery-upgrade/PLAN.md) ---- */
 .discoveryLayout {
   display: grid;
-  grid-template-columns: 290px minmax(0, 1fr);
+  /* Owner (18 Nov): filters live in the one Filters panel, so results use the full width. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 28px;
   align-items: start;
   width: min(1180px, calc(100% - 40px));
@@ -574,8 +575,7 @@
   padding: clamp(28px, 4vw, 48px) clamp(20px, 3vw, 40px) 24px;
   border: 1px solid var(--fq-hairline);
   border-radius: 24px;
-  background:
-    linear-gradient(90deg, var(--fq-void) 30%, rgba(9, 9, 12, 0.7) 58%, rgba(9, 9, 12, 0.25) 100%),
+  background: linear-gradient(90deg, var(--fq-void) 30%, rgba(9, 9, 12, 0.7) 58%, var(--tv-bg-rgba-9-9-12-a0_25, rgba(9, 9, 12, 0.25)) 100%),
     url("/editorial/hero/barbercue-hero.webp") right center / cover no-repeat,
     var(--fq-charcoal);
 }
@@ -682,8 +682,7 @@
   .intro {
     width: calc(100% - 32px);
     padding: 24px 16px 18px;
-    background:
-      linear-gradient(180deg, rgba(9, 9, 12, 0.72), var(--fq-void) 75%),
+    background: linear-gradient(180deg, rgba(9, 9, 12, 0.72), var(--fq-void) 75%),
       url("/editorial/hero/barbercue-hero.webp") center top / cover no-repeat,
       var(--fq-charcoal);
   }
@@ -733,12 +732,12 @@
   height: 100%; display: grid; place-items: center;
   border-radius: var(--bc-radius-lg); background: var(--fq-charcoal); color: var(--fq-text-muted);
 }
-.mapResult { padding: 12px; border-radius: 16px; background: #fff; transition: box-shadow 160ms ease; scroll-margin: 16px; cursor: pointer; }
+.mapResult { padding: 12px; border-radius: 16px; background: var(--tv-bg-ffffff, #fff); transition: box-shadow 160ms ease; scroll-margin: 16px; cursor: pointer; }
 .mapResultSelected { box-shadow: 0 0 0 3px var(--fq-orange); }
 .mapPreview {
   position: absolute; left: 12px; right: 12px; bottom: 12px; z-index: 700;
   padding: 14px 40px 14px 14px;
-  border-radius: 16px; background: #fff;
+  border-radius: 16px; background: var(--tv-bg-ffffff, #fff);
   box-shadow: 0 14px 34px rgba(26, 21, 51, 0.28);
   animation: mapPreviewIn 160ms ease-out;
 }
@@ -759,3 +758,54 @@
   .mapPreview { animation: none; }
   .mapResult { transition: none; }
 }
+
+/* ---- One Filters button (owner, 18 Nov): service, shop, city, distance, price and the rest ---- */
+.filterBar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; margin-top: 28px; }
+.filterButton {
+  display: inline-flex; align-items: center; gap: 10px;
+  min-height: 52px; padding: 0 22px;
+  border: 0; border-radius: 999px;
+  background: var(--fq-gradient); color: #fff;
+  font: 700 1rem var(--font-body); cursor: pointer;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+}
+.filterButton:focus-visible { outline: 2px solid var(--fq-orange); outline-offset: 3px; }
+.filterBadge {
+  display: inline-grid; place-items: center; min-width: 24px; height: 24px; padding: 0 7px;
+  border-radius: 999px; background: var(--tv-bg-ffffff, #fff); color: var(--fq-void, var(--tv-fg-111111, #111)); font-size: 0.8rem; font-weight: 800;
+}
+.filterHint { color: var(--fq-text-muted); font-size: 0.9rem; }
+.filterBackdrop { position: fixed; inset: 0; z-index: 1000; background: rgba(0, 0, 0, 0.55); }
+.filterSheet {
+  /* Above the site header (which is sticky), so the title and close button are never covered. */
+  position: fixed; z-index: 1001; top: 0; right: 0; bottom: 0;
+  display: flex; flex-direction: column;
+  width: min(440px, 100%);
+  background: var(--fq-charcoal); color: var(--fq-text);
+  border-left: 1px solid var(--fq-hairline);
+  box-shadow: -20px 0 50px rgba(0, 0, 0, 0.45);
+}
+.filterSheet[hidden] { display: none; }
+.filterSheetHeader {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 20px; border-bottom: 1px solid var(--fq-hairline);
+}
+.filterSheetHeader h2 { margin: 0; font-size: 1.25rem; }
+.filterClose {
+  width: 40px; height: 40px; border: 1px solid var(--fq-hairline); border-radius: 999px;
+  background: transparent; color: var(--fq-text); font-size: 1.5rem; line-height: 1; cursor: pointer;
+}
+.filterSheetBody { display: grid; gap: 18px; padding: 18px 20px 0; overflow-y: auto; flex: 1; }
+.filterSheetBody .citySelect { width: 100%; }
+.filterSheetFooter {
+  position: sticky; bottom: 0; display: grid;
+  margin: 0 -20px; padding: 14px 20px; background: var(--fq-charcoal); border-top: 1px solid var(--fq-hairline);
+}
+@media (max-width: 600px) {
+  .filterSheet { width: 100%; border-left: 0; }
+  .filterButton { width: 100%; justify-content: center; }
+}
+
+/* The intro sits on the dark photo in every theme: restate its designed ink (inherited tokens
+   resolve on .page, outside the keep-colours island). */
+.intro { color: var(--fq-text); }

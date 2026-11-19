@@ -1,18 +1,37 @@
 import type { Metadata, Viewport } from "next";
 import "./fonts.css";
 import "./globals.css";
+import "./theme-vars.css";
+import "./theme-fixes.css";
+import { ThemeSwitcher, THEME_BOOT_SCRIPT } from "../components/theme/ThemeSwitcher";
 import { AuthProvider } from "../lib/auth-context";
 import { SiteHeader } from "../components/layout/SiteHeader";
 import { SiteFooter } from "../components/layout/SiteFooter";
 import { HideOnOwnerShell } from "../components/layout/HideOnOwnerShell";
+import { SITE_URL } from "../lib/seo";
 import { UniqueVisitorTracker } from "../components/analytics/UniqueVisitorTracker";
 
+const SITE_DESCRIPTION =
+  "Find salons, barbershops, beauty parlours and spas near you in India. Compare services and prices, book an appointment or join the live queue online with FastQue.";
+
 export const metadata: Metadata = {
+  // Resolves every relative canonical/OG URL against the public host (issue #429).
+  metadataBase: new URL(SITE_URL),
   title: {
-    default: "FastQue",
+    default: "FastQue — book salons, barbers & beauty parlours near you",
     template: "%s | FastQue",
   },
-  description: "Find nearby barbershops, check the wait, and book your chair.",
+  description: SITE_DESCRIPTION,
+  applicationName: "FastQue",
+  openGraph: {
+    type: "website",
+    siteName: "FastQue",
+    locale: "en_IN",
+    title: "FastQue — book salons, barbers & beauty parlours near you",
+    description: SITE_DESCRIPTION,
+    images: [{ url: "/brand/fastque-premium-3d-mark.png", alt: "FastQue" }],
+  },
+  twitter: { card: "summary", title: "FastQue", description: SITE_DESCRIPTION },
   icons: {
     icon: "/brand/fastque-premium-3d-mark.png",
     apple: "/brand/fastque-premium-3d-mark.png",
@@ -36,8 +55,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en-IN" suppressHydrationWarning>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
         {/* Self-hosted brand fonts (see app/fonts.css): preload the Latin faces used above the fold. */}
         <link rel="preload" href="/fonts/fraunces-latin-normal.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
         <link rel="preload" href="/fonts/work-sans-latin-normal.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
@@ -51,6 +71,7 @@ export default function RootLayout({
             <SiteFooter />
           </HideOnOwnerShell>
         </AuthProvider>
+        <ThemeSwitcher />
       </body>
     </html>
   );

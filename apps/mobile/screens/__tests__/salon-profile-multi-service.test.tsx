@@ -20,6 +20,8 @@ jest.mock('../../lib/language-context', () => ({
 jest.mock('@react-navigation/native', () => ({
   useFocusEffect: (effect: () => void) => require('react').useEffect(effect, []),
 }));
+// Recording a view needs the auth context; this file only tests service selection.
+jest.mock('../../lib/record-salon-view', () => ({ useRecordSalonView: () => undefined }));
 jest.mock('../../components/PublicSalonStatus', () => ({ PublicSalonStatus: () => null }));
 jest.mock('../../components/ui', () => {
   const { createElement } = require('react');

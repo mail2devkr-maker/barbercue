@@ -25,7 +25,8 @@
     "prisma:migrate:deploy": "prisma migrate deploy",
     "db:seed": "prisma db seed",
     "seed:test-shops": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed-test-shops.ts",
-    "seed:test-shops:delete": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/delete-test-shops.ts"
+    "seed:test-shops:delete": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/delete-test-shops.ts",
+    "seed:onboarding-demo": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed-onboarding-demo.ts"
   },
   "prisma": {
     "seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts"
@@ -47,6 +48,8 @@
     "@prisma/client": "^5.19.1",
     "bcrypt": "^6.0.0",
     "cookie-parser": "^1.4.7",
+    "fast-xml-parser": "5.11.2",
+    "fflate": "0.8.2",
     "geo-tz": "^8.1.8",
     "google-auth-library": "^11.0.2",
     "jsqr": "1.4.0",

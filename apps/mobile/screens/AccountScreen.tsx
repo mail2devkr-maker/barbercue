@@ -20,12 +20,15 @@ import { useAuth } from '../lib/auth-context';
 import { useLanguage } from '../lib/language-context';
 import { color, font, fontSize, lineHeightFor, radius, space } from '../lib/theme';
 import { Screen, SectionHeader, Card, Button } from '../components/ui';
+import { AppearanceCard } from '../components/AppearanceCard';
 import { InlineError } from '../components/ui/ErrorState';
 import { OwnerVoiceSettingsCard } from '../components/owner/OwnerVoiceSettingsCard';
 import { AccountDeletionRequestCard } from '../components/account/AccountDeletionRequestCard';
 import { AssistantEntry } from '../components/assistant/AssistantEntry';
 import { isCreditsEnabled } from '../lib/feature-flags';
 import type { AccountStackParamList, TabParamList } from '../navigation/types';
+import { TabBackButton } from '../components/TabBackButton';
+import { useThemedStyles, useThemeTokens, type ThemeTokens } from '../lib/theme-mode';
 
 type Nav = CompositeNavigationProp<
   NativeStackNavigationProp<AccountStackParamList, 'Account'>,
@@ -37,6 +40,8 @@ type Nav = CompositeNavigationProp<
 // page is read-only too); the one exception is preferredLanguage (Phase 14), which has its own
 // dedicated PATCH auth/language endpoint and switcher below, mirroring web's profile page.
 export default function AccountScreen() {
+  const { color } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const navigation = useNavigation<Nav>();
   const { user, logout, refreshMe } = useAuth();
   // Issue 9 (mobile launch mission) — this pill row and the direct pre-auth/Home switcher
@@ -153,6 +158,7 @@ export default function AccountScreen() {
 
   return (
     <Screen refreshing={refreshing} onRefresh={() => void handleRefresh()}>
+      <TabBackButton />
       <SectionHeader eyebrow={t.tabAccount} title={t.yourAccount} subtitle={t.contactDetailsSubtitle} />
 
       <AssistantEntry onPress={() => navigation.navigate('Assistant')} />
@@ -193,6 +199,8 @@ export default function AccountScreen() {
 
       {isSalonOwner && <OwnerVoiceSettingsCard />}
 
+      <AppearanceCard />
+
       <Card style={styles.card}>
         <Text style={styles.cardTitle}>{t.listYourShopCta}</Text>
         <Text style={styles.noteText}>{t.registerShopSubtitle}</Text>
@@ -205,8 +213,17 @@ export default function AccountScreen() {
       </Card>
 
       <View style={styles.shortcutGrid}>
+        <Pressable style={styles.shortcutCard} onPress={() => navigation.navigate('CustomerDashboard')} accessibilityRole="button">
+          <Text style={styles.shortcutTitle}>{language === 'HI' ? 'मेरा डैशबोर्ड' : 'My dashboard'}</Text>
+        </Pressable>
         <Pressable style={styles.shortcutCard} onPress={() => navigation.navigate('BookingsTab', { screen: 'MyBookings' })}>
           <Text style={styles.shortcutTitle}>{t.myBookings}</Text>
+        </Pressable>
+        <Pressable style={styles.shortcutCard} onPress={() => navigation.navigate('RecentlyViewed')} accessibilityRole="button">
+          <Text style={styles.shortcutTitle}>{language === 'HI' ? 'हाल में देखे गए' : 'Recently viewed'}</Text>
+        </Pressable>
+        <Pressable style={styles.shortcutCard} onPress={() => navigation.navigate('MyReviews')} accessibilityRole="button">
+          <Text style={styles.shortcutTitle}>{language === 'HI' ? 'मेरी समीक्षाएँ' : 'My reviews'}</Text>
         </Pressable>
         <Pressable style={styles.shortcutCard} onPress={() => navigation.navigate('BookingsTab', { screen: 'MyInvoices' })} accessibilityRole="button">
           <Text style={styles.shortcutTitle}>My invoices</Text>
@@ -332,7 +349,7 @@ export default function AccountScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color, surface }: ThemeTokens) => StyleSheet.create({
   card: { marginBottom: space[4] },
   cardTitle: { fontFamily: font.displaySemiBold, fontSize: fontSize.lg, color: color.ink, marginBottom: space[3] },
   privacyLink: { alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center', marginTop: space[2] },
@@ -360,13 +377,13 @@ const styles = StyleSheet.create({
   },
   languagePillActive: { backgroundColor: color.ink, borderColor: color.ink },
   languagePillText: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, lineHeight: lineHeightFor(fontSize.sm), color: color.ink },
-  languagePillTextActive: { color: color.accentContrast },
+  languagePillTextActive: { color: surface.inverseText },
 
   shortcutGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: space[3], marginBottom: space[4] },
   shortcutCard: {
     flexBasis: '47%',
     flexGrow: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: surface.card,
     borderWidth: 1,
     borderColor: color.border,
     borderRadius: radius.md,

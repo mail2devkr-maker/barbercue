@@ -17,10 +17,9 @@
   gap: 40px;
   padding: clamp(34px, 7vw, 72px);
   overflow: hidden;
-  color: #fff;
-  background:
-    radial-gradient(circle at 82% 25%, rgba(168, 121, 31, 0.36), transparent 18rem),
-    linear-gradient(130deg, #1c1a17, #322d26);
+  color: var(--tv-fg-ffffff, #fff);
+  background: radial-gradient(circle at 82% 25%, rgba(168, 121, 31, 0.36), transparent 18rem),
+    linear-gradient(130deg, var(--tv-bg-1c1a17, #1c1a17), var(--tv-bg-322d26, #322d26));
   border-radius: var(--bc-radius-lg);
 }
 
@@ -47,7 +46,7 @@
 
 .location {
   margin: 18px 0 0;
-  color: #d8d1c7;
+  color: var(--tv-fg-d8d1c7, #d8d1c7);
   font-size: 1rem;
 }
 
@@ -55,7 +54,7 @@
   display: grid;
   min-width: 150px;
   padding: 20px 0 0 24px;
-  border-left: 1px solid rgba(255, 255, 255, 0.24);
+  border-left: 1px solid var(--tv-bg-rgba-255-255-255-a0_24, rgba(255, 255, 255, 0.24));
 }
 
 .heroAside strong {
@@ -66,7 +65,7 @@
 
 .heroAside span {
   margin-top: 7px;
-  color: #d8d1c7;
+  color: var(--tv-fg-d8d1c7, #d8d1c7);
   font-size: 0.78rem;
 }
 
@@ -93,7 +92,7 @@
 .areaLinks a {
   padding: 9px 15px;
   color: var(--bc-ink);
-  background: #fff;
+  background: var(--tv-bg-ffffff, #fff);
   border: 1px solid var(--bc-border);
   border-radius: 999px;
   font-size: 0.84rem;
@@ -101,7 +100,7 @@
 }
 
 .areaLinks a:hover {
-  background: #f8eee8;
+  background: var(--tv-bg-f8eee8, #f8eee8);
   border-color: #d39d96;
 }
 
@@ -118,7 +117,7 @@
   margin: 24px auto 0;
   padding: clamp(40px, 7vw, 68px) 28px;
   text-align: center;
-  background: #fff;
+  background: var(--tv-bg-ffffff, #fff);
   border: 1px solid var(--bc-border);
   border-radius: var(--bc-radius-lg);
   box-shadow: var(--bc-shadow-sm);
@@ -130,7 +129,7 @@
   height: 50px;
   place-items: center;
   color: var(--bc-accent);
-  background: #f8e8e4;
+  background: var(--tv-bg-f8e8e4, #f8e8e4);
   border-radius: 50%;
   font-size: 1.4rem;
 }
@@ -164,7 +163,7 @@
 
 .empty a:first-child {
   color: #fff;
-  background: var(--bc-accent);
+  background: var(--bc-accent-solid);
   border-color: var(--bc-accent);
 }
 
@@ -197,7 +196,7 @@
   .heroAside {
     min-width: 0;
     padding: 14px 0 0;
-    border-top: 1px solid rgba(255, 255, 255, 0.24);
+    border-top: 1px solid var(--tv-bg-rgba-255-255-255-a0_24, rgba(255, 255, 255, 0.24));
     border-left: 0;
   }
 

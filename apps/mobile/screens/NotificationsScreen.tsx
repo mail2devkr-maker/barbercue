@@ -8,6 +8,7 @@ import { useLanguage } from '../lib/language-context';
 import { color, font, fontSize, radius, space } from '../lib/theme';
 import { requestOwnerArrivalPrompt } from '../lib/arrival-prompt';
 import { Screen, SectionHeader, Button, EmptyState, Skeleton } from '../components/ui';
+import { useThemedStyles, useThemeTokens, type ThemeTokens } from '../lib/theme-mode';
 
 function timeAgo(t: UiStrings, iso: string): string {
   const ms = Date.now() - new Date(iso).getTime();
@@ -26,6 +27,8 @@ function timeAgo(t: UiStrings, iso: string): string {
  * notification content itself rather than attempting to navigate anywhere on tap.
  */
 export default function NotificationsScreen() {
+  const { color } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const { t, language } = useLanguage();
   const [items, setItems] = useState<NotificationDto[] | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -149,11 +152,11 @@ export default function NotificationsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color, surface }: ThemeTokens) => StyleSheet.create({
   skeleton: { height: 70, borderRadius: radius.lg, marginBottom: space[3] },
   markAllButton: { marginBottom: space[3], alignSelf: 'flex-start' },
   row: {
-    backgroundColor: '#ffffff',
+    backgroundColor: surface.card,
     borderWidth: 1,
     borderColor: color.border,
     borderRadius: radius.lg,

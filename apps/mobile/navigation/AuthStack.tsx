@@ -11,7 +11,7 @@ import GuestSearchStack from './GuestSearchStack';
 import GuestQueueStatusScreen from '../screens/GuestQueueStatusScreen';
 import { navigationRef } from './navigation-ref';
 import { subscribeQueueArrivalNavigation } from '../lib/queue-push-navigation';
-import { lightStackOptions } from './screenOptions';
+import { useStackOptions } from './screenOptions';
 import { useLanguage } from '../lib/language-context';
 import type { SearchStackParamList } from './types';
 
@@ -50,11 +50,12 @@ function GuestQueuePushNavigationBridge() {
 // Staff both hit the same POST auth/staff/login the web app's own /owner/login and /staff/login
 // pages already use; there is no separate backend concept of "owner auth" vs "staff auth".
 export default function AuthStack() {
+  const stackOptions = useStackOptions();
   const { t } = useLanguage();
   return (
     <>
     <GuestQueuePushNavigationBridge />
-    <Stack.Navigator screenOptions={lightStackOptions}>
+    <Stack.Navigator screenOptions={stackOptions}>
       <Stack.Screen name="RoleSelect" component={RoleSelectScreen} options={{ headerShown: false }} />
       <Stack.Screen name="CustomerLogin" component={PhoneOtpLoginScreen} options={{ headerShown: false }} />
       <Stack.Screen name="OwnerStaffLogin" component={OwnerStaffLoginScreen} options={{ title: t.signInTitle }} />

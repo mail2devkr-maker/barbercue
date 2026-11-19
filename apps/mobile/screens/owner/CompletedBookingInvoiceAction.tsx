@@ -5,6 +5,7 @@ import { apiFetch, ApiError } from '../../lib/api';
 import { newIdempotencyKey } from '../../lib/idempotency';
 import { ownerInvoiceByBookingRequestPath, ownerInvoiceIssueRequestPath } from '../../lib/owner-invoices';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 export function CompletedBookingInvoiceAction({ salonId, bookingId, language, onOpenInvoice }: {
   salonId: string;
@@ -12,6 +13,7 @@ export function CompletedBookingInvoiceAction({ salonId, bookingId, language, on
   language: string;
   onOpenInvoice: (invoiceId: string) => void;
 }) {
+  const styles = useThemedStyles(makeStyles);
   const isHindi = language === 'HI';
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -65,7 +67,7 @@ export function CompletedBookingInvoiceAction({ salonId, bookingId, language, on
   </View>;
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   wrap: { marginTop: space[3], alignItems: 'flex-start', gap: space[2] },
   button: { minHeight: 40, justifyContent: 'center', paddingHorizontal: space[3], borderWidth: 1, borderColor: color.accent, borderRadius: radius.sm },
   buttonText: { color: color.accent, fontFamily: font.bodySemiBold, fontSize: fontSize.xs },

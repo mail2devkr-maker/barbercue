@@ -26,7 +26,7 @@
 /* ---------- Live status ticket (QueueStatusPanel) ---------- */
 
 .ticket {
-  background: #ffffff;
+  background: var(--tv-bg-ffffff, #ffffff);
   border: 1px solid var(--bc-border);
   border-radius: var(--bc-radius-md);
   padding: var(--bc-space-5);
@@ -130,7 +130,7 @@
   appearance: none;
   border: 1px solid var(--bc-accent);
   border-radius: var(--bc-radius-sm);
-  background: #ffffff;
+  background: var(--tv-bg-ffffff, #ffffff);
   color: var(--bc-accent);
   min-height: 44px;
   padding: 10px 16px;
@@ -152,7 +152,7 @@
 /* ---------- Join forms ---------- */
 
 .joinCard {
-  background: #ffffff;
+  background: var(--tv-bg-ffffff, #ffffff);
   border: 1px solid var(--bc-border);
   border-radius: var(--bc-radius-md);
   padding: var(--bc-space-5);
@@ -176,7 +176,7 @@
   font-family: var(--font-body);
   font-size: var(--bc-text-base);
   color: var(--bc-ink);
-  background: #ffffff;
+  background: var(--tv-bg-ffffff, #ffffff);
   box-sizing: border-box;
 }
 
@@ -238,7 +238,7 @@
 .publicCard {
   width: 100%;
   max-width: 440px;
-  background: #ffffff;
+  background: var(--tv-bg-ffffff, #ffffff);
   border: 1px solid var(--bc-border);
   border-radius: var(--bc-radius-lg);
   padding: var(--bc-space-6) var(--bc-space-5);
@@ -296,28 +296,28 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  background: #ffffff;
+  background: var(--tv-bg-ffffff, #ffffff);
   /* This pill stays white even when the dashboard uses the dark theme, so its text must use
      light-surface colors rather than theme-adaptive --bc-ink/--bc-muted values. */
-  color: #1c1a17;
+  color: var(--tv-fg-1c1a17, #1c1a17);
 }
 
 .staffChipName {
   font-weight: 600;
-  color: #1c1a17;
+  color: var(--tv-fg-1c1a17, #1c1a17);
   font-size: var(--bc-text-sm);
 }
 
 .staffChipStatus {
   font-weight: 700;
-  color: #6b6357;
+  color: var(--tv-fg-6b6357, #6b6357);
   font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.02em;
 }
 
 .staffChip .assignHint {
-  color: #6b6357;
+  color: var(--tv-fg-6b6357, #6b6357);
 }
 
 .entryList {
@@ -327,7 +327,7 @@
 }
 
 .entryCard {
-  background: #ffffff;
+  background: var(--tv-bg-ffffff, #ffffff);
   border: 1px solid var(--bc-border);
   border-radius: var(--bc-radius-md);
   padding: var(--bc-space-4);
@@ -342,7 +342,7 @@
   margin-left: 8px;
   padding: 3px 7px;
   border-radius: 999px;
-  background: var(--bc-accent);
+  background: var(--bc-accent-solid);
   color: #ffffff;
   font-size: 0.64rem;
   font-weight: 800;
@@ -398,7 +398,7 @@
   border: 1px solid var(--bc-border);
   font-family: var(--font-body);
   font-size: var(--bc-text-sm);
-  background: #ffffff;
+  background: var(--tv-bg-ffffff, #ffffff);
   color: var(--bc-ink);
 }
 
@@ -434,7 +434,7 @@
   gap: 12px;
   border: 1px solid var(--bc-border);
   border-radius: var(--bc-radius-md);
-  background: rgba(255, 255, 255, 0.74);
+  background: var(--tvx-glass-0_74, rgba(255, 255, 255, 0.74));
 }
 
 .queueTools p {

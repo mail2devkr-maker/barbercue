@@ -5,6 +5,7 @@ import { apiFetch } from '../../lib/api';
 import { resolveHomeLocation } from '../../lib/home-location';
 import { filterCities, setLocationChoice, type LocationChoice } from '../../lib/location-choice';
 import { font, fastQue } from '../../lib/theme';
+import { useThemedStyles, useThemeTokens, type ThemeTokens } from '../../lib/theme-mode';
 
 let cachedCities: CityDto[] | null = null;
 
@@ -24,6 +25,8 @@ export function LocationPickerModal({
   onChosen?: (choice: LocationChoice | null) => void;
   hindi: boolean;
 }) {
+  const { fastQue } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const [cities, setCities] = useState<CityDto[] | null>(cachedCities);
   const [loadError, setLoadError] = useState(false);
   const [filter, setFilter] = useState('');
@@ -142,7 +145,7 @@ export function __resetCityCacheForTests(): void {
   cachedCities = null;
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ fastQue }: ThemeTokens) => StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
   sheet: { maxHeight: '85%', backgroundColor: fastQue.backgroundRaised, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 16, gap: 10, borderColor: fastQue.border, borderWidth: 1 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

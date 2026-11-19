@@ -28,16 +28,32 @@ export const metadata: Metadata = {
 };
 
 function organizationJsonLd() {
+  // One site-level graph: the company (Organization) and the website it runs (WebSite). Only
+  // verifiable facts: brand, legal name, canonical URL and the published logo.
+  const orgId = `${SITE_URL}/#organization`;
   return {
     "@context": "https://schema.org",
-    "@type": "WebSite",
-    name: "FastQue",
-    url: SITE_URL,
-    potentialAction: {
-      "@type": "SearchAction",
-      target: `${SITE_URL}/search?q={search_term_string}`,
-      "query-input": "required name=search_term_string",
-    },
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": orgId,
+        name: "FastQue",
+        legalName: "FastQue Digital Technology Private Limited",
+        url: SITE_URL,
+        logo: `${SITE_URL}/brand/fastque-premium-3d-mark.png`,
+        description:
+          "FastQue is an Indian platform to discover salons, barbershops, beauty parlours and spas, book appointments or join a live queue, and for shops to manage their queue, bookings, staff and services.",
+        areaServed: { "@type": "Country", name: "India" },
+      },
+      {
+        "@type": "WebSite",
+        "@id": `${SITE_URL}/#website`,
+        name: "FastQue",
+        url: SITE_URL,
+        inLanguage: "en-IN",
+        publisher: { "@id": orgId },
+      },
+    ],
   };
 }
 
@@ -111,7 +127,7 @@ export default async function HomePage() {
       <JsonLd data={organizationJsonLd()} />
 
       <main>
-      <section className={styles.hero}>
+      <section className={styles.hero} data-keep-colors>
         <HeroVisual />
         <div className={styles.heroInner}>
           <div className={styles.heroCopy}>
@@ -153,6 +169,10 @@ export default async function HomePage() {
                 </span>
               </p>
             )}
+            <Link href="/shop" className={styles.glowShopLink}>
+              <span aria-hidden="true">✨</span> Marketplace <span className={styles.glowShopNew}>New</span>
+              <span className={styles.glowShopSub}>Beauty from salons near you · no login needed</span>
+            </Link>
             <p className={styles.ownerPrompt}>
               Run a barbershop? <Link href="/owner/register">Register your shop</Link>
             </p>
@@ -228,7 +248,7 @@ export default async function HomePage() {
               <Link href="/search" className={styles.textLink}>Find a shop to book <span aria-hidden="true">→</span></Link>
             </article>
 
-            <article className={`${styles.choiceCard} ${styles.queueChoiceCard}`}>
+            <article className={`${styles.choiceCard} ${styles.queueChoiceCard}`} data-keep-colors>
               <div className={styles.choiceHead}>
                 <span className={styles.choiceIcon} aria-hidden="true">02</span>
                 <span className={styles.choiceKicker}>Join live</span>
@@ -365,7 +385,7 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section id="for-shops" className={styles.ownerSection}>
+      <section id="for-shops" className={styles.ownerSection} data-keep-colors>
         <div className={styles.ownerInner}>
           <div>
             <p className={styles.ownerEyebrow}>For modern barbershops</p>
@@ -423,6 +443,7 @@ export default async function HomePage() {
           <p>Find a barbershop and choose the way you want to walk in.</p>
           <div className={styles.finalActions}>
             <Link href="/search" className={styles.finalPrimary}>Find a barber</Link>
+            <Link href="/shop" className={styles.finalSecondary}>✨ Marketplace</Link>
             <Link href="/login" className={styles.finalSecondary}>Sign in</Link>
           </div>
         </div>

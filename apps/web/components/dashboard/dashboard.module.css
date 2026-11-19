@@ -9,11 +9,11 @@
    still-light public pages, e.g. landing's below-the-fold sections). Same fq-* values as
    landing.module.css / customer-auth.module.css. */
 .darkScope {
-  --bc-ink: #f7f5f4;
-  --bc-muted: rgba(255, 255, 255, 0.72);
-  --bc-border: rgba(255, 255, 255, 0.14);
-  --bc-surface: #12121a;
-  --bc-surface-tint: #171720;
+  --bc-ink: var(--tv-fg-f7f5f4, #f7f5f4);
+  --bc-muted: var(--tv-fg-rgba-255-255-255-a0_72, rgba(255, 255, 255, 0.72));
+  --bc-border: var(--tv-bg-rgba-255-255-255-a0_14, rgba(255, 255, 255, 0.14));
+  --bc-surface: var(--tv-bg-12121a, #12121a);
+  --bc-surface-tint: var(--tv-bg-171720, #171720);
   --bc-success: #6fcf87;
   --bc-warn: #ffb648;
   --bc-accent: #f20a83;
@@ -22,8 +22,8 @@
   --bc-gold-soft: rgba(255, 157, 92, 0.16);
   --bc-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.25);
   --bc-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.25);
-  --bc-shadow-card: 0 12px 32px rgba(0, 0, 0, 0.35), 0 2px 8px rgba(0, 0, 0, 0.2);
-  background: #09090c;
+  --bc-shadow-card: 0 12px 32px rgba(0, 0, 0, 0.35), 0 2px 8px var(--tv-bg-rgba-0-0-0-a0_2, rgba(0, 0, 0, 0.2));
+  background: var(--tv-bg-09090c, #09090c);
   color: var(--bc-ink);
   min-height: 100vh;
 }
@@ -547,7 +547,7 @@
   justify-content: space-between;
   gap: 12px;
   border-top: 1px solid var(--bc-border);
-  background: linear-gradient(180deg, rgba(33, 30, 41, 0.65), var(--bc-surface) 24%);
+  background: linear-gradient(180deg, var(--tvx-fade-211e29, rgba(33, 30, 41, 0.65)), var(--bc-surface) 24%);
 }
 
 .setupOverviewLink {

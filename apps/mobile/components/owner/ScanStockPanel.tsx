@@ -22,6 +22,7 @@ import { kindLabel, quantityText, unitShort, UNIT_OPTIONS } from '../../lib/inve
 import { inventoryBase, useInventoryLookups } from '../../lib/use-inventory-lookups';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 import { Button, Card, InlineError } from '../ui';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 /**
  * Website parity for apps/web/components/owner/inventory/ScanAddStock.tsx: scan (phone camera) or type a
@@ -37,6 +38,7 @@ const linkedText = (name: string) => `Barcode linked to "${name}". Scans now fin
 type Lookup = CatalogLookupResultDto & { hint?: 'UPC_E' };
 
 function Chips<T extends string>({ value, onPick, options }: { value: T; onPick: (v: T) => void; options: ReadonlyArray<{ value: T; label: string }> }) {
+  const styles = useThemedStyles(makeStyles);
   return (
     <View style={styles.chips}>
       {options.map((o) => (
@@ -49,6 +51,7 @@ function Chips<T extends string>({ value, onPick, options }: { value: T; onPick:
 }
 
 function Field({ label, value, onChange, keyboard, max }: { label: string; value: string; onChange: (v: string) => void; keyboard?: 'decimal-pad' | 'number-pad'; max?: number }) {
+  const styles = useThemedStyles(makeStyles);
   return (
     <View>
       <Text style={styles.label}>{label}</Text>
@@ -62,6 +65,7 @@ async function linkBarcode(salonId: string, inventoryProductId: string, globalPr
 }
 
 export function ScanStockPanel({ salonId }: { salonId: string }) {
+  const styles = useThemedStyles(makeStyles);
   const base = inventoryBase(salonId);
   const [code, setCode] = useState('');
   const [lookup, setLookup] = useState<Lookup | null>(null);
@@ -154,6 +158,7 @@ export function ScanStockPanel({ salonId }: { salonId: string }) {
 }
 
 function ProductCard({ product, stock }: { product: CatalogProductDto; stock: CatalogLookupResultDto['salonStock'] }) {
+  const styles = useThemedStyles(makeStyles);
   return (
     <Card>
       <Text style={styles.heading}>{`${product.name} · ${product.verificationStatus === 'VERIFIED' ? 'Verified' : 'Waiting for FastQue review'}`}</Text>
@@ -164,6 +169,7 @@ function ProductCard({ product, stock }: { product: CatalogProductDto; stock: Ca
 }
 
 function LinkExisting({ salonId, candidates, globalProductId, onLinked }: { salonId: string; candidates: CatalogLinkCandidateDto[]; globalProductId: string; onLinked: (name: string) => void }) {
+  const styles = useThemedStyles(makeStyles);
   const [choice, setChoice] = useState(candidates.find((c) => c.likelyMatch)?.inventoryProductId ?? '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -187,6 +193,7 @@ function LinkExisting({ salonId, candidates, globalProductId, onLinked }: { salo
 }
 
 function ReceiveForm({ salonId, catalogProductId, needsName, onDone }: { salonId: string; catalogProductId: string; needsName: boolean; onDone: (text: string) => void }) {
+  const styles = useThemedStyles(makeStyles);
   const lookups = useInventoryLookups(salonId);
   const keyRef = useRef(newIdempotencyKey());
   const [form, setForm] = useState({ name: '', usage: 'PROFESSIONAL' as StockUsage, unit: 'EACH' as InventoryUnit, quantity: '', unitCost: '', sellingPrice: '', supplierId: '', batchNumber: '', expiryDate: '', storageLocation: '', reorderThreshold: '' });
@@ -255,6 +262,7 @@ function ReceiveForm({ salonId, catalogProductId, needsName, onDone }: { salonId
 }
 
 function WriteOffForm({ salonId, stock, onDone }: { salonId: string; stock: CatalogLookupResultDto['salonStock']; onDone: (text: string) => void }) {
+  const styles = useThemedStyles(makeStyles);
   const [productId, setProductId] = useState(stock[0]?.inventoryProductId ?? '');
   const [kind, setKind] = useState<(typeof INVENTORY_LOSS_KINDS)[number]>('DAMAGE');
   const [quantity, setQuantity] = useState('');
@@ -302,6 +310,7 @@ function NewProductForm({ salonId, barcode, hint, suggestion, candidates, onCrea
   candidates: CatalogLinkCandidateDto[];
   onCreated: (r: { done?: string; error?: string }) => void;
 }) {
+  const styles = useThemedStyles(makeStyles);
   const likely = candidates.find((c) => c.likelyMatch);
   const [linkTo, setLinkTo] = useState(likely?.inventoryProductId ?? '');
   const [form, setForm] = useState({ name: suggestion?.name ?? likely?.name ?? '', brand: suggestion?.brand ?? '', category: suggestion?.category ?? '', packSize: '', packUnit: '' as InventoryUnit | '', mrp: '', productType: 'BOTH' as ProductType });
@@ -373,7 +382,7 @@ function NewProductForm({ salonId, barcode, hint, suggestion, candidates, onCrea
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   heading: { fontFamily: font.bodyBold, color: color.ink, fontSize: fontSize.base, marginBottom: space[1] },
   label: { fontFamily: font.bodyMedium, color: color.muted, fontSize: fontSize.xs, marginTop: space[2] },
   muted: { fontFamily: font.bodyRegular, color: color.muted, fontSize: fontSize.xs, marginVertical: space[1] },

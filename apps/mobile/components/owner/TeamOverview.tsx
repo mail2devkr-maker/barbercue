@@ -4,6 +4,7 @@ import { DASHBOARD_PATHS, Language, type OwnerOverviewDto, type SalonStaffDto, t
 import { apiFetch, ApiError } from '../../lib/api';
 import { color, font, fontSize, space } from '../../lib/theme';
 import { Card, InlineError } from '../ui';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 /**
  * Website parity for apps/web/components/owner/TeamPanel.tsx: per-barber performance (right now,
@@ -23,6 +24,7 @@ function money(value: number, currency: string | null): string {
 }
 
 export function TeamOverview({ salonId, language }: { salonId: string; language: Language }) {
+  const styles = useThemedStyles(makeStyles);
   const hi = language === Language.HI;
   const [tab, setTab] = useState<'performance' | 'schedule'>('performance');
   return (
@@ -40,6 +42,7 @@ export function TeamOverview({ salonId, language }: { salonId: string; language:
 }
 
 function Performance({ salonId, hi }: { salonId: string; hi: boolean }) {
+  const styles = useThemedStyles(makeStyles);
   const [data, setData] = useState<OwnerOverviewDto | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -71,6 +74,7 @@ function Performance({ salonId, hi }: { salonId: string; hi: boolean }) {
 }
 
 function Schedule({ salonId, hi }: { salonId: string; hi: boolean }) {
+  const styles = useThemedStyles(makeStyles);
   const base = `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.staff}`;
   const [rows, setRows] = useState<{ staff: SalonStaffDto; hours: StaffWorkingHoursDto[] }[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -104,7 +108,7 @@ function Schedule({ salonId, hi }: { salonId: string; hi: boolean }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   tabs: { flexDirection: 'row', gap: space[2], marginBottom: space[2] },
   chip: { borderWidth: 1, borderColor: color.border, borderRadius: 16, paddingHorizontal: space[3], paddingVertical: space[2], backgroundColor: color.surface },
   chipOn: { borderColor: color.accent, backgroundColor: color.accentSoft },

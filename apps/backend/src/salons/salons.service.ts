@@ -28,6 +28,11 @@ import {
   SALON_TYPE_FILTER_MATCHES,
   popularServiceById,
   type PopularService,
+  expandServiceSearchForResults,
+  normalizeServiceText,
+  resolveServiceNameGroup,
+  serviceNameMatches,
+  suggestServiceGroups,
 } from '@barbercue/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { AppException } from '../common/exceptions/app.exception';
@@ -341,6 +346,9 @@ export class SalonsService {
     const q = rawQuery.trim();
     if (q.length < 2) return [];
     const limit = Math.min(Math.max(requestedLimit, 1), 250);
+    // Smart search (owner, 18 Nov): what the customer may mean while typing — synonyms, Hindi,
+    // Hinglish and small typos ("hiar", "baal", "dadhi", "हेयर") — not only names containing the text.
+    const groups = suggestServiceGroups(q);
     const rows = await this.prisma.service.findMany({
       where: {
         isActive: true,
@@ -348,14 +356,47 @@ export class SalonsService {
         OR: [
           { name: { contains: q, mode: 'insensitive' } },
           { category: { contains: q, mode: 'insensitive' } },
+          ...groups.flatMap((group) =>
+            group.match.map((term) => ({
+              name: { contains: term, mode: 'insensitive' as const },
+            })),
+          ),
         ],
       },
       select: { name: true, category: true },
       distinct: ['name'],
       orderBy: { name: 'asc' },
-      take: limit,
+      // Wider than shown: equivalent names ("Haircut", "Gents Haircut", "Hair Cutting") merge below.
+      take: 500,
     });
-    return rows;
+    const out: ServiceSuggestionDto[] = [];
+    const seen = new Set<string>();
+    // 1. One line per service the text may mean, best first — only when an active shop offers it.
+    for (const group of groups) {
+      const search = { match: [...group.match], exclude: [...(group.exclude ?? [])] };
+      const row = rows.find((r) => serviceNameMatches(search, r.name));
+      if (!row) continue;
+      seen.add(`group:${group.id}`);
+      out.push({ name: group.label, category: row.category });
+    }
+    // 2. Every other matching name, with equivalent names merged into their one label. A row that was
+    // fetched only through a group's synonym but is not that service ("Head Shave" while typing
+    // "dadhi") and does not contain the typed text itself is not offered.
+    const typed = q.toLowerCase();
+    for (const row of rows) {
+      const group = resolveServiceNameGroup(row.name);
+      const containsTyped =
+        row.name.toLowerCase().includes(typed) ||
+        (row.category ?? '').toLowerCase().includes(typed);
+      if (!containsTyped && !(group && groups.includes(group))) continue;
+      const key = group
+        ? `group:${group.id}`
+        : `name:${normalizeServiceText(row.name)}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(group ? { name: group.label, category: row.category } : row);
+    }
+    return out.slice(0, limit);
   }
 
   async search(
@@ -395,11 +436,27 @@ export class SalonsService {
           }
         : undefined;
 
+    // Smart search (owner, 18 Nov): the typed service also matches its synonyms, Hindi/Hinglish
+    // names and small typos (expandServiceSearchForResults). The plain "name or category contains
+    // the text" match is kept inside it, so results are never narrower than before — except a
+    // service the recognised one explicitly is not ("shave" never returns a "Head Shave" row).
     function serviceRelevance(term: string): Prisma.ServiceWhereInput {
-      return {
+      const search = expandServiceSearchForResults(term);
+      const relevance: Prisma.ServiceWhereInput = {
         OR: [
-          { name: { contains: term, mode: 'insensitive' } },
-          { category: { contains: term, mode: 'insensitive' } },
+          ...search.match.map((t) => ({
+            name: { contains: t, mode: 'insensitive' as const },
+          })),
+          { category: { contains: term, mode: 'insensitive' as const } },
+        ],
+      };
+      if (search.exclude.length === 0) return relevance;
+      return {
+        AND: [
+          relevance,
+          ...search.exclude.map((t) => ({
+            NOT: { name: { contains: t, mode: 'insensitive' as const } },
+          })),
         ],
       };
     }

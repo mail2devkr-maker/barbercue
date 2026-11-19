@@ -66,7 +66,7 @@ erDiagram
   work_audit_events }o--|| work_jobs : "history of"
 ```
 
-Database-level guarantees (migration `20261119100000_work_marketplace`):
+Database-level guarantees (migration `20261119110000_work_marketplace`):
 
 | Rule | Mechanism |
 |---|---|

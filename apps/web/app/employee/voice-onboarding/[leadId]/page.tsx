@@ -379,7 +379,7 @@ export default function EmployeeVoiceOnboardingPage() {
   if (!page) {
     return (
       <main className={styles.page}>
-        <Link href="/employee">← Employee CRM</Link>
+        <Link href="/employee/field">← Visits &amp; follow-ups</Link>
         <p role="alert" className={styles.error}>
           {error ?? "Lead unavailable."}
         </p>
@@ -390,7 +390,7 @@ export default function EmployeeVoiceOnboardingPage() {
   return (
     <main className={styles.page}>
       <div className={styles.shell}>
-        <Link className={styles.back} href="/employee">
+        <Link className={styles.back} href="/employee/field">
           ← Employee CRM
         </Link>
         <header className={styles.header}>

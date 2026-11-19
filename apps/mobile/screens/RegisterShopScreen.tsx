@@ -17,6 +17,7 @@ import { useAuth } from '../lib/auth-context';
 import { useLanguage } from '../lib/language-context';
 import { color, font, fontSize, radius, space } from '../lib/theme';
 import { Screen, SectionHeader, Button, InlineError } from '../components/ui';
+import { useThemedStyles, useThemeTokens, type ThemeTokens } from '../lib/theme-mode';
 
 const SEARCH_DEBOUNCE_MS = 300;
 const MIN_QUERY_LENGTH = 2;
@@ -73,6 +74,8 @@ type CitySearchState = { kind: 'idle' } | { kind: 'loading' } | { kind: 'results
  * it, to refresh its already-mounted SalonProvider; see OwnerNavigator.tsx).
  */
 export default function RegisterShopScreen({ onRegistered }: { onRegistered?: () => void }) {
+  const { color } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const { applySession } = useAuth();
   const { t } = useLanguage();
   const [countries, setCountries] = useState<CountryDto[]>([]);
@@ -490,14 +493,14 @@ export default function RegisterShopScreen({ onRegistered }: { onRegistered?: ()
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color, surface }: ThemeTokens) => StyleSheet.create({
   screenContent: { padding: space[5] },
   field: { marginBottom: space[4] },
   label: { fontFamily: font.bodySemiBold, fontSize: fontSize.xs, color: color.ink, marginBottom: space[2] },
   input: {
     minHeight: 50,
     justifyContent: 'center',
-    backgroundColor: '#ffffff',
+    backgroundColor: surface.card,
     borderWidth: 1,
     borderColor: color.border,
     borderRadius: radius.sm,
@@ -524,7 +527,7 @@ const styles = StyleSheet.create({
   citySearchSpinner: { marginTop: space[2] },
   cityResultList: {
     marginTop: space[2],
-    backgroundColor: '#ffffff',
+    backgroundColor: surface.card,
     borderWidth: 1,
     borderColor: color.border,
     borderRadius: radius.sm,

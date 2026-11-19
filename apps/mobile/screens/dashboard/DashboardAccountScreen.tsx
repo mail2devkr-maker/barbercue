@@ -10,10 +10,13 @@ import { useAuth } from '../../lib/auth-context';
 import { useLanguage } from '../../lib/language-context';
 import { color, font, fontSize, space } from '../../lib/theme';
 import { Screen, SectionHeader, Card, Button, InlineError, LanguageSwitcher } from '../../components/ui';
+import { AppearanceCard } from '../../components/AppearanceCard';
 import { AccountDeletionRequestCard } from '../../components/account/AccountDeletionRequestCard';
 import { AssistantEntry } from '../../components/assistant/AssistantEntry';
 import { useOptionalSalon } from '../../lib/salon-context';
 import type { DashboardAccountStackParamList } from '../../navigation/DashboardAccountStack';
+import { TabBackButton } from '../../components/TabBackButton';
+import { useThemedStyles, useThemeTokens, type ThemeTokens } from '../../lib/theme-mode';
 
 function roleLabel(t: UiStrings, role: string): string {
   const labels: Record<string, string> = {
@@ -34,6 +37,8 @@ function roleLabel(t: UiStrings, role: string): string {
 // so an owner had no durable way to select Hindi; the voice/push code downstream was already
 // correctly reading user.preferredLanguage, it just could never become anything but the default.
 export default function DashboardAccountScreen() {
+  const { color } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const navigation = useNavigation<NativeStackNavigationProp<DashboardAccountStackParamList>>();
   const selectedSalonId = useOptionalSalon()?.selectedSalonId ?? null;
   const { user, logout } = useAuth();
@@ -77,12 +82,15 @@ export default function DashboardAccountScreen() {
 
   return (
     <Screen refreshing={refreshing} onRefresh={() => void load(true)}>
+      <TabBackButton />
       <View style={styles.headerRow}>
         <SectionHeader eyebrow={t.tabAccount} title={t.yourAccount} />
         <LanguageSwitcher />
       </View>
 
       <AssistantEntry onPress={() => navigation.navigate('Assistant', { salonId: selectedSalonId ?? undefined })} />
+
+      <AppearanceCard />
 
       <Card style={styles.card}>
         <View style={styles.fieldRow}>
@@ -128,7 +136,7 @@ export default function DashboardAccountScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   headerRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: space[2] },
   card: { marginBottom: space[4] },
   cardTitle: { fontFamily: font.displaySemiBold, fontSize: fontSize.lg, color: color.ink, marginBottom: space[3] },

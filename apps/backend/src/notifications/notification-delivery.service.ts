@@ -10,6 +10,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from './notifications.service';
 import { PushDispatchService } from '../push-notifications/push-dispatch.service';
 import { DbDeadlineSchedulerService } from '../common/db-deadline-scheduler/db-deadline-scheduler.service';
+import { PUSH_EXPIRED } from '../push-notifications/push-dispatch.service';
 
 /** Seconds to wait before attempt N+1 after attempt N failed transiently (index = attempts so far - 1). */
 export const PUSH_RETRY_BACKOFF_SECONDS = [60, 300, 1800, 7200, 21600] as const;
@@ -31,6 +32,11 @@ export interface DeliverToUserInput {
     data: Record<string, unknown>;
     category: NotificationCategory;
   };
+  /**
+   * Live-visit add-on mission: the moment this notice stops being true. The push (first attempt or
+   * any retry) is never sent at or after it; it is recorded as SKIPPED with reason EXPIRED.
+   */
+  expiresAt?: Date | null;
 }
 
 export interface DeliveryOutcome {
@@ -42,6 +48,14 @@ interface StoredPushPayload {
   title: string;
   body: string;
   data: Record<string, unknown>;
+  /** ISO 8601; absent on rows written before expiry existed (those never expire). */
+  expiresAt?: string | null;
+}
+
+function isExpired(payload: StoredPushPayload, now = Date.now()): boolean {
+  if (!payload.expiresAt) return false;
+  const at = Date.parse(payload.expiresAt);
+  return Number.isFinite(at) && at <= now;
 }
 
 /**
@@ -165,6 +179,7 @@ export class NotificationDeliveryService implements OnModuleInit {
       title: input.push.title,
       body: input.push.body,
       data: input.push.data,
+      expiresAt: input.expiresAt ? input.expiresAt.toISOString() : null,
     };
     try {
       await this.prisma.notificationDelivery.create({
@@ -214,12 +229,24 @@ export class NotificationDeliveryService implements OnModuleInit {
     userId: string,
     payload: StoredPushPayload,
     attemptsBefore: number,
+    now: Date = new Date(),
   ): Promise<NotificationDeliveryStatus | 'NO_DEVICE'> {
+    if (isExpired(payload, now.getTime())) {
+      // Never send a notice whose moment has passed (first attempt or a late retry).
+      await this.finish(
+        dedupeKey,
+        NotificationDeliveryStatus.SKIPPED,
+        PUSH_EXPIRED,
+        attemptsBefore,
+      );
+      return NotificationDeliveryStatus.SKIPPED;
+    }
     const attempts = attemptsBefore + 1;
     const result = await this.push.sendToUser(userId, {
       title: payload.title,
       body: payload.body,
       data: payload.data,
+      expiresAt: payload.expiresAt ? new Date(payload.expiresAt) : null,
       channelId: 'booking-updates',
       priority: 'high',
       // Live Queue arrival checks require audible OS notification when user permissions permit.
@@ -234,6 +261,15 @@ export class NotificationDeliveryService implements OnModuleInit {
         attempts,
       );
       return 'NO_DEVICE';
+    }
+    if (result.error === PUSH_EXPIRED) {
+      await this.finish(
+        dedupeKey,
+        NotificationDeliveryStatus.SKIPPED,
+        PUSH_EXPIRED,
+        attemptsBefore,
+      );
+      return NotificationDeliveryStatus.SKIPPED;
     }
     if (result.delivered > 0) {
       await this.finish(
@@ -375,7 +411,13 @@ export class NotificationDeliveryService implements OnModuleInit {
         );
         continue;
       }
-      await this.attemptPush(row.dedupeKey, row.userId, payload, row.attempts);
+      await this.attemptPush(
+        row.dedupeKey,
+        row.userId,
+        payload,
+        row.attempts,
+        now,
+      );
       handled += 1;
     }
     return handled;

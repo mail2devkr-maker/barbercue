@@ -62,7 +62,7 @@
 }
 
 .secondary:hover:not(:disabled) {
-  box-shadow: 0 6px 16px rgba(28, 26, 23, 0.22);
+  box-shadow: 0 6px 16px var(--tv-bg-rgba-28-26-23-a0_22, rgba(28, 26, 23, 0.22));
 }
 
 .outline {

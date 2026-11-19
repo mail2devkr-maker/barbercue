@@ -10,14 +10,14 @@ export interface BreadcrumbItem {
 // drift apart.
 export function Breadcrumbs({ items }: { items: BreadcrumbItem[] }) {
   return (
-    <nav aria-label="Breadcrumb" style={{ fontSize: "0.8rem", color: "#6B6357", marginBottom: 16 }}>
+    <nav aria-label="Breadcrumb" style={{ fontSize: "0.8rem", color: "var(--bc-muted)", marginBottom: 16 }}>
       {items.map((item, i) => (
         <span key={item.href}>
           {i > 0 && " / "}
           {i === items.length - 1 ? (
             <span aria-current="page">{item.label}</span>
           ) : (
-            <Link href={item.href} style={{ color: "#6B6357" }}>
+            <Link href={item.href} style={{ color: "var(--bc-muted)" }}>
               {item.label}
             </Link>
           )}

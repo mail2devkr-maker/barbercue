@@ -18,6 +18,7 @@ import { fastQue, font } from '../lib/theme';
 import { TabIcon, type TabIconName } from '../components/ui/TabIcon';
 import { AssistantFab } from '../components/assistant/AssistantFab';
 import type { TabParamList } from './types';
+import { useThemeTokens } from '../lib/theme-mode';
 
 const Tab = createBottomTabNavigator<TabParamList>();
 
@@ -62,7 +63,7 @@ function CustomerDestinationHandoffBridge() {
       // CreditsHistory isn't registered when its release gate is off, so the resolver returns null
       // for that intent. Register Shop always resolves to AccountTab → RegisterShop.
       const destination = resolvePostAuthCustomerNavigation(intent, isCreditsEnabled());
-      if (destination) navigationRef.navigate(destination.tab, { screen: destination.screen });
+      if (destination) navigationRef.navigate(destination.tab, { screen: destination.screen, initial: false });
     };
 
     replay();
@@ -104,6 +105,7 @@ function CustomerQueueArrivalPushNavigationBridge() {
 // Text-only tab labels (no icon library added) — active tab reads via color + weight, matching
 // the app's restrained, editorial visual language rather than a generic icon-driven tab bar.
 export default function RootNavigator() {
+  const { fastQue } = useThemeTokens();
   const unreadCount = useUnreadNotificationCount();
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
@@ -115,6 +117,8 @@ export default function RootNavigator() {
       <CustomerBookingPushNavigationBridge />
       <CustomerQueueArrivalPushNavigationBridge />
       <Tab.Navigator
+        // Owner (18 Nov): Back (the new in-app button and the phone's own) returns to the PREVIOUS tab.
+        backBehavior="history"
         screenOptions={{
         headerShown: false,
         tabBarHideOnKeyboard: true,
@@ -144,7 +148,7 @@ export default function RootNavigator() {
         tabBarIconStyle: { marginTop: 2 },
       }}
     >
-      <Tab.Screen name="HomeTab" component={HomeStack} options={tabOptions(t.tabHome, 'home')} />
+      <Tab.Screen name="HomeTab" component={HomeStack} options={tabOptions(t.tabDashboard, 'home')} />
       <Tab.Screen name="SearchTab" component={SearchStack} options={tabOptions(t.tabSearch, 'search')} />
       <Tab.Screen name="BookingsTab" component={BookingsStack} options={tabOptions(t.tabBookings, 'bookings')} />
       <Tab.Screen name="QueueTab" component={QueueStack} options={tabOptions(t.tabQueue, 'queue')} />
@@ -170,7 +174,7 @@ export default function RootNavigator() {
       <AssistantFab
         tabBarHeight={60 + insets.bottom}
         includeBottomInset
-        onOpen={() => navigationRef.navigate('AccountTab', { screen: 'Assistant' })}
+        onOpen={() => navigationRef.navigate('AccountTab', { screen: 'Assistant', initial: false })}
       />
     </>
   );

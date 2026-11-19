@@ -9,6 +9,7 @@ import { ApiError, apiFetch } from '../../lib/api';
 import { useLanguage } from '../../lib/language-context';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 import { Button, InlineError } from '../ui';
+import { useThemedStyles, useThemeTokens, type ThemeTokens } from '../../lib/theme-mode';
 
 const DAYS = [
   ['Sunday', 'रविवार'],
@@ -34,6 +35,8 @@ function staffDayName(dayOfWeek: number, hindi: boolean): string {
  * The backend remains responsible for salon/staff ownership validation and atomic weekly saving.
  */
 export function StaffWorkingHoursEditor({ salonId, staffId }: { salonId: string; staffId: string }) {
+  const { color } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const { language } = useLanguage();
   const hindi = language === 'HI';
   const [open, setOpen] = useState(false);
@@ -176,7 +179,7 @@ export function StaffWorkingHoursEditor({ salonId, staffId }: { salonId: string;
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   panel: { paddingVertical: space[2], borderTopWidth: 1, borderTopColor: color.border, marginTop: space[2] },
   row: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: space[1], paddingVertical: space[1], borderBottomWidth: 1, borderBottomColor: color.border },
   day: { width: 54, color: color.ink, fontFamily: font.bodySemiBold, fontSize: fontSize.xs },

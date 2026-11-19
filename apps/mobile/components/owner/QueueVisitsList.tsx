@@ -11,6 +11,7 @@ import { apiFetch, ApiError } from '../../lib/api';
 import { getRealtimeSocket, joinSalonRoom, onReconnect } from '../../lib/realtime';
 import { color, font, fontSize, space } from '../../lib/theme';
 import { Button, Card } from '../ui';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 /**
  * Website parity for apps/web/components/bookings/OwnerQueueVisits.tsx: customers who joined the
@@ -20,6 +21,7 @@ import { Button, Card } from '../ui';
 const PAGE_SIZE = 20;
 
 export function QueueVisitsList({ salonId, filter, language }: { salonId: string; filter: OwnerBookingFilter; language: Language }) {
+  const styles = useThemedStyles(makeStyles);
   const hi = language === Language.HI;
   const [items, setItems] = useState<QueueEntryDetailDto[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
@@ -98,7 +100,7 @@ export function QueueVisitsList({ salonId, filter, language }: { salonId: string
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   section: { marginTop: space[4], gap: space[2] },
   heading: { fontFamily: font.bodyBold, color: color.ink, fontSize: fontSize.base },
   muted: { fontFamily: font.bodyRegular, color: color.muted, fontSize: fontSize.xs },

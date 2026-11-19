@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import {
   CatalogErrorCode,
   INVENTORY_LOSS_KINDS,
+  normalizeBarcode,
   ProductDataSource,
   ProductVerificationStatus,
   validateCatalogCsv,
@@ -56,6 +57,7 @@ export function overviewRange(query: AdminInventoryOverviewQuery): {
 const adminProductInclude = {
   ...catalogProductInclude,
   submittedBySalon: { select: { id: true, name: true } },
+  ownerSalon: { select: { id: true, name: true } },
   _count: { select: { inventoryProducts: true } },
 } satisfies Prisma.GlobalProductInclude;
 
@@ -204,14 +206,39 @@ export class AdminInventoryService {
     query: AdminCatalogListQuery,
   ): Promise<InventoryPageDto<AdminCatalogProductDto>> {
     const q = query.q?.trim();
+    const qrId = q
+      ?.match(/^fastque:product:([0-9a-f-]{36})$/i)?.[1]
+      ?.toLowerCase();
+    const scanned = q && !qrId ? normalizeBarcode(q) : null;
     const where: Prisma.GlobalProductWhereInput = {
       ...(query.status ? { verificationStatus: query.status } : {}),
-      ...(q
+      ...(query.visibility ? { visibility: query.visibility } : {}),
+      ...(query.salonId
         ? {
             OR: [
-              { name: { contains: q, mode: 'insensitive' } },
-              { brand: { contains: q, mode: 'insensitive' } },
-              { barcodes: { some: { display: { contains: q } } } },
+              { ownerSalonId: query.salonId },
+              { inventoryProducts: { some: { salonId: query.salonId } } },
+            ],
+          }
+        : {}),
+      ...(query.category ? { category: query.category } : {}),
+      ...(query.missingBarcode === 'true' ? { barcodes: { none: {} } } : {}),
+      ...(query.testData ? { isTestData: query.testData === 'true' } : {}),
+      ...(qrId ? { id: qrId } : {}),
+      ...(q && !qrId
+        ? {
+            AND: [
+              {
+                OR: [
+                  { name: { contains: q, mode: 'insensitive' } },
+                  { brand: { contains: q, mode: 'insensitive' } },
+                  { externalRef: { equals: q, mode: 'insensitive' } },
+                  { barcodes: { some: { display: { contains: q } } } },
+                  ...(scanned?.ok
+                    ? [{ barcodes: { some: { code: scanned.code } } }]
+                    : []),
+                ],
+              },
             ],
           }
         : {}),
@@ -239,6 +266,8 @@ export class AdminInventoryService {
       items: page.map((row) => ({
         ...toCatalogProductDto(row),
         submittedBySalon: row.submittedBySalon,
+        ownerSalon: row.ownerSalon,
+        uploadJobId: row.uploadJobId,
         reviewNote: row.reviewNote,
         reviewedAt: row.reviewedAt?.toISOString() ?? null,
         salonsStocking: row._count.inventoryProducts,
@@ -344,6 +373,8 @@ export class AdminInventoryService {
     return {
       ...toCatalogProductDto(updated),
       submittedBySalon: updated.submittedBySalon,
+      ownerSalon: updated.ownerSalon,
+      uploadJobId: updated.uploadJobId,
       reviewNote: updated.reviewNote,
       reviewedAt: updated.reviewedAt?.toISOString() ?? null,
       salonsStocking: updated._count.inventoryProducts,

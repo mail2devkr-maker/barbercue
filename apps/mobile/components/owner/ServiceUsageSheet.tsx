@@ -11,6 +11,7 @@ import { apiFetch, ApiError } from '../../lib/api';
 import { quantityText, trimDecimal, unitShort } from '../../lib/inventory-shared';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 import { Button, InlineError } from '../ui';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 /**
  * Website parity for apps/web/components/owner/inventory/ServiceUsageDialog.tsx: "Which products did
@@ -49,6 +50,7 @@ export function ServiceUsageSheet({ queueEntryId, mode, onClose, onComplete, onS
   onComplete?: () => Promise<unknown> | void;
   onSaved?: (message: string) => void;
 }) {
+  const styles = useThemedStyles(makeStyles);
   const [options, setOptions] = useState<VisitUsageOptionsDto | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [picks, setPicks] = useState<Record<string, Pick[]>>({});
@@ -194,7 +196,7 @@ export function ServiceUsageSheet({ queueEntryId, mode, onClose, onComplete, onS
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   sheet: { padding: space[5], paddingTop: space[6], gap: space[3], backgroundColor: color.surface, flexGrow: 1 },
   title: { fontFamily: font.bodyBold, color: color.ink, fontSize: fontSize.lg },
   muted: { fontFamily: font.bodyRegular, color: color.muted, fontSize: fontSize.xs },

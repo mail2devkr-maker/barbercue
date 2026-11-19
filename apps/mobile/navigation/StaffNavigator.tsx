@@ -10,6 +10,7 @@ import { useUnreadNotificationCount } from '../lib/notifications';
 import { useLanguage } from '../lib/language-context';
 import { fastQue, font } from '../lib/theme';
 import { TabIcon, type TabIconName } from '../components/ui/TabIcon';
+import { useThemeTokens } from '../lib/theme-mode';
 
 export type StaffTabParamList = {
   StaffTodayTab: undefined;
@@ -22,6 +23,7 @@ const Tab = createBottomTabNavigator<StaffTabParamList>();
 // (see App.tsx) — deliberately just two tabs. Staff has no shop-management surface (that stays
 // on OwnerNavigator's Dashboard/Shop tabs only), so there is nothing else to give it a tab for.
 export default function StaffNavigator() {
+  const { fastQue } = useThemeTokens();
   const unreadCount = useUnreadNotificationCount();
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
@@ -53,7 +55,7 @@ export default function StaffNavigator() {
           }}
         />
       </Tab.Navigator>
-      <AssistantFab tabBarHeight={60 + insets.bottom} includeBottomInset onOpen={() => navigationRef.navigate('StaffAccountTab', { screen: 'Assistant' })} />
+      <AssistantFab tabBarHeight={60 + insets.bottom} includeBottomInset onOpen={() => navigationRef.navigate('StaffAccountTab', { screen: 'Assistant', initial: false })} />
     </SalonProvider>
   );
 }

@@ -4,8 +4,7 @@
   place-items: center;
   padding: 72px 20px;
   color: var(--bc-ink);
-  background:
-    radial-gradient(circle at 80% 15%, rgba(168, 121, 31, 0.13), transparent 22rem),
+  background: radial-gradient(circle at 80% 15%, rgba(168, 121, 31, 0.13), transparent 22rem),
     var(--bc-surface);
 }
 
@@ -15,7 +14,7 @@
   justify-items: center;
   padding: clamp(40px, 8vw, 72px) 28px;
   text-align: center;
-  background: #fff;
+  background: var(--tv-bg-ffffff, #fff);
   border: 1px solid var(--bc-border);
   border-radius: var(--bc-radius-lg);
   box-shadow: var(--bc-shadow-lg);
@@ -27,7 +26,7 @@
   height: 54px;
   place-items: center;
   color: #fff;
-  background: var(--bc-accent);
+  background: var(--bc-accent-solid);
   border-radius: 50%;
   font-family: var(--font-display);
   font-size: 1.45rem;
@@ -59,8 +58,8 @@
   min-height: 44px;
   padding: 0 18px;
   color: #fff;
-  background: var(--bc-ink);
-  border: 1px solid var(--bc-ink);
+  background: var(--bc-ink-solid);
+  border: 1px solid var(--bc-ink-solid);
   border-radius: var(--bc-radius-sm);
   font: inherit;
   font-size: 0.86rem;
@@ -86,7 +85,7 @@
 .loadingHeader,
 .loadingLine,
 .loadingBlock {
-  background: linear-gradient(90deg, #eee7dc 20%, #faf7f1 50%, #eee7dc 80%);
+  background: linear-gradient(90deg, var(--tvx-bg-eee7dc, #eee7dc) 20%, var(--tv-bg-faf7f1, #faf7f1) 50%, var(--tvx-bg-eee7dc, #eee7dc) 80%);
   background-size: 220% 100%;
   border-radius: 999px;
   animation: shimmer 1.5s ease-in-out infinite;

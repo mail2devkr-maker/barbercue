@@ -8,9 +8,8 @@
   padding: clamp(28px, 5vw, 44px);
   border: 1px solid var(--bc-border);
   border-radius: 22px;
-  background:
-    radial-gradient(circle at 90% 0%, rgba(168, 121, 31, 0.15), transparent 34%),
-    #ffffff;
+  background: radial-gradient(circle at 90% 0%, rgba(168, 121, 31, 0.15), transparent 34%),
+    var(--tv-bg-ffffff, #ffffff);
   box-shadow: var(--bc-shadow-sm);
 }
 

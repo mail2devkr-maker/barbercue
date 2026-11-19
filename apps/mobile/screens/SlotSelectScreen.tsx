@@ -10,10 +10,12 @@ import { color, font, fontSize, lineHeightFor, radius, space } from '../lib/them
 import { Screen, SectionHeader, Skeleton, InlineError, EmptyState } from '../components/ui';
 import { useLanguage } from '../lib/language-context';
 import type { SearchStackParamList } from '../navigation/types';
+import { useThemedStyles, type ThemeTokens } from '../lib/theme-mode';
 
 type Props = NativeStackScreenProps<SearchStackParamList, 'SlotSelect'>;
 
 export default function SlotSelectScreen({ route, navigation }: Props) {
+  const styles = useThemedStyles(makeStyles);
   const { t, language } = useLanguage();
   const { salonId, services, preferredStaffId, salonTimezone, date, ...rest } = route.params;
   const [slots, setSlots] = useState<AvailabilitySlotDto[]>([]);
@@ -106,7 +108,7 @@ export default function SlotSelectScreen({ route, navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color, surface }: ThemeTokens) => StyleSheet.create({
   screenContent: { padding: space[5] },
   skeletonRow: { height: 44, borderRadius: radius.sm, marginBottom: space[2] },
   listContent: { paddingTop: space[2] },
@@ -124,7 +126,7 @@ const styles = StyleSheet.create({
   slotAvailable: { backgroundColor: color.surface },
   slotOccupied: { backgroundColor: color.ink, borderColor: color.ink },
   slotText: { fontFamily: font.bodySemiBold, fontSize: fontSize.xs, lineHeight: lineHeightFor(fontSize.xs), color: color.ink },
-  slotTextOccupied: { color: '#ffffff' },
+  slotTextOccupied: { color: surface.inverseText },
   legend: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted, marginTop: space[2] },
   legendAvailable: { color: color.muted },
   legendOccupied: { color: color.ink },

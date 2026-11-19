@@ -5,6 +5,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { color, font, fontSize } from '../lib/theme';
 import { useLanguage } from '../lib/language-context';
 import type { TabParamList } from './types';
+import { useThemedStyles, type ThemeTokens } from '../lib/theme-mode';
 
 /**
  * Rendered via a stack screen's `headerRight` — so `useNavigation()` here resolves to that
@@ -14,22 +15,23 @@ import type { TabParamList } from './types';
  * BookingDetail screen) the next time the user returns to this tab, then switches to HomeTab.
  */
 export function HomeHeaderButton() {
+  const styles = useThemedStyles(makeStyles);
   const navigation = useNavigation<NativeStackNavigationProp<Record<string, undefined>>>();
   const { t } = useLanguage();
 
   function goHome() {
     navigation.popToTop();
-    navigation.getParent<BottomTabNavigationProp<TabParamList>>()?.navigate('HomeTab', { screen: 'Home' });
+    navigation.getParent<BottomTabNavigationProp<TabParamList>>()?.navigate('HomeTab', { screen: 'CustomerDashboard' });
   }
 
   return (
     <Pressable onPress={goHome} hitSlop={8} style={styles.button}>
-      <Text style={styles.text}>{t.homeButtonLabel}</Text>
+      <Text style={styles.text}>{t.tabDashboard}</Text>
     </Pressable>
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   button: { paddingHorizontal: 4, paddingVertical: 4 },
   text: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: color.accent },
 });

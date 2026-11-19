@@ -1,5 +1,6 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, type StyleProp, type ViewStyle } from 'react-native';
-import { color, font, fontSize, lineHeightFor, radius, space } from '../../lib/theme';
+import { font, fontSize, lineHeightFor, radius, space } from '../../lib/theme';
+import { useThemedStyles, useThemeTokens, type ThemeTokens } from '../../lib/theme-mode';
 
 type Variant = 'primary' | 'secondary' | 'outline';
 
@@ -15,6 +16,8 @@ interface ButtonProps {
 /** Primary = terracotta fill (the only action color). Secondary = ink-bordered cream. Outline =
  * lighter-weight ink-bordered, for secondary/tertiary actions (resend, cancel, etc). */
 export function Button({ title, onPress, variant = 'primary', loading, disabled, style }: ButtonProps) {
+  const { color } = useThemeTokens();
+  const { styles, variantStyles, textVariantStyles } = useThemedStyles(makeStyles);
   const isDisabled = disabled || loading;
   return (
     <Pressable
@@ -31,27 +34,27 @@ export function Button({ title, onPress, variant = 'primary', loading, disabled,
   );
 }
 
-const styles = StyleSheet.create({
-  base: {
-    minHeight: 50,
-    borderRadius: radius.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: space[3],
-    paddingHorizontal: space[4],
-  },
-  disabled: { opacity: 0.55 },
-  text: { fontFamily: font.bodyBold, fontSize: fontSize.base, lineHeight: lineHeightFor(fontSize.base) },
-});
-
-const variantStyles = StyleSheet.create({
-  primary: { backgroundColor: color.accent },
-  secondary: { backgroundColor: color.surface, borderWidth: 1, borderColor: color.ink },
-  outline: { backgroundColor: 'transparent', borderWidth: 1, borderColor: color.border },
-});
-
-const textVariantStyles = StyleSheet.create({
-  primary: { color: color.accentContrast },
-  secondary: { color: color.ink },
-  outline: { color: color.ink },
+const makeStyles = ({ color }: ThemeTokens) => ({
+  styles: StyleSheet.create({
+    base: {
+      minHeight: 50,
+      borderRadius: radius.sm,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: space[3],
+      paddingHorizontal: space[4],
+    },
+    disabled: { opacity: 0.55 },
+    text: { fontFamily: font.bodyBold, fontSize: fontSize.base, lineHeight: lineHeightFor(fontSize.base) },
+  }),
+  variantStyles: StyleSheet.create({
+    primary: { backgroundColor: color.accent },
+    secondary: { backgroundColor: color.surface, borderWidth: 1, borderColor: color.ink },
+    outline: { backgroundColor: 'transparent', borderWidth: 1, borderColor: color.border },
+  }),
+  textVariantStyles: StyleSheet.create({
+    primary: { color: color.accentContrast },
+    secondary: { color: color.ink },
+    outline: { color: color.ink },
+  }),
 });

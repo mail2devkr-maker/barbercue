@@ -38,6 +38,13 @@ const TYPE_CATEGORY: Record<NotificationType, NotificationCategory> = {
   // Inventory Phase 3 — stock reminders for the owner (no inventory category exists yet).
   'owner.inventory.reorder': NotificationCategory.REMINDERS,
   'owner.inventory.expiring': NotificationCategory.REMINDERS,
+  // Salon onboarding workflow notices are operational, so they ride the default-on category.
+  'onboarding.submitted': NotificationCategory.BOOKING_UPDATES,
+  'onboarding.changes_requested': NotificationCategory.BOOKING_UPDATES,
+  'onboarding.approved': NotificationCategory.BOOKING_UPDATES,
+  'onboarding.rejected': NotificationCategory.BOOKING_UPDATES,
+  'onboarding.owner_activated': NotificationCategory.BOOKING_UPDATES,
+  'onboarding.published': NotificationCategory.BOOKING_UPDATES,
   // FastQue Work: assignments are the marketplace's bookings, so they share that preference.
   'work.assignment.accepted': NotificationCategory.BOOKING_UPDATES,
   'work.offer.received': NotificationCategory.BOOKING_UPDATES,
@@ -48,6 +55,69 @@ const TYPE_CATEGORY: Record<NotificationType, NotificationCategory> = {
   'work.payout.failed': NotificationCategory.BOOKING_UPDATES,
   'work.dispute.updated': NotificationCategory.BOOKING_UPDATES,
 };
+
+// ---------- Auto-expiry (live-visit add-on mission, 17 Nov 2026) ----------
+// Owner rule: "after crossing the service time, all notification should auto expire. Never ever send
+// the expired notification on customer and owner devices." These types announce something about ONE
+// upcoming/ongoing visit; once that visit is over they are hidden from the notification centre and
+// the unread badge (rows are kept, never deleted). Outcome notices written after the visit (no-show,
+// expired, corrected) and inventory reminders are not in these lists, so they always stay.
+/** Retired once the linked queue visit (payload.queueEntryId) is completed/cancelled/no-show/expired. */
+export const QUEUE_VISIT_NOTIFICATION_TYPES: readonly NotificationType[] = [
+  'queue.turn_approaching',
+  'queue.arrival_check',
+  'owner.walk_in.joined',
+  'staff.assigned',
+];
+/** Retired once the linked booking (payload.bookingId) has ended (slotEnd passed) or is closed. */
+export const BOOKING_VISIT_NOTIFICATION_TYPES: readonly NotificationType[] = [
+  'booking.confirmed',
+  'booking.reminder',
+  'booking.cancelled',
+  'booking.cancelled_by_shop',
+  'booking.rescheduled_by_shop',
+  'owner.booking.created',
+  'owner.booking.cancelled',
+  'owner.booking.arrival_check',
+];
+// A queue-visit notice from before queueEntryId was recorded in its payload can't be matched to a
+// visit; no Live Queue visit outlives a working day, so it retires after this many hours.
+const UNLINKED_QUEUE_NOTICE_MAX_AGE_HOURS = 12;
+
+/**
+ * SQL predicate (alias `n`) that is TRUE while a notification is still current. Ids in the payload
+ * are compared as text; a payload without the id simply never matches the EXISTS (stays visible),
+ * except the unlinked-queue-notice age rule above. Timestamp columns are TIMESTAMP(3) holding UTC,
+ * so "now" is taken in UTC explicitly (correct whatever the session time zone is).
+ */
+function stillCurrentSql(): Prisma.Sql {
+  // CRM 2.0 notifications ("crm.*") belong to the employee CRM's own inbox, not this list.
+  return Prisma.sql`n."type" NOT LIKE 'crm.%' AND NOT (
+      n."type" IN (${Prisma.join([...QUEUE_VISIT_NOTIFICATION_TYPES])})
+      AND (
+        EXISTS (
+          SELECT 1 FROM "queue_entries" q
+          WHERE q."id" = n."payload"->>'queueEntryId'
+            AND q."status"::text IN ('COMPLETED', 'CANCELLED', 'NO_SHOW', 'EXPIRED')
+        )
+        OR (
+          (n."payload"->>'queueEntryId') IS NULL
+          AND n."createdAt" < (NOW() AT TIME ZONE 'UTC') - (${UNLINKED_QUEUE_NOTICE_MAX_AGE_HOURS} * INTERVAL '1 hour')
+        )
+      )
+    )
+    AND NOT (
+      n."type" IN (${Prisma.join([...BOOKING_VISIT_NOTIFICATION_TYPES])})
+      AND EXISTS (
+        SELECT 1 FROM "bookings" b
+        WHERE b."id" = n."payload"->>'bookingId'
+          AND (
+            b."slotEnd" <= (NOW() AT TIME ZONE 'UTC')
+            OR b."status"::text IN ('COMPLETED', 'NO_SHOW', 'EXPIRED')
+          )
+      )
+    )`;
+}
 
 const ALL_CATEGORIES: NotificationCategory[] = [
   NotificationCategory.BOOKING_UPDATES,
@@ -137,29 +207,65 @@ export class NotificationsService {
     return true;
   }
 
+  /**
+   * Newest first, expired visit notices left out (see stillCurrentSql). Keyset pagination on
+   * (createdAt, id); `cursor` is still the id of the last item of the previous page, so the API and
+   * every client are unchanged. An unknown cursor yields an empty page rather than restarting.
+   */
   async listMine(
     userId: string,
     cursor: string | undefined,
     limit = DEFAULT_PAGE_SIZE,
   ): Promise<PaginatedResult<NotificationDto>> {
+    let after: Prisma.Sql = Prisma.empty;
+    if (cursor) {
+      const anchor = await this.prisma.notification.findFirst({
+        where: { id: cursor, userId, channel: NotificationChannel.IN_APP },
+        select: { id: true },
+      });
+      if (!anchor) return { items: [], nextCursor: null };
+      // Compared in SQL against the anchor row itself (no timestamp round-trip through JS).
+      after = Prisma.sql`AND (n."createdAt", n."id") < (
+        SELECT a."createdAt", a."id" FROM "notifications" a WHERE a."id" = ${anchor.id}
+      )`;
+    }
+    const idRows = await this.prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT n."id"
+      FROM "notifications" n
+      WHERE n."userId" = ${userId}
+        AND n."channel"::text = ${NotificationChannel.IN_APP}
+        AND ${stillCurrentSql()}
+        ${after}
+      ORDER BY n."createdAt" DESC, n."id" DESC
+      LIMIT ${limit + 1}
+    `);
+    const hasMore = idRows.length > limit;
+    const pageIds = (hasMore ? idRows.slice(0, limit) : idRows).map((r) => r.id);
+    if (pageIds.length === 0) return { items: [], nextCursor: null };
     const rows = await this.prisma.notification.findMany({
-      where: { userId, channel: NotificationChannel.IN_APP },
-      orderBy: { createdAt: 'desc' },
-      take: limit + 1,
-      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      where: { id: { in: pageIds } },
     });
-    const hasMore = rows.length > limit;
-    const page = hasMore ? rows.slice(0, limit) : rows;
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const page = pageIds
+      .map((id) => byId.get(id))
+      .filter((r): r is NonNullable<typeof r> => r !== undefined);
     return {
       items: page.map((r) => this.toDto(r)),
-      nextCursor: hasMore ? page[page.length - 1].id : null,
+      nextCursor: hasMore ? pageIds[pageIds.length - 1] : null,
     };
   }
 
+  /** The unread badge: unread IN_APP notifications that are still current. */
   async unreadCount(userId: string): Promise<number> {
-    return this.prisma.notification.count({
-      where: { userId, channel: NotificationChannel.IN_APP, readAt: null },
-    });
+    const rows = await this.prisma.$queryRaw<Array<{ count: number }>>(Prisma.sql`
+      SELECT COUNT(*)::int AS "count"
+      FROM "notifications" n
+      WHERE n."userId" = ${userId}
+        AND n."channel"::text = ${NotificationChannel.IN_APP}
+        AND n."readAt" IS NULL
+        AND ${stillCurrentSql()}
+    `);
+    return Number(rows[0]?.count ?? 0);
   }
 
   /** Scoped by userId in the WHERE, not just the id — a no-op (not an error) if the notification

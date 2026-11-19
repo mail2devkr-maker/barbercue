@@ -383,6 +383,74 @@ describe('AvailabilityService', () => {
       expect(firstSlot?.state).toBe('OCCUPIED');
     });
 
+    // Live-visit add-on mission (17 Nov 2026): the shop's buffer after every service.
+    describe('service buffer', () => {
+      function oneChairDayWithBookingAt0930(bufferMinutes: number | undefined) {
+        prisma.salon.findUnique.mockResolvedValue({
+          id: 's1',
+          status: 'ACTIVE',
+          timezone: null,
+          city: { countryCode: 'IN' },
+          serviceBufferMinutes: bufferMinutes,
+        });
+        prisma.salonStaff.count.mockResolvedValue(1);
+        prisma.chair.count.mockResolvedValue(1);
+        prisma.operatingHours.findUnique.mockResolvedValue({
+          openTime: '09:00',
+          closeTime: '11:00',
+          isClosed: false,
+        });
+        const day = futureDateString(2);
+        const [y, m, d] = day.split('-').map(Number);
+        const ist = (h: number, min: number) =>
+          new Date(Date.UTC(y, m - 1, d, h, min) - 330 * 60_000);
+        // One 09:30-10:00 IST appointment on the only chair.
+        prisma.booking.findMany.mockResolvedValue([
+          { slotStart: ist(9, 30), slotEnd: ist(10, 0), preferredStaffId: null },
+        ]);
+        return { day, ist };
+      }
+
+      it('with no buffer, the slots right before and right after an appointment stay bookable', async () => {
+        const { day, ist } = oneChairDayWithBookingAt0930(0);
+        const slots = await service.getAvailability('s1', ['sv1'], day);
+        const at = (h: number, min: number) =>
+          slots.find((s) => s.slotStart === ist(h, min).toISOString())?.available;
+        expect(at(9, 0)).toBe(true); // 09:00-09:30 ends exactly at the appointment
+        expect(at(10, 0)).toBe(true); // 10:00-10:30 starts exactly at its end
+      });
+
+      it('a 10-minute buffer keeps 10 minutes free before and after every appointment', async () => {
+        const { day, ist } = oneChairDayWithBookingAt0930(10);
+        const slots = await service.getAvailability('s1', ['sv1'], day);
+        const at = (h: number, min: number) =>
+          slots.find((s) => s.slotStart === ist(h, min).toISOString())?.available;
+        expect(at(9, 0)).toBe(false); // would end 09:30, no gap before the 09:30 appointment
+        expect(at(10, 0)).toBe(false); // would start right when the 09:30 appointment ends
+        expect(at(10, 15)).toBe(true); // 15 minutes after its end: buffer respected
+      });
+
+      it('an old row without the column behaves as no buffer', async () => {
+        const { day, ist } = oneChairDayWithBookingAt0930(undefined);
+        const slots = await service.getAvailability('s1', ['sv1'], day);
+        expect(slots.find((s) => s.slotStart === ist(10, 0).toISOString())?.available).toBe(true);
+      });
+
+      it('widens the booking query window by the buffer', async () => {
+        oneChairDayWithBookingAt0930(15);
+        const { day } = oneChairDayWithBookingAt0930(15);
+        await service.getAvailability('s1', ['sv1'], day);
+        const where = (prisma.booking.findMany.mock.calls[prisma.booking.findMany.mock.calls.length - 1][0] as {
+          where: { slotStart: { lt: Date }; slotEnd: { gt: Date } };
+        }).where;
+        const [y, m, d] = day.split('-').map(Number);
+        const istClose = new Date(Date.UTC(y, m - 1, d, 11, 0) - 330 * 60_000);
+        const istOpen = new Date(Date.UTC(y, m - 1, d, 9, 0) - 330 * 60_000);
+        expect(where.slotStart.lt).toEqual(new Date(istClose.getTime() + 15 * 60_000));
+        expect(where.slotEnd.gt).toEqual(new Date(istOpen.getTime() - 15 * 60_000));
+      });
+    });
+
     it('marks every candidate that overlaps a longer appointment as occupied', async () => {
       prisma.service.findMany.mockResolvedValue([
         { id: 'sv1', salonId: 's1', name: 'Haircut', durationMinutes: 45, isActive: true },

@@ -148,6 +148,7 @@ export function ShopSharePanel({ salonId, settingsHref }: { salonId: string; set
   }
 
   return (
+    <>
     <div className={`${ui.grid} ${ui.evenTwo}`}>
       <Card title="Your public shop link" sub="Customers can book or join the Live Queue from this page. It is the same page search engines and the FastQue app show.">
         <Field label="Public link" htmlFor="share-link">
@@ -188,5 +189,36 @@ export function ShopSharePanel({ salonId, settingsHref }: { salonId: string; set
         </div>
       </Card>
     </div>
+    <div className={ui.mt16}>
+      <GoogleMapsCard name={name} url={url} onCopy={(v) => void copy(v, "Link copied. Paste it as the Website and Booking link on Google.")} />
+    </div>
+    </>
+  );
+}
+
+/**
+ * Get your shop on Google Maps. The owner creates and verifies the Google Business Profile themselves (Google checks
+ * ownership); we only explain the steps and give them their FastQue link to paste as Website / Booking link.
+ */
+function GoogleMapsCard({ name, url, onCopy }: { name: string; url: string; onCopy: (value: string) => void }) {
+  return (
+    <Card title="Get your shop on Google Maps" sub="Free. When people search 'salon near me' or 'haircut in your city', Google shows Maps shops first.">
+      <ol className={ui.cardSub} style={{ paddingLeft: 20, display: "grid", gap: 6 }}>
+        <li>Open Google Business Profile and sign in with your shop&apos;s Gmail.</li>
+        <li>Business name: exactly <strong>{name}</strong> as on your board. Don&apos;t add extra words like &quot;best salon&quot; or Google may suspend it.</li>
+        <li>Category: Barber shop, Beauty salon, Hair salon, Beauty parlour or Spa. Add your address, map pin and phone.</li>
+        <li>Website and Booking link: paste your FastQue link below.</li>
+        <li>Verify: Google usually asks for a short video showing your board, the street, inside the shop and you opening the shop or counter. It takes 1 to 5 days.</li>
+        <li>After that, add timings, 5 to 10 photos and your services. Ask happy customers for a Google review. Never use fake or paid reviews.</li>
+      </ol>
+      <Field label="Your FastQue link for Google" htmlFor="gmaps-link">
+        <input id="gmaps-link" className={ui.input} readOnly value={url} onFocus={(e) => e.currentTarget.select()} />
+      </Field>
+      <div className={`${ui.rowWrap} ${ui.mt12}`}>
+        <Btn variant="primary" onClick={() => onCopy(url)}>Copy link</Btn>
+        <BtnLink href="https://business.google.com/create" target="_blank" rel="noopener noreferrer" icon="arrowUpRight">Open Google Business Profile</BtnLink>
+      </div>
+      <p className={ui.cardSub}>FastQue does not create or change your Google profile. You do it in your own Google account.</p>
+    </Card>
   );
 }

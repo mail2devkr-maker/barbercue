@@ -44,6 +44,7 @@ import { cityQueryParams, getLocationChoice, locationChoiceLabel, setLocationCho
 import { LocationPickerModal } from '../components/location/LocationPickerModal';
 import { findCityForDeviceLocation, buildCityFallbackQuery, appendCityMatchesToNearby, getSearchGpsCoordinates, getViewerCoordinatesIfAllowed } from '../lib/nearby-city-fallback';
 import type { SearchStackParamList } from '../navigation/types';
+import { useThemedStyles, useThemeTokens, type ThemeTokens } from '../lib/theme-mode';
 
 type Props = NativeStackScreenProps<SearchStackParamList, 'SalonSearch'>;
 
@@ -159,6 +160,9 @@ function PriceFilterDropdown({
   activeMax: number | null;
   onApply: (min: number | null, max: number | null) => void;
 }) {
+  const { fastQue } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
+  const dropdownStyles = useThemedStyles(makeDropdownStyles);
   const { t } = useLanguage();
   const [open, setOpen] = useState(false);
   const [customOpen, setCustomOpen] = useState(false);
@@ -279,6 +283,8 @@ function PriceFilterDropdown({
 
 // Public discovery endpoint — no auth required, mirrors apps/web's search page.
 export default function SalonSearchScreen({ navigation, route }: Props) {
+  const { color, fastQue } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const { t, language } = useLanguage();
   const { width: windowWidth } = useWindowDimensions();
   const stackSearchRow = windowWidth < NARROW_SEARCH_ROW_WIDTH;
@@ -308,6 +314,9 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
   const [priceMin, setPriceMin] = useState<number | null>(null);
   const [priceMax, setPriceMax] = useState<number | null>(null);
   const [service, setService] = useState<string | null>(null);
+  // Owner (18 Nov, website parity): every search option behind ONE "Filters" button.
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [shopName, setShopName] = useState('');
   // Discovery upgrade (parity with apps/web's /search): salon type, a popular service to compare
   // prices by, sort, minimum rating, open now and favorites.
   const [discovery, setDiscovery] = useState<
@@ -365,7 +374,7 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
     overrides: Partial<DiscoveryFilters> = {},
     queryOverride?: string,
   ) {
-    const filters: DiscoveryFilters = { radiusKm, priceMin, priceMax, service, ...discovery, ...overrides };
+    const filters: DiscoveryFilters = { radiusKm, priceMin, priceMax, service, shopName, ...discovery, ...overrides };
     const city = coords ? null : cityQueryParams(getLocationChoice());
     const requestId = ++searchSequence.current;
     // A picked city still shows distances (nearest first) when the phone already allows location.
@@ -598,6 +607,32 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
     void runSearch(false, null, { radiusKm: null });
   }
 
+  // "Clear all" in the Filters panel: every option in it, city and Near me included (website parity).
+  function clearAllFilters() {
+    const cleared = {
+      ...DEFAULT_DISCOVERY_FILTERS,
+      shopName: null,
+    };
+    setQ('');
+    setShopName('');
+    setService(null);
+    setRadiusKm(null);
+    setPriceMin(null);
+    setPriceMax(null);
+    setDiscovery({
+      salonType: null,
+      popularService: null,
+      sort: discovery.sort === 'distance' || discovery.sort === 'price' ? 'relevance' : discovery.sort,
+      minRating: null,
+      openNow: false,
+      favoritesOnly: false,
+    });
+    setNearMe(null);
+    setLocationChoice(null);
+    setSuggestionsOpen(false);
+    void runSearch(false, null, cleared, '');
+  }
+
   const distanceOptions: FilterDropdownOption[] = DISTANCE_OPTIONS.map((option) => ({
     id: distanceIdFor(option.value),
     label: t[option.labelKey],
@@ -635,6 +670,22 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
   const serviceValueLabel = activeServiceCategory
     ? t[SERVICE_CATEGORY_LABEL_KEYS[activeServiceCategory.id]] ?? activeServiceCategory.label
     : t.serviceFilterAll;
+  const hi = language === 'HI';
+  // The badge on the one Filters button: every active search option.
+  const activeFilterCount = [
+    q.trim(),
+    shopName.trim(),
+    service,
+    locationChoice && locationChoice.kind !== 'gps' ? 'city' : null,
+    nearMe ? 'near' : null,
+    radiusKm !== null ? 'radius' : null,
+    priceMin !== null || priceMax !== null ? 'price' : null,
+    discovery.salonType,
+    discovery.popularService,
+    discovery.minRating !== null ? 'rating' : null,
+    discovery.openNow ? 'open' : null,
+    discovery.favoritesOnly ? 'fav' : null,
+  ].filter(Boolean).length;
 
   return (
     <PremiumScreen scroll={false} contentStyle={styles.screenContent}>
@@ -660,6 +711,47 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
           </Text>
         )}
 
+        {/* Owner (18 Nov, same as the website): every search option behind ONE Filters button. */}
+        <View style={styles.filterBarRow}>
+          <Pressable
+            style={[styles.filtersButton, filtersOpen && styles.filtersButtonOpen]}
+            onPress={() => setFiltersOpen((open) => !open)}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: filtersOpen }}
+            accessibilityLabel={`${hi ? 'फ़िल्टर' : 'Filters'}${activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}`}
+          >
+            <View style={styles.filtersIcon} accessible={false}>
+              <View style={[styles.filtersIconLine, { width: 18 }]} />
+              <View style={[styles.filtersIconLine, { width: 12 }]} />
+              <View style={[styles.filtersIconLine, { width: 6 }]} />
+            </View>
+            <Text style={styles.filtersButtonText}>{hi ? 'फ़िल्टर' : 'Filters'}</Text>
+            {activeFilterCount > 0 ? (
+              <View style={styles.filtersBadge}>
+                <Text style={styles.filtersBadgeText}>{activeFilterCount}</Text>
+              </View>
+            ) : null}
+          </Pressable>
+          <View style={styles.sortSlot}>
+            <FilterDropdown
+              label={t.sortLabel}
+              valueLabel={t[SORT_LABEL_KEYS[activeSort]]}
+              options={sortOptions}
+              selectedId={activeSort}
+              onSelect={(id) => selectDiscovery({ sort: id as SalonSortOption })}
+              closeLabel={t.closeFilterMenu}
+            />
+          </View>
+        </View>
+        {!filtersOpen ? (
+          <Text style={styles.filterHint}>
+            {hi ? 'सर्विस · दुकान · शहर · दूरी · कीमत और भी' : 'Service · Shop · City · Distance · Price and more'}
+          </Text>
+        ) : null}
+
+        {filtersOpen && (
+        <View style={styles.filterPanel}>
+        <Text style={styles.filterPanelLabel}>{hi ? 'सर्विस से फ़िल्टर करें' : 'Filter by service'}</Text>
         <View style={[styles.searchRow, stackSearchRow && styles.searchRowStacked]}>
           <PremiumTextField
             style={styles.input}
@@ -672,15 +764,11 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
             }}
             onSubmitEditing={() => {
               setSuggestionsOpen(false);
+              setFiltersOpen(false);
               void handleSearch();
             }}
             returnKeyType="search"
-          />
-          <PremiumButton
-            title={t.searchAction}
-            onPress={() => void handleSearch()}
-            loading={loading}
-            style={[styles.searchButton, stackSearchRow && styles.searchButtonStacked]}
+            accessibilityLabel={hi ? 'सर्विस से फ़िल्टर करें' : 'Filter by service'}
           />
         </View>
 
@@ -698,6 +786,7 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
                   setQ(suggestion.name);
                   setService(null);
                   setSuggestionsOpen(false);
+                  setFiltersOpen(false);
                   void runSearch(
                     false,
                     nearMe,
@@ -717,6 +806,22 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
           </ScrollView>
         )}
 
+        <Text style={styles.filterPanelLabel}>{hi ? 'दुकान से फ़िल्टर करें' : 'Filter by shop'}</Text>
+        <PremiumTextField
+          style={styles.input}
+          placeholder={hi ? 'दुकान का नाम लिखें…' : 'Type a shop name…'}
+          placeholderTextColor={fastQue.textMuted}
+          value={shopName}
+          onChangeText={setShopName}
+          onSubmitEditing={() => {
+            setFiltersOpen(false);
+            void handleSearch();
+          }}
+          returnKeyType="search"
+          accessibilityLabel={hi ? 'दुकान से फ़िल्टर करें' : 'Filter by shop'}
+        />
+
+        <Text style={styles.filterPanelLabel}>{hi ? 'शहर / लोकेशन' : 'City / location'}</Text>
         <View style={styles.locationRow}>
           <Pressable
             style={styles.cityButton}
@@ -736,15 +841,6 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
             style={styles.nearMeButton}
           />
         </View>
-        {!nearMe && !viewerKnown && results.some((item) => item.lat != null && item.lng != null) ? (
-          <PremiumButton
-            title={language === 'HI' ? '📍 हर दुकान की दूरी देखें' : '📍 Show how far each shop is'}
-            variant="quiet"
-            onPress={() => void handleShowDistance()}
-            loading={locating}
-            style={styles.showDistanceButton}
-          />
-        ) : null}
         <LocationPickerModal
           visible={locationPickerOpen}
           onClose={() => setLocationPickerOpen(false)}
@@ -803,14 +899,6 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
             closeLabel={t.closeFilterMenu}
           />
           <FilterDropdown
-            label={t.sortLabel}
-            valueLabel={t[SORT_LABEL_KEYS[activeSort]]}
-            options={sortOptions}
-            selectedId={activeSort}
-            onSelect={(id) => selectDiscovery({ sort: id as SalonSortOption })}
-            closeLabel={t.closeFilterMenu}
-          />
-          <FilterDropdown
             label={t.ratingFilterLabel}
             valueLabel={discovery.minRating === null ? t.ratingFilterAny : `${discovery.minRating}★+`}
             options={ratingOptions}
@@ -839,6 +927,35 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
           })}
         </View>
         {!nearMe && <Text style={styles.filterHint}>{t.distanceFilterLocationHint}</Text>}
+        <View style={styles.filterPanelFooter}>
+          <PremiumButton
+            title={hi ? 'सब हटाएं' : 'Clear all'}
+            variant="secondary"
+            onPress={clearAllFilters}
+            style={styles.filterPanelFooterButton}
+          />
+          <PremiumButton
+            title={hi ? 'नतीजे देखें' : 'Show results'}
+            onPress={() => {
+              setSuggestionsOpen(false);
+              setFiltersOpen(false);
+              void handleSearch();
+            }}
+            loading={loading}
+            style={styles.filterPanelFooterButton}
+          />
+        </View>
+        </View>
+        )}
+        {!nearMe && !viewerKnown && results.some((item) => item.lat != null && item.lng != null) ? (
+          <PremiumButton
+            title={language === 'HI' ? '📍 हर दुकान की दूरी देखें' : '📍 Show how far each shop is'}
+            variant="quiet"
+            onPress={() => void handleShowDistance()}
+            loading={locating}
+            style={styles.showDistanceButton}
+          />
+        ) : null}
         {notice && <Text style={styles.filterHint}>{notice}</Text>}
 
         {error && <InlineError message={error} />}
@@ -927,7 +1044,7 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
   );
 }
 
-const dropdownStyles = StyleSheet.create({
+const makeDropdownStyles = ({ fastQue }: ThemeTokens) => StyleSheet.create({
   root: { flexBasis: '31%', flexGrow: 1, minWidth: 96 },
   label: {
     fontFamily: font.bodyBold,
@@ -965,8 +1082,37 @@ const dropdownStyles = StyleSheet.create({
   optionCheck: { color: fastQue.pink, fontFamily: font.bodyBold, fontSize: fontSize.base },
 });
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color, fastQue }: ThemeTokens) => StyleSheet.create({
   screenContent: { padding: space[5] },
+  // Owner (18 Nov): the one Filters button and the panel it opens (website parity).
+  filterBarRow: { flexDirection: 'row', alignItems: 'flex-end', flexWrap: 'wrap', gap: space[2], marginBottom: space[2] },
+  filtersButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space[2],
+    minHeight: 48,
+    paddingHorizontal: space[4],
+    borderRadius: 999,
+    backgroundColor: fastQue.pink,
+  },
+  filtersButtonOpen: { backgroundColor: fastQue.coral },
+  filtersIcon: { width: 18, alignItems: 'center', gap: 3 },
+  filtersIconLine: { height: 2, borderRadius: 1, backgroundColor: '#ffffff' },
+  filtersButtonText: { fontFamily: font.bodySemiBold, fontSize: 16, color: '#ffffff' },
+  filtersBadge: { minWidth: 22, height: 22, paddingHorizontal: 6, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: '#ffffff' },
+  filtersBadgeText: { fontFamily: font.bodySemiBold, fontSize: 12, color: fastQue.background },
+  sortSlot: { flex: 1, minWidth: 150 },
+  filterPanel: {
+    padding: space[3],
+    marginBottom: space[3],
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: fastQue.borderStrong,
+    backgroundColor: fastQue.backgroundRaised,
+  },
+  filterPanelLabel: { fontFamily: font.bodySemiBold, fontSize: fontSize.xs, color: fastQue.textSecondary, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: space[2] },
+  filterPanelFooter: { flexDirection: 'row', gap: space[2], marginTop: space[2] },
+  filterPanelFooterButton: { flex: 1 },
   styleNote: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, color: fastQue.textSecondary, marginTop: -space[2], marginBottom: space[3] },
   styleNoteBold: { fontFamily: font.bodySemiBold, color: fastQue.text },
   // Owner-reported cropping fix: `minWidth: 0` lets the field shrink below its own content's

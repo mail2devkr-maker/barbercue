@@ -38,7 +38,7 @@
   position: relative;
   flex: 0 0 56px;
   border-right: 1px solid var(--bc-border);
-  background: var(--bc-surface, #fffdf9);
+  background: var(--bc-surface, var(--tv-bg-fffdf9, #fffdf9));
 }
 
 .rulerLabel {
@@ -112,7 +112,7 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--bc-accent);
+  background: var(--bc-accent-solid);
 }
 
 .block {
@@ -163,7 +163,7 @@
 }
 
 .blockCancelled {
-  background: color-mix(in srgb, var(--bc-accent) 14%, var(--bc-surface));
+  background: color-mix(in srgb, var(--bc-accent-solid) 14%, var(--bc-surface));
   border-color: color-mix(in srgb, var(--bc-accent) 35%, transparent);
   color: var(--bc-accent);
   text-decoration: line-through;

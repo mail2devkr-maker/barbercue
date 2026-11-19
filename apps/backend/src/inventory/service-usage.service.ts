@@ -68,19 +68,32 @@ const visitInclude = {
   },
   serviceSessions: { select: { staffId: true } },
   assignedStaff: { select: { displayName: true } },
+  // Live-visit add-on mission: services added at the shop use products too.
+  addOns: {
+    orderBy: { createdAt: 'asc' as const },
+    select: { serviceId: true, name: true },
+  },
 } satisfies Prisma.QueueEntryInclude;
 type VisitRow = Prisma.QueueEntryGetPayload<{ include: typeof visitInclude }>;
 
 type ActorKind = 'OWNER' | 'STAFF' | 'PLATFORM_ADMIN';
 
-/** The services performed in one visit: a booking's services in order, else the entry's service. */
+/**
+ * The services performed in one visit: a booking's services in order, else the entry's service,
+ * followed by any add-on services chosen at the shop (live-visit add-on mission).
+ */
 function visitServices(entry: VisitRow): { id: string; name: string }[] {
   const booked = entry.booking?.services ?? [];
-  if (booked.length)
-    return booked.map((s) => ({ id: s.serviceId, name: s.serviceName }));
-  return entry.service
-    ? [{ id: entry.service.id, name: entry.service.name }]
-    : [];
+  const base = booked.length
+    ? booked.map((s) => ({ id: s.serviceId, name: s.serviceName }))
+    : entry.service
+      ? [{ id: entry.service.id, name: entry.service.name }]
+      : [];
+  const seen = new Set(base.map((s) => s.id));
+  const addOns = (entry.addOns ?? [])
+    .filter((a) => !seen.has(a.serviceId))
+    .map((a) => ({ id: a.serviceId, name: a.name }));
+  return [...base, ...addOns];
 }
 
 function toRuleDto(rule: RuleRow): ServiceRecipeLineDto {

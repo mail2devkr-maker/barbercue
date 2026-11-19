@@ -1,6 +1,17 @@
 import { Test } from '@nestjs/testing';
-import { NotificationsService } from './notifications.service';
+import { Prisma } from '@prisma/client';
+import {
+  BOOKING_VISIT_NOTIFICATION_TYPES,
+  NotificationsService,
+  QUEUE_VISIT_NOTIFICATION_TYPES,
+} from './notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
+
+/** The SQL text and bound values of a $queryRaw call (Prisma.Sql). */
+function rawSql(call: unknown): { text: string; values: unknown[] } {
+  const sql = call as Prisma.Sql;
+  return { text: sql.sql, values: sql.values };
+}
 
 function makeRow(overrides: Record<string, unknown> = {}) {
   return {
@@ -20,9 +31,11 @@ describe('NotificationsService', () => {
     notification: {
       create: jest.Mock;
       findMany: jest.Mock;
+      findFirst: jest.Mock;
       count: jest.Mock;
       updateMany: jest.Mock;
     };
+    $queryRaw: jest.Mock;
     notificationPreference: {
       findUnique: jest.Mock;
       findMany: jest.Mock;
@@ -35,9 +48,11 @@ describe('NotificationsService', () => {
       notification: {
         create: jest.fn().mockResolvedValue({}),
         findMany: jest.fn().mockResolvedValue([]),
+        findFirst: jest.fn().mockResolvedValue(null),
         count: jest.fn().mockResolvedValue(0),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
+      $queryRaw: jest.fn().mockResolvedValue([]),
       notificationPreference: {
         findUnique: jest.fn().mockResolvedValue(null),
         findMany: jest.fn().mockResolvedValue([]),
@@ -87,26 +102,71 @@ describe('NotificationsService', () => {
   });
 
   describe('listMine', () => {
-    it('scopes to this user and the IN_APP channel only', async () => {
+    it('scopes to this user and the IN_APP channel only, newest first, one extra row to detect more', async () => {
       await service.listMine('user1', undefined, 20);
-      expect(prisma.notification.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { userId: 'user1', channel: 'IN_APP' },
-        }),
+      const { text, values } = rawSql(prisma.$queryRaw.mock.calls[0][0]);
+      expect(text).toContain('n."userId" =');
+      expect(text).toContain('n."channel"::text =');
+      expect(text).toContain('ORDER BY n."createdAt" DESC, n."id" DESC');
+      expect(values).toEqual(expect.arrayContaining(['user1', 'IN_APP', 21]));
+    });
+
+    it('leaves out visit notices whose queue visit or booking is over (auto-expiry)', async () => {
+      await service.listMine('user1', undefined, 20);
+      const { text, values } = rawSql(prisma.$queryRaw.mock.calls[0][0]);
+      expect(text).toContain('"queue_entries" q');
+      expect(text).toContain("q.\"status\"::text IN ('COMPLETED', 'CANCELLED', 'NO_SHOW', 'EXPIRED')");
+      expect(text).toContain('"bookings" b');
+      expect(text).toContain("b.\"slotEnd\" <= (NOW() AT TIME ZONE 'UTC')");
+      expect(values).toEqual(
+        expect.arrayContaining([
+          ...QUEUE_VISIT_NOTIFICATION_TYPES,
+          ...BOOKING_VISIT_NOTIFICATION_TYPES,
+        ]),
       );
+      // Outcome notices written after a visit are never retired.
+      for (const kept of ['booking.no_show', 'booking.expired', 'booking.corrected', 'owner.inventory.reorder']) {
+        expect(values).not.toContain(kept);
+      }
     });
 
     it('trims to the page size and sets nextCursor when there are more results', async () => {
-      const rows = Array.from({ length: 3 }, (_, i) =>
-        makeRow({ id: `n${i}` }),
-      );
-      prisma.notification.findMany.mockResolvedValueOnce(rows);
+      prisma.$queryRaw.mockResolvedValueOnce([{ id: 'n0' }, { id: 'n1' }, { id: 'n2' }]);
+      prisma.notification.findMany.mockResolvedValueOnce([
+        makeRow({ id: 'n1' }),
+        makeRow({ id: 'n0' }),
+      ]);
       const result = await service.listMine('user1', undefined, 2);
-      expect(result.items).toHaveLength(2);
+      expect(prisma.notification.findMany).toHaveBeenCalledWith({
+        where: { id: { in: ['n0', 'n1'] } },
+      });
+      // Order follows the SQL page, not the order rows came back in.
+      expect(result.items.map((i) => i.id)).toEqual(['n0', 'n1']);
       expect(result.nextCursor).toBe('n1');
     });
 
+    it('continues after the cursor row of this user, and returns an empty page for an unknown cursor', async () => {
+      prisma.notification.findFirst.mockResolvedValueOnce({ id: 'n5' });
+      await service.listMine('user1', 'n5', 20);
+      expect(prisma.notification.findFirst).toHaveBeenCalledWith({
+        where: { id: 'n5', userId: 'user1', channel: 'IN_APP' },
+        select: { id: true },
+      });
+      const { text, values } = rawSql(prisma.$queryRaw.mock.calls[0][0]);
+      expect(text).toContain('(n."createdAt", n."id") <');
+      expect(values).toContain('n5');
+
+      prisma.$queryRaw.mockClear();
+      prisma.notification.findFirst.mockResolvedValueOnce(null);
+      await expect(service.listMine('user1', 'someone-elses', 20)).resolves.toEqual({
+        items: [],
+        nextCursor: null,
+      });
+      expect(prisma.$queryRaw).not.toHaveBeenCalled();
+    });
+
     it('maps a row to a NotificationDto with ISO timestamps', async () => {
+      prisma.$queryRaw.mockResolvedValueOnce([{ id: 'n1' }]);
       prisma.notification.findMany.mockResolvedValueOnce([makeRow()]);
       const result = await service.listMine('user1', undefined, 20);
       expect(result.items[0]).toEqual({
@@ -121,11 +181,19 @@ describe('NotificationsService', () => {
   });
 
   describe('unreadCount', () => {
-    it('counts only unread IN_APP notifications for this user', async () => {
-      await service.unreadCount('user1');
-      expect(prisma.notification.count).toHaveBeenCalledWith({
-        where: { userId: 'user1', channel: 'IN_APP', readAt: null },
-      });
+    it('counts only unread, still-current IN_APP notifications for this user', async () => {
+      prisma.$queryRaw.mockResolvedValueOnce([{ count: 4 }]);
+      await expect(service.unreadCount('user1')).resolves.toBe(4);
+      const { text, values } = rawSql(prisma.$queryRaw.mock.calls[0][0]);
+      expect(text).toContain('n."readAt" IS NULL');
+      expect(text).toContain('"queue_entries" q');
+      expect(text).toContain('"bookings" b');
+      expect(values).toEqual(expect.arrayContaining(['user1', 'IN_APP']));
+    });
+
+    it('is 0 when nothing is unread', async () => {
+      prisma.$queryRaw.mockResolvedValueOnce([{ count: 0 }]);
+      await expect(service.unreadCount('user1')).resolves.toBe(0);
     });
   });
 

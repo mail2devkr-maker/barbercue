@@ -6,14 +6,14 @@
   padding: 0;
   border: 1px solid var(--bc-border);
   border-radius: 999px;
-  background: #fff;
-  color: var(--bc-brand-navy);
+  background: var(--tv-bg-ffffff, #fff);
+  color: var(--bc-navy-text);
   cursor: pointer;
   transition: transform 140ms ease, color 140ms ease;
 }
 .trigger:hover { transform: scale(1.06); color: var(--bc-brand-coral); }
 .trigger:focus-visible { outline: 2px solid var(--bc-brand-coral); outline-offset: 2px; }
-.overlay { position: absolute; top: 10px; right: 58px; z-index: 2; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18); }
+.overlay { position: absolute; top: 10px; right: 58px; z-index: 2; box-shadow: 0 4px 12px var(--tv-bg-rgba-0-0-0-a0_18, rgba(0, 0, 0, 0.18)); }
 .inline { width: 36px; height: 36px; }
 .text {
   width: auto;
@@ -40,13 +40,13 @@
   overflow-y: auto;
   padding: 22px;
   border-radius: var(--bc-radius-lg);
-  background: #fff;
+  background: var(--tv-bg-ffffff, #fff);
   color: var(--bc-ink);
   box-shadow: var(--bc-shadow-card);
   animation: rise 180ms ease-out;
 }
 .head { display: flex; justify-content: space-between; gap: 12px; }
-.head h2 { margin: 0; font-size: 1.2rem; color: var(--bc-brand-navy); }
+.head h2 { margin: 0; font-size: 1.2rem; color: var(--bc-navy-text); }
 .head p { margin: 4px 0 0; color: var(--bc-muted); font-size: var(--bc-text-sm); }
 .close {
   width: 36px; height: 36px; flex: none;
@@ -69,7 +69,7 @@
   padding: 8px 4px;
   border: 1px solid var(--bc-border);
   border-radius: var(--bc-radius-md);
-  background: #fff;
+  background: var(--tv-bg-ffffff, #fff);
   color: var(--bc-ink);
   font: inherit;
   font-size: 0.8rem;
@@ -84,16 +84,16 @@
   width: 38px; height: 38px;
   display: grid; place-items: center;
   border-radius: 999px;
-  color: #fff;
+  color: var(--tv-fg-ffffff, #fff);
   font-weight: 800;
 }
-.copy { background: var(--bc-surface-tint); color: var(--bc-brand-navy); }
+.copy { background: var(--bc-surface-tint); color: var(--bc-navy-text); }
 .whatsapp { background: #25d366; }
 .facebook { background: #1877f2; }
-.x { background: #111; }
+.x { background: var(--tv-bg-111111, #111); }
 .more { background: var(--bc-brand-gradient); }
 .qr { background: var(--bc-brand-navy); }
-div.qr { margin-top: 14px; display: grid; place-items: center; padding: 12px; background: #fff; }
+div.qr { margin-top: 14px; display: grid; place-items: center; padding: 12px; background: var(--tv-bg-ffffff, #fff); }
 .linkRow { margin-top: 16px; display: flex; gap: 8px; }
 .linkRow input {
   flex: 1; min-width: 0;

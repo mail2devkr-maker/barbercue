@@ -64,6 +64,55 @@ it('keeps the city from the link selected, and "All cities" clears it', async ()
   expect(push).toHaveBeenLastCalledWith('/search');
 });
 
+// Owner (18 Nov): every search option behind ONE Filters button.
+it('has one Filters button that opens one panel with service, shop, city, distance and price', async () => {
+  query = 'shopName=Royal&city=pune&countryCode=IN&priceMax=300';
+  window.location.search = `?${query}`;
+  const tree = await render();
+  const filterButtons = tree.root.findAll(
+    (n) => n.type === 'button' && n.props['aria-haspopup'] === 'dialog',
+  );
+  expect(filterButtons).toHaveLength(1);
+  // shop + city + price = 3 active filters on the badge.
+  expect(textOf(filterButtons[0])).toBe('Filters3');
+  const sheet = tree.root.find((n) => n.props.role === 'dialog');
+  expect(sheet.props.hidden).toBe(true);
+  await act(async () => filterButtons[0].props.onClick());
+  expect(tree.root.find((n) => n.props.role === 'dialog').props.hidden).toBe(false);
+  const text = textOf(tree.root.find((n) => n.props.role === 'dialog'));
+  for (const section of ['Filter by service', 'Filter by shop', 'City / location', 'Distance', 'Price']) {
+    expect(text).toContain(section);
+  }
+  // No second search form and no separate Filters toggle elsewhere on the page.
+  expect(tree.root.findAll((n) => n.props.role === 'search')).toHaveLength(1);
+});
+
+// Smart search (owner, 18 Nov): a Service field beside the Shop-name field; both can be used.
+it('searches by the Service field and keeps the Shop-name search', async () => {
+  const tree = await render();
+  const serviceInput = tree.root.find(
+    (n) => n.type === 'input' && n.props['aria-labelledby'] === 'search-service-label',
+  );
+  await act(async () => serviceInput.props.onChange({ target: { value: 'baal katna' } }));
+  await act(async () => tree.root.findByProps({ role: 'search' }).props.onSubmit({ preventDefault() {} }));
+  expect(push).toHaveBeenLastCalledWith('/search?service=baal+katna');
+  // The Shop-name field is still on the page.
+  expect(textOf(tree.root)).toContain('Shop');
+});
+
+it('shows the service from the link, and clearing it removes the filter', async () => {
+  query = 'service=Haircut';
+  window.location.search = '?service=Haircut';
+  const tree = await render();
+  const serviceInput = tree.root.find(
+    (n) => n.type === 'input' && n.props['aria-labelledby'] === 'search-service-label',
+  );
+  expect(serviceInput.props.value).toBe('Haircut');
+  await act(async () => serviceInput.props.onChange({ target: { value: '' } }));
+  await act(async () => tree.root.findByProps({ role: 'search' }).props.onSubmit({ preventDefault() {} }));
+  expect(push).toHaveBeenLastCalledWith('/search');
+});
+
 it('never sits on "Loading cities…" if the city list fails', async () => {
   const tree = await render(true);
   const select = tree.root.find((n) => n.type === 'select' && n.props['aria-labelledby'] === 'search-city-label');

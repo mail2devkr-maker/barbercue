@@ -62,8 +62,19 @@ describe('Live Queue T-10 arrival reminders', () => {
     expect(deliverToUser).toHaveBeenCalledTimes(1);
     expect(send).toHaveBeenCalledTimes(1);
     expect(send).toHaveBeenCalledWith([expect.objectContaining({
-      data: { type: 'queue.arrival_check', salonId: 'salon-1', queueEntryId: 'guest-1' },
+      data: {
+        type: 'queue.arrival_check',
+        salonId: 'salon-1',
+        queueEntryId: 'guest-1',
+        expiresAt: expect.any(String),
+      },
+      // Live-visit add-on mission: APNs/FCM drop it if the phone is unreachable for 30 minutes.
+      expiration: expect.any(Number),
     })]);
+    const message = send.mock.calls[0][0][0] as { expiration: number; data: { expiresAt: string } };
+    expect(message.expiration * 1000).toBeGreaterThan(Date.now() + 29 * 60_000);
+    expect(message.expiration * 1000).toBeLessThanOrEqual(Date.now() + 31 * 60_000);
+    expect(deliverToUser).toHaveBeenCalledWith(expect.objectContaining({ expiresAt: expect.any(Date) }));
   });
 });
 

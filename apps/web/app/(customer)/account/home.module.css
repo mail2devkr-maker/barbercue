@@ -9,7 +9,7 @@
   font-family: var(--font-display, inherit);
   font-size: clamp(1.7rem, 3.2vw, 2.4rem);
   letter-spacing: -0.02em;
-  color: var(--bc-brand-navy);
+  color: var(--bc-navy-text);
 }
 .lead { margin: 6px 0 0; color: var(--bc-muted); font-size: 1.05rem; }
 
@@ -23,8 +23,8 @@
   padding: 14px 10px;
   border: 1px solid var(--bc-border);
   border-radius: var(--bc-radius-lg);
-  background: #fff;
-  color: var(--bc-brand-navy);
+  background: var(--tv-bg-ffffff, #fff);
+  color: var(--bc-navy-text);
   text-align: center;
   text-decoration: none;
   box-shadow: var(--bc-shadow-sm);
@@ -37,7 +37,7 @@
 .quickIcon {
   width: 46px; height: 46px; display: grid; place-items: center;
   border-radius: 14px;
-  background: color-mix(in srgb, var(--bc-brand-coral) 10%, #fff);
+  background: color-mix(in srgb, var(--bc-brand-coral) 10%, var(--tv-bg-ffffff, #fff));
   color: var(--bc-brand-coral);
 }
 
@@ -45,11 +45,11 @@
 
 .nextBody { display: grid; gap: 2px; }
 .when { margin: 0; color: var(--bc-brand-coral); font-weight: 700; }
-.salon { margin: 2px 0; font-weight: 800; font-size: 1.05rem; color: var(--bc-brand-navy); }
+.salon { margin: 2px 0; font-weight: 800; font-size: 1.05rem; color: var(--bc-navy-text); }
 .nextBody .actions, .nextBody > div:last-child { margin-top: 10px; }
 .miniEmpty { display: grid; gap: 10px; justify-items: start; color: var(--bc-muted); }
 .miniEmpty p { margin: 0; }
-.bigNumber { margin: 0; font-size: 2rem; font-weight: 800; color: var(--bc-brand-navy); line-height: 1.1; }
+.bigNumber { margin: 0; font-size: 2rem; font-weight: 800; color: var(--bc-navy-text); line-height: 1.1; }
 
 .split { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 18px; align-items: start; }
 .activity { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }

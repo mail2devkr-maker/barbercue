@@ -21,6 +21,7 @@ import { useCursorList } from '../../lib/use-cursor-list';
 import { inventoryBase, useInventoryLookups } from '../../lib/use-inventory-lookups';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 import { Button, Card, InlineError } from '../ui';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 /**
  * Website parity for apps/web/components/owner/inventory/LookupViews.tsx (categories, suppliers) and
@@ -43,6 +44,7 @@ function Footer({ list }: { list: { nextCursor?: string | null; hasMore?: boolea
 }
 
 export function CategoriesPanel({ salonId }: { salonId: string }) {
+  const styles = useThemedStyles(makeStyles);
   const path = `${inventoryBase(salonId)}/${INVENTORY_PATHS.categories}`;
   const list = useCursorList<InventoryCategoryDto>(path, {});
   const [name, setName] = useState('');
@@ -86,6 +88,7 @@ export function CategoriesPanel({ salonId }: { salonId: string }) {
 }
 
 export function SuppliersPanel({ salonId }: { salonId: string }) {
+  const styles = useThemedStyles(makeStyles);
   const path = `${inventoryBase(salonId)}/${INVENTORY_PATHS.suppliers}`;
   const list = useCursorList<InventorySupplierDto>(path, {});
   const [form, setForm] = useState<SupplierForm>(EMPTY_SUPPLIER);
@@ -147,6 +150,7 @@ export function ProductEditor({ salonId, product, onSaved, onCancel }: {
   onSaved: (message: string) => void;
   onCancel: () => void;
 }) {
+  const styles = useThemedStyles(makeStyles);
   const lookups = useInventoryLookups(salonId);
   const [form, setForm] = useState<ProductForm>(() => productFormFrom(product));
   const [errors, setErrors] = useState<ProductErrors>({});
@@ -219,10 +223,11 @@ export function ProductEditor({ salonId, product, onSaved, onCancel }: {
 }
 
 function Row({ title, note }: { title: string; note?: string }) {
+  const styles = useThemedStyles(makeStyles);
   return <View style={styles.line}><Text style={styles.lineStrong}>{title}</Text>{note ? <Text style={styles.muted}>{note}</Text> : null}</View>;
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   heading: { fontFamily: font.bodyBold, color: color.ink, fontSize: fontSize.base, marginBottom: space[1] },
   label: { fontFamily: font.bodyMedium, color: color.muted, fontSize: fontSize.xs, marginTop: space[2] },
   muted: { fontFamily: font.bodyRegular, color: color.muted, fontSize: fontSize.xs, marginVertical: space[1] },

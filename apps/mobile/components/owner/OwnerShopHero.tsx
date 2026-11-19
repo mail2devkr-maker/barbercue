@@ -8,6 +8,7 @@ import { pickCoverPhoto } from '../../lib/owner-dashboard-layout';
 import { fastQue, font, fontSize, radius, space } from '../../lib/theme';
 import { SafeImage } from '../ui/SafeImage';
 import { scope } from './ShopSetupSections';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 /**
  * Owner request (16 Nov 2026): the shop's cover photo as the hero at the top of the owner dashboard.
@@ -15,6 +16,7 @@ import { scope } from './ShopSetupSections';
  * never a stock image.
  */
 export function OwnerShopHero({ salonId, name, topRight, onShownChange }: { salonId: string; name: string; topRight?: ReactNode; onShownChange?: (shown: boolean) => void }) {
+  const styles = useThemedStyles(makeStyles);
   const [photo, setPhoto] = useState<PhotoDto | null>(null);
   useEffect(() => { onShownChange?.(photo !== null); }, [photo, onShownChange]);
 
@@ -47,7 +49,7 @@ export function OwnerShopHero({ salonId, name, topRight, onShownChange }: { salo
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ fastQue }: ThemeTokens) => StyleSheet.create({
   wrap: { borderRadius: radius.lg, overflow: 'hidden', marginBottom: space[4], backgroundColor: fastQue.card },
   image: { width: '100%', height: 200 },
   scrim: { position: 'absolute', left: 0, right: 0, bottom: 0, height: '60%', backgroundColor: 'rgba(0, 0, 0, 0.45)' },

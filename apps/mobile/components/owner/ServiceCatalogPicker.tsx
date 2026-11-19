@@ -18,6 +18,7 @@ import { apiFetch, ApiError } from '../../lib/api';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 import { Button, InlineError } from '../ui';
 import { scope } from './ShopSetupSections';
+import { useThemedStyles, useThemeTokens, type ThemeTokens } from '../../lib/theme-mode';
 
 type ExistingService = Pick<ServiceDto, 'id' | 'name' | 'category' | 'isActive'>;
 type PresetDraft = { price: string; durationMinutes: string };
@@ -53,6 +54,8 @@ export function ServiceCatalogPicker({
   salonType: SalonType;
   onChanged: () => void;
 }) {
+  const { color } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const [pack, setPack] = useState<ServicePackId>("BASIC");
   const [category, setCategory] = useState<string>(
     () =>
@@ -369,7 +372,7 @@ export function ServiceCatalogPicker({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   section: {
     marginTop: space[3],
     marginBottom: space[3],

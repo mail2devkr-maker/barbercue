@@ -16,6 +16,7 @@ import { newIdempotencyKey } from '../../lib/idempotency';
 import { useLanguage } from '../../lib/language-context';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 import { Button, Card, InlineError, Screen, SectionHeader } from '../../components/ui';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 const BASE = (salonId: string) => `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}`;
 
@@ -31,6 +32,7 @@ function localTime(value: string, timeZone: string | null): string {
 }
 
 export default function InShopAppointmentPanel({ salonId, onBack, onCreated }: { salonId: string; onBack: () => void; onCreated: () => void }) {
+  const styles = useThemedStyles(makeStyles);
   const { language } = useLanguage();
   const hi = language === Language.HI;
   const [services, setServices] = useState<SalonServiceDto[]>([]);
@@ -166,7 +168,7 @@ export default function InShopAppointmentPanel({ salonId, onBack, onCreated }: {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   screen: { gap: space[3] },
   heading: { color: color.ink, fontFamily: font.bodyBold, fontSize: fontSize.lg, marginBottom: space[2] },
   body: { color: color.ink, fontSize: fontSize.base, flexShrink: 1 },

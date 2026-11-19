@@ -24,6 +24,7 @@ import { TabIcon } from '../components/ui/TabIcon';
 import { EDITORIAL_ASSET_URL } from '../lib/editorial';
 import { AllServicesModal } from '../components/AllServicesModal';
 import type { AuthStackParamList } from '../navigation/AuthStack';
+import { ON_ACCENT, useThemedStyles, useThemeTokens, type ThemeTokens } from '../lib/theme-mode';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'RoleSelect'>;
 
@@ -51,6 +52,8 @@ const POPULAR_SERVICE_CATEGORIES = [
  * screen with a role chooser.
  */
 export default function RoleSelectScreen({ navigation }: Props) {
+  const { color, fastQue } = useThemeTokens();
+  const styles = useThemedStyles(makeStyles);
   const insets = useSafeAreaInsets();
   const keyboardAware = useKeyboardAwareScroll();
   const { width: windowWidth } = useWindowDimensions();
@@ -224,7 +227,7 @@ export default function RoleSelectScreen({ navigation }: Props) {
                 hitSlop={8}
               >
                 <View style={[styles.benefitIconWrap, styles.benefitPurple]}>
-                  <TabIcon name="bookings" color={color.surface} size={15} />
+                  <TabIcon name="bookings" color={ON_ACCENT} size={15} />
                 </View>
                 <Text style={styles.benefitLabel}>{t.bookAheadKicker}</Text>
               </Pressable>
@@ -236,7 +239,7 @@ export default function RoleSelectScreen({ navigation }: Props) {
                 hitSlop={8}
               >
                 <View style={[styles.benefitIconWrap, styles.benefitBlue]}>
-                  <TabIcon name="queue" color={color.surface} size={15} />
+                  <TabIcon name="queue" color={ON_ACCENT} size={15} />
                 </View>
                 <Text style={styles.benefitLabel}>{t.joinLiveKicker}</Text>
               </Pressable>
@@ -248,7 +251,7 @@ export default function RoleSelectScreen({ navigation }: Props) {
                 hitSlop={8}
               >
                 <View style={[styles.benefitIconWrap, styles.benefitGold]}>
-                  <TabIcon name="offer" color={color.surface} size={15} />
+                  <TabIcon name="offer" color={ON_ACCENT} size={15} />
                 </View>
                 <Text style={styles.benefitLabel}>{t.trustOffersLabel}</Text>
               </Pressable>
@@ -266,7 +269,7 @@ export default function RoleSelectScreen({ navigation }: Props) {
             >
               {searchMode === 'barber' ? (
                 <GradientView colors={GRADIENT_COLORS} stops={GRADIENT_STOPS} style={[styles.segment, compactCopy && styles.segmentCompact]}>
-                  <TabIcon name="scissors" color={color.surface} size={compactCopy ? 14 : 16} />
+                  <TabIcon name="scissors" color={ON_ACCENT} size={compactCopy ? 14 : 16} />
                   <Text style={[styles.segmentText, styles.segmentTextActive]} numberOfLines={1}>
                     {barberModeLabel}
                   </Text>
@@ -287,7 +290,7 @@ export default function RoleSelectScreen({ navigation }: Props) {
             >
               {searchMode === 'salon' ? (
                 <GradientView colors={GRADIENT_COLORS} stops={GRADIENT_STOPS} style={[styles.segment, compactCopy && styles.segmentCompact]}>
-                  <TabIcon name="salon" color={color.surface} size={compactCopy ? 14 : 16} />
+                  <TabIcon name="salon" color={ON_ACCENT} size={compactCopy ? 14 : 16} />
                   <Text style={[styles.segmentText, styles.segmentTextActive]} numberOfLines={1}>
                     {salonModeLabel}
                   </Text>
@@ -360,7 +363,7 @@ export default function RoleSelectScreen({ navigation }: Props) {
             <Text style={styles.queueBannerSubcopy}>{t.queuePromoSubcopy}</Text>
           </View>
           <View style={styles.queueClock}>
-            <TabIcon name="queue" color={color.surface} size={28} />
+            <TabIcon name="queue" color={ON_ACCENT} size={28} />
           </View>
         </Pressable>
 
@@ -419,7 +422,7 @@ export default function RoleSelectScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color, fastQue }: ThemeTokens) => StyleSheet.create({
   root: { flex: 1, backgroundColor: fastQue.background },
   scroll: { flex: 1 },
 
@@ -489,7 +492,7 @@ const styles = StyleSheet.create({
     color: color.goldSoft,
     marginBottom: 8,
   },
-  heroHeadline: { fontFamily: font.bodyBold, fontSize: 36, lineHeight: 39, color: color.surface, letterSpacing: -1.05 },
+  heroHeadline: { fontFamily: font.bodyBold, fontSize: 36, lineHeight: 39, color: ON_ACCENT, letterSpacing: -1.05 },
   heroHeadlineAccent: { color: color.brandGradientEnd },
   heroSubcopy: {
     fontFamily: font.bodyRegular,
@@ -506,7 +509,7 @@ const styles = StyleSheet.create({
   benefitPurple: { backgroundColor: '#6C2BFF' },
   benefitBlue: { backgroundColor: '#2D9CDB' },
   benefitGold: { backgroundColor: '#D6A700' },
-  benefitLabel: { fontFamily: font.bodyMedium, fontSize: 9.5, lineHeight: 12, color: color.surface, maxWidth: 52 },
+  benefitLabel: { fontFamily: font.bodyMedium, fontSize: 9.5, lineHeight: 12, color: ON_ACCENT, maxWidth: 52 },
 
   searchCard: {
     backgroundColor: fastQue.card,
@@ -525,7 +528,7 @@ const styles = StyleSheet.create({
   segment: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 40, borderRadius: radius.pill, paddingHorizontal: 7 },
   segmentCompact: { minHeight: 38, gap: 5, paddingHorizontal: 5 },
   segmentText: { fontFamily: font.bodySemiBold, fontSize: 12.5, color: fastQue.text },
-  segmentTextActive: { color: color.surface },
+  segmentTextActive: { color: ON_ACCENT },
   inputRow: {
     minHeight: 54,
     flexDirection: 'row',
@@ -545,7 +548,7 @@ const styles = StyleSheet.create({
   cityPlaceholderText: { fontFamily: font.bodyRegular, fontSize: 13.5, color: fastQue.textSecondary },
   chevron: { fontFamily: font.bodyBold, fontSize: 22, color: fastQue.text, marginLeft: 4 },
   ctaButton: { minHeight: 50, alignItems: 'center', justifyContent: 'center', borderRadius: 14, marginTop: 1 },
-  ctaButtonText: { fontFamily: font.bodyBold, fontSize: 15, color: color.surface },
+  ctaButtonText: { fontFamily: font.bodyBold, fontSize: 15, color: ON_ACCENT },
 
   sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space[5], marginTop: 26 },
   sectionTitle: { fontFamily: font.bodyBold, fontSize: 20, color: fastQue.text },
@@ -567,7 +570,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
   },
   queueBannerText: { flexShrink: 1, gap: 1 },
-  queueBannerHeadline: { fontFamily: font.bodyBold, fontSize: 18, lineHeight: 21, color: color.surface },
+  queueBannerHeadline: { fontFamily: font.bodyBold, fontSize: 18, lineHeight: 21, color: ON_ACCENT },
   queueBannerHeadlineAccent: { color: '#F2A93B' },
   queueBannerSubcopy: { fontFamily: font.bodyRegular, fontSize: 11.5, lineHeight: 16, color: 'rgba(255,255,255,0.74)', marginTop: 5, maxWidth: 220 },
   queueClock: { width: 58, height: 58, borderRadius: 29, borderWidth: 2, borderColor: color.brandCoral, alignItems: 'center', justifyContent: 'center', marginLeft: 12 },

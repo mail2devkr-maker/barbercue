@@ -34,9 +34,16 @@ export function canOpenAdminPath(roles: Role[], pathname: string): boolean {
   }
   // Inventory overview and catalog: same audience as GET admin/inventory-overview and inventory-catalog.
   // (Catalog review and import are further limited to PLATFORM_ADMIN / CO_FOUNDER on the server.)
+  // Marketplace control: same audience as GET admin/shop/* (approvals are admin/co-founder on the server).
+  if (pathname.startsWith("/dashboard/admin/marketplace")) {
+    return superAdmin || coFounder || roles.includes(Role.PLATFORM_VIEWER);
+  }
   if (pathname.startsWith("/dashboard/admin/inventory")) {
     return superAdmin || coFounder || roles.includes(Role.PLATFORM_VIEWER);
   }
+  // Finance: every internal role may file and track its OWN expenses and claims; company-wide figures are
+  // limited server-side (FINANCE_PERMISSION_ROLES) and the page hides the tabs a role cannot use.
+  if (pathname.startsWith("/dashboard/admin/finance")) return true;
   // Live queue monitoring is counts-only: every internal admin role, like shop activity (GET admin/live-queue).
   if (pathname.startsWith("/dashboard/admin/live-queue")) return true;
   // All Bookings: mirrors GET admin/bookings (PLATFORM_ADMIN, CO_FOUNDER, PLATFORM_VIEWER).
@@ -46,6 +53,12 @@ export function canOpenAdminPath(roles: Role[], pathname: string): boolean {
   // FastQue Work control centre: mirrors GET work/admin/* (PLATFORM_ADMIN, CO_FOUNDER, PLATFORM_VIEWER; writes PLATFORM_ADMIN).
   if (pathname.startsWith("/dashboard/admin/work")) return superAdmin || coFounder || roles.includes(Role.PLATFORM_VIEWER);
   if (pathname.startsWith("/dashboard/admin/access")) return superAdmin;
+  // Salon onboarding review queue: mirrors GET admin/onboarding-applications (decisions stay PLATFORM_ADMIN / CO_FOUNDER server-side).
+  if (pathname.startsWith("/dashboard/admin/onboarding-review")) {
+    return superAdmin || coFounder || sales || roles.includes(Role.PLATFORM_VIEWER);
+  }
+  // Field CRM 2.0 (manager/admin views): mirrors the crm/* API roles (SALES_ADMIN, PLATFORM_ADMIN, CO_FOUNDER; PLATFORM_VIEWER read-only).
+  if (pathname.startsWith("/dashboard/admin/field-crm")) return superAdmin || coFounder || sales || roles.includes(Role.PLATFORM_VIEWER);
   // The platform CRM analytics and its cursor-paged rows are PLATFORM_ADMIN only on the server (ADMIN_CRM_ANALYTICS_V1).
   if (pathname.startsWith("/dashboard/admin/crm/analytics")) return superAdmin;
   if (pathname.startsWith("/dashboard/admin/crm")) return superAdmin || coFounder || hr || sales;

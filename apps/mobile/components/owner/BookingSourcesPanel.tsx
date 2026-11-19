@@ -33,6 +33,7 @@ import { presetRange, RANGE_ERROR_TEXT, todayInZone, validateRange, type PresetI
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 import { Button, Card, EmptyState, InlineError } from '../ui';
 import { QrMatrixView } from './QrMatrixView';
+import { useThemedStyles, type ThemeTokens } from '../../lib/theme-mode';
 
 /**
  * Website parity for apps/web/components/owner/BookingSources.tsx: where bookings came from for any
@@ -50,6 +51,7 @@ const PRESETS: ReadonlyArray<{ id: PresetId; label: string }> = [
 ];
 
 export function BookingSourcesPanel({ salonId, language }: { salonId: string; language: Language }) {
+  const styles = useThemedStyles(makeStyles);
   const hi = language === Language.HI;
   const base = `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}`;
   const attributionBase = `${base}/${OWNER_OPS_PATHS.bookingAttribution}`;
@@ -248,6 +250,7 @@ export function BookingSourcesPanel({ salonId, language }: { salonId: string; la
 }
 
 function Row({ title, value, note }: { title: string; value: string; note?: string }) {
+  const styles = useThemedStyles(makeStyles);
   return (
     <View style={styles.line}>
       <View style={styles.flex}><Text style={styles.lineStrong}>{title}</Text>{note ? <Text style={styles.muted}>{note}</Text> : null}</View>
@@ -256,7 +259,7 @@ function Row({ title, value, note }: { title: string; value: string; note?: stri
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ color }: ThemeTokens) => StyleSheet.create({
   heading: { fontFamily: font.bodyBold, color: color.ink, fontSize: fontSize.base, marginBottom: space[1] },
   sub: { fontFamily: font.bodySemiBold, color: color.ink, fontSize: fontSize.sm, marginTop: space[3] },
   label: { fontFamily: font.bodyMedium, color: color.muted, fontSize: fontSize.xs, marginTop: space[2] },

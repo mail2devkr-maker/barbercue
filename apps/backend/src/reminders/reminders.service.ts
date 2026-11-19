@@ -87,6 +87,7 @@ export class RemindersService {
         customerId: true,
         salonId: true,
         slotStart: true,
+        slotEnd: true,
         salon: { select: { name: true } },
         serviceId: true,
         service: {
@@ -139,6 +140,8 @@ export class RemindersService {
           'booking.reminder',
           {
             salonId: booking.salonId,
+            // Lets the notification centre retire the reminder once the appointment is over.
+            bookingId: booking.id,
             salonName: booking.salon.name,
             serviceName,
             slotStart: booking.slotStart.toISOString(),
@@ -160,6 +163,7 @@ export class RemindersService {
             bookingId: booking.id,
             salonId: booking.salonId,
           },
+          { expiresAt: booking.slotEnd },
         );
       }
     }

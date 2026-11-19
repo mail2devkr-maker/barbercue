@@ -3,13 +3,17 @@ import path from "path";
 
 // Verify the complete Owner workspace, not just its chrome: dark canvas, layered cards and readable
 // data/controls. Resolve actual token pairs from the stylesheet and enforce WCAG AA (4.5:1).
-const CSS = fs.readFileSync(path.join(__dirname, "../owner.module.css"), "utf8");
-const GLOBAL_CSS = fs.readFileSync(path.join(__dirname, "../../../app/globals.css"), "utf8");
-const LEGACY_CSS = fs.readFileSync(path.join(__dirname, "../../dashboard/dashboard.module.css"), "utf8");
-const BOOKINGS_CSS = fs.readFileSync(path.join(__dirname, "../../bookings/bookings.module.css"), "utf8");
-const ARRIVAL_CSS = fs.readFileSync(path.join(__dirname, "../../bookings/arrival-alert-overlay.module.css"), "utf8");
-const ANALYTICS = fs.readFileSync(path.join(__dirname, "../../../app/(dashboard)/dashboard/salons/[salonId]/analytics/page.tsx"), "utf8");
-const CATALOG_IMPORT = fs.readFileSync(path.join(__dirname, "../../dashboard/CatalogImportPanel.tsx"), "utf8");
+// Light/Dark theme: colours are written as var(--tv-..., <designed colour>). "As designed" renders the
+// fallback, so these contrast checks read the designed colour.
+const designed = (css) => css.replace(/var\(--tv-[\w-]+,\s*([^()]+?|rgba?\([^)]*\))\)/g, "$1");
+const read = (p) => designed(fs.readFileSync(p, "utf8"));
+const CSS = read(path.join(__dirname, "../owner.module.css"));
+const GLOBAL_CSS = read(path.join(__dirname, "../../../app/globals.css"));
+const LEGACY_CSS = read(path.join(__dirname, "../../dashboard/dashboard.module.css"));
+const BOOKINGS_CSS = read(path.join(__dirname, "../../bookings/bookings.module.css"));
+const ARRIVAL_CSS = read(path.join(__dirname, "../../bookings/arrival-alert-overlay.module.css"));
+const ANALYTICS = read(path.join(__dirname, "../../../app/(dashboard)/dashboard/salons/[salonId]/analytics/page.tsx"));
+const CATALOG_IMPORT = read(path.join(__dirname, "../../dashboard/CatalogImportPanel.tsx"));
 
 function tokensFrom(source, selector) {
   const block = new RegExp("\\" + selector + "\\s*\\{([\\s\\S]*?)\\n\\}").exec(source)?.[1];
@@ -182,8 +186,9 @@ describe("owner dashboard colour contrast", () => {
 
   it("uses dark ink on bright analytics and catalog actions, with a defined selected-service tint", () => {
     expect(resolve("var(--bc-accent-soft)")).toBe("#3a2131");
-    expect(ANALYTICS).toContain('color: view === id ? "#09090c" : "var(--bc-ink)"');
-    expect(CATALOG_IMPORT).toContain('background: "var(--bc-accent)", color: "#09090c"');
+    // As designed (dark): dark ink on the bright accent. The light theme supplies --bc-accent-fill-ink.
+    expect(ANALYTICS).toContain('color: view === id ? "var(--bc-accent-fill-ink, #09090c)" : "var(--bc-ink)"');
+    expect(CATALOG_IMPORT).toContain('background: "var(--bc-accent-fill, var(--bc-accent))", color: "var(--bc-accent-fill-ink, #09090c)"');
     expect(ratio("#09090c", resolve("var(--bc-accent)"))).toBeGreaterThanOrEqual(4.5);
   });
 
