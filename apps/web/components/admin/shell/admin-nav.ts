@@ -18,6 +18,7 @@ export type AdminNavGroupId =
   | "SALES"
   | "OPERATIONS"
   | "INVENTORY"
+  | "FINANCE"
   | "ANALYTICS"
   | "ALERTS"
   | "REPORTS"
@@ -46,6 +47,7 @@ export const ADMIN_NAV_GROUPS: ReadonlyArray<{ id: AdminNavGroupId; label: strin
   { id: "SALES", label: "Regional Sales", icon: "trend" },
   { id: "OPERATIONS", label: "Operations", icon: "queue" },
   { id: "INVENTORY", label: "Inventory", icon: "tag" },
+  { id: "FINANCE", label: "Finance", icon: "card" },
   { id: "ANALYTICS", label: "Analytics", icon: "chart" },
   { id: "ALERTS", label: "Alerts", icon: "alert" },
   { id: "REPORTS", label: "Reports", icon: "receipt" },
@@ -115,6 +117,15 @@ export const ADMIN_NAV_ITEMS: ReadonlyArray<AdminNavItem> = [
   { id: "marketplace", label: "Marketplace", group: "INVENTORY", href: "/dashboard/admin/marketplace", status: "live" },
   { id: "marketplace-approvals", label: "Listing Approvals", group: "INVENTORY", href: "/dashboard/admin/marketplace", query: "tab=listings", status: "live" },
   { id: "marketplace-orders", label: "Shop Orders", group: "INVENTORY", href: "/dashboard/admin/marketplace", query: "tab=orders", status: "live" },
+
+  { id: "finance-overview", label: "Overview", group: "FINANCE", href: "/dashboard/admin/finance", status: "live" },
+  { id: "finance-expenses", label: "Expenses", group: "FINANCE", href: "/dashboard/admin/finance", query: "tab=expenses", status: "live" },
+  { id: "finance-funding", label: "Contributions & Funding", group: "FINANCE", href: "/dashboard/admin/finance", query: "tab=funding", status: "live" },
+  { id: "finance-reimbursements", label: "Reimbursements", group: "FINANCE", href: "/dashboard/admin/finance", query: "tab=reimbursements", status: "live" },
+  planned("FINANCE", "finance-budgets", "Budgets", "Budget records by category, city and month, with revisions and 75/90/100% alerts (finance Phase 4)."),
+  { id: "finance-vendors", label: "Vendors & Payments", group: "FINANCE", href: "/dashboard/admin/finance", query: "tab=vendors", status: "live" },
+  planned("FINANCE", "finance-reports", "Reports & Analytics", "Excel/PDF statements, budget-vs-actual, forecasts and salon acquisition cost (finance Phases 4-5)."),
+  { id: "finance-settings", label: "Settings & Categories", group: "FINANCE", href: "/dashboard/admin/finance", query: "tab=settings", status: "live" },
 
   { id: "quiet-shops", label: "Open, No Bookings", group: "ALERTS", href: STATUS, query: "filter=quiet", status: "live" },
   planned("ALERTS", "inactive-alerts", "Inactive Shop Alerts", "Alert rules, alert records and assignable follow-ups."),

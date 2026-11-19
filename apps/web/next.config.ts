@@ -27,6 +27,10 @@ const nextConfig: NextConfig = {
   // Monorepo: prevents Next.js from mis-inferring the workspace root when multiple
   // package-lock.json files exist in the tree (root + legacy-prototype/).
   outputFileTracingRoot: path.join(__dirname, "../../"),
+  experimental: {
+    // Next.js upgrade assistant: offer security-only upgrades for this app.
+    agentUpgrade: "security",
+  },
   images: {
     // BarberCue's own editorial asset library (apps/web/public/editorial/**) is hand-authored,
     // script-free SVG — next/image otherwise refuses to optimize any SVG at all (XSS protection,

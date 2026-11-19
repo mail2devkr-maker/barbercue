@@ -1,0 +1,183 @@
+/* Finance-only layout. Colours come from the admin shell's --os-* tokens and the shared brand
+   gradient (owner.module.css .barFill) — no new palette. */
+
+.filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  align-items: end;
+}
+
+.breakdown {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.breakdownRow {
+  display: grid;
+  grid-template-columns: minmax(110px, 1.2fr) 2fr auto;
+  gap: 12px;
+  align-items: center;
+  font-size: 14px;
+}
+
+.breakdownLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.breakdownValue {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  text-align: right;
+}
+
+.months {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 6px;
+  align-items: end;
+  height: 160px;
+  padding-top: 8px;
+}
+
+.monthCol {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  height: 100%;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.monthBars {
+  display: flex;
+  gap: 2px;
+  align-items: flex-end;
+  width: 100%;
+  height: 120px;
+  justify-content: center;
+}
+
+.monthBar {
+  width: 40%;
+  max-width: 14px;
+  border-radius: 4px 4px 0 0;
+  background: linear-gradient(180deg, #ff7a3d, #f2295c);
+  min-height: 2px;
+}
+
+.monthBarCash {
+  background: var(--os-muted);
+  opacity: 0.55;
+}
+
+.monthLabel {
+  font-size: 11px;
+  color: var(--os-muted);
+}
+
+.legend {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--os-muted);
+  margin-top: 8px;
+}
+
+.swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  margin-right: 6px;
+  vertical-align: -1px;
+  background: linear-gradient(180deg, #ff7a3d, #f2295c);
+}
+
+.swatchCash {
+  background: var(--os-muted);
+  opacity: 0.55;
+}
+
+.twoUp {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.formWide {
+  grid-column: 1 / -1;
+}
+
+.money {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.rowButton {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rowButton:hover .rowTitle,
+.rowButton:focus-visible .rowTitle {
+  text-decoration: underline;
+}
+
+.rowTitle {
+  font-weight: 600;
+}
+
+.pager {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.timeline li {
+  border-left: 2px solid var(--os-border);
+  padding-left: 10px;
+}
+
+.changes {
+  color: var(--os-muted);
+  font-size: 12px;
+  margin-top: 2px;
+  word-break: break-word;
+}
+
+@media (max-width: 640px) {
+  .breakdownRow {
+    grid-template-columns: 1fr auto;
+  }
+  .breakdownRow > :nth-child(2) {
+    grid-column: 1 / -1;
+    order: 3;
+  }
+  .monthLabel {
+    font-size: 9px;
+  }
+}

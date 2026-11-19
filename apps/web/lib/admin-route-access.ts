@@ -41,6 +41,9 @@ export function canOpenAdminPath(roles: Role[], pathname: string): boolean {
   if (pathname.startsWith("/dashboard/admin/inventory")) {
     return superAdmin || coFounder || roles.includes(Role.PLATFORM_VIEWER);
   }
+  // Finance: every internal role may file and track its OWN expenses and claims; company-wide figures are
+  // limited server-side (FINANCE_PERMISSION_ROLES) and the page hides the tabs a role cannot use.
+  if (pathname.startsWith("/dashboard/admin/finance")) return true;
   // Live queue monitoring is counts-only: every internal admin role, like shop activity (GET admin/live-queue).
   if (pathname.startsWith("/dashboard/admin/live-queue")) return true;
   // All Bookings: mirrors GET admin/bookings (PLATFORM_ADMIN, CO_FOUNDER, PLATFORM_VIEWER).

@@ -24,10 +24,10 @@ describe('admin navigation', () => {
     expect(fs.existsSync(path.join(APP_DIR, 'dashboard/admin/planned/[id]/page.tsx'))).toBe(true);
   });
 
-  it('has unique ids and covers the 13 blueprint sections plus Inventory', () => {
+  it('has unique ids and covers the 13 blueprint sections plus Inventory and Finance', () => {
     const ids = ADMIN_NAV_ITEMS.map((i) => i.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ADMIN_NAV_GROUPS).toHaveLength(14);
+    expect(ADMIN_NAV_GROUPS).toHaveLength(15);
     for (const group of ADMIN_NAV_GROUPS) {
       expect(ADMIN_NAV_ITEMS.some((i) => i.group === group.id)).toBe(true);
     }
