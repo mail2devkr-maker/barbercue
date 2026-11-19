@@ -16,7 +16,7 @@
     "@zxing/browser": "0.1.5",
     "@zxing/library": "0.21.3",
     "leaflet": "1.9.4",
-    "next": "16.4.1",
+    "next": "16.4.6",
     "pdfjs-dist": "5.4.296",
     "qrcode.react": "^4.2.0",
     "react": "19.2.3",
@@ -30,7 +30,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.4.1",
+    "eslint-config-next": "16.4.6",
     "typescript": "^5"
   }
 }
