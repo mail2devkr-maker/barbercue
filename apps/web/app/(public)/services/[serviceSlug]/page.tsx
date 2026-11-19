@@ -5,7 +5,7 @@ import { DISCOVERY_PATHS } from "@barbercue/shared";
 import type { CityDto, PaginatedResult, SalonListItemDto } from "@barbercue/shared";
 import { fetchDiscoveryOrNull } from "../../../../lib/discovery-api";
 import { absoluteUrl, DISCOVERY_REVALIDATE_SECONDS, SITE_URL } from "../../../../lib/seo";
-import { SEO_SERVICES, seoServiceBySlug } from "../../../../lib/seo-services";
+import { seoServiceBySlug } from "../../../../lib/seo-services";
 import {
   faqJsonLd,
   SalonResults,
@@ -18,10 +18,6 @@ import { JsonLd } from "../../../../components/discovery/JsonLd";
 import styles from "../../[countryCode]/[citySlug]/city.module.css";
 
 export const revalidate = 3600;
-
-export function generateStaticParams() {
-  return SEO_SERVICES.map((svc) => ({ serviceSlug: svc.slug }));
-}
 
 export async function generateMetadata({ params }: { params: Promise<{ serviceSlug: string }> }): Promise<Metadata> {
   const { serviceSlug } = await params;

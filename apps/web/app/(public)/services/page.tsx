@@ -9,7 +9,8 @@ import { Breadcrumbs, breadcrumbJsonLd } from "../../../components/discovery/Bre
 import { JsonLd } from "../../../components/discovery/JsonLd";
 import styles from "../[countryCode]/[citySlug]/city.module.css";
 
-export const revalidate = 3600;
+// Rendered per request (data fetches stay cached) so the build never needs a live backend.
+export const dynamic = "force-dynamic";
 
 const TITLE = "All beauty & grooming services — salons, barbers, parlours and spas near you";
 const DESCRIPTION =
