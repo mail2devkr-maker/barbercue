@@ -9,6 +9,8 @@ import { SalonCard } from "../../../../components/discovery/SalonCard";
 import { Breadcrumbs, breadcrumbJsonLd } from "../../../../components/discovery/Breadcrumbs";
 import { JsonLd } from "../../../../components/discovery/JsonLd";
 import { SEO_SERVICES } from "../../../../lib/seo-services";
+import { faqJsonLd, salonItemListJsonLd } from "../../../../lib/seo-service-page";
+import { cityFaq, cityIntro } from "../../../../lib/seo-city";
 import styles from "./city.module.css";
 
 interface CityPageParams {
@@ -16,6 +18,14 @@ interface CityPageParams {
   // it before the (countryCode, slug) lookup, so either case resolves identically.
   countryCode: string;
   citySlug: string;
+}
+
+function loadCitySalons(city: CityDto) {
+  // Same request (and cache key) for metadata and page body.
+  return fetchDiscoveryOrNull<PaginatedResult<SalonListItemDto>>(
+    `${DISCOVERY_PATHS.salons}?city=${city.slug}&countryCode=${city.countryCode}`,
+    DISCOVERY_REVALIDATE_SECONDS,
+  );
 }
 
 async function loadCity(countryCode: string, citySlug: string) {
@@ -28,8 +38,11 @@ async function loadCity(countryCode: string, citySlug: string) {
 export async function generateMetadata({ params }: { params: Promise<CityPageParams> }): Promise<Metadata> {
   const { countryCode, citySlug } = await params;
   const city = await loadCity(countryCode, citySlug);
-  if (!city) return {};
+  // Unknown entity: a real 404 (crawlers wait for metadata, so this beats the streamed 200).
+  if (!city) notFound();
 
+  const salons = await loadCitySalons(city).catch(() => null);
+  const shopCount = salons?.items.length ?? 0;
   const title = `Salons, barbershops, beauty parlours & spas in ${city.name}`;
   const description = `Find the best salons, barbershops, beauty parlours, spas and nail studios in ${city.name}, ${city.state}. Haircut, facial, waxing, hair spa, bridal makeup and more — see prices and wait times, book ahead or join the live queue.`;
   const url = absoluteUrl(`/${city.countryCode.toLowerCase()}/${city.slug}`);
@@ -37,6 +50,8 @@ export async function generateMetadata({ params }: { params: Promise<CityPagePar
   return {
     title,
     description,
+    // A city with no listed shop is a thin page: keep it out of the index (still followable).
+    robots: shopCount > 0 ? undefined : { index: false, follow: true },
     alternates: { canonical: url },
     openGraph: { title, description, url, type: "website" },
   };
@@ -54,11 +69,16 @@ export default async function CityPage({ params }: { params: Promise<CityPagePar
       `${DISCOVERY_PATHS.cities}/${countryCode}/${citySlug}/localities`,
       DISCOVERY_REVALIDATE_SECONDS,
     ),
-    fetchDiscoveryOrNull<PaginatedResult<SalonListItemDto>>(
-      `${DISCOVERY_PATHS.salons}?city=${citySlug}&countryCode=${city.countryCode}`,
-      DISCOVERY_REVALIDATE_SECONDS,
-    ),
+    loadCitySalons(city),
   ]);
+  const facts = {
+    name: city.name,
+    state: city.state,
+    shopCount: salons?.items.length ?? 0,
+    hasMore: Boolean(salons?.nextCursor),
+  };
+  const faq = cityFaq(facts);
+  const pageUrl = absoluteUrl(cityPath);
 
   const breadcrumbItems = [
     { label: "Home", href: "/" },
@@ -68,6 +88,8 @@ export default async function CityPage({ params }: { params: Promise<CityPagePar
   return (
     <main className={styles.page}>
       <JsonLd data={breadcrumbJsonLd(breadcrumbItems, SITE_URL)} />
+      <JsonLd data={faqJsonLd(faq)} />
+      {salons && salons.items.length > 0 && <JsonLd data={salonItemListJsonLd(salons.items, pageUrl, SITE_URL)} />}
       <div className={styles.breadcrumbs}>
         <Breadcrumbs items={breadcrumbItems} />
       </div>
@@ -77,6 +99,7 @@ export default async function CityPage({ params }: { params: Promise<CityPagePar
           <p className={styles.eyebrow}>Salons · Barbershops · Beauty parlours · Spas</p>
           <h1>Salons &amp; barbershops in {city.name}</h1>
           <p className={styles.location}>{city.state}, {city.country}</p>
+          <p className={styles.location}>{cityIntro(facts)}</p>
         </div>
       </header>
 
@@ -133,6 +156,18 @@ export default async function CityPage({ params }: { params: Promise<CityPagePar
             </div>
           </div>
         )}
+      </section>
+
+      <section className={styles.areas}>
+        <div className={styles.sectionHeading}>
+          <h2>Salon booking in {city.name}: common questions</h2>
+        </div>
+        {faq.map((f) => (
+          <div key={f.q}>
+            <h3>{f.q}</h3>
+            <p className={styles.location}>{f.a}</p>
+          </div>
+        ))}
       </section>
     </main>
   );

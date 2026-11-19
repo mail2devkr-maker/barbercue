@@ -3,13 +3,18 @@ import { DISCOVERY_PATHS } from "@barbercue/shared";
 import type { CityDto, LocalityDto, PaginatedResult, SalonListItemDto } from "@barbercue/shared";
 import { fetchDiscovery } from "../lib/discovery-api";
 import { SITE_URL } from "../lib/seo";
-import { SEO_SERVICES } from "../lib/seo-services";
+import { SEO_SERVICES, citySalonsWithServicePath } from "../lib/seo-services";
 
 export const revalidate = 3600;
 // Rendered per request (Next caches the fetches for `revalidate`), never baked at build time: the
 // build cannot always reach the backend, and a sitemap built during a backend/DB cold start used to
 // be cached for an hour with no city, area or salon pages at all.
 export const dynamic = "force-dynamic";
+
+// Google's per-file limit is 50,000 URLs; stay far below it and fail loudly if we ever get close.
+const MAX_URLS = 45_000;
+// Safety cap on cursor pages per city (50 salons per page).
+const MAX_SALON_PAGES_PER_CITY = 40;
 
 async function withRetry<T>(load: () => Promise<T>, attempts = 3): Promise<T> {
   let last: unknown;
@@ -24,27 +29,58 @@ async function withRetry<T>(load: () => Promise<T>, attempts = 3): Promise<T> {
   throw last;
 }
 
-// Dynamic per PROJECT_STRUCTURE.md's "SEO details": generated from live backend data, not
-// hand-maintained. Priority tiers: homepage highest, salon pages next (the actual conversion
-// content), city/locality pages after.
-//
-// Known scaling limit, not a bug: fetches only the first 50 salons per city (the API's max page
-// size). Fine at the current data volume (one seeded salon); revisit with full pagination once a
-// city has more listings than that.
+/** Every public salon in a city (cursor pagination; the API returns at most 50 per page). */
+async function allCitySalons(city: CityDto): Promise<SalonListItemDto[]> {
+  const out: SalonListItemDto[] = [];
+  let cursor: string | null = null;
+  for (let page = 0; page < MAX_SALON_PAGES_PER_CITY; page += 1) {
+    const path: string =
+      `${DISCOVERY_PATHS.salons}?city=${city.slug}&countryCode=${city.countryCode}&limit=50` +
+      (cursor ? `&cursor=${cursor}` : "");
+    const res: PaginatedResult<SalonListItemDto> = await withRetry(() =>
+      fetchDiscovery<PaginatedResult<SalonListItemDto>>(path, revalidate),
+    );
+    out.push(...res.items);
+    if (!res.nextCursor) break;
+    cursor = res.nextCursor;
+  }
+  return out;
+}
+
+/** Run `fn` over `items` with at most `limit` in flight (keeps the backend/DB load gentle). */
+async function mapLimited<T, R>(items: readonly T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await fn(items[i]);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
+/**
+ * Only canonical, indexable URLs. Rules (super SEO pass / issue #429):
+ * - lastModified only where the data has a real timestamp; never "now" for every page.
+ * - a city, area or "service in city" page is listed only when it shows at least one real shop
+ *   (empty pages are noindex and would contradict the sitemap);
+ * - all salons per city via cursor pagination (the old first-50 cap is gone).
+ */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const now = new Date();
   const entries: MetadataRoute.Sitemap = [
-    { url: SITE_URL, lastModified: now, changeFrequency: "daily", priority: 1 },
-    { url: `${SITE_URL}/search`, lastModified: now, changeFrequency: "weekly", priority: 0.5 },
-    { url: `${SITE_URL}/shop`, lastModified: now, changeFrequency: "daily", priority: 0.8 },
-    { url: `${SITE_URL}/shop/browse`, lastModified: now, changeFrequency: "daily", priority: 0.6 },
-    { url: `${SITE_URL}/about-us`, lastModified: now, changeFrequency: "monthly", priority: 0.5 },
-    { url: `${SITE_URL}/contact-us`, lastModified: now, changeFrequency: "monthly", priority: 0.5 },
-    { url: `${SITE_URL}/careers`, lastModified: now, changeFrequency: "weekly", priority: 0.6 },
-    { url: `${SITE_URL}/faq`, lastModified: now, changeFrequency: "monthly", priority: 0.6 },
-    { url: `${SITE_URL}/hr-policy`, lastModified: now, changeFrequency: "monthly", priority: 0.4 },
-    { url: `${SITE_URL}/privacy-policy`, lastModified: now, changeFrequency: "yearly", priority: 0.3 },
-    { url: `${SITE_URL}/account-deletion`, lastModified: now, changeFrequency: "yearly", priority: 0.3 },
+    { url: SITE_URL, changeFrequency: "daily", priority: 1 },
+    { url: `${SITE_URL}/search`, changeFrequency: "weekly", priority: 0.5 },
+    { url: `${SITE_URL}/shop`, changeFrequency: "daily", priority: 0.8 },
+    { url: `${SITE_URL}/shop/browse`, changeFrequency: "daily", priority: 0.6 },
+    { url: `${SITE_URL}/about-us`, changeFrequency: "monthly", priority: 0.5 },
+    { url: `${SITE_URL}/contact-us`, changeFrequency: "monthly", priority: 0.5 },
+    { url: `${SITE_URL}/careers`, changeFrequency: "weekly", priority: 0.6 },
+    { url: `${SITE_URL}/faq`, changeFrequency: "monthly", priority: 0.6 },
+    { url: `${SITE_URL}/hr-policy`, changeFrequency: "monthly", priority: 0.4 },
+    { url: `${SITE_URL}/privacy-policy`, changeFrequency: "yearly", priority: 0.3 },
+    { url: `${SITE_URL}/account-deletion`, changeFrequency: "yearly", priority: 0.3 },
   ];
 
   // Marketplace product pages: verified, public, non-test products only (decided by the backend).
@@ -56,60 +92,73 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // Shop unavailable: keep the rest of the sitemap.
   }
 
-  entries.push({ url: `${SITE_URL}/services`, lastModified: now, changeFrequency: "weekly", priority: 0.8 });
+  // National service hubs: always useful (they list cities and nearby shops).
+  entries.push({ url: `${SITE_URL}/services`, changeFrequency: "weekly", priority: 0.8 });
   for (const svc of SEO_SERVICES) {
-    entries.push({ url: `${SITE_URL}/services/${svc.slug}`, lastModified: now, changeFrequency: "weekly", priority: 0.7 });
+    entries.push({ url: `${SITE_URL}/services/${svc.slug}`, changeFrequency: "weekly", priority: 0.7 });
   }
 
   let cities: CityDto[] = [];
   try {
     cities = await withRetry(() => fetchDiscovery<CityDto[]>(DISCOVERY_PATHS.cities, revalidate));
-  } catch {
-    // Backend unreachable at build/request time — degrade to the static entries above rather
-    // than failing the whole sitemap.
+  } catch (err) {
+    // Backend unreachable: degrade to the static entries above rather than failing the whole
+    // sitemap, but leave a trace in the logs so an incomplete sitemap is never silent.
+    console.error("[sitemap] city list unavailable; serving static entries only", err);
     return entries;
   }
 
-  for (const city of cities) {
+  await mapLimited(cities, 3, async (city) => {
     // B9: country-scoped public URLs. countryCode is lowercased for the URL by convention; the
     // backend uppercases it before the (countryCode, slug) lookup either way.
     const countrySegment = city.countryCode.toLowerCase();
     const cityPath = `${countrySegment}/${city.slug}`;
-    entries.push({ url: `${SITE_URL}/${cityPath}`, lastModified: now, changeFrequency: "daily", priority: 0.8 });
 
     const [localities, salons] = await Promise.all([
-      fetchDiscovery<LocalityDto[]>(
-        `${DISCOVERY_PATHS.cities}/${countrySegment}/${city.slug}/localities`,
-        revalidate,
-      ).catch(() => [] as LocalityDto[]),
-      fetchDiscovery<PaginatedResult<SalonListItemDto>>(
-        `${DISCOVERY_PATHS.salons}?city=${city.slug}&countryCode=${city.countryCode}&limit=50`,
-        revalidate,
-      ).catch(() => ({ items: [] as SalonListItemDto[], nextCursor: null })),
+      fetchDiscovery<LocalityDto[]>(`${DISCOVERY_PATHS.cities}/${countrySegment}/${city.slug}/localities`, revalidate).catch(
+        () => [] as LocalityDto[],
+      ),
+      allCitySalons(city).catch((err) => {
+        console.error(`[sitemap] salons unavailable for ${cityPath}`, err);
+        return [] as SalonListItemDto[];
+      }),
     ]);
+    if (salons.length === 0) return; // no shop yet: the city page is thin, keep it out
 
-    for (const svc of SEO_SERVICES) {
-      entries.push({ url: `${SITE_URL}/${cityPath}/services/${svc.slug}`, lastModified: now, changeFrequency: "weekly", priority: 0.7 });
-    }
+    entries.push({ url: `${SITE_URL}/${cityPath}`, changeFrequency: "daily", priority: 0.8 });
 
+    // Areas that actually contain a listed shop.
+    const liveAreas = new Set(salons.map((s) => s.localitySlug).filter(Boolean));
     for (const locality of localities) {
-      entries.push({
-        url: `${SITE_URL}/${cityPath}/areas/${locality.slug}`,
-        lastModified: now,
-        changeFrequency: "weekly",
-        priority: 0.6,
-      });
+      if (!liveAreas.has(locality.slug)) continue;
+      entries.push({ url: `${SITE_URL}/${cityPath}/areas/${locality.slug}`, changeFrequency: "weekly", priority: 0.6 });
     }
 
-    for (const salon of salons.items) {
+    for (const salon of salons) {
       entries.push({
         url: `${SITE_URL}/${salon.countryCode.toLowerCase()}/${salon.citySlug}/${salon.slug}`,
-        lastModified: now,
         changeFrequency: "weekly",
         priority: 0.9,
       });
     }
-  }
 
+    // "Service in city" pages only where a shop here offers that service (same query and cache
+    // key as the page itself, so this adds no extra load on page views).
+    const offered = await mapLimited(SEO_SERVICES, 4, async (svc) => {
+      try {
+        const res = await fetchDiscovery<PaginatedResult<SalonListItemDto>>(citySalonsWithServicePath(city, svc.query), revalidate);
+        return res.items.length > 0;
+      } catch {
+        return false;
+      }
+    });
+    SEO_SERVICES.forEach((svc, i) => {
+      if (offered[i]) entries.push({ url: `${SITE_URL}/${cityPath}/services/${svc.slug}`, changeFrequency: "weekly", priority: 0.7 });
+    });
+  });
+
+  if (entries.length > MAX_URLS) {
+    console.error(`[sitemap] ${entries.length} URLs is near Google's 50,000 limit; split into a sitemap index`);
+  }
   return entries;
 }

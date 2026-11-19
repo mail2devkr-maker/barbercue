@@ -5,7 +5,7 @@ import { DISCOVERY_PATHS } from "@barbercue/shared";
 import type { CityDto, PaginatedResult, SalonListItemDto } from "@barbercue/shared";
 import { fetchDiscoveryOrNull } from "../../../../../../lib/discovery-api";
 import { absoluteUrl, DISCOVERY_REVALIDATE_SECONDS, SITE_URL } from "../../../../../../lib/seo";
-import { seoServiceBySlug } from "../../../../../../lib/seo-services";
+import { citySalonsWithServicePath, seoServiceBySlug } from "../../../../../../lib/seo-services";
 import {
   faqJsonLd,
   SalonResults,
@@ -27,7 +27,7 @@ interface Params {
 
 function loadSalons(city: CityDto, query: string) {
   return fetchDiscoveryOrNull<PaginatedResult<SalonListItemDto>>(
-    `${DISCOVERY_PATHS.salons}?city=${city.slug}&countryCode=${city.countryCode}&service=${encodeURIComponent(query)}&limit=50`,
+    citySalonsWithServicePath(city, query),
     DISCOVERY_REVALIDATE_SECONDS,
   );
 }
@@ -40,7 +40,8 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
   const { countryCode, citySlug, serviceSlug } = await params;
   const service = seoServiceBySlug(serviceSlug);
   const city = service ? await loadCity(countryCode, citySlug) : null;
-  if (!service || !city) return {};
+  // Unknown entity: a real 404 (crawlers wait for metadata, so this beats the streamed 200).
+  if (!service || !city) notFound();
   const title = `${service.name} in ${city.name} — salons, barbers & parlours near you`;
   const description = `Best ${service.name.toLowerCase()} in ${city.name}, ${city.state}. ${service.blurb} Compare prices, book ahead or join the live queue on FastQue.`;
   const url = absoluteUrl(`/${city.countryCode.toLowerCase()}/${city.slug}/services/${service.slug}`);

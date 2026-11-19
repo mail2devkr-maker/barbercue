@@ -1,4 +1,4 @@
-import styles from "./app-state.module.css";
+import styles from "../app-state.module.css";
 
 export default function Loading() {
   return (

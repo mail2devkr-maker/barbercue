@@ -28,16 +28,32 @@ export const metadata: Metadata = {
 };
 
 function organizationJsonLd() {
+  // One site-level graph: the company (Organization) and the website it runs (WebSite). Only
+  // verifiable facts: brand, legal name, canonical URL and the published logo.
+  const orgId = `${SITE_URL}/#organization`;
   return {
     "@context": "https://schema.org",
-    "@type": "WebSite",
-    name: "FastQue",
-    url: SITE_URL,
-    potentialAction: {
-      "@type": "SearchAction",
-      target: `${SITE_URL}/search?q={search_term_string}`,
-      "query-input": "required name=search_term_string",
-    },
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": orgId,
+        name: "FastQue",
+        legalName: "FastQue Digital Technology Private Limited",
+        url: SITE_URL,
+        logo: `${SITE_URL}/brand/fastque-premium-3d-mark.png`,
+        description:
+          "FastQue is an Indian platform to discover salons, barbershops, beauty parlours and spas, book appointments or join a live queue, and for shops to manage their queue, bookings, staff and services.",
+        areaServed: { "@type": "Country", name: "India" },
+      },
+      {
+        "@type": "WebSite",
+        "@id": `${SITE_URL}/#website`,
+        name: "FastQue",
+        url: SITE_URL,
+        inLanguage: "en-IN",
+        publisher: { "@id": orgId },
+      },
+    ],
   };
 }
 
