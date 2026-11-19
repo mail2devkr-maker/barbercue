@@ -1,5 +1,5 @@
 import { color, fastQue } from '../theme';
-import { colorOnDark, fastQueOnLight, resolveTheme, statusBarStyleFor, themedStyles, tokensFor } from '../theme-mode';
+import { colorOnDark, colorOnLight, fastQueOnLight, resolveTheme, statusBarStyleFor, themedStyles, tokensFor } from '../theme-mode';
 
 describe('theme foundation', () => {
   it('each twin palette has exactly the same keys as the palette it mirrors', () => {
@@ -15,7 +15,9 @@ describe('theme foundation', () => {
   });
 
   it('Light keeps the light palette and lightens the dark one; Dark the other way round', () => {
-    expect(tokensFor('light').color).toBe(color);
+    expect(tokensFor('light').color).toBe(colorOnLight);
+    // Light only deepens the brand coral (it is read as text there); every other value is as designed.
+    expect({ ...colorOnLight, brandCoral: color.brandCoral }).toEqual(color);
     expect(tokensFor('light').fastQue).toBe(fastQueOnLight);
     expect(tokensFor('dark').fastQue).toBe(fastQue);
     expect(tokensFor('dark').color).toBe(colorOnDark);
@@ -45,5 +47,22 @@ describe('theme foundation', () => {
     expect(statusBarStyleFor('designed', 'dark')).toBe('dark');
     expect(statusBarStyleFor('light', 'light')).toBe('dark');
     expect(statusBarStyleFor('dark', 'dark')).toBe('light');
+  });
+});
+
+const lum = (hex: string) => {
+  const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+};
+const contrast = (a: string, b: string) => { const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m); return (x + 0.05) / (y + 0.05); };
+
+describe('theme contrast (owner: theme must read "very very fine")', () => {
+  it('Light: accent text (coral, orange) reads on the light background', () => {
+    expect(contrast(colorOnLight.brandCoral, fastQueOnLight.background)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(fastQueOnLight.orange, fastQueOnLight.background)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('Dark: button text reads on the coral button fill', () => {
+    expect(contrast(colorOnDark.accentContrast, colorOnDark.accent)).toBeGreaterThanOrEqual(4.5);
   });
 });

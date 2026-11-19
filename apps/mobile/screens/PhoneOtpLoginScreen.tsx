@@ -10,7 +10,7 @@ import { useLanguage } from '../lib/language-context';
 import { color, fastQue, font, fontSize, radius, space } from '../lib/theme';
 import { BrandLockup, GradientView } from '../components/ui';
 import { AppleSignInButton } from '../components/auth/AppleSignInButton';
-import { useThemedStyles, useThemeTokens, type ThemeTokens } from '../lib/theme-mode';
+import { ON_ACCENT, useThemedStyles, useThemeTokens, type ThemeTokens } from '../lib/theme-mode';
 
 // Exact website 3-stop brand gradient (pink 0% -> coral 55% -> orange 100%, matching
 // apps/web/components/landing/landing.module.css's `--fq-gradient` on master).
@@ -251,7 +251,7 @@ export default function PhoneOtpLoginScreen() {
                     />
                     <Pressable onPress={() => void requestOtp()} disabled={submitting}>
                       <GradientView colors={GRADIENT_COLORS} stops={GRADIENT_STOPS} style={styles.primaryButton}>
-                        {submitting ? <ActivityIndicator color={color.accentContrast} /> : <Text style={styles.primaryButtonText}>{t.sendOtpAction}</Text>}
+                        {submitting ? <ActivityIndicator color={ON_ACCENT} /> : <Text style={styles.primaryButtonText}>{t.sendOtpAction}</Text>}
                       </GradientView>
                     </Pressable>
                   </>
@@ -271,7 +271,7 @@ export default function PhoneOtpLoginScreen() {
                 <Pressable onPress={() => void verifyOtp()} disabled={submitting}>
                   <GradientView colors={GRADIENT_COLORS} stops={GRADIENT_STOPS} style={styles.primaryButton}>
                     {submitting ? (
-                      <ActivityIndicator color={color.accentContrast} />
+                      <ActivityIndicator color={ON_ACCENT} />
                     ) : (
                       <Text style={styles.primaryButtonText}>{t.verifyAndContinueAction}</Text>
                     )}
@@ -434,7 +434,8 @@ const makeStyles = ({ color, fastQue }: ThemeTokens) => StyleSheet.create({
   primaryButtonText: {
     fontFamily: font.bodyBold,
     fontSize: fontSize.base,
-    color: color.accentContrast,
+    // On the brand gradient: always light text, whatever the theme.
+    color: ON_ACCENT,
   },
 
   googleButton: {
