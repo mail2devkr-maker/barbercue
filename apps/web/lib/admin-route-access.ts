@@ -43,6 +43,8 @@ export function canOpenAdminPath(roles: Role[], pathname: string): boolean {
   if (pathname.startsWith("/dashboard/admin/bookings")) return superAdmin || coFounder || roles.includes(Role.PLATFORM_VIEWER);
   // New Shop Onboarding: mirrors GET admin/onboarding (PLATFORM_ADMIN, CO_FOUNDER, SALES_ADMIN, PLATFORM_VIEWER).
   if (pathname.startsWith("/dashboard/admin/onboarding")) return superAdmin || coFounder || sales || roles.includes(Role.PLATFORM_VIEWER);
+  // FastQue Work control centre: mirrors GET work/admin/* (PLATFORM_ADMIN, CO_FOUNDER, PLATFORM_VIEWER; writes PLATFORM_ADMIN).
+  if (pathname.startsWith("/dashboard/admin/work")) return superAdmin || coFounder || roles.includes(Role.PLATFORM_VIEWER);
   if (pathname.startsWith("/dashboard/admin/access")) return superAdmin;
   // The platform CRM analytics and its cursor-paged rows are PLATFORM_ADMIN only on the server (ADMIN_CRM_ANALYTICS_V1).
   if (pathname.startsWith("/dashboard/admin/crm/analytics")) return superAdmin;

@@ -96,6 +96,7 @@ export const ADMIN_NAV_ITEMS: ReadonlyArray<AdminNavItem> = [
   { id: "shop-status-ops", label: "Open / Closed Monitoring", group: "OPERATIONS", href: STATUS, query: "view=hourly", status: "live" },
   { id: "waiting-time", label: "Waiting Time Analysis", group: "OPERATIONS", href: CHARTS, query: "preset=wait", status: "live" },
   { id: "live-queue", label: "Live Queue Monitoring", group: "OPERATIONS", href: "/dashboard/admin/live-queue", status: "live" },
+  { id: "work-marketplace", label: "FastQue Work", group: "OPERATIONS", href: "/dashboard/admin/work", status: "live" },
   planned("OPERATIONS", "chair-utilization", "Chair Utilization", "Phase 3 utilisation model (chairs × operating hours × sessions)."),
 
   { id: "chart-builder", label: "Chart Builder", group: "ANALYTICS", href: CHARTS, status: "live" },

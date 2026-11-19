@@ -28,6 +28,14 @@ export const TYPE_LABEL: Record<string, string> = {
   "booking.rescheduled_by_shop": "Appointment time changed by the shop",
   "owner.inventory.reorder": "Time to reorder stock",
   "owner.inventory.expiring": "Stock expiring soon",
+  "work.assignment.accepted": "A worker accepted your job",
+  "work.offer.received": "You received a job offer",
+  "work.submission.received": "Work submitted for your review",
+  "work.submission.approved": "Your work was approved",
+  "work.rework.requested": "Changes requested on your work",
+  "work.payout.sent": "Payout sent",
+  "work.payout.failed": "Payout failed — we will retry",
+  "work.dispute.updated": "Dispute update",
 };
 
 export function timeAgo(iso: string): string {

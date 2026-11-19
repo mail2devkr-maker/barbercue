@@ -1,0 +1,82 @@
+name: FastQue Work Marketplace Certification
+
+# FastQue Work (docs/work-marketplace/): the MVP acceptance scenario, capacity race, ledger,
+# payout failure/retry, cancellation compensation, review deadline and security checks against the
+# real AppModule on disposable PostgreSQL 17. Sandbox payment provider only; nothing is sent or paid.
+on:
+  pull_request:
+    paths:
+      - "apps/backend/prisma/**"
+      - "apps/backend/src/work/**"
+      - "apps/backend/src/notifications/notifications.service.ts"
+      - "apps/backend/src/common/db-deadline-scheduler/**"
+      - "apps/backend/test/work-marketplace.e2e-spec.ts"
+      - "packages/shared/src/work-marketplace.ts"
+      - "packages/shared/src/__tests__/work-marketplace.test.ts"
+      - "apps/web/app/(work)/**"
+      - "apps/web/app/(dashboard)/dashboard/admin/work/**"
+      - "apps/web/lib/work.ts"
+      - ".github/workflows/work-marketplace-certification.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: work-marketplace-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  certify:
+    name: Work marketplace - migration chain, shared rules, e2e twice, web typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres:17.11
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci-only
+          POSTGRES_DB: work_marketplace_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d work_marketplace_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      DATABASE_URL: postgresql://postgres:ci-only@127.0.0.1:5432/work_marketplace_ci?schema=public
+      NODE_ENV: development
+      AGENT_LLM_PROVIDER: none
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Build shared contracts
+        run: npm run build:shared
+      - name: Shared marketplace rules (state machines, fees, eligibility, screening, smart draft)
+        run: npm run test --workspace=@barbercue/shared -- --runTestsByPath src/__tests__/work-marketplace.test.ts src/__tests__/i18n.test.ts
+      - name: Generate Prisma client and type-check the backend
+        run: |
+          npm run prisma:generate --workspace=@barbercue/backend
+          npm run typecheck --workspace=@barbercue/backend
+      - name: Backend unit tests for the work module
+        working-directory: apps/backend
+        run: npx jest --runInBand --ci src/work src/notifications
+      - name: Apply complete migration chain to disposable PostgreSQL
+        working-directory: apps/backend
+        run: bash scripts/verify-migration-chain.sh
+      - name: Work marketplace e2e (real application, twice)
+        working-directory: apps/backend
+        run: |
+          export JWT_ACCESS_SECRET="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
+          export TOTP_ENCRYPTION_KEY="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
+          npx jest --config ./test/jest-e2e.json --runInBand --ci test/work-marketplace.e2e-spec.ts
+          npx jest --config ./test/jest-e2e.json --runInBand --ci test/work-marketplace.e2e-spec.ts
+      - name: Web TypeScript typecheck
+        run: npm run typecheck --workspace=@barbercue/web

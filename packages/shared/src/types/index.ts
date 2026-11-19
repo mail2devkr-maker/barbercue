@@ -1435,6 +1435,15 @@ export const NOTIFICATION_TYPES = [
   // (low, predicted to run out, or out) and stock expiring or expired.
   "owner.inventory.reorder",
   "owner.inventory.expiring",
+  // FastQue Work marketplace (docs/work-marketplace/) — assignment, review and payout events.
+  "work.assignment.accepted",
+  "work.offer.received",
+  "work.submission.received",
+  "work.submission.approved",
+  "work.rework.requested",
+  "work.payout.sent",
+  "work.payout.failed",
+  "work.dispute.updated",
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 

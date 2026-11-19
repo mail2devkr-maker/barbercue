@@ -2743,6 +2743,14 @@ const enNotificationTypeLabels: NotificationTypeLabels = {
   'booking.rescheduled_by_shop': 'Appointment time changed by the shop',
   'owner.inventory.reorder': 'Time to reorder stock',
   'owner.inventory.expiring': 'Stock expiring soon',
+  'work.assignment.accepted': 'A worker accepted your job',
+  'work.offer.received': 'You received a job offer',
+  'work.submission.received': 'Work submitted for your review',
+  'work.submission.approved': 'Your work was approved',
+  'work.rework.requested': 'Changes requested on your work',
+  'work.payout.sent': 'Payout sent',
+  'work.payout.failed': 'Payout failed — we will retry',
+  'work.dispute.updated': 'Dispute update',
 };
 
 const hiNotificationTypeLabels: NotificationTypeLabels = {
@@ -2765,6 +2773,14 @@ const hiNotificationTypeLabels: NotificationTypeLabels = {
   'booking.rescheduled_by_shop': 'दुकान ने अपॉइंटमेंट का समय बदला',
   'owner.inventory.reorder': 'स्टॉक फिर से मंगाने का समय',
   'owner.inventory.expiring': 'स्टॉक जल्द एक्सपायर हो रहा है',
+  'work.assignment.accepted': 'एक वर्कर ने आपकी जॉब स्वीकार की',
+  'work.offer.received': 'आपको जॉब ऑफर मिला',
+  'work.submission.received': 'आपकी समीक्षा के लिए काम जमा हुआ',
+  'work.submission.approved': 'आपका काम स्वीकृत हुआ',
+  'work.rework.requested': 'आपके काम में बदलाव का अनुरोध',
+  'work.payout.sent': 'भुगतान भेजा गया',
+  'work.payout.failed': 'भुगतान विफल — हम फिर कोशिश करेंगे',
+  'work.dispute.updated': 'विवाद अपडेट',
 };
 
 export const NOTIFICATION_TYPE_LABELS: Readonly<Record<Language, NotificationTypeLabels>> = {
