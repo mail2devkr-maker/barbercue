@@ -34,9 +34,9 @@ export default function WorkMarketplacePage() {
     if (f.locationType) p.set("locationType", f.locationType);
     if (f.instantOnly) p.set("instantOnly", "true");
     if (after) p.set("cursor", after);
-    setError(null);
     return workGet<{ items: WorkJobCardDto[]; nextCursor: string | null }>(`jobs?${p.toString()}`)
       .then((page) => {
+        setError(null);
         setJobs((cur) => (after && cur ? [...cur, ...page.items] : page.items));
         setCursor(page.nextCursor);
       })

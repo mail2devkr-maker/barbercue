@@ -17,6 +17,12 @@ function Review() {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
   const [disputeText, setDisputeText] = useState("");
+  // Wall clock kept in state (render must stay pure); ticks so the no-show action unlocks on time.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(t);
+  }, []);
 
   const load = useCallback(() => {
     workGet<WorkAssignmentDetailDto>(`assignments/${assignmentId}`)
@@ -44,7 +50,7 @@ function Review() {
   if (!a) return error ? <p className={styles.error} role="alert">{error}</p> : <div className={styles.skeleton} aria-busy="true" />;
   const org = `orgs/${orgId}/assignments/${a.id}`;
   const st = ASSIGNMENT_STATUS[a.status];
-  const startedPlus30 = Date.now() > new Date(a.startsAt).getTime() + 30 * 60_000;
+  const startedPlus30 = now > new Date(a.startsAt).getTime() + 30 * 60_000;
 
   return (
     <>

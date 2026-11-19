@@ -30,8 +30,12 @@ function useLoad<T>(path: string | null) {
   const [error, setError] = useState<string | null>(null);
   const load = useCallback(() => {
     if (!path) return;
-    setError(null);
-    workGet<T>(path).then(setData).catch((err) => setError(errorText(err)));
+    workGet<T>(path)
+      .then((d) => {
+        setData(d);
+        setError(null);
+      })
+      .catch((err) => setError(errorText(err)));
   }, [path]);
   useEffect(load, [load]);
   return { data, error, reload: load };
