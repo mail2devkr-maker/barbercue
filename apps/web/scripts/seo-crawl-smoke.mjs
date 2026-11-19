@@ -82,7 +82,7 @@ for (const path of targets) {
   assert.equal(response.status, 200, `indexable route should return HTTP 200: ${path}`);
   assert.match(response.headers.get("content-type") ?? "", /text\/html/i);
   assert.match(body, /<h1\b/i, `indexable route should include server-rendered heading content: ${path}`);
-  assert.match(body, new RegExp(`<link rel="canonical" href="${canonicalOrigin.replaceAll(".", "\\.")}${path === "/" ? "/" : path}"`, "i"));
+  assert.match(body, new RegExp(`<link rel="canonical" href="${canonicalOrigin.replaceAll(".", "\\.")}${path === "/" ? "" : path}"`, "i"));
   assert.doesNotMatch(body, /[a-z0-9.-]+\.railway\.app/i, "Railway hostnames must not leak into rendered HTML");
 }
 
