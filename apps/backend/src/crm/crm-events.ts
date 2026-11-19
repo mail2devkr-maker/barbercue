@@ -13,7 +13,13 @@ export async function logLeadActivity(
   metadata?: Record<string, unknown>,
 ): Promise<void> {
   await db.crmLeadActivity.create({
-    data: { leadId, actorUserId, type: type.slice(0, 40), summary: summary.slice(0, 500), metadata: metadata as Prisma.InputJsonValue | undefined },
+    data: {
+      leadId,
+      actorUserId,
+      type: type.slice(0, 40),
+      summary: summary.slice(0, 500),
+      metadata: metadata as Prisma.InputJsonValue | undefined,
+    },
   });
 }
 
@@ -44,7 +50,12 @@ export async function notifyCrm(
   dedupeKey: string,
 ): Promise<boolean> {
   const existing = await db.notification.findFirst({
-    where: { userId, type, readAt: null, payload: { path: ['dedupeKey'], equals: dedupeKey } },
+    where: {
+      userId,
+      type,
+      readAt: null,
+      payload: { path: ['dedupeKey'], equals: dedupeKey },
+    },
     select: { id: true },
   });
   if (existing) return false;
@@ -53,7 +64,11 @@ export async function notifyCrm(
       userId,
       channel: 'IN_APP',
       type,
-      payload: { title: title.slice(0, 200), body: body?.slice(0, 500) ?? null, dedupeKey } as Prisma.InputJsonValue,
+      payload: {
+        title: title.slice(0, 200),
+        body: body?.slice(0, 500) ?? null,
+        dedupeKey,
+      },
       status: 'SENT',
       sentAt: new Date(),
       deepLink,
@@ -91,27 +106,67 @@ export function leadStatusForOnboarding(status: string): CrmLeadStatus | null {
  * approval/activation; the lead shows where the salon is in the journey) and writes the timeline
  * entry and the employee's notification. Called from every onboarding status change.
  */
-export async function syncLeadFromOnboarding(db: Db, applicationId: string, previous: string | null, next: string, actorUserId: string | null, reason?: string | null): Promise<void> {
+export async function syncLeadFromOnboarding(
+  db: Db,
+  applicationId: string,
+  previous: string | null,
+  next: string,
+  actorUserId: string | null,
+  reason?: string | null,
+): Promise<void> {
   const app = await db.salonOnboardingApplication.findUnique({
     where: { id: applicationId },
-    select: { leadId: true, reference: true, salonName: true, assignedEmployee: { select: { userId: true } } },
+    select: {
+      leadId: true,
+      reference: true,
+      salonName: true,
+      assignedEmployee: { select: { userId: true } },
+    },
   });
   if (!app) return;
   const status = leadStatusForOnboarding(next);
   if (status) {
     await db.employeeCrmLead.update({
       where: { id: app.leadId },
-      data: { status, ...(status === 'ONBOARDED' ? { onboardedAt: new Date() } : {}) },
+      data: {
+        status,
+        ...(status === 'ONBOARDED' ? { onboardedAt: new Date() } : {}),
+      },
     });
   }
-  await logLeadActivity(db, app.leadId, actorUserId, 'ONBOARDING_STATUS', `Onboarding ${app.reference}: ${previous ? `${previous.toLowerCase()} → ` : ''}${next.toLowerCase().replace(/_/g, ' ')}${status ? ` (lead: ${CRM_LEAD_STATUS_META[status].label})` : ''}`, {
-    applicationId,
-    previous,
-    next,
-    reason: reason ?? null,
-  });
-  if (['APPROVED', 'CHANGES_REQUESTED', 'REJECTED', 'ACTIVE'].includes(next) && app.assignedEmployee.userId !== actorUserId) {
-    const verb = next === 'APPROVED' ? 'was approved' : next === 'ACTIVE' ? 'is now live' : next === 'REJECTED' ? 'was rejected' : 'needs changes';
-    await notifyCrm(db, app.assignedEmployee.userId, 'crm.onboarding_decision', `${app.salonName} ${verb}`, reason ?? null, `/employee/onboarding/${applicationId}`, `onboarding:${applicationId}:${next}`);
+  await logLeadActivity(
+    db,
+    app.leadId,
+    actorUserId,
+    'ONBOARDING_STATUS',
+    `Onboarding ${app.reference}: ${previous ? `${previous.toLowerCase()} → ` : ''}${next.toLowerCase().replace(/_/g, ' ')}${status ? ` (lead: ${CRM_LEAD_STATUS_META[status].label})` : ''}`,
+    {
+      applicationId,
+      previous,
+      next,
+      reason: reason ?? null,
+    },
+  );
+  if (
+    ['APPROVED', 'CHANGES_REQUESTED', 'REJECTED', 'ACTIVE'].includes(next) &&
+    app.assignedEmployee.userId !== actorUserId
+  ) {
+    const verb =
+      next === 'APPROVED'
+        ? 'was approved'
+        : next === 'ACTIVE'
+          ? 'is now live'
+          : next === 'REJECTED'
+            ? 'was rejected'
+            : 'needs changes';
+    await notifyCrm(
+      db,
+      app.assignedEmployee.userId,
+      'crm.onboarding_decision',
+      `${app.salonName} ${verb}`,
+      reason ?? null,
+      `/employee/onboarding/${applicationId}`,
+      `onboarding:${applicationId}:${next}`,
+    );
   }
 }

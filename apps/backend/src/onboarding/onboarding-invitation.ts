@@ -74,7 +74,14 @@ export async function acceptOnboardingInvitationInTx(
         reason: 'Owner accepted the invitation and set a password',
       },
     });
-    await syncLeadFromOnboarding(tx, app.id, app.status, next, userId, 'Owner accepted the invitation');
+    await syncLeadFromOnboarding(
+      tx,
+      app.id,
+      app.status,
+      next,
+      userId,
+      'Owner accepted the invitation',
+    );
   }
   return {
     applicationId: app.id,

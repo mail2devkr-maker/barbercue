@@ -13,6 +13,14 @@ import { CrmTicketsService } from './crm-tickets.service';
 @Module({
   imports: [StorageModule],
   controllers: [CrmController],
-  providers: [CrmAccessService, CrmLeadsService, CrmActivityService, CrmRecordingsService, CrmTicketsService, CrmAnalyticsService, CrmSchedulerService],
+  providers: [
+    CrmAccessService,
+    CrmLeadsService,
+    CrmActivityService,
+    CrmRecordingsService,
+    CrmTicketsService,
+    CrmAnalyticsService,
+    CrmSchedulerService,
+  ],
 })
 export class CrmModule {}

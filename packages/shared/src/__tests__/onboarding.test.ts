@@ -28,6 +28,8 @@ const complete: OnboardingCompletenessInput = {
   consentListing: true,
   consentAccuracy: true,
   consentAuthorization: true,
+  consentMethod: 'SIGNED_FORM_PHOTO',
+  consentByName: 'Ramesh Kumar',
   hours: [{ dayOfWeek: 1, isClosed: false, opensAt: '09:00', closesAt: '21:00' }],
   services: [
     { serviceName: 'Haircut', isActive: true, basePrice: 150, durationMinutes: 30, confirmedByEmployee: true },
@@ -53,6 +55,13 @@ describe('normalizeIndianMobile', () => {
 describe('onboardingMissingFields', () => {
   it('passes a complete application', () => {
     expect(onboardingMissingFields(complete)).toEqual([]);
+  });
+
+  it('requires a documented consent method and the person who gave consent', () => {
+    for (const patch of [{ consentMethod: null }, { consentByName: '  ' }]) {
+      const missing = onboardingMissingFields({ ...complete, ...patch });
+      expect(missing.map((m) => m.field)).toContain('consent');
+    }
   });
 
   it('never treats missing durations, prices, photos or consent as present', () => {

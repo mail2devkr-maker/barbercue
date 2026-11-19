@@ -25,13 +25,25 @@ export interface CrmActor {
   manage: boolean;
 }
 
-export const CRM_ROLES = [Role.FIELD_EXECUTIVE, Role.SALES_ADMIN, Role.PLATFORM_ADMIN, Role.CO_FOUNDER, Role.PLATFORM_VIEWER] as const;
+export const CRM_ROLES = [
+  Role.FIELD_EXECUTIVE,
+  Role.SALES_ADMIN,
+  Role.PLATFORM_ADMIN,
+  Role.CO_FOUNDER,
+  Role.PLATFORM_VIEWER,
+] as const;
 
-export function forbidden(message = 'You do not have access to this record.'): AppException {
+export function forbidden(
+  message = 'You do not have access to this record.',
+): AppException {
   return new AppException('CRM_FORBIDDEN', message, HttpStatus.FORBIDDEN);
 }
 export function notFound(what = 'Record'): AppException {
-  return new AppException('CRM_NOT_FOUND', `${what} not found.`, HttpStatus.NOT_FOUND);
+  return new AppException(
+    'CRM_NOT_FOUND',
+    `${what} not found.`,
+    HttpStatus.NOT_FOUND,
+  );
 }
 
 @Injectable()
@@ -40,18 +52,63 @@ export class CrmAccessService {
 
   async actor(user: AuthenticatedUser): Promise<CrmActor> {
     // Re-read roles from the database (defence in depth: the token says what the user had at login).
-    const roles = new Set((await this.prisma.userRole.findMany({ where: { userId: user.id, salonId: null }, select: { role: true } })).map((r) => r.role));
+    const roles = new Set(
+      (
+        await this.prisma.userRole.findMany({
+          where: { userId: user.id, salonId: null },
+          select: { role: true },
+        })
+      ).map((r) => r.role),
+    );
     const tokenRoles = new Set(user.roles);
     const has = (r: Role) => roles.has(r) && tokenRoles.has(r);
-    const profile = await this.prisma.employeeProfile.findUnique({ where: { userId: user.id }, select: { id: true } });
+    const profile = await this.prisma.employeeProfile.findUnique({
+      where: { userId: user.id },
+      select: { id: true },
+    });
     if (has(Role.PLATFORM_ADMIN) || has(Role.CO_FOUNDER))
-      return { userId: user.id, kind: 'ADMIN', employeeProfileId: profile?.id ?? null, team: true, write: true, manage: true };
-    if (has(Role.SALES_ADMIN)) return { userId: user.id, kind: 'SALES_MANAGER', employeeProfileId: profile?.id ?? null, team: true, write: true, manage: true };
+      return {
+        userId: user.id,
+        kind: 'ADMIN',
+        employeeProfileId: profile?.id ?? null,
+        team: true,
+        write: true,
+        manage: true,
+      };
+    if (has(Role.SALES_ADMIN))
+      return {
+        userId: user.id,
+        kind: 'SALES_MANAGER',
+        employeeProfileId: profile?.id ?? null,
+        team: true,
+        write: true,
+        manage: true,
+      };
     if (has(Role.FIELD_EXECUTIVE)) {
-      if (!profile) throw new AppException('CRM_NO_EMPLOYEE_PROFILE', 'Your employee profile is not set up yet. Ask an admin.', HttpStatus.FORBIDDEN);
-      return { userId: user.id, kind: 'FIELD_EMPLOYEE', employeeProfileId: profile.id, team: false, write: true, manage: false };
+      if (!profile)
+        throw new AppException(
+          'CRM_NO_EMPLOYEE_PROFILE',
+          'Your employee profile is not set up yet. Ask an admin.',
+          HttpStatus.FORBIDDEN,
+        );
+      return {
+        userId: user.id,
+        kind: 'FIELD_EMPLOYEE',
+        employeeProfileId: profile.id,
+        team: false,
+        write: true,
+        manage: false,
+      };
     }
-    if (has(Role.PLATFORM_VIEWER)) return { userId: user.id, kind: 'VIEWER', employeeProfileId: null, team: true, write: false, manage: false };
+    if (has(Role.PLATFORM_VIEWER))
+      return {
+        userId: user.id,
+        kind: 'VIEWER',
+        employeeProfileId: null,
+        team: true,
+        write: false,
+        manage: false,
+      };
     throw forbidden('The CRM is for FastQue field and sales staff.');
   }
 
@@ -71,22 +128,37 @@ export class CrmAccessService {
   }
 
   assertManage(a: CrmActor): void {
-    if (!a.manage) throw forbidden('Only sales managers and admins can do this.');
+    if (!a.manage)
+      throw forbidden('Only sales managers and admins can do this.');
   }
 
   /** The lead, if the actor may see it. */
   async lead(a: CrmActor, leadId: string) {
-    const lead = await this.prisma.employeeCrmLead.findFirst({ where: { id: leadId, ...this.leadScope(a) } });
+    const lead = await this.prisma.employeeCrmLead.findFirst({
+      where: { id: leadId, ...this.leadScope(a) },
+    });
     if (!lead) throw notFound('Lead');
     return lead;
   }
 
   /** Which employee profile new work is owned by: the field employee themself, or (managers) whoever they name. */
-  async ownerFor(a: CrmActor, requested?: string | null, fallback?: string): Promise<string> {
+  async ownerFor(
+    a: CrmActor,
+    requested?: string | null,
+    fallback?: string,
+  ): Promise<string> {
     if (!a.team) return a.employeeProfileId!;
     const id = requested ?? fallback ?? a.employeeProfileId;
-    if (!id) throw new AppException('CRM_EMPLOYEE_REQUIRED', 'Choose the employee this is for.', HttpStatus.BAD_REQUEST);
-    const exists = await this.prisma.employeeProfile.findUnique({ where: { id }, select: { id: true } });
+    if (!id)
+      throw new AppException(
+        'CRM_EMPLOYEE_REQUIRED',
+        'Choose the employee this is for.',
+        HttpStatus.BAD_REQUEST,
+      );
+    const exists = await this.prisma.employeeProfile.findUnique({
+      where: { id },
+      select: { id: true },
+    });
     if (!exists) throw notFound('Employee');
     return id;
   }

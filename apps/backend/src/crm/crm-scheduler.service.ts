@@ -18,7 +18,9 @@ export class CrmSchedulerService {
     try {
       await this.activity.remind();
     } catch (error) {
-      this.log.warn(`CRM reminders failed: ${error instanceof Error ? error.message : String(error)}`);
+      this.log.warn(
+        `CRM reminders failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 
@@ -27,7 +29,9 @@ export class CrmSchedulerService {
     try {
       await this.recordings.purgeExpired();
     } catch (error) {
-      this.log.warn(`Recording retention purge failed: ${error instanceof Error ? error.message : String(error)}`);
+      this.log.warn(
+        `Recording retention purge failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 }

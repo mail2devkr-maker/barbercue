@@ -45,7 +45,13 @@ type EmployeeProfileRow = {
 export function draftToData(
   input: Omit<OnboardingDraftInput, 'hours' | 'expectedVersion'>,
 ): Prisma.SalonOnboardingApplicationUncheckedUpdateInput {
-  const { coordinates, weeklyHolidays, amenities, consentEvidenceNote, ...rest } = input;
+  const {
+    coordinates,
+    weeklyHolidays,
+    amenities,
+    consentEvidenceNote,
+    ...rest
+  } = input;
   const data: Prisma.SalonOnboardingApplicationUncheckedUpdateInput = {
     ...rest,
   };
@@ -58,9 +64,13 @@ export function draftToData(
     // A new pin must be confirmed again at the entrance.
     if (input.locationVerified === undefined) data.locationVerified = false;
   }
-  if (weeklyHolidays !== undefined) data.weeklyHolidays = weeklyHolidays.map(String);
+  if (weeklyHolidays !== undefined)
+    data.weeklyHolidays = weeklyHolidays.map(String);
   if (amenities !== undefined) data.amenities = amenities;
-  if (consentEvidenceNote !== undefined) data.consentEvidence = consentEvidenceNote ? { note: consentEvidenceNote } : Prisma.DbNull;
+  if (consentEvidenceNote !== undefined)
+    data.consentEvidence = consentEvidenceNote
+      ? { note: consentEvidenceNote }
+      : Prisma.DbNull;
   return data;
 }
 
@@ -90,7 +100,14 @@ export async function writeStatusHistory(
     },
   });
   // CRM 2.0: the lead mirrors its onboarding (status, timeline, employee notification).
-  await syncLeadFromOnboarding(db, applicationId, previousStatus, newStatus, actorId, reason);
+  await syncLeadFromOnboarding(
+    db,
+    applicationId,
+    previousStatus,
+    newStatus,
+    actorId,
+    reason,
+  );
 }
 
 /** Rewrites the 7-day schedule. TIME columns; a close before the open means "past midnight". */

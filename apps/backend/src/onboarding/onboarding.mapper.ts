@@ -152,6 +152,19 @@ function toMediaDto(
     uploadedBy: personName(m.uploadedBy) ?? 'Unknown',
     createdAt: m.createdAt.toISOString(),
     filePath: `${base}/${m.applicationId}/${EMPLOYEE_PATHS.media}/${m.id}/${EMPLOYEE_PATHS.file}`,
+    gpsTagged: m.captureLatitude != null && m.captureLongitude != null,
+    capture:
+      audience === 'admin'
+        ? {
+            capturedAt: m.capturedAt?.toISOString() ?? null,
+            latitude:
+              m.captureLatitude != null ? Number(m.captureLatitude) : null,
+            longitude:
+              m.captureLongitude != null ? Number(m.captureLongitude) : null,
+            accuracyMeters:
+              m.captureAccuracy != null ? Number(m.captureAccuracy) : null,
+          }
+        : null,
   };
 }
 
@@ -250,7 +263,9 @@ export function toApplicationDto(
     consentAuthorization: app.consentAuthorization,
     locationVerified: app.locationVerified,
     washStationCount: app.washStationCount,
-    weeklyHolidays: app.weeklyHolidays.map(Number).filter((n) => Number.isInteger(n)),
+    weeklyHolidays: app.weeklyHolidays
+      .map(Number)
+      .filter((n) => Number.isInteger(n)),
     amenities: Array.isArray(app.amenities) ? (app.amenities as string[]) : [],
     qrInstallReady: app.qrInstallReady,
     inventoryInterest: app.inventoryInterest,
@@ -258,7 +273,8 @@ export function toApplicationDto(
     consentMethod: app.consentMethod,
     consentByName: app.consentByName,
     consentByRole: app.consentByRole,
-    consentEvidenceNote: (app.consentEvidence as { note?: string } | null)?.note ?? null,
+    consentEvidenceNote:
+      (app.consentEvidence as { note?: string } | null)?.note ?? null,
     consentCapturedAt: iso(app.consentCapturedAt),
     gstin: app.gstin,
     businessRegistration: app.businessRegistration,

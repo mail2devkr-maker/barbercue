@@ -61,7 +61,12 @@ export class OnboardingMediaService {
     applicationId: string,
     file: Express.Multer.File | undefined,
     category: OnboardingMediaCategory,
-    capture: { capturedAt?: string; captureLatitude?: number; captureLongitude?: number; captureAccuracy?: number } = {},
+    capture: {
+      capturedAt?: string;
+      captureLatitude?: number;
+      captureLongitude?: number;
+      captureAccuracy?: number;
+    } = {},
   ): Promise<OnboardingApplicationDto> {
     const profile = await this.onboarding.requireProfile(userId);
     if (!file || !file.buffer?.length) {
@@ -134,7 +139,9 @@ export class OnboardingMediaService {
             height: archived.height,
             uploadedById: userId,
             // Private capture metadata (never published; never used as the salon location).
-            capturedAt: capture.capturedAt ? new Date(capture.capturedAt) : null,
+            capturedAt: capture.capturedAt
+              ? new Date(capture.capturedAt)
+              : null,
             captureLatitude: capture.captureLatitude ?? null,
             captureLongitude: capture.captureLongitude ?? null,
             captureAccuracy: capture.captureAccuracy ?? null,

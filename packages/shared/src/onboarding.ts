@@ -755,6 +755,10 @@ export interface OnboardingMediaDto {
   createdAt: string;
   /** Authenticated API path (relative to the API base); never a public URL. */
   filePath: string;
+  /** True when the photo was taken with the in-app camera and the phone shared its location. */
+  gpsTagged: boolean;
+  /** Private capture metadata — admin reviewers only (null for the employee audience). */
+  capture: { capturedAt: string | null; latitude: number | null; longitude: number | null; accuracyMeters: number | null } | null;
 }
 
 export interface OnboardingStatusHistoryDto {
