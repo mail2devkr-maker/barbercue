@@ -8,6 +8,7 @@ import { absoluteUrl, DISCOVERY_REVALIDATE_SECONDS, SITE_URL } from "../../../..
 import { SalonCard } from "../../../../components/discovery/SalonCard";
 import { Breadcrumbs, breadcrumbJsonLd } from "../../../../components/discovery/Breadcrumbs";
 import { JsonLd } from "../../../../components/discovery/JsonLd";
+import { SEO_SERVICES } from "../../../../lib/seo-services";
 import styles from "./city.module.css";
 
 interface CityPageParams {
@@ -29,8 +30,8 @@ export async function generateMetadata({ params }: { params: Promise<CityPagePar
   const city = await loadCity(countryCode, citySlug);
   if (!city) return {};
 
-  const title = `Barbershops in ${city.name}`;
-  const description = `Find and book nearby barbershops in ${city.name}, ${city.state}. See wait times, services, and prices before you go.`;
+  const title = `Salons, barbershops, beauty parlours & spas in ${city.name}`;
+  const description = `Find the best salons, barbershops, beauty parlours, spas and nail studios in ${city.name}, ${city.state}. Haircut, facial, waxing, hair spa, bridal makeup and more — see prices and wait times, book ahead or join the live queue.`;
   const url = absoluteUrl(`/${city.countryCode.toLowerCase()}/${city.slug}`);
 
   return {
@@ -73,8 +74,8 @@ export default async function CityPage({ params }: { params: Promise<CityPagePar
 
       <header className={styles.hero}>
         <div>
-          <p className={styles.eyebrow}>Explore local barbers</p>
-          <h1>Barbershops in {city.name}</h1>
+          <p className={styles.eyebrow}>Salons · Barbershops · Beauty parlours · Spas</p>
+          <h1>Salons &amp; barbershops in {city.name}</h1>
           <p className={styles.location}>{city.state}, {city.country}</p>
         </div>
       </header>
@@ -97,6 +98,20 @@ export default async function CityPage({ params }: { params: Promise<CityPagePar
           </nav>
         </section>
       )}
+
+      <section className={styles.areas}>
+        <div className={styles.sectionHeading}>
+          <p className={styles.eyebrow}>Popular in {city.name}</p>
+          <h2>Beauty services in {city.name}</h2>
+        </div>
+        <nav className={styles.areaLinks} aria-label={`Services in ${city.name}`}>
+          {SEO_SERVICES.map((svc) => (
+            <Link key={svc.slug} href={`${cityPath}/services/${svc.slug}`}>
+              {svc.name}
+            </Link>
+          ))}
+        </nav>
+      </section>
 
       <section className={styles.shops}>
         <div className={styles.sectionHeading}>
