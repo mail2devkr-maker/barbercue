@@ -40,6 +40,8 @@ import { SalonDescriptionModule } from './salon-description/salon-description.mo
 import { InventoryModule } from './inventory/inventory.module';
 import { FinanceModule } from './finance/finance.module';
 import { ShopModule } from './shop/shop.module';
+import { OnboardingModule } from './onboarding/onboarding.module';
+import { CrmModule } from './crm/crm.module';
 
 @Module({
   imports: [
@@ -81,6 +83,9 @@ import { ShopModule } from './shop/shop.module';
     StyleAdvisorModule,
     PublicQueueModule,
     SalonSetupModule,
+    // Before AdminModule so admin/onboarding/* never meets a broader admin route first.
+    OnboardingModule,
+    CrmModule,
     AdminModule,
     DashboardBookingsModule,
     DashboardCustomersModule,

@@ -51,6 +51,12 @@ export function canOpenAdminPath(roles: Role[], pathname: string): boolean {
   // New Shop Onboarding: mirrors GET admin/onboarding (PLATFORM_ADMIN, CO_FOUNDER, SALES_ADMIN, PLATFORM_VIEWER).
   if (pathname.startsWith("/dashboard/admin/onboarding")) return superAdmin || coFounder || sales || roles.includes(Role.PLATFORM_VIEWER);
   if (pathname.startsWith("/dashboard/admin/access")) return superAdmin;
+  // Salon onboarding review queue: mirrors GET admin/onboarding-applications (decisions stay PLATFORM_ADMIN / CO_FOUNDER server-side).
+  if (pathname.startsWith("/dashboard/admin/onboarding-review")) {
+    return superAdmin || coFounder || sales || roles.includes(Role.PLATFORM_VIEWER);
+  }
+  // Field CRM 2.0 (manager/admin views): mirrors the crm/* API roles (SALES_ADMIN, PLATFORM_ADMIN, CO_FOUNDER; PLATFORM_VIEWER read-only).
+  if (pathname.startsWith("/dashboard/admin/field-crm")) return superAdmin || coFounder || sales || roles.includes(Role.PLATFORM_VIEWER);
   // The platform CRM analytics and its cursor-paged rows are PLATFORM_ADMIN only on the server (ADMIN_CRM_ANALYTICS_V1).
   if (pathname.startsWith("/dashboard/admin/crm/analytics")) return superAdmin;
   if (pathname.startsWith("/dashboard/admin/crm")) return superAdmin || coFounder || hr || sales;

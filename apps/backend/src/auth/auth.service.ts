@@ -1,4 +1,10 @@
-import { HttpStatus, Inject, Injectable } from '@nestjs/common';
+import {
+  HttpStatus,
+  Inject,
+  Injectable,
+  Logger,
+  Optional,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { createHash, randomBytes } from 'crypto';
 import {
@@ -32,6 +38,8 @@ import {
   buildPasswordLink,
   passwordWebBaseUrl,
 } from './services/password-link';
+import { NotificationsService } from '../notifications/notifications.service';
+import { acceptOnboardingInvitationInTx } from '../onboarding/onboarding-invitation';
 
 const PASSWORD_RESET_TTL_MINUTES = 15;
 const GLOBAL_ADMIN_DASHBOARD_ROLES = new Set<Role>([
@@ -131,6 +139,9 @@ export class AuthService {
     private readonly googleAuthService: GoogleAuthService,
     private readonly appleAuthService: AppleAuthService,
     @Inject(EMAIL_SENDER) private readonly emailSender: EmailSender,
+    // Optional so existing construction sites keep working; used only to tell admins and the
+    // field employee that an onboarded salon's owner has activated their account.
+    @Optional() private readonly notifications?: NotificationsService,
   ) {}
 
   // ---------- Customer: phone OTP ----------
@@ -2244,7 +2255,7 @@ export class AuthService {
     }
 
     const passwordHash = await this.passwordService.hash(newPassword);
-    await this.prisma.$transaction(async (tx) => {
+    const accepted = await this.prisma.$transaction(async (tx) => {
       const claimed = await tx.passwordResetToken.updateMany({
         where: {
           id: resetToken.id,
@@ -2268,7 +2279,64 @@ export class AuthService {
         where: { userId: resetToken.userId, revokedAt: null },
         data: { revokedAt: new Date() },
       });
+      // Salon onboarding owner invitations reuse this single-use token flow; a no-op for any
+      // ordinary password reset.
+      return acceptOnboardingInvitationInTx(
+        tx,
+        resetToken.id,
+        resetToken.userId,
+      );
     });
+    if (accepted) await this.notifyOwnerActivated(accepted);
+  }
+
+  private async notifyOwnerActivated(accepted: {
+    applicationId: string;
+    reference: string;
+    salonName: string;
+    assignedEmployeeId: string;
+  }): Promise<void> {
+    if (!this.notifications) return;
+    try {
+      const [admins, employee] = await Promise.all([
+        this.prisma.userRole.findMany({
+          where: {
+            role: { in: [Role.PLATFORM_ADMIN, Role.CO_FOUNDER] },
+            salonId: null,
+          },
+          select: { userId: true },
+          distinct: ['userId'],
+        }),
+        this.prisma.employeeProfile.findUnique({
+          where: { id: accepted.assignedEmployeeId },
+          select: { userId: true },
+        }),
+      ]);
+      const payload = {
+        reference: accepted.reference,
+        salonName: accepted.salonName,
+      };
+      for (const { userId } of admins) {
+        await this.notifications.notify(
+          userId,
+          'onboarding.owner_activated',
+          payload,
+          `admin/onboarding/${accepted.applicationId}`,
+        );
+      }
+      if (employee) {
+        await this.notifications.notify(
+          employee.userId,
+          'onboarding.owner_activated',
+          payload,
+          `employee/onboarding/${accepted.applicationId}`,
+        );
+      }
+    } catch (err) {
+      new Logger(AuthService.name).warn(
+        `Owner-activation notice failed: ${err instanceof Error ? err.message : 'unknown error'}`,
+      );
+    }
   }
 
   private async assertAdminTotp(

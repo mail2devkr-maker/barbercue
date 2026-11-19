@@ -34,3 +34,5 @@ export * from './assistant';
 export * from './permanent-deletion';
 export * from './assistant-voice-check';
 export * from './customer-dashboard';
+export * from './onboarding';
+export * from './crm';

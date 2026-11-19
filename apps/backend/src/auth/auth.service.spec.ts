@@ -67,6 +67,7 @@ describe('AuthService', () => {
       create: jest.Mock;
       updateMany: jest.Mock;
     };
+    salonOnboardingInvitation: { findUnique: jest.Mock };
     $transaction: jest.Mock;
   };
   let passwordService: { hash: jest.Mock; compare: jest.Mock };
@@ -149,6 +150,10 @@ describe('AuthService', () => {
         findUnique: jest.fn().mockResolvedValue(null),
         create: jest.fn(),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      // An ordinary reset token is not an onboarding invitation.
+      salonOnboardingInvitation: {
+        findUnique: jest.fn().mockResolvedValue(null),
       },
       // Supports both call shapes AuthService actually uses: the array form
       // (resetPassword's batch of writes) and the interactive-callback form (googleLogin's

@@ -133,6 +133,122 @@ enum CrmLeadStatus {
   FOLLOW_UP
   ONBOARDED
   LOST
+  // CRM 2.0 (additive). Labels: DEMO_SCHEDULED = "Meeting scheduled", FOLLOW_UP = "Follow-up required",
+  // LOST = "Not interested", ONBOARDED = "Activated" — see packages/shared/src/crm.ts.
+  ASSIGNED
+  CALL_PENDING
+  CONTACT_ATTEMPTED
+  NO_ANSWER
+  CALLBACK_REQUESTED
+  MEETING_COMPLETED
+  ONBOARDING_STARTED
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  DUPLICATE
+  INVALID_CONTACT
+}
+
+enum CrmLeadPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum CrmTaskType {
+  CALL_OWNER
+  SCHEDULE_MEETING
+  COMPLETE_MEETING
+  REVISIT_SALON
+  COMPLETE_ONBOARDING
+  CAPTURE_PHOTOS
+  UPLOAD_MENU
+  VERIFY_GPS
+  PRICING_FOLLOW_UP
+  INSTALL_QR
+  TRAIN_OWNER
+  ACTIVATE_SALON
+  RESOLVE_SUPPORT
+  OTHER
+}
+
+enum CrmTaskStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+  BLOCKED
+  CANCELLED
+}
+
+enum CrmMeetingMode {
+  PHYSICAL
+  ONLINE
+  PHONE
+}
+
+enum CrmMeetingStatus {
+  SCHEDULED
+  CONFIRMED
+  COMPLETED
+  RESCHEDULED
+  CANCELLED
+  NO_SHOW
+}
+
+enum CrmCallOutcome {
+  CONNECTED
+  NO_ANSWER
+  BUSY
+  SWITCHED_OFF
+  INVALID_NUMBER
+  CALLBACK_REQUESTED
+  INTERESTED
+  NOT_INTERESTED
+  MEETING_SCHEDULED
+  OTHER
+}
+
+enum SalesRecordingStatus {
+  UPLOADED
+  DELETED
+}
+
+enum SalesAnalysisStatus {
+  NOT_CONFIGURED
+  DISABLED
+  QUEUED
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum SupportTicketCategory {
+  APP_PROBLEM
+  CRM_ISSUE
+  ONBOARDING_ISSUE
+  CAMERA_GPS
+  LEAD_ASSIGNMENT
+  OWNER_DASHBOARD
+  LOGIN_PASSWORD
+  INCORRECT_SALON_INFO
+  OWNER_COMPLAINT
+  PRICING_DISPUTE
+  FIELD_OPERATIONS
+  QR_CODE
+  PAYMENT_SUBSCRIPTION
+  OTHER
+}
+
+enum SupportTicketStatus {
+  OPEN
+  ASSIGNED
+  IN_PROGRESS
+  WAITING_EMPLOYEE
+  WAITING_SALON
+  RESOLVED
+  CLOSED
+  REOPENED
 }
 
 enum CrmLeadSource {
@@ -562,6 +678,19 @@ model User {
   manualChairOccupanciesEnded   ManualChairOccupancy[]   @relation("ManualChairOccupancyEndedBy")
   employeeProfile               EmployeeProfile?
   createdDemoWorkspaces         OwnerDemoWorkspace[]     @relation("OwnerDemoWorkspaceCreator")
+  onboardingCreated             SalonOnboardingApplication[] @relation("OnboardingCreatedBy")
+  onboardingReviewing           SalonOnboardingApplication[] @relation("OnboardingReviewer")
+  onboardingApproved            SalonOnboardingApplication[] @relation("OnboardingApprovedBy")
+  onboardingReviews             SalonOnboardingReview[]
+  onboardingStatusChanges       SalonOnboardingStatusHistory[]
+  onboardingMediaUploads        SalonOnboardingMedia[]
+  onboardingInvitations         SalonOnboardingInvitation[]
+  crmLeadImports                CrmLeadImportJob[]      @relation("CrmLeadImportUploader")
+  crmLeadActivities             CrmLeadActivity[]       @relation("CrmLeadActivityActor")
+  crmTasksCreated               CrmTask[]               @relation("CrmTaskCreator")
+  supportTicketsCreated         SupportTicket[]         @relation("SupportTicketCreator")
+  supportTicketsAssigned        SupportTicket[]         @relation("SupportTicketAssignee")
+  supportTicketComments         SupportTicketComment[]  @relation("SupportTicketCommentAuthor")
   financeContributor            FinanceContributor?
 
   @@map("users")
@@ -629,6 +758,11 @@ model EmployeeProfile {
   crmVisits    EmployeeCrmVisit[]
   crmFollowUps EmployeeCrmFollowUp[]
   voiceVisitLogs EmployeeVoiceVisitLog[]
+  crmTasks       CrmTask[]
+  crmMeetings    CrmMeeting[]
+  crmCalls       CrmCall[]
+  salesRecordings SalesRecording[]
+  onboardingApplications SalonOnboardingApplication[]
 
   @@map("employee_profiles")
 }
@@ -653,16 +787,57 @@ model EmployeeCrmLead {
   onboardedAt       DateTime?
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
+  // CRM 2.0 — one central lead record; every call, meeting, task, visit, recording and the
+  // onboarding application hang off it. All columns optional so existing leads stay valid.
+  businessType      String?         @db.VarChar(40)
+  ownerName         String?         @db.VarChar(120)
+  managerName       String?         @db.VarChar(120)
+  alternatePhone    String?         @db.VarChar(20)
+  whatsappPhone     String?         @db.VarChar(20)
+  state             String?         @db.VarChar(80)
+  postalCode        String?         @db.VarChar(12)
+  mapsUrl           String?         @db.VarChar(500)
+  latitude          Float?
+  longitude         Float?
+  salonSize         String?         @db.VarChar(40)
+  chairCount        Int?
+  existingSoftware  String?         @db.VarChar(120)
+  territory         String?         @db.VarChar(80)
+  priority          CrmLeadPriority @default(NORMAL)
+  interestLevel     Int?
+  nextAction        String?         @db.VarChar(200)
+  nextFollowUpAt    DateTime?
+  lastContactedAt   DateTime?
+  contactAttempts   Int             @default(0)
+  meetingAt         DateTime?
+  objections        String?         @db.VarChar(1000)
+  assignedAt        DateTime?
+  assignedByUserId  String?
+  createdByUserId   String?
+  importJobId       String?         @db.Uuid
+  importJob         CrmLeadImportJob? @relation(fields: [importJobId], references: [id], onDelete: SetNull)
 
   visits            EmployeeCrmVisit[]
   followUps         EmployeeCrmFollowUp[]
   voiceVisitLogs    EmployeeVoiceVisitLog[]
+  onboardingApplication SalonOnboardingApplication?
+  activities        CrmLeadActivity[]
+  tasks             CrmTask[]
+  meetings          CrmMeeting[]
+  calls             CrmCall[]
+  recordings        SalesRecording[]
+  tickets           SupportTicket[]
 
   @@index([employeeProfileId, status])
   @@index([employeeProfileId, createdAt])
   @@unique([id, employeeProfileId])
   @@index([phone])
   @@index([email])
+  @@index([status, updatedAt])
+  @@index([territory, status])
+  @@index([city])
+  @@index([nextFollowUpAt])
+  @@index([importJobId])
   @@map("employee_crm_leads")
 }
 
@@ -808,6 +983,8 @@ model PasswordResetToken {
   expiresAt DateTime
   usedAt    DateTime?
   createdAt DateTime  @default(now())
+
+  onboardingInvitation SalonOnboardingInvitation?
 
   @@index([userId, createdAt])
   @@map("password_reset_tokens")
@@ -1122,6 +1299,7 @@ model Salon {
   inventorySettings        InventorySettings?
   inventoryAlerts          InventoryAlert[]
   demoWorkspace               OwnerDemoWorkspace?
+  onboardingApplication       SalonOnboardingApplication?
 
   @@unique([cityId, slug])
   @@map("salons")
@@ -2584,6 +2762,257 @@ model ShopWishlistItem {
   @@map("shop_wishlist_items")
 }
 
+// ---------- Employee CRM 2.0 ----------
+
+model CrmLeadImportJob {
+  id               String   @id @default(uuid()) @db.Uuid
+  uploadedByUserId String
+  uploadedBy       User     @relation("CrmLeadImportUploader", fields: [uploadedByUserId], references: [id], onDelete: Restrict)
+  fileName         String   @db.VarChar(255)
+  fileSha256       String   @db.VarChar(64)
+  status           String   @default("PREVIEWED") @db.VarChar(20)
+  columnMapping    Json?
+  parsedRows       Json?
+  issues           Json?
+  defaultEmployeeProfileId String?
+  totalRows        Int      @default(0)
+  createdCount     Int      @default(0)
+  duplicateCount   Int      @default(0)
+  errorCount       Int      @default(0)
+  createdAt        DateTime @default(now()) @db.Timestamptz(6)
+  completedAt      DateTime? @db.Timestamptz(6)
+
+  leads EmployeeCrmLead[]
+
+  @@index([createdAt])
+  @@index([fileSha256])
+  @@map("crm_lead_import_jobs")
+}
+
+// The lead's timeline: every assignment, status change, call, meeting, task, visit, recording,
+// onboarding step and ticket writes one row, so the history never has to be reassembled.
+model CrmLeadActivity {
+  id          String          @id @default(uuid()) @db.Uuid
+  leadId      String
+  lead        EmployeeCrmLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  actorUserId String?
+  actor       User?           @relation("CrmLeadActivityActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  type        String          @db.VarChar(40)
+  summary     String          @db.VarChar(500)
+  metadata    Json?
+  createdAt   DateTime        @default(now()) @db.Timestamptz(6)
+
+  @@index([leadId, createdAt])
+  @@index([type, createdAt])
+  @@map("crm_lead_activities")
+}
+
+model CrmTask {
+  id                String          @id @default(uuid()) @db.Uuid
+  number            Int             @unique @default(autoincrement())
+  subject           String          @db.VarChar(200)
+  description       String?         @db.VarChar(2000)
+  type              CrmTaskType     @default(OTHER)
+  priority          CrmLeadPriority @default(NORMAL)
+  status            CrmTaskStatus   @default(NOT_STARTED)
+  leadId            String?
+  lead              EmployeeCrmLead? @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  onboardingApplicationId String?
+  assigneeEmployeeId String
+  assignee          EmployeeProfile @relation(fields: [assigneeEmployeeId], references: [id], onDelete: Restrict)
+  createdByUserId   String
+  createdBy         User            @relation("CrmTaskCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  dueAt             DateTime?       @db.Timestamptz(6)
+  completedAt       DateTime?       @db.Timestamptz(6)
+  blockedReason     String?         @db.VarChar(300)
+  createdAt         DateTime        @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime        @updatedAt @db.Timestamptz(6)
+
+  @@index([assigneeEmployeeId, status, dueAt])
+  @@index([leadId])
+  @@index([status, dueAt])
+  @@map("crm_tasks")
+}
+
+model CrmMeeting {
+  id                String           @id @default(uuid()) @db.Uuid
+  leadId            String
+  lead              EmployeeCrmLead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  employeeProfileId String
+  employeeProfile   EmployeeProfile  @relation(fields: [employeeProfileId], references: [id], onDelete: Restrict)
+  contactName       String?          @db.VarChar(120)
+  contactPhone      String?          @db.VarChar(20)
+  startsAt          DateTime         @db.Timestamptz(6)
+  endsAt            DateTime?        @db.Timestamptz(6)
+  mode              CrmMeetingMode   @default(PHYSICAL)
+  location          String?          @db.VarChar(300)
+  purpose           String?          @db.VarChar(200)
+  agenda            String?          @db.VarChar(1000)
+  status            CrmMeetingStatus @default(SCHEDULED)
+  outcome           String?          @db.VarChar(1000)
+  notes             String?          @db.VarChar(2000)
+  nextAction        String?          @db.VarChar(200)
+  followUpAt        DateTime?        @db.Timestamptz(6)
+  createdByUserId   String
+  createdAt         DateTime         @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime         @updatedAt @db.Timestamptz(6)
+
+  recordings SalesRecording[]
+
+  @@index([employeeProfileId, startsAt])
+  @@index([leadId, startsAt])
+  @@index([status, startsAt])
+  @@map("crm_meetings")
+}
+
+// A scheduled call and/or its logged outcome. Outcomes are entered by the employee; ordinary
+// browser click-to-call cannot record or monitor a phone call.
+model CrmCall {
+  id                String          @id @default(uuid()) @db.Uuid
+  leadId            String
+  lead              EmployeeCrmLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  employeeProfileId String
+  employeeProfile   EmployeeProfile @relation(fields: [employeeProfileId], references: [id], onDelete: Restrict)
+  scheduledAt       DateTime?       @db.Timestamptz(6)
+  calledAt          DateTime?       @db.Timestamptz(6)
+  outcome           CrmCallOutcome?
+  durationSeconds   Int?
+  notes             String?         @db.VarChar(2000)
+  nextCallbackAt    DateTime?       @db.Timestamptz(6)
+  interestLevel     Int?
+  nextAction        String?         @db.VarChar(200)
+  createdByUserId   String
+  createdAt         DateTime        @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime        @updatedAt @db.Timestamptz(6)
+
+  @@index([employeeProfileId, scheduledAt])
+  @@index([employeeProfileId, calledAt])
+  @@index([leadId, createdAt])
+  @@map("crm_calls")
+}
+
+// A consented sales conversation. Audio lives in private object storage (never public); the
+// consent statement, method and time are stored with it.
+model SalesRecording {
+  id                String               @id @default(uuid()) @db.Uuid
+  leadId            String
+  lead              EmployeeCrmLead      @relation(fields: [leadId], references: [id], onDelete: Restrict)
+  meetingId         String?              @db.Uuid
+  meeting           CrmMeeting?          @relation(fields: [meetingId], references: [id], onDelete: SetNull)
+  employeeProfileId String
+  employeeProfile   EmployeeProfile      @relation(fields: [employeeProfileId], references: [id], onDelete: Restrict)
+  storageKey        String?              @db.VarChar(300)
+  mimeType          String               @db.VarChar(60)
+  sizeBytes         Int
+  sha256            String               @db.VarChar(64)
+  durationSeconds   Int
+  language          String               @default("hi-IN") @db.VarChar(16)
+  consentGiven      Boolean
+  consentMethod     String               @db.VarChar(30)
+  consentStatement  String               @db.VarChar(1000)
+  consentAt         DateTime             @db.Timestamptz(6)
+  participants      String?              @db.VarChar(300)
+  status            SalesRecordingStatus @default(UPLOADED)
+  analysisStatus    SalesAnalysisStatus  @default(NOT_CONFIGURED)
+  retentionUntil    DateTime?            @db.Timestamptz(6)
+  deletedAt         DateTime?            @db.Timestamptz(6)
+  deletedByUserId   String?
+  submissionKey     String               @db.VarChar(80)
+  createdAt         DateTime             @default(now()) @db.Timestamptz(6)
+
+  analyses SalesRecordingAnalysis[]
+
+  @@unique([employeeProfileId, submissionKey])
+  @@index([leadId, createdAt])
+  @@index([employeeProfileId, createdAt])
+  @@index([analysisStatus])
+  @@map("sales_recordings")
+}
+
+// Real AI output only (transcript + evaluation from a configured provider); managers may correct it.
+model SalesRecordingAnalysis {
+  id               String              @id @default(uuid()) @db.Uuid
+  recordingId      String              @db.Uuid
+  recording        SalesRecording      @relation(fields: [recordingId], references: [id], onDelete: Cascade)
+  provider         String              @db.VarChar(40)
+  model            String?             @db.VarChar(80)
+  status           SalesAnalysisStatus
+  transcript       String?             @db.Text
+  report           Json?
+  overallScore     Int?
+  errorMessage     String?             @db.VarChar(500)
+  estimatedCostUsd Decimal?            @db.Decimal(10, 4)
+  reviewedByUserId String?
+  reviewerNotes    String?             @db.VarChar(2000)
+  correctedScore   Int?
+  createdAt        DateTime            @default(now()) @db.Timestamptz(6)
+  completedAt      DateTime?           @db.Timestamptz(6)
+
+  @@index([recordingId, createdAt])
+  @@map("sales_recording_analyses")
+}
+
+model SupportTicket {
+  id                String                @id @default(uuid()) @db.Uuid
+  number            Int                   @unique @default(autoincrement())
+  createdByUserId   String
+  createdBy         User                  @relation("SupportTicketCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  leadId            String?
+  lead              EmployeeCrmLead?      @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  salonId           String?
+  category          SupportTicketCategory
+  subject           String                @db.VarChar(200)
+  description       String                @db.VarChar(5000)
+  priority          CrmLeadPriority       @default(NORMAL)
+  status            SupportTicketStatus   @default(OPEN)
+  assignedToUserId  String?
+  assignedTo        User?                 @relation("SupportTicketAssignee", fields: [assignedToUserId], references: [id], onDelete: SetNull)
+  slaDueAt          DateTime              @db.Timestamptz(6)
+  firstResponseAt   DateTime?             @db.Timestamptz(6)
+  escalatedAt       DateTime?             @db.Timestamptz(6)
+  resolutionNotes   String?               @db.VarChar(2000)
+  resolvedAt        DateTime?             @db.Timestamptz(6)
+  closedAt          DateTime?             @db.Timestamptz(6)
+  createdAt         DateTime              @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime              @updatedAt @db.Timestamptz(6)
+
+  comments    SupportTicketComment[]
+  attachments SupportTicketAttachment[]
+
+  @@index([createdByUserId, createdAt])
+  @@index([status, slaDueAt])
+  @@index([assignedToUserId, status])
+  @@map("support_tickets")
+}
+
+model SupportTicketComment {
+  id           String        @id @default(uuid()) @db.Uuid
+  ticketId     String        @db.Uuid
+  ticket       SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorUserId String
+  author       User          @relation("SupportTicketCommentAuthor", fields: [authorUserId], references: [id], onDelete: Restrict)
+  body         String        @db.VarChar(5000)
+  internal     Boolean       @default(false)
+  createdAt    DateTime      @default(now()) @db.Timestamptz(6)
+
+  @@index([ticketId, createdAt])
+  @@map("support_ticket_comments")
+}
+
+model SupportTicketAttachment {
+  id             String        @id @default(uuid()) @db.Uuid
+  ticketId       String        @db.Uuid
+  ticket         SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  storageKey     String        @db.VarChar(300)
+  mimeType       String        @db.VarChar(60)
+  sizeBytes      Int
+  uploadedById   String
+  createdAt      DateTime      @default(now()) @db.Timestamptz(6)
+
+  @@index([ticketId])
+  @@map("support_ticket_attachments")
+}
+
 // ---------- Subscription (inactive in V1 — see ARCHITECTURE.md §16) ----------
 
 model Plan {
@@ -3168,6 +3597,389 @@ model InventoryAlert {
 
   @@index([salonId, resolvedAt, createdAt])
   @@map("inventory_alerts")
+}
+
+// ---------- Employee-to-admin salon onboarding ----------
+// A field employee's application to list a salon. Nothing here is public: the master Salon row is
+// created only on admin approval (status PENDING, so still invisible to discovery), and publication
+// is a separate, recorded admin decision (publishAuthorizedAt). Unknown details stay NULL; the
+// workflow never fills in a value nobody supplied.
+
+enum OnboardingStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  CHANGES_REQUESTED
+  RESUBMITTED
+  REJECTED
+  APPROVED
+  OWNER_INVITED
+  AWAITING_OWNER_ACTIVATION
+  READY_TO_PUBLISH
+  ACTIVE
+  SUSPENDED
+}
+
+enum OnboardingGender {
+  MEN
+  WOMEN
+  UNISEX
+}
+
+enum OnboardingSalonKind {
+  BARBER_SHOP
+  BEAUTY_SALON
+  UNISEX_SALON
+  SPA
+  OTHER
+}
+
+enum OnboardingMediaCategory {
+  EXTERIOR
+  INTERIOR
+  STATIONS
+  RECEPTION
+  LOGO
+  MENU
+  OTHER
+  ENTRANCE
+  INTERIOR_LEFT
+  INTERIOR_RIGHT
+  WASH_STATIONS
+  WAITING_AREA
+  EQUIPMENT
+  RETAIL_DISPLAY
+}
+
+enum OnboardingServiceSource {
+  MANUAL
+  AI_EXTRACTED
+}
+
+enum OnboardingPriceType {
+  FIXED
+  STARTS_FROM
+}
+
+enum OnboardingReviewDecision {
+  START_REVIEW
+  NOTE
+  CORRECTION
+  REQUEST_CHANGES
+  REJECT
+  APPROVE
+}
+
+// SENT means the provider accepted the message; CAPTURED_DEV means the development console
+// sender logged the link and nothing left the machine. Neither is "delivered".
+enum OnboardingInvitationStatus {
+  PENDING
+  SENT
+  CAPTURED_DEV
+  FAILED
+  DELIVERY_UNAVAILABLE
+  ACCEPTED
+  REVOKED
+}
+
+model SalonOnboardingApplication {
+  id                         String               @id @default(uuid())
+  // Display reference only ("FQ-ONB-2026-000001"); never used for authorization or public access.
+  // Assigned by a Postgres sequence default (see migration 20261119090000_salon_onboarding).
+  reference                  String               @unique @default(dbgenerated("(((('FQ-ONB-'::text || to_char(now(), 'YYYY'::text)) || '-'::text) || lpad((nextval('salon_onboarding_reference_seq'::regclass))::text, 6, '0'::text)))"))
+  // Incremented on every edit after first submission and on every admin correction, so a review
+  // decision records exactly which version it judged.
+  version                    Int                  @default(1)
+  status                     OnboardingStatus     @default(DRAFT)
+  leadId                     String               @unique
+  lead                       EmployeeCrmLead      @relation(fields: [leadId], references: [id], onDelete: Restrict)
+  salonId                    String?              @unique
+  salon                      Salon?               @relation(fields: [salonId], references: [id], onDelete: Restrict)
+  assignedEmployeeId         String
+  assignedEmployee           EmployeeProfile      @relation(fields: [assignedEmployeeId], references: [id], onDelete: Restrict)
+  createdByUserId            String
+  createdBy                  User                 @relation("OnboardingCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  // Snapshot of the employee's territory at creation; drives read-only sharing between employees.
+  territory                  String?              @db.VarChar(120)
+  reviewerId                 String?
+  reviewer                   User?                @relation("OnboardingReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+
+  // Step 1 - identity
+  salonName                  String               @db.VarChar(160)
+  genderCategory             OnboardingGender?
+  salonKind                  OnboardingSalonKind?
+  description                String?              @db.VarChar(2000)
+  brandName                  String?              @db.VarChar(160)
+  websiteUrl                 String?              @db.VarChar(500)
+  instagramUrl               String?              @db.VarChar(500)
+  mapsUrl                    String?              @db.VarChar(1000)
+  isFranchise                Boolean?
+  branchCount                Int?
+
+  // Step 2 - owner / contact (private until the owner account exists)
+  ownerName                  String?              @db.VarChar(160)
+  ownerPhone                 String?              @db.VarChar(20)
+  ownerWhatsapp              String?              @db.VarChar(20)
+  ownerEmail                 String?              @db.VarChar(254)
+  alternatePhone             String?              @db.VarChar(20)
+  managerName                String?              @db.VarChar(160)
+  managerPhone               String?              @db.VarChar(20)
+  preferredLanguage          String?              @db.VarChar(40)
+
+  // Step 3 - address
+  shopNumber                 String?              @db.VarChar(60)
+  buildingName               String?              @db.VarChar(160)
+  streetAddress              String?              @db.VarChar(300)
+  locality                   String?              @db.VarChar(160)
+  city                       String?              @db.VarChar(120)
+  district                   String?              @db.VarChar(120)
+  state                      String?              @db.VarChar(120)
+  postalCode                 String?              @db.VarChar(12)
+  country                    String?              @db.VarChar(80)
+  landmark                   String?              @db.VarChar(200)
+  latitude                   Float?
+  longitude                  Float?
+  // GPS / MAP_PIN / MANUAL: coordinates are only stored with an explicit source.
+  coordinatesSource          String?              @db.VarChar(16)
+  // CRM 2.0 GPS verification of the salon entrance (device capture). Never public until approval.
+  gpsAccuracyMeters          Float?
+  gpsCapturedAt              DateTime?
+  gpsCapturedById            String?
+  locationVerified           Boolean              @default(false)
+
+  // Step 4 - operations
+  employeeCount              Int?
+  chairCount                 Int?
+  activeChairCount           Int?
+  maleStaffCount             Int?
+  femaleStaffCount           Int?
+  walkInsAccepted            Boolean?
+  bookingsAccepted           Boolean?
+  liveQueueSupported         Boolean?
+  appointmentIntervalMinutes Int?
+  averageServiceMinutes      Int?
+  specialTimings             String?              @db.VarChar(1000)
+  // CRM 2.0 operations details
+  washStationCount           Int?
+  weeklyHolidays             String[]             @default([])
+  amenities                  Json?
+  qrInstallReady             Boolean?
+  inventoryInterest          Boolean?
+  ownerTrainingStatus        String?              @db.VarChar(20)
+
+  // Step 7 - verification and consent
+  consentContact             Boolean              @default(false)
+  consentListing             Boolean              @default(false)
+  consentAccuracy            Boolean              @default(false)
+  consentAuthorization       Boolean              @default(false)
+  consentCapturedAt          DateTime?
+  // How the owner's consent was documented (an employee checkbox alone is not proof).
+  consentMethod              String?              @db.VarChar(30)
+  consentByName              String?              @db.VarChar(120)
+  consentByRole              String?              @db.VarChar(40)
+  consentEvidence            Json?
+  gstin                      String?              @db.VarChar(15)
+  businessRegistration       String?              @db.VarChar(200)
+  employeeNotes              String?              @db.VarChar(2000)
+  openQuestions              String?              @db.VarChar(2000)
+
+  // Admin-only fields
+  internalNotes              String?              @db.VarChar(4000)
+  photoExceptionReason       String?              @db.VarChar(500)
+  photoExceptionById         String?
+  // [{ field, message }]: exactly which information needs correction.
+  changeRequest              Json?
+
+  firstSubmittedAt           DateTime?
+  submittedAt                DateTime?
+  reviewStartedAt            DateTime?
+  approvedAt                 DateTime?
+  approvedById               String?
+  approvedBy                 User?                @relation("OnboardingApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+  approvedVersion            Int?
+  rejectedAt                 DateTime?
+  rejectionReason            String?              @db.VarChar(1000)
+  publishAuthorizedAt        DateTime?
+  publishAuthorizedById      String?
+  publishedAt                DateTime?
+  suspendedAt                DateTime?
+  createdAt                  DateTime             @default(now())
+  updatedAt                  DateTime             @updatedAt
+
+  hours         SalonOnboardingHours[]
+  services      SalonOnboardingService[]
+  media         SalonOnboardingMedia[]
+  extractions   SalonOnboardingExtraction[]
+  reviews       SalonOnboardingReview[]
+  statusHistory SalonOnboardingStatusHistory[]
+  invitations   SalonOnboardingInvitation[]
+
+  @@index([status, submittedAt])
+  @@index([assignedEmployeeId, status])
+  @@index([territory, status])
+  @@index([city])
+  @@index([ownerPhone])
+  @@index([ownerEmail])
+  @@index([reviewerId, status])
+  @@map("salon_onboarding_applications")
+}
+
+// One row per weekday (0 = Sunday .. 6 = Saturday, matching OperatingHours). Real TIME columns;
+// closesNextDay marks hours that run past midnight (e.g. 18:00 -> 02:00).
+model SalonOnboardingHours {
+  id            String                     @id @default(uuid())
+  applicationId String
+  application   SalonOnboardingApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  dayOfWeek     Int
+  isClosed      Boolean                    @default(false)
+  opensAt       DateTime?                  @db.Time(0)
+  closesAt      DateTime?                  @db.Time(0)
+  closesNextDay Boolean                    @default(false)
+
+  @@unique([applicationId, dayOfWeek])
+  @@map("salon_onboarding_hours")
+}
+
+model SalonOnboardingService {
+  id                   String                     @id @default(uuid())
+  applicationId        String
+  application          SalonOnboardingApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  serviceName          String                     @db.VarChar(120)
+  // Lowercased, punctuation-free name + gender; merges duplicates across photos and manual rows.
+  normalizedKey        String                     @db.VarChar(160)
+  category             String?                    @db.VarChar(80)
+  applicableGender     OnboardingGender?
+  basePrice            Decimal?                   @db.Decimal(10, 2)
+  priceType            OnboardingPriceType        @default(FIXED)
+  discountedPrice      Decimal?                   @db.Decimal(10, 2)
+  // Never defaulted: a missing duration stays NULL until the employee or owner enters it.
+  durationMinutes      Int?
+  description          String?                    @db.VarChar(500)
+  isActive             Boolean                    @default(true)
+  sourceType           OnboardingServiceSource    @default(MANUAL)
+  sourceMediaId        String?
+  sourceMedia          SalonOnboardingMedia?      @relation(fields: [sourceMediaId], references: [id], onDelete: SetNull)
+  sourcePage           Int?
+  extractionConfidence Float?
+  // Field names the extractor was unsure about (e.g. ["basePrice"]); cleared when confirmed.
+  uncertainFields      String[]
+  confirmedByEmployee  Boolean                    @default(false)
+  sortOrder            Int                        @default(0)
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
+
+  @@index([applicationId, sortOrder])
+  @@map("salon_onboarding_services")
+}
+
+// Private files. storageKey points into private storage only, never a public URL; files are
+// streamed through authenticated API routes.
+model SalonOnboardingMedia {
+  id               String                     @id @default(uuid())
+  applicationId    String
+  application      SalonOnboardingApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  storageKey       String                     @unique @db.VarChar(300)
+  category         OnboardingMediaCategory
+  originalFilename String                     @db.VarChar(200)
+  mimeType         String                     @db.VarChar(40)
+  fileSize         Int
+  sha256           String                     @db.VarChar(64)
+  width            Int?
+  height           Int?
+  uploadedById     String
+  uploadedBy       User                       @relation(fields: [uploadedById], references: [id], onDelete: Restrict)
+  createdAt        DateTime                   @default(now())
+  deletedAt        DateTime?
+
+  services    SalonOnboardingService[]
+  extractions SalonOnboardingExtraction[]
+
+  // Where/when the photo was taken (with the employee's permission). Private: never copied to
+  // public salon photos and never used as the salon's location.
+  capturedAt       DateTime?
+  captureLatitude  Float?
+  captureLongitude Float?
+  captureAccuracy  Float?
+
+  @@index([applicationId, category])
+  @@index([applicationId, sha256])
+  @@map("salon_onboarding_media")
+}
+
+model SalonOnboardingExtraction {
+  id            String                     @id @default(uuid())
+  applicationId String
+  application   SalonOnboardingApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  mediaId       String
+  media         SalonOnboardingMedia       @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  provider      String                     @db.VarChar(40)
+  status        String                     @db.VarChar(16)
+  serviceCount  Int                        @default(0)
+  errorCode     String?                    @db.VarChar(60)
+  result        Json?
+  requestedById String
+  createdAt     DateTime                   @default(now())
+
+  @@index([applicationId, createdAt])
+  @@map("salon_onboarding_extractions")
+}
+
+model SalonOnboardingReview {
+  id                 String                     @id @default(uuid())
+  applicationId      String
+  application        SalonOnboardingApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  reviewerId         String
+  reviewer           User                       @relation(fields: [reviewerId], references: [id], onDelete: Restrict)
+  decision           OnboardingReviewDecision
+  comments           String?                    @db.VarChar(4000)
+  // CORRECTION: [{ field, from, to }]; REQUEST_CHANGES: [{ field, message }].
+  details            Json?
+  applicationVersion Int
+  reviewedAt         DateTime                   @default(now())
+
+  @@index([applicationId, reviewedAt])
+  @@map("salon_onboarding_reviews")
+}
+
+model SalonOnboardingStatusHistory {
+  id             String                     @id @default(uuid())
+  applicationId  String
+  application    SalonOnboardingApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  previousStatus OnboardingStatus?
+  newStatus      OnboardingStatus
+  actorId        String?
+  actor          User?                      @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  reason         String?                    @db.VarChar(1000)
+  createdAt      DateTime                   @default(now())
+
+  @@index([applicationId, createdAt])
+  @@index([newStatus, createdAt])
+  @@map("salon_onboarding_status_history")
+}
+
+// The secret lives only as PasswordResetToken.tokenHash (sha256); the raw token is never stored.
+model SalonOnboardingInvitation {
+  id                   String                     @id @default(uuid())
+  applicationId        String
+  application          SalonOnboardingApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  ownerUserId          String
+  ownerUser            User                       @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
+  passwordResetTokenId String?                    @unique
+  passwordResetToken   PasswordResetToken?        @relation(fields: [passwordResetTokenId], references: [id], onDelete: SetNull)
+  channel              String                     @default("EMAIL") @db.VarChar(16)
+  status               OnboardingInvitationStatus @default(PENDING)
+  attempts             Int                        @default(0)
+  lastError            String?                    @db.VarChar(300)
+  createdById          String
+  sentAt               DateTime?
+  expiresAt            DateTime
+  acceptedAt           DateTime?
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
+
+  @@index([applicationId, createdAt])
+  @@index([ownerUserId, status])
+  @@map("salon_onboarding_invitations")
 }
 
 model AccountDeletionRequest {

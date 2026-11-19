@@ -264,12 +264,16 @@ maybe('Action Assistant batch 7 (e2e, disposable local database)', () => {
       expect(r.message).toBe(
         `${o.counts.employees} field employees: ${o.counts.leads} leads, ${o.counts.onboarded} onboarded (${o.conversionRatePercent}%), ${o.counts.overdueFollowUps} follow-ups overdue.`,
       );
-      const byName = new Map(
-        o.performance.map((e) => [e.employee.fullName, e]),
-      );
+      // Rank by each row's own figures: other suites on the shared CI database can create
+      // employees with the same display name, so a name lookup is ambiguous.
+      const names = new Set(o.performance.map((e) => e.employee.fullName));
       const rows = (r.result?.items ?? []).slice(2);
       expect(rows).toHaveLength(Math.min(8, o.performance.length));
-      const ranked = rows.map((i) => byName.get(i.title));
+      expect(rows.every((i) => names.has(i.title))).toBe(true);
+      const ranked = rows.map((i) => {
+        const m = /^(\d+) leads · (\d+) onboarded/.exec(i.detail ?? '');
+        return m ? { leads: Number(m[1]), onboarded: Number(m[2]) } : undefined;
+      });
       expect(ranked.every(Boolean)).toBe(true);
       for (let k = 1; k < ranked.length; k++) {
         const [a, b] = [ranked[k - 1]!, ranked[k]!];
