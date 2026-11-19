@@ -3,8 +3,26 @@ import { DISCOVERY_PATHS } from "@barbercue/shared";
 import type { CityDto, LocalityDto, PaginatedResult, SalonListItemDto } from "@barbercue/shared";
 import { fetchDiscovery } from "../lib/discovery-api";
 import { SITE_URL } from "../lib/seo";
+import { SEO_SERVICES } from "../lib/seo-services";
 
 export const revalidate = 3600;
+// Rendered per request (Next caches the fetches for `revalidate`), never baked at build time: the
+// build cannot always reach the backend, and a sitemap built during a backend/DB cold start used to
+// be cached for an hour with no city, area or salon pages at all.
+export const dynamic = "force-dynamic";
+
+async function withRetry<T>(load: () => Promise<T>, attempts = 3): Promise<T> {
+  let last: unknown;
+  for (let i = 0; i < attempts; i += 1) {
+    try {
+      return await load();
+    } catch (err) {
+      last = err;
+      await new Promise((r) => setTimeout(r, 1500 * (i + 1)));
+    }
+  }
+  throw last;
+}
 
 // Dynamic per PROJECT_STRUCTURE.md's "SEO details": generated from live backend data, not
 // hand-maintained. Priority tiers: homepage highest, salon pages next (the actual conversion
@@ -38,9 +56,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // Shop unavailable: keep the rest of the sitemap.
   }
 
+  entries.push({ url: `${SITE_URL}/services`, lastModified: now, changeFrequency: "weekly", priority: 0.8 });
+  for (const svc of SEO_SERVICES) {
+    entries.push({ url: `${SITE_URL}/services/${svc.slug}`, lastModified: now, changeFrequency: "weekly", priority: 0.7 });
+  }
+
   let cities: CityDto[] = [];
   try {
-    cities = await fetchDiscovery<CityDto[]>(DISCOVERY_PATHS.cities, revalidate);
+    cities = await withRetry(() => fetchDiscovery<CityDto[]>(DISCOVERY_PATHS.cities, revalidate));
   } catch {
     // Backend unreachable at build/request time — degrade to the static entries above rather
     // than failing the whole sitemap.
@@ -64,6 +87,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         revalidate,
       ).catch(() => ({ items: [] as SalonListItemDto[], nextCursor: null })),
     ]);
+
+    for (const svc of SEO_SERVICES) {
+      entries.push({ url: `${SITE_URL}/${cityPath}/services/${svc.slug}`, lastModified: now, changeFrequency: "weekly", priority: 0.7 });
+    }
 
     for (const locality of localities) {
       entries.push({
