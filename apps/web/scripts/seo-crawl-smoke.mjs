@@ -114,6 +114,7 @@ await writeFile(targetsFile, `${JSON.stringify(targets.map((path) => new URL(pat
 
 console.log(JSON.stringify({
   result: "PASS",
+  syntheticFixture: true,
   sitemapUrls: urls.length,
   educationSitemapUrls: guideUrls.length,
   crawledIndexablePages: targets.length,
