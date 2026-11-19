@@ -27,8 +27,8 @@
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background: var(--bc-ink);
-  color: var(--tv-fg-ffffff, #ffffff);
+  background: var(--bc-ink-solid);
+  color: #ffffff;
   font-size: 0.62rem;
   font-weight: 700;
   letter-spacing: 0.08em;

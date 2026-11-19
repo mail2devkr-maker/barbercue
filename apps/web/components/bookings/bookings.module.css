@@ -27,7 +27,7 @@
 
 .filterChipActive {
   border-color: var(--bc-accent);
-  background: color-mix(in srgb, var(--bc-accent) 12%, transparent);
+  background: color-mix(in srgb, var(--bc-accent-solid) 12%, transparent);
   color: var(--bc-accent);
 }
 
@@ -150,7 +150,7 @@
 .statusCancelled,
 .statusNoShow {
   color: var(--bc-accent);
-  background: color-mix(in srgb, var(--bc-accent) 14%, transparent);
+  background: color-mix(in srgb, var(--bc-accent-solid) 14%, transparent);
 }
 
 .detail {

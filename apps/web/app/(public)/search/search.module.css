@@ -805,3 +805,7 @@
   .filterSheet { width: 100%; border-left: 0; }
   .filterButton { width: 100%; justify-content: center; }
 }
+
+/* The intro sits on the dark photo in every theme: restate its designed ink (inherited tokens
+   resolve on .page, outside the keep-colours island). */
+.intro { color: var(--fq-text); }

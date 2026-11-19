@@ -186,8 +186,9 @@ describe("owner dashboard colour contrast", () => {
 
   it("uses dark ink on bright analytics and catalog actions, with a defined selected-service tint", () => {
     expect(resolve("var(--bc-accent-soft)")).toBe("#3a2131");
-    expect(ANALYTICS).toContain('color: view === id ? "#09090c" : "var(--bc-ink)"');
-    expect(CATALOG_IMPORT).toContain('background: "var(--bc-accent)", color: "#09090c"');
+    // As designed (dark): dark ink on the bright accent. The light theme supplies --bc-accent-fill-ink.
+    expect(ANALYTICS).toContain('color: view === id ? "var(--bc-accent-fill-ink, #09090c)" : "var(--bc-ink)"');
+    expect(CATALOG_IMPORT).toContain('background: "var(--bc-accent-fill, var(--bc-accent))", color: "var(--bc-accent-fill-ink, #09090c)"');
     expect(ratio("#09090c", resolve("var(--bc-accent)"))).toBeGreaterThanOrEqual(4.5);
   });
 

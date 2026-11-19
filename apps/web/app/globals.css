@@ -1,5 +1,5 @@
 :root {
-  --background: #fffdf9;
+  --background: var(--tvx-bg-fffdf9, #fffdf9);
   --foreground: #1c1a17;
 
   /* BarberCue shared design tokens (major customer-experience-polish phase) — same values already
@@ -29,6 +29,10 @@
   --bc-brand-coral: #f2542d;
   --bc-brand-orange: #ff7a3d;
   --bc-brand-navy: #1a1533;
+  /* Fixed (never themed) fills for buttons/badges drawn in the ink or accent colour. */
+  --bc-ink-solid: #1c1a17;
+  --bc-navy-text: #1a1533;
+  --bc-accent-solid: #b0413e;
   --bc-brand-gradient: linear-gradient(105deg, var(--bc-brand-pink) 0%, var(--bc-brand-coral) 54%, var(--bc-brand-orange) 100%);
   --bc-surface-tint: var(--tv-bg-f8f1e6, #f8f1e6);
   --bc-radius-xl: 26px;

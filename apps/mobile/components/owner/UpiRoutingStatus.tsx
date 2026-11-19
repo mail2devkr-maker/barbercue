@@ -1,5 +1,12 @@
-import { Text, View } from 'react-native';
+import { Text as RNText, View, type TextProps } from 'react-native';
+import { useThemeTokens } from '../../lib/theme-mode';
 import { UPI_QR_ONLY_NOTICE, type SalonPaymentQrDto } from '@barbercue/shared';
+
+/** Plain Text had no colour (black), unreadable in the dark theme: follow the theme's ink. */
+function Text(props: TextProps) {
+  const { color } = useThemeTokens();
+  return <RNText {...props} style={[{ color: color.ink }, props.style]} />;
+}
 
 /** Read-only result of the existing native QR upload; no manual routing override. */
 export function UpiRoutingStatus({ current }: {

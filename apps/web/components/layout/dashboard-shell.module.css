@@ -73,8 +73,8 @@
   height: 34px;
   place-items: center;
   border-radius: 50%;
-  background: var(--bc-ink);
-  color: var(--tv-fg-ffffff, #fff);
+  background: var(--bc-ink-solid);
+  color: #fff;
   font-family: var(--font-body);
   font-size: 0.67rem;
   font-weight: 700;

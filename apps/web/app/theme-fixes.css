@@ -1,0 +1,342 @@
+/* Theme fixes (hand-written, loaded after theme-vars.css).
+   "Keep colours" islands: sections that are dark (or photo-backed) by design keep their designed colours
+   in every theme. Setting a theme variable to `initial` makes every var(--tv-x, #original) fall back to
+   its designed value inside the island. Mark an element with data-keep-colors to use it. */
+html[data-theme] [data-keep-colors] {
+  --tvx-bg-ece6dc: initial;
+  --tvx-bg-eee2d2: initial;
+  --tvx-bg-eee7dc: initial;
+  --tvx-bg-eee8dd: initial;
+  --tvx-bg-efe0cd: initial;
+  --tvx-bg-efe7dc: initial;
+  --tvx-bg-efe8df: initial;
+  --tvx-bg-f1e6d8: initial;
+  --tvx-bg-f1eadf: initial;
+  --tvx-bg-f1ebe1: initial;
+  --tvx-bg-f6d0a8: initial;
+  --tvx-bg-fffdf9: initial;
+  --tvx-bgd-1a1533: initial;
+  --tvx-bgd-30255f: initial;
+  --tvx-bgd-3a2366: initial;
+  --tvx-bgd-421e36: initial;
+  --tvx-bgd-493a27: initial;
+  --tvx-bgd-592039: initial;
+  --tvx-fg-68480d: initial;
+  --tvx-glass-0_42: initial;
+  --tvx-glass-0_74: initial;
+  --tvx-glass-0_84: initial;
+  --tvx-glass-0_88: initial;
+  --tvx-glass-0_9: initial;
+  --tvx-glass-0_92: initial;
+  --tvx-glass-0_94: initial;
+  --tvx-glass-248-241-230-0_96: initial;
+  --tvx-glass-255-253-249-0_98: initial;
+  /* tokens resolved on an ancestor are inherited as values, so islands restate the designed ones */
+  --fq-void: #09090c;
+  --fq-charcoal: #0d0d12;
+  --fq-utility-bg: #171314;
+  --fq-hairline: rgba(255, 255, 255, 0.1);
+  --fq-text: #f7f5f4;
+  --fq-text-muted: rgba(255, 255, 255, 0.72);
+  --fq-text-faint: rgba(255, 255, 255, 0.5);
+  --tv-bg-09090c: initial;
+  --tv-bg-0d0c10: initial;
+  --tv-bg-0d0d12: initial;
+  --tv-bg-0f171a: initial;
+  --tv-bg-101014: initial;
+  --tv-bg-101016: initial;
+  --tv-bg-101017: initial;
+  --tv-bg-111111: initial;
+  --tv-bg-111a16: initial;
+  --tv-bg-121116: initial;
+  --tv-bg-12121a: initial;
+  --tv-bg-141016: initial;
+  --tv-bg-151017: initial;
+  --tv-bg-151310: initial;
+  --tv-bg-170f1a: initial;
+  --tv-bg-171314: initial;
+  --tv-bg-171319: initial;
+  --tv-bg-17141a: initial;
+  --tv-bg-171720: initial;
+  --tv-bg-171722: initial;
+  --tv-bg-1a0f14: initial;
+  --tv-bg-1a130f: initial;
+  --tv-bg-1b1b26: initial;
+  --tv-bg-1c1a17: initial;
+  --tv-bg-1c1a20: initial;
+  --tv-bg-1d1a17: initial;
+  --tv-bg-211722: initial;
+  --tv-bg-211e1a: initial;
+  --tv-bg-211e29: initial;
+  --tv-bg-22222c: initial;
+  --tv-bg-231824: initial;
+  --tv-bg-241f27: initial;
+  --tv-bg-242126: initial;
+  --tv-bg-26232b: initial;
+  --tv-bg-282832: initial;
+  --tv-bg-292431: initial;
+  --tv-bg-2a2420: initial;
+  --tv-bg-2b202e: initial;
+  --tv-bg-2d2730: initial;
+  --tv-bg-2d2735: initial;
+  --tv-bg-322d26: initial;
+  --tv-bg-33303a: initial;
+  --tv-bg-351e32: initial;
+  --tv-bg-383139: initial;
+  --tv-bg-39303e: initial;
+  --tv-bg-3a3a46: initial;
+  --tv-bg-3a3a48: initial;
+  --tv-bg-3c3328: initial;
+  --tv-bg-454556: initial;
+  --tv-bg-494050: initial;
+  --tv-bg-497862: initial;
+  --tv-bg-514067: initial;
+  --tv-bg-5b3a51: initial;
+  --tv-bg-747078: initial;
+  --tv-bg-765068: initial;
+  --tv-bg-786979: initial;
+  --tv-bg-8a8088: initial;
+  --tv-bg-98a2b3: initial;
+  --tv-bg-9d6572: initial;
+  --tv-bg-b3a6b8: initial;
+  --tv-bg-c9bdc9: initial;
+  --tv-bg-d8cebd: initial;
+  --tv-bg-d8cfc3: initial;
+  --tv-bg-e5ded2: initial;
+  --tv-bg-f4f1ec: initial;
+  --tv-bg-f5effa: initial;
+  --tv-bg-f7e6ee: initial;
+  --tv-bg-f7ede4: initial;
+  --tv-bg-f7f5f4: initial;
+  --tv-bg-f8e8e4: initial;
+  --tv-bg-f8eee8: initial;
+  --tv-bg-f8f0e5: initial;
+  --tv-bg-f8f1e6: initial;
+  --tv-bg-f8f1e8: initial;
+  --tv-bg-f8f3ec: initial;
+  --tv-bg-faf7f1: initial;
+  --tv-bg-fafafa: initial;
+  --tv-bg-fbf6ed: initial;
+  --tv-bg-fbf7f0: initial;
+  --tv-bg-fbf8f2: initial;
+  --tv-bg-fbf8f3: initial;
+  --tv-bg-fdecee: initial;
+  --tv-bg-fdf7eb: initial;
+  --tv-bg-ffe4ee: initial;
+  --tv-bg-fff0e7: initial;
+  --tv-bg-fff0f3: initial;
+  --tv-bg-fff3f5: initial;
+  --tv-bg-fff6f2: initial;
+  --tv-bg-fffdf9: initial;
+  --tv-bg-ffffff: initial;
+  --tv-bg-rgba-0-0-0-a0_16: initial;
+  --tv-bg-rgba-0-0-0-a0_18: initial;
+  --tv-bg-rgba-0-0-0-a0_2: initial;
+  --tv-bg-rgba-0-0-0-a0_28: initial;
+  --tv-bg-rgba-0-0-0-a0_3: initial;
+  --tv-bg-rgba-0-0-0-a_18: initial;
+  --tv-bg-rgba-0-0-0-a_28: initial;
+  --tv-bg-rgba-20-16-12-a0: initial;
+  --tv-bg-rgba-255-255-255-a0_015: initial;
+  --tv-bg-rgba-255-255-255-a0_025: initial;
+  --tv-bg-rgba-255-255-255-a0_03: initial;
+  --tv-bg-rgba-255-255-255-a0_035: initial;
+  --tv-bg-rgba-255-255-255-a0_04: initial;
+  --tv-bg-rgba-255-255-255-a0_05: initial;
+  --tv-bg-rgba-255-255-255-a0_06: initial;
+  --tv-bg-rgba-255-255-255-a0_08: initial;
+  --tv-bg-rgba-255-255-255-a0_09: initial;
+  --tv-bg-rgba-255-255-255-a0_1: initial;
+  --tv-bg-rgba-255-255-255-a0_10: initial;
+  --tv-bg-rgba-255-255-255-a0_11: initial;
+  --tv-bg-rgba-255-255-255-a0_12: initial;
+  --tv-bg-rgba-255-255-255-a0_14: initial;
+  --tv-bg-rgba-255-255-255-a0_16: initial;
+  --tv-bg-rgba-255-255-255-a0_2: initial;
+  --tv-bg-rgba-255-255-255-a0_22: initial;
+  --tv-bg-rgba-255-255-255-a0_24: initial;
+  --tv-bg-rgba-255-255-255-a0_25: initial;
+  --tv-bg-rgba-255-255-255-a0_28: initial;
+  --tv-bg-rgba-255-255-255-a0_3: initial;
+  --tv-bg-rgba-255-255-255-a_025: initial;
+  --tv-bg-rgba-255-255-255-a_028: initial;
+  --tv-bg-rgba-255-255-255-a_032: initial;
+  --tv-bg-rgba-255-255-255-a_035: initial;
+  --tv-bg-rgba-255-255-255-a_04: initial;
+  --tv-bg-rgba-255-255-255-a_05: initial;
+  --tv-bg-rgba-255-255-255-a_07: initial;
+  --tv-bg-rgba-255-255-255-a_09: initial;
+  --tv-bg-rgba-255-255-255-a_11: initial;
+  --tv-bg-rgba-255-255-255-a_12: initial;
+  --tv-bg-rgba-255-255-255-a_14: initial;
+  --tv-bg-rgba-255-255-255-a_22: initial;
+  --tv-bg-rgba-28-26-23-a0_05: initial;
+  --tv-bg-rgba-28-26-23-a0_12: initial;
+  --tv-bg-rgba-28-26-23-a0_22: initial;
+  --tv-bg-rgba-29-26-23-a0_08: initial;
+  --tv-bg-rgba-29-26-23-a0_09: initial;
+  --tv-bg-rgba-29-26-23-a0_1: initial;
+  --tv-bg-rgba-29-26-23-a0_12: initial;
+  --tv-bg-rgba-29-26-23-a0_14: initial;
+  --tv-bg-rgba-29-26-23-a0_16: initial;
+  --tv-bg-rgba-29-26-23-a0_22: initial;
+  --tv-bg-rgba-32-24-20-a0_045: initial;
+  --tv-bg-rgba-32-24-20-a0_055: initial;
+  --tv-bg-rgba-32-24-20-a0_09: initial;
+  --tv-bg-rgba-32-24-20-a0_14: initial;
+  --tv-bg-rgba-9-9-12-a0_08: initial;
+  --tv-bg-rgba-9-9-12-a0_12: initial;
+  --tv-bg-rgba-9-9-12-a0_18: initial;
+  --tv-bg-rgba-9-9-12-a0_2: initial;
+  --tv-bg-rgba-9-9-12-a0_25: initial;
+  --tv-fg-09090c: initial;
+  --tv-fg-111111: initial;
+  --tv-fg-171019: initial;
+  --tv-fg-171313: initial;
+  --tv-fg-1c1a17: initial;
+  --tv-fg-1d1a17: initial;
+  --tv-fg-211d1a: initial;
+  --tv-fg-48433c: initial;
+  --tv-fg-494050: initial;
+  --tv-fg-4e4941: initial;
+  --tv-fg-5f514b: initial;
+  --tv-fg-5f5852: initial;
+  --tv-fg-625f70: initial;
+  --tv-fg-655e54: initial;
+  --tv-fg-6b6357: initial;
+  --tv-fg-6b6560: initial;
+  --tv-fg-6d665f: initial;
+  --tv-fg-716960: initial;
+  --tv-fg-786979: initial;
+  --tv-fg-7b746c: initial;
+  --tv-fg-858594: initial;
+  --tv-fg-8b8277: initial;
+  --tv-fg-8b8b93: initial;
+  --tv-fg-8b8b99: initial;
+  --tv-fg-8e8e9b: initial;
+  --tv-fg-98a2b3: initial;
+  --tv-fg-9b8f98: initial;
+  --tv-fg-9d7198: initial;
+  --tv-fg-a7a7b4: initial;
+  --tv-fg-b4ac9c: initial;
+  --tv-fg-b5b5c2: initial;
+  --tv-fg-b8b8c4: initial;
+  --tv-fg-b9b3bd: initial;
+  --tv-fg-c9bdc9: initial;
+  --tv-fg-c9bfc6: initial;
+  --tv-fg-c9c9d3: initial;
+  --tv-fg-c9c9d4: initial;
+  --tv-fg-cfcfda: initial;
+  --tv-fg-d7d0c5: initial;
+  --tv-fg-d8d1c7: initial;
+  --tv-fg-e8e8ef: initial;
+  --tv-fg-f5f5fa: initial;
+  --tv-fg-f7f3f6: initial;
+  --tv-fg-f7f5f4: initial;
+  --tv-fg-f7f7fb: initial;
+  --tv-fg-f8f4ef: initial;
+  --tv-fg-faf6f8: initial;
+  --tv-fg-fffdf9: initial;
+  --tv-fg-ffffff: initial;
+  --tv-fg-rgba-248-244-239-a0_5: initial;
+  --tv-fg-rgba-248-244-239-a0_55: initial;
+  --tv-fg-rgba-248-244-239-a0_63: initial;
+  --tv-fg-rgba-248-244-239-a0_8: initial;
+  --tv-fg-rgba-248-244-239-a0_82: initial;
+  --tv-fg-rgba-248-244-239-a_42: initial;
+  --tv-fg-rgba-248-244-239-a_48: initial;
+  --tv-fg-rgba-248-244-239-a_55: initial;
+  --tv-fg-rgba-248-244-239-a_58: initial;
+  --tv-fg-rgba-248-244-239-a_62: initial;
+  --tv-fg-rgba-248-244-239-a_66: initial;
+  --tv-fg-rgba-248-244-239-a_68: initial;
+  --tv-fg-rgba-248-244-239-a_74: initial;
+  --tv-fg-rgba-248-244-239-a_78: initial;
+  --tv-fg-rgba-255-255-255-a0_05: initial;
+  --tv-fg-rgba-255-255-255-a0_3: initial;
+  --tv-fg-rgba-255-255-255-a0_42: initial;
+  --tv-fg-rgba-255-255-255-a0_5: initial;
+  --tv-fg-rgba-255-255-255-a0_55: initial;
+  --tv-fg-rgba-255-255-255-a0_56: initial;
+  --tv-fg-rgba-255-255-255-a0_62: initial;
+  --tv-fg-rgba-255-255-255-a0_65: initial;
+  --tv-fg-rgba-255-255-255-a0_66: initial;
+  --tv-fg-rgba-255-255-255-a0_68: initial;
+  --tv-fg-rgba-255-255-255-a0_7: initial;
+  --tv-fg-rgba-255-255-255-a0_72: initial;
+  --tv-fg-rgba-255-255-255-a0_76: initial;
+  --tv-fg-rgba-255-255-255-a0_78: initial;
+  --tv-fg-rgba-255-255-255-a0_82: initial;
+  --tv-fg-rgba-255-255-255-a0_96: initial;
+}
+
+/* Dark theme: the site-wide design tokens (text, muted text, borders, accent) were never part of the
+   generated variable set, so text drawn with them stayed dark on the new dark surfaces. */
+html[data-theme="dark"] {
+  --bc-ink: #f3efe9;
+  --bc-muted: #b4ab9e;
+  --bc-border: #38322b;
+  --bc-accent: #ef7d78;
+  --bc-gold: #e0b45c;
+  --bc-gold-soft: #2c2415;
+  /* ink-filled buttons would vanish into the dark page: lift them a little. */
+  --bc-ink-solid: #3a332b;
+  --bc-navy-text: #dcd6f2;
+}
+
+/* Dark theme: light surfaces the generator missed (raw light hex and translucent white cards). */
+html[data-theme="dark"] {
+  --tvx-bg-ece6dc: #201c16;
+  --tvx-bg-eee7dc: #1f1b15;
+  --tvx-bg-eee8dd: #1f1b14;
+  --tvx-bg-efe7dc: #1f1a14;
+  --tvx-bg-efe8df: #1d1913;
+  --tvx-bg-f1e6d8: #221b13;
+  --tvx-bg-fffdf9: #140f05;
+  --tvx-glass-0_74: rgba(28, 24, 20, 0.74);
+  --tvx-glass-0_84: rgba(28, 24, 20, 0.84);
+  --tvx-glass-0_88: rgba(28, 24, 20, 0.88);
+  --tvx-glass-0_9: rgba(28, 24, 20, 0.9);
+  --tvx-glass-0_92: rgba(28, 24, 20, 0.92);
+  --tvx-glass-0_94: rgba(28, 24, 20, 0.94);
+}
+
+html[data-theme="dark"] {
+  --tvx-fg-68480d: #e2bf73;
+  --tvx-glass-0_42: rgba(28, 24, 20, 0.62);
+}
+
+/* Light theme: faint/muted text converted from white-alpha was too faint on light surfaces. */
+html[data-theme="light"] {
+  --tv-fg-rgba-255-255-255-a0_42: rgba(28, 26, 23, 0.62);
+  --tv-fg-rgba-255-255-255-a0_5: rgba(28, 26, 23, 0.64);
+  --tv-fg-rgba-255-255-255-a0_55: rgba(28, 26, 23, 0.66);
+  --tv-fg-rgba-255-255-255-a0_56: rgba(28, 26, 23, 0.66);
+  --tv-fg-rgba-248-244-239-a_42: rgba(28, 26, 23, 0.62);
+  --tv-fg-rgba-248-244-239-a_48: rgba(28, 26, 23, 0.64);
+  --tv-fg-rgba-248-244-239-a0_5: rgba(28, 26, 23, 0.64);
+}
+
+/* Gradient stops the generator left raw: light stops darken in dark, dark stops lighten in light. */
+html[data-theme="dark"] {
+  --tvx-bg-eee2d2: #272017;
+  --tvx-bg-eee7dc: #1f1b15;
+  --tvx-bg-efe0cd: #2b2217;
+  --tvx-bg-f1eadf: #1c1812;
+  --tvx-bg-f1ebe1: #1b1711;
+  --tvx-bg-f6d0a8: #3d2915;
+  --tvx-glass-248-241-230-0_96: rgba(28, 24, 20, 0.96);
+  --tvx-glass-255-253-249-0_98: rgba(28, 24, 20, 0.98);
+}
+html[data-theme="light"] {
+  --tvx-bgd-1a1533: #d4d1e6;
+  --tvx-bgd-30255f: #d4d0e6;
+  --tvx-bgd-3a2366: #d7cfe8;
+  --tvx-bgd-421e36: #e5d2de;
+  --tvx-bgd-493a27: #e3dcd4;
+  --tvx-bgd-592039: #e7d0da;
+}
+
+html[data-theme="light"] {
+  --tvx-fade-211e29: rgba(245, 243, 247, 0.65);
+}

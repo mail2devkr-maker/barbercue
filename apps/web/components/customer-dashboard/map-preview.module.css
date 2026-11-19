@@ -6,7 +6,7 @@
 }
 .photo { display: block; }
 .body { min-width: 0; }
-.name { margin: 0; font-size: 1rem; color: var(--bc-brand-navy); display: flex; gap: 6px; align-items: center; }
+.name { margin: 0; font-size: 1rem; color: var(--bc-navy-text); display: flex; gap: 6px; align-items: center; }
 .name a { color: inherit; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .name a:hover { text-decoration: underline; }
 .verified {
@@ -26,6 +26,6 @@
   font-size: 0.82rem; font-weight: 700; text-decoration: none;
 }
 .primary { background: var(--bc-brand-gradient); color: #fff; }
-.secondary { border: 1px solid var(--bc-brand-navy); color: var(--bc-brand-navy); background: var(--tv-bg-ffffff, #fff); }
+.secondary { border: 1px solid var(--bc-brand-navy); color: var(--bc-navy-text); background: var(--tv-bg-ffffff, #fff); }
 .primary:focus-visible, .secondary:focus-visible { outline: 2px solid var(--bc-brand-coral); outline-offset: 2px; }
 .closed { font-size: 0.78rem; color: var(--bc-warn); font-weight: 600; }

@@ -5,7 +5,7 @@
   border-radius: var(--bc-radius-lg);
   overflow: hidden;
   border: 1px solid var(--bc-border);
-  background: #ece6dc;
+  background: var(--tvx-bg-ece6dc, #ece6dc);
   isolation: isolate;
 }
 .map { position: absolute; inset: 0; }
@@ -19,7 +19,7 @@
   position: absolute; left: 12px; bottom: 12px; z-index: 500;
   margin: 0; max-width: calc(100% - 24px);
   padding: 6px 10px; border-radius: 10px;
-  background: rgba(255, 255, 255, 0.94);
+  background: var(--tvx-glass-0_94, rgba(255, 255, 255, 0.94));
   font-size: 0.75rem; color: var(--bc-muted);
   box-shadow: var(--bc-shadow-sm);
 }
@@ -27,7 +27,7 @@
 .searchArea {
   position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 600;
   padding: 10px 18px; border: 0; border-radius: 999px;
-  background: var(--bc-brand-navy); color: var(--tv-fg-ffffff, #fff); font-weight: 700; font-size: 0.85rem;
+  background: var(--bc-brand-navy); color: #fff; font-weight: 700; font-size: 0.85rem;
   box-shadow: 0 8px 20px rgba(26, 21, 51, 0.3);
   cursor: pointer;
 }
@@ -61,7 +61,7 @@
   background: var(--bc-brand-navy);
   border: 2px solid var(--tv-bg-ffffff, #fff);
   box-shadow: 0 4px 10px rgba(26, 21, 51, 0.35);
-  color: var(--tv-fg-ffffff, #fff); font-size: 0.62rem; font-weight: 800;
+  color: #fff; font-size: 0.62rem; font-weight: 800;
   cursor: pointer;
 }
 .pinHead em { width: 10px; height: 10px; border-radius: 50%; background: var(--tv-bg-ffffff, #fff); }

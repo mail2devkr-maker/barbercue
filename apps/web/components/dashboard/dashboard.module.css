@@ -358,14 +358,14 @@
   border-color: transparent;
   background: var(--bc-brand-pink);
   background-image: var(--bc-brand-gradient);
-  color: var(--tv-fg-09090c, #09090c);
+  color: #09090c;
 }
 
 .shopCardLinks a:first-child:hover {
   border-color: transparent;
   background: var(--bc-brand-coral);
   background-image: linear-gradient(105deg, var(--bc-brand-coral), var(--bc-brand-orange));
-  color: var(--tv-fg-09090c, #09090c);
+  color: #09090c;
 }
 
 /* ---------- Setup checklist ---------- */
@@ -433,7 +433,7 @@
 .toggleActive {
   background: var(--bc-brand-pink);
   background-image: var(--bc-brand-gradient);
-  color: var(--tv-fg-09090c, #09090c);
+  color: #09090c;
   border-color: transparent;
   font-weight: 600;
 }
@@ -528,7 +528,7 @@
   border-color: transparent;
   background: var(--bc-brand-pink);
   background-image: var(--bc-brand-gradient);
-  color: var(--tv-fg-09090c, #09090c);
+  color: #09090c;
 }
 
 .setupStepCurrent span {
@@ -547,7 +547,7 @@
   justify-content: space-between;
   gap: 12px;
   border-top: 1px solid var(--bc-border);
-  background: linear-gradient(180deg, rgba(33, 30, 41, 0.65), var(--bc-surface) 24%);
+  background: linear-gradient(180deg, var(--tvx-fade-211e29, rgba(33, 30, 41, 0.65)), var(--bc-surface) 24%);
 }
 
 .setupOverviewLink {
@@ -606,7 +606,7 @@
   border-color: transparent;
   background: var(--bc-brand-pink);
   background-image: var(--bc-brand-gradient);
-  color: var(--tv-fg-09090c, #09090c);
+  color: #09090c;
 }
 
 @media (max-width: 520px) {

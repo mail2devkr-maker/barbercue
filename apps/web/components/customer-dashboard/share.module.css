@@ -7,7 +7,7 @@
   border: 1px solid var(--bc-border);
   border-radius: 999px;
   background: var(--tv-bg-ffffff, #fff);
-  color: var(--bc-brand-navy);
+  color: var(--bc-navy-text);
   cursor: pointer;
   transition: transform 140ms ease, color 140ms ease;
 }
@@ -46,7 +46,7 @@
   animation: rise 180ms ease-out;
 }
 .head { display: flex; justify-content: space-between; gap: 12px; }
-.head h2 { margin: 0; font-size: 1.2rem; color: var(--bc-brand-navy); }
+.head h2 { margin: 0; font-size: 1.2rem; color: var(--bc-navy-text); }
 .head p { margin: 4px 0 0; color: var(--bc-muted); font-size: var(--bc-text-sm); }
 .close {
   width: 36px; height: 36px; flex: none;
@@ -87,7 +87,7 @@
   color: var(--tv-fg-ffffff, #fff);
   font-weight: 800;
 }
-.copy { background: var(--bc-surface-tint); color: var(--bc-brand-navy); }
+.copy { background: var(--bc-surface-tint); color: var(--bc-navy-text); }
 .whatsapp { background: #25d366; }
 .facebook { background: #1877f2; }
 .x { background: var(--tv-bg-111111, #111); }

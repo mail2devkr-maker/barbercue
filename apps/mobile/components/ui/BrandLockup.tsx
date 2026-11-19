@@ -120,7 +120,11 @@ export function BrandLockup({
   );
 }
 
-const makeStyles = (_tokens: ThemeTokens) => StyleSheet.create({
+// Light theme: the lockup's "Fast" lettering is cream (made for dark headers), so it would vanish on a
+// light background. Seat it on a small charcoal tile (the same --fq-utility-bg as the designed header).
+const LIGHT_TILE = '#171314';
+
+const makeStyles = ({ resolved }: ThemeTokens) => StyleSheet.create({
   root: { alignItems: 'center', flexShrink: 1, minWidth: 0 },
   rootCompact: {},
   markOnly: { flexShrink: 0 },
@@ -133,7 +137,7 @@ const makeStyles = (_tokens: ThemeTokens) => StyleSheet.create({
   // space, and the clip box matches that same box exactly so rounding clips the image itself.
   lockupClipDefault: { width: 39 * LOCKUP_ASPECT_RATIO, height: 39, flexShrink: 1 },
   lockupClipCompact: { width: 33 * LOCKUP_ASPECT_RATIO, height: 33 },
-  lockupClip: { borderRadius: LOCKUP_RADIUS, overflow: 'hidden' },
+  lockupClip: { borderRadius: LOCKUP_RADIUS, overflow: 'hidden', ...(resolved === 'light' ? { backgroundColor: LIGHT_TILE, paddingHorizontal: 8, paddingVertical: 4 } : null) },
   lockupArt: { width: '100%', height: '100%' },
 
   // Auth (login-screen) presentation — width-percentage + aspectRatio rather than a JS-computed
@@ -145,6 +149,7 @@ const makeStyles = (_tokens: ThemeTokens) => StyleSheet.create({
     aspectRatio: LOCKUP_ASPECT_RATIO,
     borderRadius: AUTH_LOCKUP_RADIUS,
     overflow: 'hidden',
+    ...(resolved === 'light' ? { backgroundColor: LIGHT_TILE, padding: 10 } : null),
   },
   authArt: { width: '100%', height: '100%' },
 });

@@ -342,8 +342,8 @@
   margin-left: 8px;
   padding: 3px 7px;
   border-radius: 999px;
-  background: var(--bc-accent);
-  color: var(--tv-fg-ffffff, #ffffff);
+  background: var(--bc-accent-solid);
+  color: #ffffff;
   font-size: 0.64rem;
   font-weight: 800;
   letter-spacing: 0.07em;
@@ -434,7 +434,7 @@
   gap: 12px;
   border: 1px solid var(--bc-border);
   border-radius: var(--bc-radius-md);
-  background: rgba(255, 255, 255, 0.74);
+  background: var(--tvx-glass-0_74, rgba(255, 255, 255, 0.74));
 }
 
 .queueTools p {

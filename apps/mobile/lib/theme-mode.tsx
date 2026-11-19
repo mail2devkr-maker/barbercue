@@ -32,7 +32,8 @@ export const colorOnDark: LightTokens = {
   warn: '#ffc368',
   accent: '#ff3e57',
   accentSoft: 'rgba(255,62,87,0.14)',
-  accentContrast: '#ffffff',
+  // White on this coral is only 3.45:1; near-black reads 5.9:1 (same as the web dark theme's button ink).
+  accentContrast: '#09090c',
   gold: '#e0b25a',
   goldSoft: 'rgba(224,178,90,0.14)',
   brandGradientStart: designedLight.brandGradientStart,
@@ -53,11 +54,11 @@ export const fastQueOnLight: DarkTokens = {
   borderStrong: 'rgba(176,65,62,0.30)',
   text: '#1c1a17',
   textSecondary: 'rgba(28,26,23,0.74)',
-  textMuted: 'rgba(28,26,23,0.56)',
+  textMuted: 'rgba(28,26,23,0.66)',
   gradientStart: designedDark.gradientStart,
   gradientMid: designedDark.gradientMid,
   gradientEnd: designedDark.gradientEnd,
-  orange: '#e8622c',
+  orange: '#b8461a',
   pink: '#d1086f',
   coral: '#e0304a',
   success: '#2e7d32',
@@ -106,8 +107,11 @@ const DESIGNED: ThemeTokens = {
   surface: { card: '#ffffff', onCard: designedLight.ink, statusBarOn: 'dark', errorText: '#8f302d', inverseText: '#ffffff', photoBackdrop: '#1c1a17' },
   resolved: 'designed',
 };
+/** Light theme: the designed `color` palette, with the brand coral deepened where it is read as text. */
+export const colorOnLight: LightTokens = { ...designedLight, brandCoral: '#d4183a' };
+
 const LIGHT: ThemeTokens = {
-  color: designedLight,
+  color: colorOnLight,
   fastQue: fastQueOnLight,
   surface: { card: '#ffffff', onCard: designedLight.ink, statusBarOn: 'dark', errorText: '#8f302d', inverseText: '#ffffff', photoBackdrop: '#1c1a17' },
   resolved: 'light',

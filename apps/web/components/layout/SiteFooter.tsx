@@ -38,7 +38,7 @@ export function SiteFooter() {
   );
 
   return (
-    <footer id="site-footer" className={styles.footer}>
+    <footer id="site-footer" className={styles.footer} data-keep-colors>
       <div className={styles.footerInner}>
         <div className={styles.footerBrand}>
           <span className={styles.footerLogoFrame}>

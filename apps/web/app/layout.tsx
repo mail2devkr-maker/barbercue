@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./fonts.css";
 import "./globals.css";
 import "./theme-vars.css";
+import "./theme-fixes.css";
 import { ThemeSwitcher, THEME_BOOT_SCRIPT } from "../components/theme/ThemeSwitcher";
 import { AuthProvider } from "../lib/auth-context";
 import { SiteHeader } from "../components/layout/SiteHeader";
