@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
+import { DISCOVERY_PATHS } from "@barbercue/shared";
+import type { CityDto, PaginatedResult, SalonListItemDto } from "@barbercue/shared";
 import { Suspense } from "react";
+import { fetchDiscovery } from "../../../lib/discovery-api";
 import { absoluteUrl } from "../../../lib/seo";
 import SearchClient from "./SearchClient";
 
@@ -9,7 +12,7 @@ import SearchClient from "./SearchClient";
 export async function generateMetadata({
   searchParams,
 }: {
-  searchParams: Promise<Record<string, string | undefined>>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }): Promise<Metadata> {
   const params = await searchParams;
   const keys = Object.keys(params).filter((k) => params[k]);
@@ -22,10 +25,30 @@ export async function generateMetadata({
   };
 }
 
-export default function SearchPage() {
+export default async function SearchPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const params = await searchParams;
+  const hasFilters = Object.values(params).some((value) => Array.isArray(value) ? value.some(Boolean) : Boolean(value));
+
+  let initialCities: CityDto[] | undefined;
+  let initialResults: PaginatedResult<SalonListItemDto> | undefined;
+  if (!hasFilters) {
+    [initialCities, initialResults] = await Promise.all([
+      fetchDiscovery<CityDto[]>(DISCOVERY_PATHS.cities, 300).catch(() => undefined),
+      fetchDiscovery<PaginatedResult<SalonListItemDto>>(`${DISCOVERY_PATHS.salons}?limit=12`, 300).catch(() => undefined),
+    ]);
+  }
+
   return (
     <Suspense fallback={null}>
-      <SearchClient />
+      <SearchClient
+        initialCities={initialCities}
+        initialResults={initialResults?.items}
+        initialHasMore={initialResults ? initialResults.nextCursor !== null : undefined}
+      />
     </Suspense>
   );
 }
