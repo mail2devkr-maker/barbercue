@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import { Share, StyleSheet, Text, TextInput } from 'react-native';
+import { Linking, Share, StyleSheet, Text, TextInput } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { qrMatrixToPng, toBase64 } from '../../lib/qr-png';
@@ -153,6 +153,33 @@ export default function OwnerQrPosterScreen() {
             <Text style={styles.note}>{hindi ? 'यह स्क्रीन सार्वजनिक दुकान लिंक का QR पूर्वावलोकन दिखाती है। शेयर से कोई संदेश अपने-आप नहीं भेजा जाता।' : 'This screen previews a QR for the public shop link. Sharing does not send messages automatically.'}</Text>
             {actionError ? <InlineError message={actionError} /> : null}
             {notice ? <Text accessibilityLiveRegion="polite" style={styles.notice}>{notice}</Text> : null}
+          </Card>
+          <Text style={styles.sectionLabel}>{hindi ? 'अपनी दुकान Google Maps पर लाएँ' : 'Get your shop on Google Maps'}</Text>
+          <Card>
+            <Text style={styles.body}>{hindi
+              ? 'मुफ़्त। जब कोई "salon near me" या "haircut in <शहर>" खोजता है, तो Google पहले Maps वाली दुकानें दिखाता है।'
+              : "Free. When people search 'salon near me' or 'haircut in your city', Google shows Maps shops first."}</Text>
+            {(hindi
+              ? [
+                  '1. Google Business Profile खोलें और दुकान के Gmail से लॉग इन करें।',
+                  `2. नाम: बोर्ड पर लिखा "${name}" ही डालें। "best salon" जैसे शब्द न जोड़ें।`,
+                  '3. कैटेगरी (Barber shop / Beauty salon / Beauty parlour / Spa), पता, मैप पिन और फ़ोन डालें।',
+                  '4. Website और Booking link में अपना FastQue लिंक डालें (नीचे शेयर करके कॉपी करें)।',
+                  '5. वेरिफ़िकेशन: Google आम तौर पर एक वीडियो माँगता है: बोर्ड, सड़क, दुकान के अंदर का हिस्सा और आप दुकान/काउंटर खोलते हुए। 1–5 दिन लगते हैं।',
+                  '6. फिर समय, 5–10 फ़ोटो और सर्विसेज़ डालें। खुश ग्राहकों से Google review माँगें। नकली या पैसे देकर लिए गए review कभी न लें।',
+                ]
+              : [
+                  "1. Open Google Business Profile and sign in with your shop's Gmail.",
+                  `2. Business name: exactly "${name}" as on your board. Don't add words like "best salon".`,
+                  '3. Category (Barber shop / Beauty salon / Beauty parlour / Spa), address, map pin and phone.',
+                  '4. Website and Booking link: paste your FastQue link (share it below to copy).',
+                  '5. Verify: Google usually asks for a short video showing your board, the street, inside the shop and you opening the shop or counter. It takes 1 to 5 days.',
+                  '6. Then add timings, 5 to 10 photos and your services. Ask happy customers for a Google review. Never use fake or paid reviews.',
+                ]
+            ).map((line) => <Text key={line} style={styles.note}>{line}</Text>)}
+            <Button title={hindi ? 'Google Business Profile खोलें' : 'Open Google Business Profile'} onPress={() => void Linking.openURL('https://business.google.com/create')} style={styles.button} />
+            <Button title={hindi ? 'Google के लिए FastQue लिंक कॉपी/शेयर करें' : 'Copy / share FastQue link for Google'} variant="outline" onPress={() => void Share.share({ message: load.publicUrl })} style={styles.button} />
+            <Text style={styles.note}>{hindi ? 'FastQue आपकी Google प्रोफ़ाइल नहीं बनाता या बदलता। यह आप अपने Google अकाउंट में करते हैं।' : 'FastQue does not create or change your Google profile. You do it in your own Google account.'}</Text>
           </Card>
         </>
       )}
