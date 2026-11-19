@@ -138,6 +138,12 @@ describe("indexing rules in the source", () => {
     expect(seo).not.toMatch(/railway\.app"/);
   });
 
+  it("the sitemap makes no per-service backend calls (backend limit: 60 requests/minute)", () => {
+    const src = read("sitemap.ts");
+    expect(src).not.toMatch(/citySalonsWithServicePath/);
+    expect(src).not.toMatch(/mapLimited\(SEO_SERVICES/);
+  });
+
   it("the sitemap never stamps every URL with today's date and has no first-50 cap", () => {
     const src = read("sitemap.ts");
     expect(src).not.toMatch(/lastModified: now/);
@@ -149,7 +155,6 @@ describe("indexing rules in the source", () => {
     expect(citySalonsWithServicePath({ slug: "jharsuguda", countryCode: "IN" }, "hair cut")).toBe(
       "salons?city=jharsuguda&countryCode=IN&service=hair%20cut&limit=50",
     );
-    expect(read("sitemap.ts")).toMatch(/citySalonsWithServicePath\(city, svc\.query\)/);
     expect(read("(public)/[countryCode]/[citySlug]/services/[serviceSlug]/page.tsx")).toMatch(/citySalonsWithServicePath\(city, query\)/);
   });
 });

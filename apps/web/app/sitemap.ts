@@ -3,7 +3,7 @@ import { DISCOVERY_PATHS } from "@barbercue/shared";
 import type { CityDto, LocalityDto, PaginatedResult, SalonListItemDto } from "@barbercue/shared";
 import { fetchDiscovery } from "../lib/discovery-api";
 import { SITE_URL } from "../lib/seo";
-import { SEO_SERVICES, citySalonsWithServicePath } from "../lib/seo-services";
+import { SEO_SERVICES } from "../lib/seo-services";
 
 export const revalidate = 3600;
 // Rendered per request (Next caches the fetches for `revalidate`), never baked at build time: the
@@ -64,8 +64,9 @@ async function mapLimited<T, R>(items: readonly T[], limit: number, fn: (item: T
 /**
  * Only canonical, indexable URLs. Rules (super SEO pass / issue #429):
  * - lastModified only where the data has a real timestamp; never "now" for every page.
- * - a city, area or "service in city" page is listed only when it shows at least one real shop
- *   (empty pages are noindex and would contradict the sitemap);
+ * - a city or area page is listed only when it shows at least one real shop (empty ones are
+ *   noindex and would contradict the sitemap);
+ * - keep the backend call count low: the backend allows 60 requests per minute per caller.
  * - all salons per city via cursor pagination (the old first-50 cap is gone).
  */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
@@ -108,7 +109,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     return entries;
   }
 
-  await mapLimited(cities, 3, async (city) => {
+  await mapLimited(cities, 2, async (city) => {
     // B9: country-scoped public URLs. countryCode is lowercased for the URL by convention; the
     // backend uppercases it before the (countryCode, slug) lookup either way.
     const countrySegment = city.countryCode.toLowerCase();
@@ -142,19 +143,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       });
     }
 
-    // "Service in city" pages only where a shop here offers that service (same query and cache
-    // key as the page itself, so this adds no extra load on page views).
-    const offered = await mapLimited(SEO_SERVICES, 4, async (svc) => {
-      try {
-        const res = await fetchDiscovery<PaginatedResult<SalonListItemDto>>(citySalonsWithServicePath(city, svc.query), revalidate);
-        return res.items.length > 0;
-      } catch {
-        return false;
-      }
-    });
-    SEO_SERVICES.forEach((svc, i) => {
-      if (offered[i]) entries.push({ url: `${SITE_URL}/${cityPath}/services/${svc.slug}`, changeFrequency: "weekly", priority: 0.7 });
-    });
+    // "Service in city" pages for every city that has shops. No per-service check here: that was
+    // ~54 extra backend calls per city, and the backend rate-limits one caller to 60 requests per
+    // minute, which dropped whole cities from the sitemap (19 Nov). A page whose service no shop
+    // here offers is noindex itself.
+    for (const svc of SEO_SERVICES) {
+      entries.push({ url: `${SITE_URL}/${cityPath}/services/${svc.slug}`, changeFrequency: "weekly", priority: 0.7 });
+    }
   });
 
   if (entries.length > MAX_URLS) {
