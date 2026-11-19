@@ -23,25 +23,41 @@ import { PrismaService } from '../prisma/prisma.service';
 
 export type Db = PrismaService | Prisma.TransactionClient;
 
-export type JobWithRefs = WorkJob & { org: WorkOrganization; category: WorkCategory };
+export type JobWithRefs = WorkJob & {
+  org: WorkOrganization;
+  category: WorkCategory;
+};
 export const JOB_REFS = { org: true, category: true } as const;
 
-export const ACTIVE_ASSIGNMENT_STATUSES = WORK_ASSIGNMENT_ACTIVE_STATUSES as WorkAssignmentStatus[];
+export const ACTIVE_ASSIGNMENT_STATUSES =
+  WORK_ASSIGNMENT_ACTIVE_STATUSES as WorkAssignmentStatus[];
 
 /** Row lock on a job for the rest of the transaction — serializes capacity changes. */
-export async function lockJob(tx: Prisma.TransactionClient, jobId: string): Promise<void> {
+export async function lockJob(
+  tx: Prisma.TransactionClient,
+  jobId: string,
+): Promise<void> {
   await tx.$queryRaw`SELECT "id" FROM "work_jobs" WHERE "id" = ${jobId} FOR UPDATE`;
 }
 
-export async function lockAssignment(tx: Prisma.TransactionClient, assignmentId: string): Promise<void> {
+export async function lockAssignment(
+  tx: Prisma.TransactionClient,
+  assignmentId: string,
+): Promise<void> {
   await tx.$queryRaw`SELECT "id" FROM "work_assignments" WHERE "id" = ${assignmentId} FOR UPDATE`;
 }
 
-export async function lockPayout(tx: Prisma.TransactionClient, payoutId: string): Promise<void> {
+export async function lockPayout(
+  tx: Prisma.TransactionClient,
+  payoutId: string,
+): Promise<void> {
   await tx.$queryRaw`SELECT "id" FROM "work_payouts" WHERE "id" = ${payoutId} FOR UPDATE`;
 }
 
-export async function lockFunding(tx: Prisma.TransactionClient, fundingId: string): Promise<void> {
+export async function lockFunding(
+  tx: Prisma.TransactionClient,
+  fundingId: string,
+): Promise<void> {
   await tx.$queryRaw`SELECT "id" FROM "work_fundings" WHERE "id" = ${fundingId} FOR UPDATE`;
 }
 
@@ -52,7 +68,10 @@ export function newCheckInCode(): string {
 
 /** Case, spacing and punctuation-insensitive form used to detect a repeated answer (e.g. a shop phone). */
 export function normalizeAnswer(text: string): string {
-  return text.toLowerCase().normalize('NFKC').replace(/[^\p{L}\p{N}]+/gu, '');
+  return text
+    .toLowerCase()
+    .normalize('NFKC')
+    .replace(/[^\p{L}\p{N}]+/gu, '');
 }
 
 export function maskVpa(vpa: string | null): string | null {
@@ -73,21 +92,41 @@ export function parseTerms(raw: Prisma.JsonValue): WorkCancellationTerms {
 export function isPubliclyVisible(job: JobWithRefs): boolean {
   return (
     job.org.status === WorkOrgStatus.VERIFIED &&
-    ([WorkJobStatus.OPEN, WorkJobStatus.PARTIALLY_FILLED, WorkJobStatus.FILLED, WorkJobStatus.IN_PROGRESS] as WorkJobStatus[]).includes(job.status)
+    (
+      [
+        WorkJobStatus.OPEN,
+        WorkJobStatus.PARTIALLY_FILLED,
+        WorkJobStatus.FILLED,
+        WorkJobStatus.IN_PROGRESS,
+      ] as WorkJobStatus[]
+    ).includes(job.status)
   );
 }
 
 /** A job only reaches OPEN through a provider-confirmed funding webhook, so OPEN-or-later means funded. */
 export function isFunded(job: WorkJob): boolean {
-  return !([WorkJobStatus.DRAFT, WorkJobStatus.PENDING_VERIFICATION, WorkJobStatus.FUNDING_REQUIRED, WorkJobStatus.REJECTED] as WorkJobStatus[]).includes(job.status)
-    && job.publishedAt !== null;
+  return (
+    !(
+      [
+        WorkJobStatus.DRAFT,
+        WorkJobStatus.PENDING_VERIFICATION,
+        WorkJobStatus.FUNDING_REQUIRED,
+        WorkJobStatus.REJECTED,
+      ] as WorkJobStatus[]
+    ).includes(job.status) && job.publishedAt !== null
+  );
 }
 
-export async function employerTrust(db: Db, orgs: WorkOrganization[]): Promise<Map<string, WorkEmployerTrustDto>> {
+export async function employerTrust(
+  db: Db,
+  orgs: WorkOrganization[],
+): Promise<Map<string, WorkEmployerTrustDto>> {
   const ids = orgs.map((o) => o.id);
   const out = new Map<string, WorkEmployerTrustDto>();
   if (!ids.length) return out;
-  const stats = await db.$queryRaw<{ orgId: string; paid: bigint; reviewed: bigint; onTime: bigint }[]>`
+  const stats = await db.$queryRaw<
+    { orgId: string; paid: bigint; reviewed: bigint; onTime: bigint }[]
+  >`
     SELECT j."orgId" AS "orgId",
       COUNT(*) FILTER (WHERE a."status" = 'PAID')::bigint AS paid,
       COUNT(*) FILTER (WHERE a."reviewedAt" IS NOT NULL AND a."reviewDueAt" IS NOT NULL)::bigint AS reviewed,
@@ -109,13 +148,17 @@ export async function employerTrust(db: Db, orgs: WorkOrganization[]): Promise<M
       verified: org.status === WorkOrgStatus.VERIFIED,
       completedAssignments: Number(s?.paid ?? 0),
       onTimeReviewRate: reviewed ? Number(s?.onTime ?? 0) / reviewed : null,
-      employerCancellations: cancels.find((c) => c.orgId === org.id)?._count._all ?? 0,
+      employerCancellations:
+        cancels.find((c) => c.orgId === org.id)?._count._all ?? 0,
     });
   }
   return out;
 }
 
-export function toJobCard(job: JobWithRefs, trust: WorkEmployerTrustDto): WorkJobCardDto {
+export function toJobCard(
+  job: JobWithRefs,
+  trust: WorkEmployerTrustDto,
+): WorkJobCardDto {
   return {
     id: job.id,
     title: job.title,
@@ -141,7 +184,10 @@ export function toJobCard(job: JobWithRefs, trust: WorkEmployerTrustDto): WorkJo
   };
 }
 
-export function toJobDetail(job: JobWithRefs, trust: WorkEmployerTrustDto): WorkJobDetailDto {
+export function toJobDetail(
+  job: JobWithRefs,
+  trust: WorkEmployerTrustDto,
+): WorkJobDetailDto {
   return {
     ...toJobCard(job, trust),
     description: job.description,
@@ -174,11 +220,16 @@ export function termsSnapshot(job: WorkJob): Prisma.InputJsonValue {
 }
 
 export function snapshotChecklist(a: WorkAssignment): WorkChecklistItem[] {
-  return parseChecklist((a.termsSnapshot as unknown as { checklist: Prisma.JsonValue }).checklist);
+  return parseChecklist(
+    (a.termsSnapshot as unknown as { checklist: Prisma.JsonValue }).checklist,
+  );
 }
 
 export function snapshotTerms(a: WorkAssignment): WorkCancellationTerms {
-  return parseTerms((a.termsSnapshot as unknown as { cancellationTerms: Prisma.JsonValue }).cancellationTerms);
+  return parseTerms(
+    (a.termsSnapshot as unknown as { cancellationTerms: Prisma.JsonValue })
+      .cancellationTerms,
+  );
 }
 
 export function snapshotFeeBps(a: WorkAssignment): number {
@@ -186,5 +237,6 @@ export function snapshotFeeBps(a: WorkAssignment): number {
 }
 
 export function snapshotReviewHours(a: WorkAssignment): number {
-  return (a.termsSnapshot as unknown as { reviewWindowHours: number }).reviewWindowHours;
+  return (a.termsSnapshot as unknown as { reviewWindowHours: number })
+    .reviewWindowHours;
 }

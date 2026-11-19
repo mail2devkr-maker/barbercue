@@ -1,4 +1,11 @@
-import { Controller, Get, Param, ParseUUIDPipe, Query, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { z } from 'zod';
 import { workJobSearchSchema } from '@barbercue/shared';
@@ -25,7 +32,10 @@ export class WorkPublicController {
   @Public()
   @Throttle({ default: { ttl: 60_000, limit: 120 } })
   @Get('jobs')
-  search(@Query(new ZodValidationPipe(workJobSearchSchema)) query: z.infer<typeof workJobSearchSchema>) {
+  search(
+    @Query(new ZodValidationPipe(workJobSearchSchema))
+    query: z.infer<typeof workJobSearchSchema>,
+  ) {
     return this.jobs.search(query);
   }
 

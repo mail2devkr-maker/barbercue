@@ -1,5 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { WorkOrgMemberRole, WorkOrgStatus, WorkParty, type WorkOrganization } from '@prisma/client';
+import {
+  WorkOrgMemberRole,
+  WorkOrgStatus,
+  WorkParty,
+  type WorkOrganization,
+} from '@prisma/client';
 import type { WorkOrgDto, WorkOrgUpsertInput } from '@barbercue/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { WorkAccessService } from './work-access.service';
@@ -40,44 +45,105 @@ export class WorkOrgsService {
   }
 
   async mine(userId: string): Promise<WorkOrgDto[]> {
-    const rows = await this.prisma.workOrgMember.findMany({ where: { userId }, include: { org: true }, orderBy: { createdAt: 'asc' } });
+    const rows = await this.prisma.workOrgMember.findMany({
+      where: { userId },
+      include: { org: true },
+      orderBy: { createdAt: 'asc' },
+    });
     return rows.map((m) => this.toDto(m.org, m.role));
   }
 
   async create(userId: string, input: WorkOrgUpsertInput): Promise<WorkOrgDto> {
-    const existing = await this.prisma.workOrgMember.count({ where: { userId, role: WorkOrgMemberRole.OWNER } });
-    if (existing >= 5) throw workValidation('You can own at most five organizations.');
+    const existing = await this.prisma.workOrgMember.count({
+      where: { userId, role: WorkOrgMemberRole.OWNER },
+    });
+    if (existing >= 5)
+      throw workValidation('You can own at most five organizations.');
     return this.prisma.$transaction(async (tx) => {
       const org = await tx.workOrganization.create({
-        data: { ...input, gstin: input.gstin ?? null, createdById: userId, members: { create: { userId, role: WorkOrgMemberRole.OWNER } } },
+        data: {
+          ...input,
+          gstin: input.gstin ?? null,
+          createdById: userId,
+          members: { create: { userId, role: WorkOrgMemberRole.OWNER } },
+        },
       });
-      await this.audit.record(tx, { entityType: 'ORG', entityId: org.id, action: 'ORG_CREATED', toStatus: org.status, actorUserId: userId, actorParty: WorkParty.EMPLOYER, orgId: org.id });
+      await this.audit.record(tx, {
+        entityType: 'ORG',
+        entityId: org.id,
+        action: 'ORG_CREATED',
+        toStatus: org.status,
+        actorUserId: userId,
+        actorParty: WorkParty.EMPLOYER,
+        orgId: org.id,
+      });
       return this.toDto(org, WorkOrgMemberRole.OWNER);
     });
   }
 
-  async update(userId: string, orgId: string, input: WorkOrgUpsertInput): Promise<WorkOrgDto> {
-    const { org, role } = await this.access.requireOrgRole(userId, orgId, [WorkOrgMemberRole.OWNER]);
-    if (!([WorkOrgStatus.DRAFT, WorkOrgStatus.REJECTED] as WorkOrgStatus[]).includes(org.status)) {
-      throw workInvalidState('Business details can only be changed before submission or after a rejection.');
+  async update(
+    userId: string,
+    orgId: string,
+    input: WorkOrgUpsertInput,
+  ): Promise<WorkOrgDto> {
+    const { org, role } = await this.access.requireOrgRole(userId, orgId, [
+      WorkOrgMemberRole.OWNER,
+    ]);
+    if (
+      !(
+        [WorkOrgStatus.DRAFT, WorkOrgStatus.REJECTED] as WorkOrgStatus[]
+      ).includes(org.status)
+    ) {
+      throw workInvalidState(
+        'Business details can only be changed before submission or after a rejection.',
+      );
     }
     const updated = await this.prisma.$transaction(async (tx) => {
-      const u = await tx.workOrganization.update({ where: { id: orgId }, data: { ...input, gstin: input.gstin ?? null } });
-      await this.audit.record(tx, { entityType: 'ORG', entityId: orgId, action: 'ORG_UPDATED', actorUserId: userId, actorParty: WorkParty.EMPLOYER, orgId });
+      const u = await tx.workOrganization.update({
+        where: { id: orgId },
+        data: { ...input, gstin: input.gstin ?? null },
+      });
+      await this.audit.record(tx, {
+        entityType: 'ORG',
+        entityId: orgId,
+        action: 'ORG_UPDATED',
+        actorUserId: userId,
+        actorParty: WorkParty.EMPLOYER,
+        orgId,
+      });
       return u;
     });
     return this.toDto(updated, role);
   }
 
   async submit(userId: string, orgId: string): Promise<WorkOrgDto> {
-    const { org, role } = await this.access.requireOrgRole(userId, orgId, [WorkOrgMemberRole.OWNER]);
+    const { org, role } = await this.access.requireOrgRole(userId, orgId, [
+      WorkOrgMemberRole.OWNER,
+    ]);
     const updated = await this.prisma.$transaction(async (tx) => {
       const res = await tx.workOrganization.updateMany({
-        where: { id: orgId, status: { in: [WorkOrgStatus.DRAFT, WorkOrgStatus.REJECTED] } },
-        data: { status: WorkOrgStatus.SUBMITTED, submittedAt: new Date(), rejectionReason: null },
+        where: {
+          id: orgId,
+          status: { in: [WorkOrgStatus.DRAFT, WorkOrgStatus.REJECTED] },
+        },
+        data: {
+          status: WorkOrgStatus.SUBMITTED,
+          submittedAt: new Date(),
+          rejectionReason: null,
+        },
       });
-      if (!res.count) throw workInvalidState('This organization has already been submitted.');
-      await this.audit.record(tx, { entityType: 'ORG', entityId: orgId, action: 'KYC_SUBMITTED', fromStatus: org.status, toStatus: 'SUBMITTED', actorUserId: userId, actorParty: WorkParty.EMPLOYER, orgId });
+      if (!res.count)
+        throw workInvalidState('This organization has already been submitted.');
+      await this.audit.record(tx, {
+        entityType: 'ORG',
+        entityId: orgId,
+        action: 'KYC_SUBMITTED',
+        fromStatus: org.status,
+        toStatus: 'SUBMITTED',
+        actorUserId: userId,
+        actorParty: WorkParty.EMPLOYER,
+        orgId,
+      });
       return tx.workOrganization.findUniqueOrThrow({ where: { id: orgId } });
     });
     return this.toDto(updated, role);
@@ -92,10 +158,19 @@ export class WorkOrgsService {
     return rows.map((o) => this.toDto(o, null));
   }
 
-  async adminReview(adminId: string, orgId: string, decision: 'MARK_UNDER_REVIEW' | 'VERIFY' | 'REJECT' | 'SUSPEND', reason?: string): Promise<WorkOrgDto> {
+  async adminReview(
+    adminId: string,
+    orgId: string,
+    decision: 'MARK_UNDER_REVIEW' | 'VERIFY' | 'REJECT' | 'SUSPEND',
+    reason?: string,
+  ): Promise<WorkOrgDto> {
     const allowedFrom: Record<typeof decision, WorkOrgStatus[]> = {
       MARK_UNDER_REVIEW: [WorkOrgStatus.SUBMITTED],
-      VERIFY: [WorkOrgStatus.SUBMITTED, WorkOrgStatus.UNDER_REVIEW, WorkOrgStatus.SUSPENDED],
+      VERIFY: [
+        WorkOrgStatus.SUBMITTED,
+        WorkOrgStatus.UNDER_REVIEW,
+        WorkOrgStatus.SUSPENDED,
+      ],
       REJECT: [WorkOrgStatus.SUBMITTED, WorkOrgStatus.UNDER_REVIEW],
       SUSPEND: [WorkOrgStatus.VERIFIED],
     };
@@ -109,7 +184,9 @@ export class WorkOrgsService {
       throw workValidation('A reason is required — the business is shown it.');
     }
     return this.prisma.$transaction(async (tx) => {
-      const org = await tx.workOrganization.findUnique({ where: { id: orgId } });
+      const org = await tx.workOrganization.findUnique({
+        where: { id: orgId },
+      });
       if (!org) throw workNotFound('Organization not found.');
       const res = await tx.workOrganization.updateMany({
         where: { id: orgId, status: { in: allowedFrom[decision] } },
@@ -117,12 +194,31 @@ export class WorkOrgsService {
           status: to[decision],
           reviewedAt: new Date(),
           reviewedById: adminId,
-          rejectionReason: decision === 'REJECT' || decision === 'SUSPEND' ? reason!.trim() : null,
+          rejectionReason:
+            decision === 'REJECT' || decision === 'SUSPEND'
+              ? reason!.trim()
+              : null,
         },
       });
-      if (!res.count) throw workInvalidState(`Cannot ${decision.toLowerCase().replace(/_/g, ' ')} an organization that is ${org.status}.`);
-      await this.audit.record(tx, { entityType: 'ORG', entityId: orgId, action: `KYC_${decision}`, fromStatus: org.status, toStatus: to[decision], actorUserId: adminId, actorParty: WorkParty.PLATFORM, orgId, note: reason ?? null });
-      return this.toDto(await tx.workOrganization.findUniqueOrThrow({ where: { id: orgId } }), null);
+      if (!res.count)
+        throw workInvalidState(
+          `Cannot ${decision.toLowerCase().replace(/_/g, ' ')} an organization that is ${org.status}.`,
+        );
+      await this.audit.record(tx, {
+        entityType: 'ORG',
+        entityId: orgId,
+        action: `KYC_${decision}`,
+        fromStatus: org.status,
+        toStatus: to[decision],
+        actorUserId: adminId,
+        actorParty: WorkParty.PLATFORM,
+        orgId,
+        note: reason ?? null,
+      });
+      return this.toDto(
+        await tx.workOrganization.findUniqueOrThrow({ where: { id: orgId } }),
+        null,
+      );
     });
   }
 }

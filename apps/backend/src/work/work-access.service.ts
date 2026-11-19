@@ -1,5 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, WorkOrgMemberRole, type WorkOrganization } from '@prisma/client';
+import {
+  Prisma,
+  WorkOrgMemberRole,
+  type WorkOrganization,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { workForbidden, workNotFound } from './work-errors';
 
@@ -18,7 +22,11 @@ export class WorkAccessService {
   async requireOrgRole(
     userId: string,
     orgId: string,
-    allowed: WorkOrgMemberRole[] = [WorkOrgMemberRole.OWNER, WorkOrgMemberRole.MANAGER, WorkOrgMemberRole.BILLING],
+    allowed: WorkOrgMemberRole[] = [
+      WorkOrgMemberRole.OWNER,
+      WorkOrgMemberRole.MANAGER,
+      WorkOrgMemberRole.BILLING,
+    ],
     db: Db = this.prisma,
   ): Promise<{ org: WorkOrganization; role: WorkOrgMemberRole }> {
     const member = await db.workOrgMember.findUnique({
@@ -27,21 +35,39 @@ export class WorkAccessService {
     });
     if (!member) throw workNotFound('Organization not found.');
     if (!allowed.includes(member.role)) {
-      throw workForbidden('Your role in this organization does not allow this action.');
+      throw workForbidden(
+        'Your role in this organization does not allow this action.',
+      );
     }
     return { org: member.org, role: member.role };
   }
 
   async memberOrgIds(userId: string, db: Db = this.prisma): Promise<string[]> {
-    const rows = await db.workOrgMember.findMany({ where: { userId }, select: { orgId: true } });
+    const rows = await db.workOrgMember.findMany({
+      where: { userId },
+      select: { orgId: true },
+    });
     return rows.map((r) => r.orgId);
   }
 
-  async isOrgMember(userId: string, orgId: string, db: Db = this.prisma): Promise<boolean> {
-    const row = await db.workOrgMember.findUnique({ where: { orgId_userId: { orgId, userId } }, select: { id: true } });
+  async isOrgMember(
+    userId: string,
+    orgId: string,
+    db: Db = this.prisma,
+  ): Promise<boolean> {
+    const row = await db.workOrgMember.findUnique({
+      where: { orgId_userId: { orgId, userId } },
+      select: { id: true },
+    });
     return !!row;
   }
 }
 
-export const JOB_EDITORS: WorkOrgMemberRole[] = [WorkOrgMemberRole.OWNER, WorkOrgMemberRole.MANAGER];
-export const JOB_FUNDERS: WorkOrgMemberRole[] = [WorkOrgMemberRole.OWNER, WorkOrgMemberRole.BILLING];
+export const JOB_EDITORS: WorkOrgMemberRole[] = [
+  WorkOrgMemberRole.OWNER,
+  WorkOrgMemberRole.MANAGER,
+];
+export const JOB_FUNDERS: WorkOrgMemberRole[] = [
+  WorkOrgMemberRole.OWNER,
+  WorkOrgMemberRole.BILLING,
+];

@@ -1,7 +1,24 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Post, Query, Res, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Query,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import type { Response } from 'express';
 import { z } from 'zod';
-import { WorkDisputeStatus, WorkJobStatus, WorkOrgStatus, WorkPayoutStatus } from '@prisma/client';
+import {
+  WorkDisputeStatus,
+  WorkJobStatus,
+  WorkOrgStatus,
+  WorkPayoutStatus,
+} from '@prisma/client';
 import {
   Role,
   workDisputeResolveSchema,
@@ -22,10 +39,19 @@ import { WorkPaymentsService } from './work-payments.service';
 import { WorkWorkersService } from './work-workers.service';
 
 const READ_ROLES = [Role.PLATFORM_ADMIN, Role.CO_FOUNDER, Role.PLATFORM_VIEWER];
-const statusQuery = <T extends Record<string, string>>(e: T) => z.object({ status: z.nativeEnum(e).optional() });
-const auditQuery = z.object({ jobId: z.string().uuid().optional(), orgId: z.string().uuid().optional(), entityType: z.string().max(40).optional(), entityId: z.string().max(80).optional() });
+const statusQuery = <T extends Record<string, string>>(e: T) =>
+  z.object({ status: z.nativeEnum(e).optional() });
+const auditQuery = z.object({
+  jobId: z.string().uuid().optional(),
+  orgId: z.string().uuid().optional(),
+  entityType: z.string().max(40).optional(),
+  entityId: z.string().max(80).optional(),
+});
 const verifySchema = z.object({ note: z.string().trim().min(5).max(1000) });
-const suspendSchema = z.object({ suspended: z.boolean(), reason: z.string().trim().min(5).max(1000) });
+const suspendSchema = z.object({
+  suspended: z.boolean(),
+  reason: z.string().trim().min(5).max(1000),
+});
 const workerQuery = z.object({ q: z.string().trim().max(80).optional() });
 
 /**
@@ -58,55 +84,99 @@ export class WorkAdminController {
   }
 
   @Get('orgs')
-  listOrgs(@Query(new ZodValidationPipe(statusQuery(WorkOrgStatus))) q: { status?: WorkOrgStatus }) {
+  listOrgs(
+    @Query(new ZodValidationPipe(statusQuery(WorkOrgStatus)))
+    q: {
+      status?: WorkOrgStatus;
+    },
+  ) {
     return this.orgs.adminList(q.status);
   }
 
   @Post('orgs/:orgId/review')
   @Roles(Role.PLATFORM_ADMIN)
   @HttpCode(HttpStatus.OK)
-  reviewOrg(@CurrentUser() user: AuthenticatedUser, @Param('orgId', ParseUUIDPipe) orgId: string, @Body(new ZodValidationPipe(workOrgReviewSchema)) body: z.infer<typeof workOrgReviewSchema>) {
+  reviewOrg(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('orgId', ParseUUIDPipe) orgId: string,
+    @Body(new ZodValidationPipe(workOrgReviewSchema))
+    body: z.infer<typeof workOrgReviewSchema>,
+  ) {
     return this.orgs.adminReview(user.id, orgId, body.decision, body.reason);
   }
 
   @Get('jobs')
-  listJobs(@Query(new ZodValidationPipe(statusQuery(WorkJobStatus))) q: { status?: WorkJobStatus }) {
+  listJobs(
+    @Query(new ZodValidationPipe(statusQuery(WorkJobStatus)))
+    q: {
+      status?: WorkJobStatus;
+    },
+  ) {
     return this.jobs.adminList(q.status);
   }
 
   @Post('jobs/:jobId/moderate')
   @Roles(Role.PLATFORM_ADMIN)
   @HttpCode(HttpStatus.OK)
-  moderate(@CurrentUser() user: AuthenticatedUser, @Param('jobId', ParseUUIDPipe) jobId: string, @Body(new ZodValidationPipe(workJobModerationSchema)) body: z.infer<typeof workJobModerationSchema>) {
+  moderate(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('jobId', ParseUUIDPipe) jobId: string,
+    @Body(new ZodValidationPipe(workJobModerationSchema))
+    body: z.infer<typeof workJobModerationSchema>,
+  ) {
     return this.jobs.moderate(user.id, jobId, body.decision, body.reason);
   }
 
   @Get('workers')
-  listWorkers(@Query(new ZodValidationPipe(workerQuery)) q: z.infer<typeof workerQuery>) {
+  listWorkers(
+    @Query(new ZodValidationPipe(workerQuery)) q: z.infer<typeof workerQuery>,
+  ) {
     return this.workers.adminList(q.q);
   }
 
   @Post('workers/:userId/verify')
   @Roles(Role.PLATFORM_ADMIN)
   @HttpCode(HttpStatus.OK)
-  verifyWorker(@CurrentUser() user: AuthenticatedUser, @Param('userId', ParseUUIDPipe) userId: string, @Body(new ZodValidationPipe(verifySchema)) body: z.infer<typeof verifySchema>) {
+  verifyWorker(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Body(new ZodValidationPipe(verifySchema))
+    body: z.infer<typeof verifySchema>,
+  ) {
     return this.workers.adminVerify(user.id, userId, body.note);
   }
 
   @Post('workers/:userId/suspension')
   @Roles(Role.PLATFORM_ADMIN)
   @HttpCode(HttpStatus.OK)
-  suspendWorker(@CurrentUser() user: AuthenticatedUser, @Param('userId', ParseUUIDPipe) userId: string, @Body(new ZodValidationPipe(suspendSchema)) body: z.infer<typeof suspendSchema>) {
-    return this.workers.adminSetSuspended(user.id, userId, body.suspended, body.reason);
+  suspendWorker(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Body(new ZodValidationPipe(suspendSchema))
+    body: z.infer<typeof suspendSchema>,
+  ) {
+    return this.workers.adminSetSuspended(
+      user.id,
+      userId,
+      body.suspended,
+      body.reason,
+    );
   }
 
   @Get('assignments/:assignmentId')
-  assignment(@CurrentUser() user: AuthenticatedUser, @Param('assignmentId', ParseUUIDPipe) id: string) {
+  assignment(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('assignmentId', ParseUUIDPipe) id: string,
+  ) {
     return this.assignments.detail(user.id, id, true);
   }
 
   @Get('evidence/:fileId')
-  async evidence(@CurrentUser() user: AuthenticatedUser, @Param('fileId', ParseUUIDPipe) fileId: string, @Res() res: Response) {
+  async evidence(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('fileId', ParseUUIDPipe) fileId: string,
+    @Res() res: Response,
+  ) {
     const file = await this.assignments.evidenceFile(user.id, fileId, true);
     res.setHeader('Content-Type', file.mimeType);
     res.setHeader('Cache-Control', 'private, no-store');
@@ -115,7 +185,12 @@ export class WorkAdminController {
   }
 
   @Get('payouts')
-  listPayouts(@Query(new ZodValidationPipe(statusQuery(WorkPayoutStatus))) q: { status?: WorkPayoutStatus }) {
+  listPayouts(
+    @Query(new ZodValidationPipe(statusQuery(WorkPayoutStatus)))
+    q: {
+      status?: WorkPayoutStatus;
+    },
+  ) {
     return this.admin.payouts(q.status);
   }
 
@@ -129,24 +204,39 @@ export class WorkAdminController {
   @Post('payouts/:payoutId/retry')
   @Roles(Role.PLATFORM_ADMIN)
   @HttpCode(HttpStatus.OK)
-  retryPayout(@CurrentUser() user: AuthenticatedUser, @Param('payoutId', ParseUUIDPipe) id: string) {
+  retryPayout(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('payoutId', ParseUUIDPipe) id: string,
+  ) {
     return this.payments.retryPayout(user.id, id);
   }
 
   @Get('disputes')
-  listDisputes(@Query(new ZodValidationPipe(statusQuery(WorkDisputeStatus))) q: { status?: WorkDisputeStatus }) {
+  listDisputes(
+    @Query(new ZodValidationPipe(statusQuery(WorkDisputeStatus)))
+    q: {
+      status?: WorkDisputeStatus;
+    },
+  ) {
     return this.disputes.adminList(q.status);
   }
 
   @Post('disputes/:disputeId/resolve')
   @Roles(Role.PLATFORM_ADMIN)
   @HttpCode(HttpStatus.OK)
-  resolve(@CurrentUser() user: AuthenticatedUser, @Param('disputeId', ParseUUIDPipe) id: string, @Body(new ZodValidationPipe(workDisputeResolveSchema)) body: z.infer<typeof workDisputeResolveSchema>) {
+  resolve(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('disputeId', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(workDisputeResolveSchema))
+    body: z.infer<typeof workDisputeResolveSchema>,
+  ) {
     return this.disputes.resolve(user.id, id, body.awardPaise, body.note);
   }
 
   @Get('audit')
-  audit(@Query(new ZodValidationPipe(auditQuery)) q: z.infer<typeof auditQuery>) {
+  audit(
+    @Query(new ZodValidationPipe(auditQuery)) q: z.infer<typeof auditQuery>,
+  ) {
     return this.admin.auditTrail(q);
   }
 

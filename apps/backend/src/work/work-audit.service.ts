@@ -6,7 +6,16 @@ import { PrismaService } from '../prisma/prisma.service';
 type Db = PrismaService | Prisma.TransactionClient;
 
 export interface WorkAuditInput {
-  entityType: 'ORG' | 'WORKER' | 'JOB' | 'APPLICATION' | 'ASSIGNMENT' | 'FUNDING' | 'PAYOUT' | 'DISPUTE' | 'WEBHOOK';
+  entityType:
+    | 'ORG'
+    | 'WORKER'
+    | 'JOB'
+    | 'APPLICATION'
+    | 'ASSIGNMENT'
+    | 'FUNDING'
+    | 'PAYOUT'
+    | 'DISPUTE'
+    | 'WEBHOOK';
   entityId: string;
   action: string;
   fromStatus?: string | null;
@@ -42,12 +51,16 @@ export class WorkAuditService {
         orgId: input.orgId ?? null,
         jobId: input.jobId ?? null,
         note: input.note ?? null,
-        metadata: (input.metadata ?? undefined) as Prisma.InputJsonValue | undefined,
+        metadata: (input.metadata ?? undefined) as
+          Prisma.InputJsonValue | undefined,
       },
     });
   }
 
-  async timeline(entityType: string, entityId: string): Promise<WorkAuditEventDto[]> {
+  async timeline(
+    entityType: string,
+    entityId: string,
+  ): Promise<WorkAuditEventDto[]> {
     const rows = await this.prisma.workAuditEvent.findMany({
       where: { entityType, entityId },
       orderBy: { createdAt: 'asc' },

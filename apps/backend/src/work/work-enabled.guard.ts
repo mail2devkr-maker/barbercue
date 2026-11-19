@@ -8,7 +8,11 @@ import { workError } from './work-errors';
 export class WorkEnabledGuard implements CanActivate {
   canActivate(): boolean {
     if (!workMarketplaceEnabled()) {
-      throw workError(WorkErrorCode.MARKETPLACE_DISABLED, 'FastQue Work is not available yet.', HttpStatus.NOT_FOUND);
+      throw workError(
+        WorkErrorCode.MARKETPLACE_DISABLED,
+        'FastQue Work is not available yet.',
+        HttpStatus.NOT_FOUND,
+      );
     }
     return true;
   }

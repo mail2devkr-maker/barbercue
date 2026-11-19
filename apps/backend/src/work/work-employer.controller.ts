@@ -1,4 +1,16 @@
-import { Body, Controller, Get, Headers, HttpCode, HttpStatus, Param, ParseUUIDPipe, Post, Put, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Headers,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Put,
+  UseGuards,
+} from '@nestjs/common';
 import { z } from 'zod';
 import {
   workCancelSchema,
@@ -44,38 +56,62 @@ export class WorkEmployerController {
   }
 
   @Post()
-  create(@CurrentUser() user: AuthenticatedUser, @Body(new ZodValidationPipe(workOrgUpsertSchema)) body: WorkOrgUpsertInput) {
+  create(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body(new ZodValidationPipe(workOrgUpsertSchema)) body: WorkOrgUpsertInput,
+  ) {
     return this.orgs.create(user.id, body);
   }
 
   @Put(':orgId')
-  update(@CurrentUser() user: AuthenticatedUser, @Param('orgId', ParseUUIDPipe) orgId: string, @Body(new ZodValidationPipe(workOrgUpsertSchema)) body: WorkOrgUpsertInput) {
+  update(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('orgId', ParseUUIDPipe) orgId: string,
+    @Body(new ZodValidationPipe(workOrgUpsertSchema)) body: WorkOrgUpsertInput,
+  ) {
     return this.orgs.update(user.id, orgId, body);
   }
 
   @Post(':orgId/submit')
   @HttpCode(HttpStatus.OK)
-  submit(@CurrentUser() user: AuthenticatedUser, @Param('orgId', ParseUUIDPipe) orgId: string) {
+  submit(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('orgId', ParseUUIDPipe) orgId: string,
+  ) {
     return this.orgs.submit(user.id, orgId);
   }
 
   @Get(':orgId/report')
-  report(@CurrentUser() user: AuthenticatedUser, @Param('orgId', ParseUUIDPipe) orgId: string) {
+  report(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('orgId', ParseUUIDPipe) orgId: string,
+  ) {
     return this.admin.orgReport(user.id, orgId);
   }
 
   @Get(':orgId/jobs')
-  listJobs(@CurrentUser() user: AuthenticatedUser, @Param('orgId', ParseUUIDPipe) orgId: string) {
+  listJobs(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('orgId', ParseUUIDPipe) orgId: string,
+  ) {
     return this.jobs.listForOrg(user.id, orgId);
   }
 
   @Post(':orgId/jobs')
-  createJob(@CurrentUser() user: AuthenticatedUser, @Param('orgId', ParseUUIDPipe) orgId: string, @Body(new ZodValidationPipe(workJobUpsertSchema)) body: WorkJobUpsertInput) {
+  createJob(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('orgId', ParseUUIDPipe) orgId: string,
+    @Body(new ZodValidationPipe(workJobUpsertSchema)) body: WorkJobUpsertInput,
+  ) {
     return this.jobs.createDraft(user.id, orgId, body);
   }
 
   @Get(':orgId/jobs/:jobId')
-  getJob(@CurrentUser() user: AuthenticatedUser, @Param('orgId', ParseUUIDPipe) orgId: string, @Param('jobId', ParseUUIDPipe) jobId: string) {
+  getJob(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('orgId', ParseUUIDPipe) orgId: string,
+    @Param('jobId', ParseUUIDPipe) jobId: string,
+  ) {
     return this.jobs.employerJob(user.id, orgId, jobId);
   }
 
@@ -92,7 +128,13 @@ export class WorkEmployerController {
   /** The employer has reviewed the full preview and quote; `version` is the one they approved. */
   @Post(':orgId/jobs/:jobId/publish')
   @HttpCode(HttpStatus.OK)
-  publish(@CurrentUser() user: AuthenticatedUser, @Param('orgId', ParseUUIDPipe) orgId: string, @Param('jobId', ParseUUIDPipe) jobId: string, @Body(new ZodValidationPipe(versionSchema)) body: z.infer<typeof versionSchema>) {
+  publish(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('orgId', ParseUUIDPipe) orgId: string,
+    @Param('jobId', ParseUUIDPipe) jobId: string,
+    @Body(new ZodValidationPipe(versionSchema))
+    body: z.infer<typeof versionSchema>,
+  ) {
     return this.jobs.publish(user.id, orgId, jobId, body.version);
   }
 
@@ -102,10 +144,17 @@ export class WorkEmployerController {
     @CurrentUser() user: AuthenticatedUser,
     @Param('orgId', ParseUUIDPipe) orgId: string,
     @Param('jobId', ParseUUIDPipe) jobId: string,
-    @Body(new ZodValidationPipe(versionSchema)) body: z.infer<typeof versionSchema>,
+    @Body(new ZodValidationPipe(versionSchema))
+    body: z.infer<typeof versionSchema>,
     @Headers('idempotency-key') key: string,
   ) {
-    return this.payments.createFunding(user.id, orgId, jobId, body.version, key);
+    return this.payments.createFunding(
+      user.id,
+      orgId,
+      jobId,
+      body.version,
+      key,
+    );
   }
 
   @Post(':orgId/jobs/:jobId/cancel')
@@ -114,18 +163,34 @@ export class WorkEmployerController {
     @CurrentUser() user: AuthenticatedUser,
     @Param('orgId', ParseUUIDPipe) orgId: string,
     @Param('jobId', ParseUUIDPipe) jobId: string,
-    @Body(new ZodValidationPipe(workCancelSchema)) body: z.infer<typeof workCancelSchema>,
+    @Body(new ZodValidationPipe(workCancelSchema))
+    body: z.infer<typeof workCancelSchema>,
   ) {
-    const r = await this.jobs.cancelJob(user.id, orgId, jobId, body.reason, async (tx, assignmentId) => {
-      await this.assignments.employerCancelInTx(tx, assignmentId, user.id, body.reason);
-    });
+    const r = await this.jobs.cancelJob(
+      user.id,
+      orgId,
+      jobId,
+      body.reason,
+      async (tx, assignmentId) => {
+        await this.assignments.employerCancelInTx(
+          tx,
+          assignmentId,
+          user.id,
+          body.reason,
+        );
+      },
+    );
     await this.payments.initiatePendingPayoutsFor();
     return r;
   }
 
   @Post(':orgId/jobs/:jobId/close')
   @HttpCode(HttpStatus.OK)
-  close(@CurrentUser() user: AuthenticatedUser, @Param('orgId', ParseUUIDPipe) orgId: string, @Param('jobId', ParseUUIDPipe) jobId: string) {
+  close(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('orgId', ParseUUIDPipe) orgId: string,
+    @Param('jobId', ParseUUIDPipe) jobId: string,
+  ) {
     return this.jobs.closeJob(user.id, orgId, jobId);
   }
 
@@ -135,9 +200,15 @@ export class WorkEmployerController {
     @CurrentUser() user: AuthenticatedUser,
     @Param('orgId', ParseUUIDPipe) orgId: string,
     @Param('applicationId', ParseUUIDPipe) id: string,
-    @Body(new ZodValidationPipe(decideSchema)) body: z.infer<typeof decideSchema>,
+    @Body(new ZodValidationPipe(decideSchema))
+    body: z.infer<typeof decideSchema>,
   ) {
-    return this.assignments.decideApplication(user.id, orgId, id, body.decision);
+    return this.assignments.decideApplication(
+      user.id,
+      orgId,
+      id,
+      body.decision,
+    );
   }
 
   @Post(':orgId/assignments/:assignmentId/review')
@@ -153,13 +224,21 @@ export class WorkEmployerController {
 
   @Post(':orgId/assignments/:assignmentId/confirm-attendance')
   @HttpCode(HttpStatus.OK)
-  confirmAttendance(@CurrentUser() user: AuthenticatedUser, @Param('orgId', ParseUUIDPipe) orgId: string, @Param('assignmentId', ParseUUIDPipe) id: string) {
+  confirmAttendance(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('orgId', ParseUUIDPipe) orgId: string,
+    @Param('assignmentId', ParseUUIDPipe) id: string,
+  ) {
     return this.assignments.confirmAttendance(user.id, orgId, id);
   }
 
   @Post(':orgId/assignments/:assignmentId/no-show')
   @HttpCode(HttpStatus.OK)
-  noShow(@CurrentUser() user: AuthenticatedUser, @Param('orgId', ParseUUIDPipe) orgId: string, @Param('assignmentId', ParseUUIDPipe) id: string) {
+  noShow(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('orgId', ParseUUIDPipe) orgId: string,
+    @Param('assignmentId', ParseUUIDPipe) id: string,
+  ) {
     return this.assignments.flagNoShow(user.id, orgId, id);
   }
 
@@ -169,7 +248,8 @@ export class WorkEmployerController {
     @CurrentUser() user: AuthenticatedUser,
     @Param('orgId', ParseUUIDPipe) orgId: string,
     @Param('assignmentId', ParseUUIDPipe) id: string,
-    @Body(new ZodValidationPipe(workCancelSchema)) body: z.infer<typeof workCancelSchema>,
+    @Body(new ZodValidationPipe(workCancelSchema))
+    body: z.infer<typeof workCancelSchema>,
   ) {
     return this.assignments.employerCancel(user.id, orgId, id, body.reason);
   }

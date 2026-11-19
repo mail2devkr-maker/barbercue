@@ -41,7 +41,9 @@ import { WorkJobsService } from './work-jobs.service';
 import { WorkWorkersService } from './work-workers.service';
 
 const applySchema = z.object({ note: z.string().trim().max(600).optional() });
-const offerResponseSchema = z.object({ response: z.enum(['ACCEPT', 'DECLINE']) });
+const offerResponseSchema = z.object({
+  response: z.enum(['ACCEPT', 'DECLINE']),
+});
 const ITEM_ID = /^[a-z0-9-]{1,40}$/;
 
 /**
@@ -65,7 +67,11 @@ export class WorkWorkerController {
   }
 
   @Put('me/profile')
-  saveProfile(@CurrentUser() user: AuthenticatedUser, @Body(new ZodValidationPipe(workerProfileUpsertSchema)) body: WorkerProfileUpsertInput) {
+  saveProfile(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body(new ZodValidationPipe(workerProfileUpsertSchema))
+    body: WorkerProfileUpsertInput,
+  ) {
     return this.workers.upsertProfile(user.id, body);
   }
 
@@ -80,44 +86,69 @@ export class WorkWorkerController {
   }
 
   @Get('me/jobs/:jobId')
-  jobForMe(@CurrentUser() user: AuthenticatedUser, @Param('jobId', ParseUUIDPipe) jobId: string) {
+  jobForMe(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('jobId', ParseUUIDPipe) jobId: string,
+  ) {
     return this.jobs.viewerDetail(user.id, jobId);
   }
 
   @Post('jobs/:jobId/accept')
   @Idempotent()
   @Throttle({ default: { ttl: 60_000, limit: 20 } })
-  accept(@CurrentUser() user: AuthenticatedUser, @Param('jobId', ParseUUIDPipe) jobId: string) {
+  accept(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('jobId', ParseUUIDPipe) jobId: string,
+  ) {
     return this.assignments.acceptInstant(user.id, jobId);
   }
 
   @Post('jobs/:jobId/apply')
   @Throttle({ default: { ttl: 60_000, limit: 20 } })
-  apply(@CurrentUser() user: AuthenticatedUser, @Param('jobId', ParseUUIDPipe) jobId: string, @Body(new ZodValidationPipe(applySchema)) body: z.infer<typeof applySchema>) {
+  apply(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('jobId', ParseUUIDPipe) jobId: string,
+    @Body(new ZodValidationPipe(applySchema)) body: z.infer<typeof applySchema>,
+  ) {
     return this.assignments.apply(user.id, jobId, body.note);
   }
 
   @Post('applications/:applicationId/withdraw')
   @HttpCode(HttpStatus.OK)
-  withdraw(@CurrentUser() user: AuthenticatedUser, @Param('applicationId', ParseUUIDPipe) id: string) {
+  withdraw(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('applicationId', ParseUUIDPipe) id: string,
+  ) {
     return this.assignments.withdrawApplication(user.id, id);
   }
 
   @Post('applications/:applicationId/respond')
   @HttpCode(HttpStatus.OK)
-  respond(@CurrentUser() user: AuthenticatedUser, @Param('applicationId', ParseUUIDPipe) id: string, @Body(new ZodValidationPipe(offerResponseSchema)) body: z.infer<typeof offerResponseSchema>) {
+  respond(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('applicationId', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(offerResponseSchema))
+    body: z.infer<typeof offerResponseSchema>,
+  ) {
     return this.assignments.respondToOffer(user.id, id, body.response);
   }
 
   @Get('assignments/:assignmentId')
-  assignment(@CurrentUser() user: AuthenticatedUser, @Param('assignmentId', ParseUUIDPipe) id: string) {
+  assignment(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('assignmentId', ParseUUIDPipe) id: string,
+  ) {
     return this.assignments.detail(user.id, id);
   }
 
   @Post('assignments/:assignmentId/check-in')
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { ttl: 60_000, limit: 10 } })
-  checkIn(@CurrentUser() user: AuthenticatedUser, @Param('assignmentId', ParseUUIDPipe) id: string, @Body(new ZodValidationPipe(workCheckInSchema)) body: WorkCheckInInput) {
+  checkIn(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('assignmentId', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(workCheckInSchema)) body: WorkCheckInInput,
+  ) {
     return this.assignments.checkIn(user.id, id, body);
   }
 
@@ -126,27 +157,43 @@ export class WorkWorkerController {
     @CurrentUser() user: AuthenticatedUser,
     @Param('assignmentId', ParseUUIDPipe) id: string,
     @Param('itemId') itemId: string,
-    @Body(new ZodValidationPipe(workTaskResponseSchema)) body: z.infer<typeof workTaskResponseSchema>,
+    @Body(new ZodValidationPipe(workTaskResponseSchema))
+    body: z.infer<typeof workTaskResponseSchema>,
   ) {
-    if (!ITEM_ID.test(itemId)) return this.assignments.saveResponse(user.id, id, '__invalid__', body);
+    if (!ITEM_ID.test(itemId))
+      return this.assignments.saveResponse(user.id, id, '__invalid__', body);
     return this.assignments.saveResponse(user.id, id, itemId, body);
   }
 
   @Post('assignments/:assignmentId/evidence/:itemId')
   @Throttle({ default: { ttl: 60_000, limit: 30 } })
-  @UseInterceptors(FileInterceptor('file', { storage: memoryStorage(), limits: { fileSize: WORK_LIMITS.maxEvidenceBytes, files: 1 } }))
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: WORK_LIMITS.maxEvidenceBytes, files: 1 },
+    }),
+  )
   uploadEvidence(
     @CurrentUser() user: AuthenticatedUser,
     @Param('assignmentId', ParseUUIDPipe) id: string,
     @Param('itemId') itemId: string,
     @UploadedFile() file: Express.Multer.File | undefined,
   ) {
-    return this.assignments.uploadEvidence(user.id, id, ITEM_ID.test(itemId) ? itemId : '__invalid__', file);
+    return this.assignments.uploadEvidence(
+      user.id,
+      id,
+      ITEM_ID.test(itemId) ? itemId : '__invalid__',
+      file,
+    );
   }
 
   /** Private evidence: only the worker, the employer's members (and admins via the admin route). */
   @Get('evidence/:fileId')
-  async evidence(@CurrentUser() user: AuthenticatedUser, @Param('fileId', ParseUUIDPipe) fileId: string, @Res() res: Response) {
+  async evidence(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('fileId', ParseUUIDPipe) fileId: string,
+    @Res() res: Response,
+  ) {
     const file = await this.assignments.evidenceFile(user.id, fileId);
     res.setHeader('Content-Type', file.mimeType);
     res.setHeader('Cache-Control', 'private, no-store');
@@ -157,26 +204,42 @@ export class WorkWorkerController {
 
   @Post('assignments/:assignmentId/submit')
   @HttpCode(HttpStatus.OK)
-  submit(@CurrentUser() user: AuthenticatedUser, @Param('assignmentId', ParseUUIDPipe) id: string) {
+  submit(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('assignmentId', ParseUUIDPipe) id: string,
+  ) {
     return this.assignments.submit(user.id, id);
   }
 
   @Post('assignments/:assignmentId/cancel')
   @HttpCode(HttpStatus.OK)
-  cancel(@CurrentUser() user: AuthenticatedUser, @Param('assignmentId', ParseUUIDPipe) id: string, @Body(new ZodValidationPipe(workCancelSchema)) body: z.infer<typeof workCancelSchema>) {
+  cancel(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('assignmentId', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(workCancelSchema))
+    body: z.infer<typeof workCancelSchema>,
+  ) {
     return this.assignments.workerCancel(user.id, id, body.reason);
   }
 
   /** Either party (worker, or the employer's owner/manager) opens a dispute on the assignment. */
   @Post('assignments/:assignmentId/disputes')
-  openDispute(@CurrentUser() user: AuthenticatedUser, @Param('assignmentId', ParseUUIDPipe) id: string, @Body(new ZodValidationPipe(workDisputeOpenSchema)) body: z.infer<typeof workDisputeOpenSchema>) {
+  openDispute(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('assignmentId', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(workDisputeOpenSchema))
+    body: z.infer<typeof workDisputeOpenSchema>,
+  ) {
     return this.disputes.open(user.id, id, body.reasonCode, body.description);
   }
 
   /** Rules-based smart draft for employers. Deterministic, no AI provider, never invents fields. */
   @Post('draft')
   @HttpCode(HttpStatus.OK)
-  draft(@Body(new ZodValidationPipe(workDraftRequestSchema)) body: z.infer<typeof workDraftRequestSchema>) {
+  draft(
+    @Body(new ZodValidationPipe(workDraftRequestSchema))
+    body: z.infer<typeof workDraftRequestSchema>,
+  ) {
     return draftWorkJobFromText(body.text);
   }
 }

@@ -30,7 +30,13 @@ import { WorkWorkersService } from './work-workers.service';
  */
 @Module({
   imports: [NotificationsModule],
-  controllers: [WorkPublicController, WorkWorkerController, WorkEmployerController, WorkPaymentsController, WorkAdminController],
+  controllers: [
+    WorkPublicController,
+    WorkWorkerController,
+    WorkEmployerController,
+    WorkPaymentsController,
+    WorkAdminController,
+  ],
   providers: [
     WorkEnabledGuard,
     WorkAccessService,
@@ -47,8 +53,12 @@ import { WorkWorkersService } from './work-workers.service';
       provide: WORK_PAYMENT_PROVIDER,
       useFactory: (): WorkPaymentProvider => {
         if (configuredWorkPaymentProvider() === 'sandbox') {
-          new Logger('WorkModule').warn('FastQue Work is using the SANDBOX payment provider. No real money moves.');
-          return new SandboxWorkPaymentProvider(process.env.WORK_SANDBOX_WEBHOOK_SECRET ?? '');
+          new Logger('WorkModule').warn(
+            'FastQue Work is using the SANDBOX payment provider. No real money moves.',
+          );
+          return new SandboxWorkPaymentProvider(
+            process.env.WORK_SANDBOX_WEBHOOK_SECRET ?? '',
+          );
         }
         return new UnconfiguredWorkPaymentProvider();
       },
