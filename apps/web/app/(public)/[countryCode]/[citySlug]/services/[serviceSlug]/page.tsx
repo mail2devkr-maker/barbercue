@@ -25,6 +25,13 @@ interface Params {
   serviceSlug: string;
 }
 
+function loadSalons(city: CityDto, query: string) {
+  return fetchDiscoveryOrNull<PaginatedResult<SalonListItemDto>>(
+    `${DISCOVERY_PATHS.salons}?city=${city.slug}&countryCode=${city.countryCode}&service=${encodeURIComponent(query)}&limit=50`,
+    DISCOVERY_REVALIDATE_SECONDS,
+  );
+}
+
 async function loadCity(countryCode: string, citySlug: string) {
   return fetchDiscoveryOrNull<CityDto>(`${DISCOVERY_PATHS.cities}/${countryCode}/${citySlug}`, DISCOVERY_REVALIDATE_SECONDS);
 }
@@ -37,9 +44,14 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
   const title = `${service.name} in ${city.name} — salons, barbers & parlours near you`;
   const description = `Best ${service.name.toLowerCase()} in ${city.name}, ${city.state}. ${service.blurb} Compare prices, book ahead or join the live queue on FastQue.`;
   const url = absoluteUrl(`/${city.countryCode.toLowerCase()}/${city.slug}/services/${service.slug}`);
+  // A city with no salon offering this service yet is a thin page: keep it out of Google's index
+  // (still followable) until a salon for it joins.
+  const salons = await loadSalons(city, service.query).catch(() => null);
+  const hasSalons = Boolean(salons && salons.items.length > 0);
   return {
     title,
     description,
+    robots: hasSalons ? undefined : { index: false, follow: true },
     keywords: [`${service.name} in ${city.name}`, ...service.aka.map((a) => `${a} ${city.name}`)],
     alternates: { canonical: url },
     openGraph: { title, description, url, type: "website" },
@@ -55,10 +67,7 @@ export default async function CityServicePage({ params }: { params: Promise<Para
 
   const cityPath = `/${city.countryCode.toLowerCase()}/${city.slug}`;
   const pageUrl = absoluteUrl(`${cityPath}/services/${service.slug}`);
-  const salons = await fetchDiscoveryOrNull<PaginatedResult<SalonListItemDto>>(
-    `${DISCOVERY_PATHS.salons}?city=${city.slug}&countryCode=${city.countryCode}&service=${encodeURIComponent(service.query)}&limit=50`,
-    DISCOVERY_REVALIDATE_SECONDS,
-  );
+  const salons = await loadSalons(city, service.query);
   const crumbs = [
     { label: "Home", href: "/" },
     { label: city.name, href: cityPath },
