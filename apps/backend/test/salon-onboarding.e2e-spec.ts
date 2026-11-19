@@ -182,6 +182,8 @@ maybe('Salon onboarding workflow (e2e, disposable local database)', () => {
         consentListing: true,
         consentAccuracy: true,
         consentAuthorization: true,
+        consentMethod: 'WHATSAPP_CONFIRMATION',
+        consentByName: 'Sample Owner',
         hours: [0, 1, 2, 3, 4, 5, 6].map((d) => ({
           dayOfWeek: d,
           isClosed: false,
@@ -578,13 +580,13 @@ maybe('Salon onboarding workflow (e2e, disposable local database)', () => {
 
     const queue = await api(
       'get',
-      `admin/onboarding?q=${run}`,
+      `admin/onboarding-applications?q=${run}`,
       tok.admin,
     ).expect(200);
     expect(queue.body.items.map((i: Json) => i.id)).toContain(ids.main);
     const viewerList = await api(
       'get',
-      `admin/onboarding?q=${run}`,
+      `admin/onboarding-applications?q=${run}`,
       tok.viewer,
     ).expect(200);
     expect(
@@ -592,10 +594,10 @@ maybe('Salon onboarding workflow (e2e, disposable local database)', () => {
     ).toMatch(/^\+\*+\d{2}$/);
     await api(
       'post',
-      `admin/onboarding/${ids.main}/start-review`,
+      `admin/onboarding-applications/${ids.main}/start-review`,
       tok.viewer,
     ).expect(403);
-    const kpis = await api('get', 'admin/onboarding/kpis', tok.admin).expect(
+    const kpis = await api('get', 'admin/onboarding-applications/kpis', tok.admin).expect(
       200,
     );
     expect(kpis.body.pendingReview).toBeGreaterThan(0);
@@ -607,7 +609,7 @@ maybe('Salon onboarding workflow (e2e, disposable local database)', () => {
     ids.dupe = dupe.id;
     const dups = await api(
       'get',
-      `admin/onboarding/${ids.main}/duplicates`,
+      `admin/onboarding-applications/${ids.main}/duplicates`,
       tok.admin,
     ).expect(200);
     expect(dups.body).toEqual(
@@ -624,16 +626,16 @@ maybe('Salon onboarding workflow (e2e, disposable local database)', () => {
 
     const review = await api(
       'post',
-      `admin/onboarding/${ids.main}/start-review`,
+      `admin/onboarding-applications/${ids.main}/start-review`,
       tok.admin,
     ).expect(201);
     expect(review.body.status).toBe('UNDER_REVIEW');
-    await api('post', `admin/onboarding/${ids.main}/request-changes`, tok.admin)
+    await api('post', `admin/onboarding-applications/${ids.main}/request-changes`, tok.admin)
       .send({ items: [], applicationVersion: review.body.version })
       .expect(400);
     const changes = await api(
       'post',
-      `admin/onboarding/${ids.main}/request-changes`,
+      `admin/onboarding-applications/${ids.main}/request-changes`,
       tok.admin,
     )
       .send({
@@ -674,10 +676,10 @@ maybe('Salon onboarding workflow (e2e, disposable local database)', () => {
 
   // 23: employees cannot approve, and nobody approves their own application
   it('blocks employees and self-review from deciding', async () => {
-    await api('post', `admin/onboarding/${ids.main}/approve`, tok.empA)
+    await api('post', `admin/onboarding-applications/${ids.main}/approve`, tok.empA)
       .send({ applicationVersion: 1 })
       .expect(403);
-    await api('post', `admin/onboarding/${ids.main}/reject`, tok.empA)
+    await api('post', `admin/onboarding-applications/${ids.main}/reject`, tok.empA)
       .send({ reason: 'nope nope', applicationVersion: 1 })
       .expect(403);
     // A user who holds both roles still cannot decide their own application.
@@ -689,7 +691,7 @@ maybe('Salon onboarding workflow (e2e, disposable local database)', () => {
       .signAccessToken(ids.empA, [Role.PLATFORM_ADMIN], SessionAudience.ADMIN);
     const res = await api(
       'post',
-      `admin/onboarding/${ids.main}/approve`,
+      `admin/onboarding-applications/${ids.main}/approve`,
       selfAdmin,
     )
       .send({ applicationVersion: 99 })
@@ -707,13 +709,13 @@ maybe('Salon onboarding workflow (e2e, disposable local database)', () => {
     try {
       const current = await api(
         'get',
-        `admin/onboarding/${ids.main}`,
+        `admin/onboarding-applications/${ids.main}`,
         tok.admin,
       ).expect(200);
       for (const path of ['approve', 'publish', 'invitation/resend']) {
         const res = await api(
           'post',
-          `admin/onboarding/${ids.main}/${path}`,
+          `admin/onboarding-applications/${ids.main}/${path}`,
           tok.admin,
         )
           .send({ applicationVersion: current.body.version })
@@ -723,7 +725,7 @@ maybe('Salon onboarding workflow (e2e, disposable local database)', () => {
       expect(await prisma.salon.count()).toBe(before);
       const after = await api(
         'get',
-        `admin/onboarding/${ids.main}`,
+        `admin/onboarding-applications/${ids.main}`,
         tok.admin,
       ).expect(200);
       expect(after.body.status).toBe(current.body.status);
@@ -735,16 +737,16 @@ maybe('Salon onboarding workflow (e2e, disposable local database)', () => {
   it('approves once, keeps the salon hidden, and retries a failed invitation', async () => {
     const current = await api(
       'get',
-      `admin/onboarding/${ids.main}`,
+      `admin/onboarding-applications/${ids.main}`,
       tok.admin,
     ).expect(200);
-    await api('post', `admin/onboarding/${ids.main}/approve`, tok.admin)
+    await api('post', `admin/onboarding-applications/${ids.main}/approve`, tok.admin)
       .send({ applicationVersion: current.body.version - 1 })
       .expect(409);
     mailer.failNext = 1;
     const approved = await api(
       'post',
-      `admin/onboarding/${ids.main}/approve`,
+      `admin/onboarding-applications/${ids.main}/approve`,
       tok.admin,
     )
       .send({
@@ -776,8 +778,9 @@ maybe('Salon onboarding workflow (e2e, disposable local database)', () => {
     const lead = await prisma.employeeCrmLead.findUniqueOrThrow({
       where: { id: current.body.leadId },
     });
+    // CRM 2.0: approval and activation are separate — the lead is APPROVED until the salon goes live.
     expect(lead).toMatchObject({
-      status: 'ONBOARDED',
+      status: 'APPROVED',
       onboardedSalonId: ids.salon,
     });
     const review = await prisma.salonOnboardingReview.findFirstOrThrow({
@@ -791,7 +794,7 @@ maybe('Salon onboarding workflow (e2e, disposable local database)', () => {
 
     const again = await api(
       'post',
-      `admin/onboarding/${ids.main}/approve`,
+      `admin/onboarding-applications/${ids.main}/approve`,
       tok.admin,
     )
       .send({ applicationVersion: current.body.version })
@@ -809,7 +812,7 @@ maybe('Salon onboarding workflow (e2e, disposable local database)', () => {
 
     const retry = await api(
       'post',
-      `admin/onboarding/${ids.main}/invitation/resend`,
+      `admin/onboarding-applications/${ids.main}/invitation/resend`,
       tok.admin,
     ).expect(201);
     expect(retry.body.application.status).toBe('AWAITING_OWNER_ACTIVATION');
@@ -835,13 +838,13 @@ maybe('Salon onboarding workflow (e2e, disposable local database)', () => {
     await api('post', `employee/onboarding/${other.id}/submit`, tok.empA)
       .send({})
       .expect(201);
-    const v = (await api('get', `admin/onboarding/${other.id}`, tok.admin)).body
+    const v = (await api('get', `admin/onboarding-applications/${other.id}`, tok.admin)).body
       .version;
     const results = await Promise.all([
-      api('post', `admin/onboarding/${other.id}/approve`, tok.admin).send({
+      api('post', `admin/onboarding-applications/${other.id}/approve`, tok.admin).send({
         applicationVersion: v,
       }),
-      api('post', `admin/onboarding/${other.id}/approve`, tok.cofounder).send({
+      api('post', `admin/onboarding-applications/${other.id}/approve`, tok.cofounder).send({
         applicationVersion: v,
       }),
     ]);
@@ -873,7 +876,7 @@ maybe('Salon onboarding workflow (e2e, disposable local database)', () => {
 
     await api(
       'post',
-      `admin/onboarding/${ids.main}/invitation/resend`,
+      `admin/onboarding-applications/${ids.main}/invitation/resend`,
       tok.admin,
     ).expect(201);
     const fresh = mailer.lastToken(ownerEmail);
@@ -897,7 +900,7 @@ maybe('Salon onboarding workflow (e2e, disposable local database)', () => {
     expect(owner.emailVerifiedAt).not.toBeNull();
     const detail = await api(
       'get',
-      `admin/onboarding/${ids.main}`,
+      `admin/onboarding-applications/${ids.main}`,
       tok.admin,
     ).expect(200);
     expect(detail.body.status).toBe('READY_TO_PUBLISH');
@@ -928,12 +931,12 @@ maybe('Salon onboarding workflow (e2e, disposable local database)', () => {
     await api('post', `employee/onboarding/${branch.id}/submit`, tok.empA)
       .send({})
       .expect(201);
-    const v = (await api('get', `admin/onboarding/${branch.id}`, tok.admin))
+    const v = (await api('get', `admin/onboarding-applications/${branch.id}`, tok.admin))
       .body.version;
     const before = mailer.invites.length;
     const res = await api(
       'post',
-      `admin/onboarding/${branch.id}/approve`,
+      `admin/onboarding-applications/${branch.id}/approve`,
       tok.admin,
     )
       .send({ applicationVersion: v })
@@ -951,20 +954,20 @@ maybe('Salon onboarding workflow (e2e, disposable local database)', () => {
 
   // 14: rejection
   it('rejects with a recorded reason and tells the employee', async () => {
-    const v = (await api('get', `admin/onboarding/${ids.dupe}`, tok.admin)).body
+    const v = (await api('get', `admin/onboarding-applications/${ids.dupe}`, tok.admin)).body
       .version;
     await api('post', `employee/onboarding/${ids.dupe}/submit`, tok.empB)
       .send({})
       .expect(201);
-    const fresh = (await api('get', `admin/onboarding/${ids.dupe}`, tok.admin))
+    const fresh = (await api('get', `admin/onboarding-applications/${ids.dupe}`, tok.admin))
       .body.version;
     expect(fresh).toBe(v);
-    await api('post', `admin/onboarding/${ids.dupe}/reject`, tok.admin)
+    await api('post', `admin/onboarding-applications/${ids.dupe}/reject`, tok.admin)
       .send({ reason: 'x', applicationVersion: fresh })
       .expect(400);
     const rej = await api(
       'post',
-      `admin/onboarding/${ids.dupe}/reject`,
+      `admin/onboarding-applications/${ids.dupe}/reject`,
       tok.admin,
     )
       .send({
@@ -981,7 +984,7 @@ maybe('Salon onboarding workflow (e2e, disposable local database)', () => {
         where: { userId: ids.empB, type: 'onboarding.rejected' },
       }),
     ).toBe(1);
-    await api('post', `admin/onboarding/${ids.dupe}/approve`, tok.admin)
+    await api('post', `admin/onboarding-applications/${ids.dupe}/approve`, tok.admin)
       .send({ applicationVersion: fresh })
       .expect(409);
   });
@@ -999,17 +1002,17 @@ maybe('Salon onboarding workflow (e2e, disposable local database)', () => {
     expect(ownerPatch.status).toBe(409);
     await api(
       'post',
-      `admin/onboarding/${ids.main}/publish`,
+      `admin/onboarding-applications/${ids.main}/publish`,
       tok.cofounder,
     ).expect(403);
     await api(
       'post',
-      `admin/onboarding/${ids.main}/publish`,
+      `admin/onboarding-applications/${ids.main}/publish`,
       tok.viewer,
     ).expect(403);
     const notReady = await api(
       'post',
-      `admin/onboarding/${ids.main}/publish`,
+      `admin/onboarding-applications/${ids.main}/publish`,
       tok.admin,
     ).expect(409);
     const failing = notReady.body.error.details.checks
@@ -1029,12 +1032,12 @@ maybe('Salon onboarding workflow (e2e, disposable local database)', () => {
     });
     const detail = await api(
       'get',
-      `admin/onboarding/${ids.main}`,
+      `admin/onboarding-applications/${ids.main}`,
       tok.admin,
     ).expect(200);
     const promoted = await api(
       'post',
-      `admin/onboarding/${ids.main}/photos/publish`,
+      `admin/onboarding-applications/${ids.main}/photos/publish`,
       tok.admin,
     )
       .send({ mediaIds: detail.body.media.map((m: Json) => m.id) })
@@ -1053,14 +1056,14 @@ maybe('Salon onboarding workflow (e2e, disposable local database)', () => {
     }
     const ready = await api(
       'get',
-      `admin/onboarding/${ids.main}/publish-readiness`,
+      `admin/onboarding-applications/${ids.main}/publish-readiness`,
       tok.admin,
     ).expect(200);
     expect(ready.body.ready).toBe(true);
 
     const published = await api(
       'post',
-      `admin/onboarding/${ids.main}/publish`,
+      `admin/onboarding-applications/${ids.main}/publish`,
       tok.admin,
     );
     if (published.status !== 201)
@@ -1098,7 +1101,7 @@ maybe('Salon onboarding workflow (e2e, disposable local database)', () => {
     ).expect(200);
     const team = await api(
       'get',
-      'admin/onboarding/analytics',
+      'admin/onboarding-applications/analytics',
       tok.admin,
     ).expect(200);
     const rowA = team.body.employees.find(
@@ -1136,6 +1139,6 @@ maybe('Salon onboarding workflow (e2e, disposable local database)', () => {
     ).expect(200);
     expect(counts.body.activated).toBe(1);
     expect(counts.body.drafts).toBe(2);
-    await api('get', 'admin/onboarding/analytics', tok.empA).expect(403);
+    await api('get', 'admin/onboarding-applications/analytics', tok.empA).expect(403);
   });
 });
