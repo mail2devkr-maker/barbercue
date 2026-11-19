@@ -9,8 +9,8 @@ try {
   throw new Error("Run the SEO crawl smoke check before Lighthouse CI to discover real city, locality and salon routes.", { cause: error });
 }
 
-if (!Array.isArray(urls) || urls.length !== 6 || urls.some((url) => typeof url !== "string")) {
-  throw new Error("The SEO crawl smoke check must produce exactly six real page URLs for Lighthouse CI.");
+if (!Array.isArray(urls) || ![5, 6].includes(urls.length) || urls.some((url) => typeof url !== "string")) {
+  throw new Error("The SEO crawl smoke check must produce five core routes, plus a locality only when the sitemap has real inventory for one.");
 }
 
 module.exports = {
