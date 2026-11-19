@@ -67,21 +67,28 @@ export const DRAFT_FIELDS = [
   "walkInsAccepted", "bookingsAccepted", "liveQueueSupported", "appointmentIntervalMinutes",
   "averageServiceMinutes", "specialTimings", "consentContact", "consentListing", "consentAccuracy",
   "consentAuthorization", "gstin", "businessRegistration", "employeeNotes", "openQuestions",
+  // CRM 2.0 additions
+  "washStationCount", "qrInstallReady", "inventoryInterest", "ownerTrainingStatus", "weeklyHolidays", "amenities",
+  "consentMethod", "consentByName", "consentByRole", "consentEvidenceNote",
 ] as const;
 
 const NUMBER_FIELDS = new Set([
   "branchCount", "employeeCount", "chairCount", "activeChairCount", "maleStaffCount", "femaleStaffCount",
-  "appointmentIntervalMinutes", "averageServiceMinutes",
+  "appointmentIntervalMinutes", "averageServiceMinutes", "washStationCount",
 ]);
-const ENUM_FIELDS = new Set(["genderCategory", "salonKind"]);
-const TRISTATE_FIELDS = new Set(["isFranchise", "walkInsAccepted", "bookingsAccepted", "liveQueueSupported"]);
+const ENUM_FIELDS = new Set(["genderCategory", "salonKind", "ownerTrainingStatus", "consentMethod"]);
+const TRISTATE_FIELDS = new Set(["isFranchise", "walkInsAccepted", "bookingsAccepted", "liveQueueSupported", "qrInstallReady", "inventoryInterest"]);
+const CONSENT_FLAGS = new Set(["consentContact", "consentListing", "consentAccuracy", "consentAuthorization"]);
+/** Array fields, held in the form as comma-separated strings ("0,6", "parking,wifi"). */
+const LIST_FIELDS = new Set(["weeklyHolidays", "amenities"]);
 
 export function formFromApplication(app: OnboardingApplicationDto): DraftForm {
   const form: DraftForm = {};
   const source = app as unknown as Record<string, unknown>;
   for (const key of DRAFT_FIELDS) {
     const value = source[key];
-    form[key] = value === null || value === undefined ? "" : (value as string | number | boolean);
+    if (LIST_FIELDS.has(key)) form[key] = Array.isArray(value) ? value.join(",") : "";
+    else form[key] = value === null || value === undefined ? "" : (value as string | number | boolean);
   }
   // Display phones in the familiar 10-digit form; the server re-normalizes to +91.
   for (const key of ["ownerPhone", "ownerWhatsapp", "alternatePhone", "managerPhone"]) {
@@ -96,13 +103,16 @@ export function draftPayload(form: DraftForm): Record<string, unknown> {
   for (const key of DRAFT_FIELDS) {
     const value = form[key];
     if (value === undefined) continue;
-    if (NUMBER_FIELDS.has(key)) {
+    if (LIST_FIELDS.has(key)) {
+      const items = typeof value === "string" ? value.split(",").filter(Boolean) : [];
+      out[key] = key === "weeklyHolidays" ? items.map(Number) : items;
+    } else if (NUMBER_FIELDS.has(key)) {
       out[key] = value === "" || value === null ? null : Number(value);
     } else if (ENUM_FIELDS.has(key)) {
       out[key] = value === "" ? null : value;
     } else if (TRISTATE_FIELDS.has(key)) {
       out[key] = value === "" || value === null ? null : value === true || value === "true";
-    } else if (key.startsWith("consent")) {
+    } else if (CONSENT_FLAGS.has(key)) {
       out[key] = value === true;
     } else if (key === "salonName") {
       if (typeof value === "string" && value.trim()) out[key] = value;
@@ -182,6 +192,23 @@ export function servicesPayload(rows: ServiceRow[]): OnboardingServiceRowInput[]
       basePrice: row.basePrice === null || row.basePrice === undefined || Number.isNaN(row.basePrice) ? null : row.basePrice,
       durationMinutes: row.durationMinutes ? row.durationMinutes : null,
     }));
+}
+
+/** Toggle one value in a comma-separated list field. */
+export function toggleListValue(current: unknown, value: string): string {
+  const items = typeof current === "string" ? current.split(",").filter(Boolean) : [];
+  return (items.includes(value) ? items.filter((v) => v !== value) : [...items, value]).join(",");
+}
+export function listHas(current: unknown, value: string): boolean {
+  return typeof current === "string" && current.split(",").includes(value);
+}
+
+/** One quick GPS fix (cached up to 2 min) for photo capture metadata; resolves null when unavailable. */
+export function quickPosition(timeoutMs = 6000): Promise<GeolocationPosition | null> {
+  if (typeof navigator === "undefined" || !navigator.geolocation) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(resolve, () => resolve(null), { enableHighAccuracy: true, timeout: timeoutMs, maximumAge: 120_000 });
+  });
 }
 
 /** The wizard's live view of what is still missing, using the same rules the server enforces. */

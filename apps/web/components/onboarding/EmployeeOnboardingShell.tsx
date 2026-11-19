@@ -27,7 +27,7 @@ export function EmployeeOnboardingShell({ children }: { children: React.ReactNod
             <strong>Salon Onboarding</strong>
           </div>
           <div className={base.topActions}>
-            <Link className={base.secondaryButton} href="/employee?tab=onboarding">
+            <Link className={base.secondaryButton} href="/employee/onboarding">
               ← All applications
             </Link>
           </div>

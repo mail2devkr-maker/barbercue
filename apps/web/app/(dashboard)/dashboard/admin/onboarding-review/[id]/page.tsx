@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import {
+  ONBOARDING_AMENITY_LABEL,
+  ONBOARDING_CONSENT_METHOD_LABEL,
   ONBOARDING_FIELD_LABELS,
   ONBOARDING_STATUS_LABELS,
   type AdminOnboardingApplicationDto,
@@ -305,7 +307,8 @@ export default function AdminOnboardingReviewPage() {
               <dt>City / district</dt><dd><Value v={[app.city, app.district].filter(Boolean).join(", ")} /></dd>
               <dt>State / PIN</dt><dd><Value v={app.state} /> · <Value v={app.postalCode} /></dd>
               <dt>Country</dt><dd><Value v={app.country} /></dd>
-              <dt>Coordinates</dt><dd>{app.coordinates ? `${app.coordinates.latitude}, ${app.coordinates.longitude} (${app.coordinates.source})` : <Value v={null} />}</dd>
+              <dt>Coordinates</dt><dd>{app.coordinates ? `${app.coordinates.latitude}, ${app.coordinates.longitude} (${app.coordinates.source}${app.coordinates.accuracyMeters != null ? ` · ±${Math.round(app.coordinates.accuracyMeters)} m` : ""})` : <Value v={null} />}</dd>
+              <dt>Location check</dt><dd>{app.coordinates ? (app.locationVerified ? "Employee confirmed at the entrance" : "Not confirmed at the entrance") : <Value v={null} />}{app.coordinates?.accuracyMeters != null && app.coordinates.accuracyMeters > 50 ? " · weak GPS fix" : ""}</dd>
               <dt>Maps link</dt><dd>{app.mapsUrl ? <a href={app.mapsUrl} target="_blank" rel="noreferrer noopener">Open map</a> : <Value v={null} />}</dd>
             </dl>
           </section>
@@ -398,6 +401,15 @@ export default function AdminOnboardingReviewPage() {
                   )}
                   <PrivateImage path={m.filePath} alt={`${m.category} photo`} />
                   <small>{m.category.toLowerCase()} · {m.uploadedBy} · {when(m.createdAt)}</small>
+                  {m.capture?.latitude != null && m.capture.longitude != null && (
+                    <small>
+                      Camera {when(m.capture.capturedAt)} ·{" "}
+                      <a href={`https://www.google.com/maps?q=${m.capture.latitude},${m.capture.longitude}`} target="_blank" rel="noreferrer noopener">
+                        taken at {m.capture.latitude.toFixed(5)}, {m.capture.longitude.toFixed(5)}
+                      </a>
+                      {m.capture.accuracyMeters != null ? ` ±${Math.round(m.capture.accuracyMeters)} m` : ""}
+                    </small>
+                  )}
                 </div>
               ))}
             </div>
@@ -424,6 +436,13 @@ export default function AdminOnboardingReviewPage() {
             </ul>
             <dl style={{ marginTop: 8 }}>
               <dt>Captured</dt><dd>{when(app.consentCapturedAt)}</dd>
+              <dt>Method</dt><dd><Value v={app.consentMethod ? (ONBOARDING_CONSENT_METHOD_LABEL[app.consentMethod as keyof typeof ONBOARDING_CONSENT_METHOD_LABEL] ?? app.consentMethod) : null} /></dd>
+              <dt>Given by</dt><dd><Value v={app.consentByName ? `${app.consentByName}${app.consentByRole ? ` (${app.consentByRole})` : ""}` : null} /></dd>
+              <dt>Evidence</dt><dd><Value v={app.consentEvidenceNote} /></dd>
+              <dt>Wash stations</dt><dd><Value v={app.washStationCount != null ? String(app.washStationCount) : null} /></dd>
+              <dt>Weekly holidays</dt><dd><Value v={app.weeklyHolidays.length ? app.weeklyHolidays.map((d) => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d]).join(", ") : null} /></dd>
+              <dt>Amenities</dt><dd><Value v={app.amenities.length ? app.amenities.map((a) => ONBOARDING_AMENITY_LABEL[a as keyof typeof ONBOARDING_AMENITY_LABEL] ?? a).join(", ") : null} /></dd>
+              <dt>QR / marketplace / training</dt><dd>{app.qrInstallReady == null ? "—" : app.qrInstallReady ? "QR ready" : "QR not ready"} · {app.inventoryInterest == null ? "—" : app.inventoryInterest ? "Interested in products" : "No product interest"} · {app.ownerTrainingStatus ? app.ownerTrainingStatus.toLowerCase().replace(/_/g, " ") : "training not recorded"}</dd>
               <dt>GSTIN</dt><dd><Value v={app.gstin} /></dd>
               <dt>Registration</dt><dd><Value v={app.businessRegistration} /></dd>
             </dl>

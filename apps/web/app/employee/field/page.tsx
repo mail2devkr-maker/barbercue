@@ -16,13 +16,13 @@ import {
   type EmployeeCrmLeadDto,
   type EmployeeCrmVisitDto,
 } from "@barbercue/shared";
-import { ApiError, apiFetch } from "../../lib/api";
-import { useAuth } from "../../lib/auth-context";
-import styles from "./employee.module.css";
-import { EmployeeShopDetails } from "./EmployeeShopDetails";
-import { ActionAssistant } from "../../components/assistant/ActionAssistant";
-import { useAssistantRefresh } from "../../lib/assistant-events";
-import { EmployeeOnboardingTab } from "../../components/onboarding/EmployeeOnboardingTab";
+import { ApiError, apiFetch } from "../../../lib/api";
+import { useAuth } from "../../../lib/auth-context";
+import styles from "../employee.module.css";
+import { EmployeeShopDetails } from "../EmployeeShopDetails";
+import { ActionAssistant } from "../../../components/assistant/ActionAssistant";
+import { useAssistantRefresh } from "../../../lib/assistant-events";
+import { EmployeeOnboardingTab } from "../../../components/onboarding/EmployeeOnboardingTab";
 
 type Tab = "dashboard" | "leads" | "visits" | "followups" | "onboarding";
 
@@ -47,7 +47,7 @@ function errorMessage(error: unknown, fallback: string): string {
   return error instanceof ApiError ? error.message : fallback;
 }
 
-export default function EmployeeDashboardPage() {
+export default function EmployeeFieldWorkPage() {
   const { user, status, logout } = useAuth();
   const router = useRouter();
   // "?tab=onboarding" deep-links back from the onboarding pages. Tabs render only after the
@@ -354,6 +354,9 @@ export default function EmployeeDashboardPage() {
             <strong>{profile.fullName} · {profile.employeeCode}</strong>
           </div>
           <div className={styles.topActions}>
+            <Link className={styles.secondaryButton} href="/employee">
+              ← CRM home
+            </Link>
             <button type="button" className={styles.secondaryButton} onClick={() => void refreshAll()}>
               Refresh
             </button>

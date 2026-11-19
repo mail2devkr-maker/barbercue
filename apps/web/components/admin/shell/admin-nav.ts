@@ -89,6 +89,8 @@ export const ADMIN_NAV_ITEMS: ReadonlyArray<AdminNavItem> = [
   { id: "customer-overview", label: "Customer Overview", group: "CUSTOMERS", href: "/dashboard/admin/customers", status: "live" },
   { id: "customer-export", label: "Customer Data Export", group: "CUSTOMERS", href: "/dashboard/admin/customers", query: "view=export", status: "live" },
 
+  { id: "field-crm-2", label: "Field CRM 2.0", group: "SALES", href: "/dashboard/admin/field-crm", status: "live" },
+  { id: "onboarding-review", label: "Onboarding Review", group: "SALES", href: "/dashboard/admin/onboarding-review", status: "live" },
   { id: "field-crm", label: "Field CRM", group: "SALES", href: "/dashboard/admin/crm", status: "live" },
   { id: "crm-analytics", label: "Sales Executives", group: "SALES", href: "/dashboard/admin/crm/analytics", status: "live" },
   planned("SALES", "regions", "Regional Managers & Cities", "Sales territories, effective-dated assignments and targets."),

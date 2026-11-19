@@ -5,7 +5,12 @@ import Link from "next/link";
 import {
   EMPLOYEE_PATHS,
   ONBOARDING_FIELD_LABELS,
+  ONBOARDING_AMENITIES,
+  ONBOARDING_AMENITY_LABEL,
+  ONBOARDING_CONSENT_METHOD_LABEL,
+  ONBOARDING_GPS_GOOD_ACCURACY_METERS,
   ONBOARDING_MEDIA_LIMITS,
+  ONBOARDING_PHOTO_SLOTS,
   ONBOARDING_SHOP_PHOTO_CATEGORIES,
   ONBOARDING_STATUS_LABELS,
   type MenuExtractionResultDto,
@@ -26,10 +31,13 @@ import {
   formatInr,
   hoursForSave,
   initialHours,
+  listHas,
   liveMissing,
   newServiceRow,
   rowsFromServices,
+  quickPosition,
   servicesPayload,
+  toggleListValue,
   type DraftForm,
   type ServiceRow,
 } from "../../lib/onboarding";
@@ -37,14 +45,6 @@ import { PrivateImage } from "./PrivateImage";
 import base from "../../app/employee/employee.module.css";
 import styles from "../../app/employee/onboarding/onboarding.module.css";
 
-const PHOTO_GROUPS: Array<{ category: OnboardingMediaCategory; label: string }> = [
-  { category: "EXTERIOR", label: "Exterior / shop front" },
-  { category: "INTERIOR", label: "Interior" },
-  { category: "STATIONS", label: "Working chairs / stations" },
-  { category: "RECEPTION", label: "Reception" },
-  { category: "LOGO", label: "Logo" },
-  { category: "OTHER", label: "Other useful photos" },
-];
 
 function message(error: unknown, fallback: string): string {
   return error instanceof ApiError ? error.message : fallback;
@@ -158,10 +158,13 @@ export function OnboardingWizard({ applicationId }: Props) {
   if (!app) return <p className={base.empty} aria-busy="true">Loading application…</p>;
 
   // Takes a copied array: an input's FileList is live and is emptied when the input is reset.
-  const upload = async (files: File[], category: OnboardingMediaCategory) => {
+  // Camera captures carry private capture metadata (time + the phone's GPS, with permission) so
+  // reviewers can see a photo was taken at the salon. Gallery uploads carry none: we cannot know.
+  const upload = async (files: File[], category: OnboardingMediaCategory, fromCamera = false) => {
     if (!files.length) return;
     if (!(await save(true))) return;
     setError(null);
+    const fix = fromCamera ? await quickPosition() : null;
     for (const file of files) {
       if (file.size > ONBOARDING_MEDIA_LIMITS.maxBytes) {
         setError(`${file.name} is larger than 10 MB.`);
@@ -170,6 +173,14 @@ export function OnboardingWizard({ applicationId }: Props) {
       setBusy(`upload-${category}`);
       const body = new FormData();
       body.append("category", category);
+      if (fromCamera) {
+        body.append("capturedAt", new Date().toISOString());
+        if (fix) {
+          body.append("captureLatitude", fix.coords.latitude.toFixed(6));
+          body.append("captureLongitude", fix.coords.longitude.toFixed(6));
+          body.append("captureAccuracy", String(Math.round(fix.coords.accuracy)));
+        }
+      }
       body.append("image", file);
       try {
         const next = await apiFetch<OnboardingApplicationDto>(`${EMPLOYEE_ONBOARDING}/${app.id}/${EMPLOYEE_PATHS.media}`, {
@@ -254,7 +265,7 @@ export function OnboardingWizard({ applicationId }: Props) {
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setBusy(null);
-        void saveCoordinates(pos.coords.latitude, pos.coords.longitude);
+        void saveCoordinates(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
       },
       () => {
         setBusy(null);
@@ -264,19 +275,38 @@ export function OnboardingWizard({ applicationId }: Props) {
     );
   };
 
-  const saveCoordinates = async (latitude: number, longitude: number) => {
+  const saveCoordinates = async (latitude: number, longitude: number, accuracy: number) => {
     try {
       const next = await apiFetch<OnboardingApplicationDto>(`${EMPLOYEE_ONBOARDING}/${app.id}`, {
         method: "PATCH",
         body: JSON.stringify({
-          coordinates: { latitude: Number(latitude.toFixed(6)), longitude: Number(longitude.toFixed(6)), source: "GPS" },
+          coordinates: { latitude: Number(latitude.toFixed(6)), longitude: Number(longitude.toFixed(6)), source: "GPS", accuracyMeters: Math.round(accuracy) },
           expectedVersion: app.version,
         }),
       });
       accept(next, false);
-      setNotice("GPS location saved.");
+      setNotice(
+        accuracy > ONBOARDING_GPS_GOOD_ACCURACY_METERS
+          ? `Location saved, but it is only accurate to about ${Math.round(accuracy)} m. Step outside, wait a few seconds and recapture.`
+          : "GPS location saved. Confirm you are at the salon entrance.",
+      );
     } catch (err) {
       setError(message(err, "Could not save the location."));
+    }
+  };
+
+  const verifyLocation = async (verified: boolean) => {
+    setBusy("gps-verify");
+    try {
+      const next = await apiFetch<OnboardingApplicationDto>(`${EMPLOYEE_ONBOARDING}/${app.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ locationVerified: verified, expectedVersion: app.version }),
+      });
+      accept(next, false);
+    } catch (err) {
+      setError(message(err, "Could not save the location check."));
+    } finally {
+      setBusy(null);
     }
   };
 
@@ -355,7 +385,7 @@ export function OnboardingWizard({ applicationId }: Props) {
           until the FastQue team reviews it.
         </p>
         <div className={base.quickActions}>
-          <Link className={base.primaryButton} href="/employee?tab=onboarding">Back to Salon Onboarding</Link>
+          <Link className={base.primaryButton} href="/employee/onboarding">Back to Salon Onboarding</Link>
           <Link className={base.secondaryButton} href="/employee/onboarding/new">Start another</Link>
         </div>
       </section>
@@ -480,14 +510,30 @@ export function OnboardingWizard({ applicationId }: Props) {
               <span>GPS coordinates</span>
               <div className={styles.uploadButtons}>
                 <button type="button" className={base.secondaryButton} disabled={readOnly || busy === "gps"} onClick={captureLocation}>
-                  {busy === "gps" ? "Getting location…" : "Use my current location"}
+                  {busy === "gps" ? "Getting location…" : app.coordinates ? "Recapture location" : "Use my current location"}
                 </button>
                 <span className={styles.hint}>
                   {app.coordinates
-                    ? `${app.coordinates.latitude}, ${app.coordinates.longitude} (${app.coordinates.source})`
+                    ? `${app.coordinates.latitude}, ${app.coordinates.longitude} (${app.coordinates.source}${app.coordinates.accuracyMeters != null ? ` · ±${Math.round(app.coordinates.accuracyMeters)} m` : ""})`
                     : "Not captured. Only saved with your permission; never guessed from the address."}
                 </span>
               </div>
+              {app.coordinates?.accuracyMeters != null && app.coordinates.accuracyMeters > ONBOARDING_GPS_GOOD_ACCURACY_METERS && (
+                <p className={`${styles.callout} ${styles.calloutDanger}`}>
+                  Weak GPS fix (±{Math.round(app.coordinates.accuracyMeters)} m). Move outside the shop, wait a few seconds and recapture.
+                </p>
+              )}
+              {app.coordinates && (
+                <label className={styles.checkRow}>
+                  <input type="checkbox" checked={app.locationVerified} disabled={readOnly || busy === "gps-verify"} onChange={(e) => void verifyLocation(e.target.checked)} />
+                  <span>I captured this standing at the salon entrance{app.locationVerified ? " (verified)" : ""}</span>
+                </label>
+              )}
+              {app.coordinates && (
+                <a className={styles.hint} href={`https://www.google.com/maps?q=${app.coordinates.latitude},${app.coordinates.longitude}`} target="_blank" rel="noreferrer">
+                  Check the pin on Google Maps ↗
+                </a>
+              )}
             </div>
             <div className={`${styles.preview} ${styles.full}`} aria-label="Address preview">
               {addressPreview(form) || "The address preview appears here as you type."}
@@ -551,6 +597,30 @@ export function OnboardingWizard({ applicationId }: Props) {
                 })}
               </div>
             </div>
+            {number("washStationCount", "Hair wash stations")}
+            <div className={`${styles.field} ${styles.full}`}>
+              <span>Weekly holiday(s)</span>
+              <div className={styles.segmented} role="group" aria-label="Weekly holidays">
+                {WEEK_DAYS.map(({ day, label }) => (
+                  <button key={day} type="button" aria-pressed={listHas(form.weeklyHolidays, String(day))} className={listHas(form.weeklyHolidays, String(day)) ? styles.segmentedActive : undefined} disabled={readOnly} onClick={() => set("weeklyHolidays", toggleListValue(form.weeklyHolidays, String(day)))}>
+                    {label.slice(0, 3)}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className={`${styles.field} ${styles.full}`}>
+              <span>Amenities</span>
+              <div className={styles.segmented} role="group" aria-label="Amenities">
+                {ONBOARDING_AMENITIES.map((a) => (
+                  <button key={a} type="button" aria-pressed={listHas(form.amenities, a)} className={listHas(form.amenities, a) ? styles.segmentedActive : undefined} disabled={readOnly} onClick={() => set("amenities", toggleListValue(form.amenities, a))}>
+                    {ONBOARDING_AMENITY_LABEL[a]}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {yesNo("qrInstallReady", "Ready to put up the FastQue QR code")}
+            {yesNo("inventoryInterest", "Interested in buying products from the FastQue marketplace")}
+            {choice("ownerTrainingStatus", "Owner training", [["NOT_STARTED", "Not started"], ["SCHEDULED", "Scheduled"], ["COMPLETED", "Completed"]])}
             <label className={styles.full}>
               Weekly holidays, special or festival timings
               <textarea value={(form.specialTimings as string) ?? ""} disabled={readOnly} onChange={(e) => set("specialTimings", e.target.value)} />
@@ -675,7 +745,7 @@ export function OnboardingWizard({ applicationId }: Props) {
               At least one exterior, interior, stations or reception photo is required. Photos stay private until FastQue
               approves them for the public profile. JPG, PNG or WebP up to 10 MB.
             </p>
-            {PHOTO_GROUPS.map((group) => {
+            {ONBOARDING_PHOTO_SLOTS.map((group) => {
               const items = app.media.filter((m) => m.category === group.category);
               return (
                 <div key={group.category}>
@@ -686,13 +756,14 @@ export function OnboardingWizard({ applicationId }: Props) {
                     </h2>
                     <small>{items.length} uploaded</small>
                   </div>
+                  <p className={styles.hint}>{group.hint}</p>
                   <PhotoPicker category={group.category} busy={busy} readOnly={readOnly} onFiles={upload} />
                   <div className={styles.photoGrid}>
                     {items.map((m) => (
                       <div key={m.id} className={styles.photoCard}>
                         <PrivateImage path={m.filePath} alt={`${group.label} photo`} />
                         <footer>
-                          <span>{m.uploadedBy}</span>
+                          <span>{m.uploadedBy}{m.gpsTagged ? " · GPS-tagged" : ""}</span>
                           {!readOnly && (
                             <button type="button" className={base.smallButtonMuted} disabled={busy === `remove-${m.id}`} onClick={() => void removeMedia(m.id)}>
                               Remove
@@ -714,6 +785,19 @@ export function OnboardingWizard({ applicationId }: Props) {
             {check("consentListing", "The owner consents to the FastQue listing and to FastQue processing these contact details.")}
             {check("consentAuthorization", "The owner authorises the content I collected (details, photos, menu) to be submitted.")}
             {check("consentContact", "The owner agrees to be contacted and to have a FastQue account created.")}
+            <label className={styles.full}>
+              <span className={styles.required}>How did the owner give consent?</span>
+              <select value={(form.consentMethod as string) ?? ""} disabled={readOnly} onChange={(e) => set("consentMethod", e.target.value)}>
+                <option value="">Choose…</option>
+                {Object.entries(ONBOARDING_CONSENT_METHOD_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
+            </label>
+            {text("consentByName", "Consent given by (name)", { required: true, maxLength: 120 })}
+            {text("consentByRole", "Their role", { placeholder: "Owner, partner, manager…", maxLength: 40 })}
+            <label className={styles.full}>
+              Consent evidence note
+              <textarea maxLength={500} placeholder="e.g. Signed form photo uploaded under Miscellaneous; WhatsApp confirmation at 4:10 pm; witness Ravi (manager)." value={(form.consentEvidenceNote as string) ?? ""} disabled={readOnly} onChange={(e) => set("consentEvidenceNote", e.target.value)} />
+            </label>
             {text("gstin", "GSTIN (optional)", { maxLength: 15 })}
             {text("businessRegistration", "Business registration details (optional)")}
             <label className={styles.full}>
@@ -776,25 +860,25 @@ function PhotoPicker({
   category: OnboardingMediaCategory;
   busy: string | null;
   readOnly: boolean;
-  onFiles: (files: File[], category: OnboardingMediaCategory) => void | Promise<void>;
+  onFiles: (files: File[], category: OnboardingMediaCategory, fromCamera?: boolean) => void | Promise<void>;
 }) {
   if (readOnly) return null;
   const uploading = busy === `upload-${category}`;
   // Copy the files before clearing the input (which lets the same photo be picked again).
-  const pick = (e: ChangeEvent<HTMLInputElement>) => {
+  const pick = (fromCamera: boolean) => (e: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
     e.target.value = "";
-    void onFiles(files, category);
+    void onFiles(files, category, fromCamera);
   };
   return (
     <div className={styles.uploadButtons} style={{ marginBottom: 10 }}>
       <label className={styles.uploadLabel}>
         {uploading ? "Uploading…" : "Take photo"}
-        <input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" disabled={!!busy} onChange={pick} />
+        <input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" disabled={!!busy} onChange={pick(true)} />
       </label>
       <label className={styles.uploadLabel}>
         Upload from device
-        <input type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={!!busy} onChange={pick} />
+        <input type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={!!busy} onChange={pick(false)} />
       </label>
     </div>
   );
@@ -854,7 +938,7 @@ function ReviewStep({
             <dt>Name</dt><dd>{v("ownerName")}</dd>
             <dt>Mobile</dt><dd>{v("ownerPhone")}</dd>
             <dt>Email</dt><dd>{v("ownerEmail")}</dd>
-            <dt>Consent</dt><dd>{consents} of 4 confirmations</dd>
+            <dt>Consent</dt><dd>{consents} of 4 confirmations{form.consentMethod ? ` · ${ONBOARDING_CONSENT_METHOD_LABEL[form.consentMethod as keyof typeof ONBOARDING_CONSENT_METHOD_LABEL] ?? form.consentMethod}` : " · method not recorded"}{form.consentByName ? ` · by ${form.consentByName}${form.consentByRole ? ` (${form.consentByRole})` : ""}` : ""}</dd>
           </dl>
         </section>
         <section>
