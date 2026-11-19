@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import {
   CRM_CALL_OUTCOME_LABEL,
   CRM_TASK_TYPE_LABEL,
@@ -241,6 +241,8 @@ export function MeetingOutcomeDialog({ meeting, onClose, onSaved }: { meeting: C
  */
 export function CallLogDialog({ call, lead, onClose, onSaved }: { call?: CrmCallDto; lead?: LeadRef | null; onClose: () => void; onSaved: (c: CrmCallDto) => void }) {
   const [pick, setPick] = useState<LeadRef | null>(call?.lead ?? lead ?? null);
+  // A call row created for "log it now" is reused if saving the outcome has to be retried.
+  const createdId = useRef<string | null>(null);
   const [form, setForm] = useState({ outcome: "" as CrmCallOutcome | "", durationMinutes: "", notes: "", nextCallbackAt: "", interestLevel: "", nextAction: "", meetingAt: "" });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -252,8 +254,11 @@ export function CallLogDialog({ call, lead, onClose, onSaved }: { call?: CrmCall
     setBusy(true);
     setErr(null);
     try {
-      let id = call?.id;
-      if (!id) id = (await apiFetch<CrmCallDto>("crm/calls", { method: "POST", ...jsonBody({ leadId: pick.id, scheduledAt: new Date().toISOString() }) })).id;
+      let id = call?.id ?? createdId.current;
+      if (!id) {
+        id = (await apiFetch<CrmCallDto>("crm/calls", { method: "POST", ...jsonBody({ leadId: pick.id, scheduledAt: new Date().toISOString() }) })).id;
+        createdId.current = id;
+      }
       const body = clean({
         outcome: form.outcome,
         durationSeconds: form.durationMinutes ? Math.round(Number(form.durationMinutes) * 60) : undefined,
@@ -273,7 +278,7 @@ export function CallLogDialog({ call, lead, onClose, onSaved }: { call?: CrmCall
   return (
     <Dialog title="Log call outcome" onClose={onClose}>
       <form className={s.form} onSubmit={submit}>
-        {!call && <Field label="Lead"><LeadPicker value={pick} onChange={setPick} /></Field>}
+        {!call && <Field label="Lead"><LeadPicker value={pick} onChange={(l) => { createdId.current = null; setPick(l); }} /></Field>}
         {call && <p className={s.muted}>{call.lead.shopName}{call.lead.phone ? ` · ${call.lead.phone}` : ""}</p>}
         <Field label="Outcome">
           <select className={s.select} required value={form.outcome} onChange={set("outcome")}>
