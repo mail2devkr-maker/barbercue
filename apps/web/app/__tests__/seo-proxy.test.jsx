@@ -1,4 +1,4 @@
-import { proxy } from "../../proxy";
+import { config, proxy } from "../../proxy";
 
 function request(url) {
   const parsed = new URL(url);
@@ -25,7 +25,6 @@ describe("SEO canonical host proxy", () => {
 
 describe("proxy matcher", () => {
   it("skips build assets and image optimisation", () => {
-    const { config } = require("../../proxy");
     const re = new RegExp("^" + config.matcher[0] + "$");
     expect(re.test("/_next/static/chunks/app.js")).toBe(false);
     expect(re.test("/_next/image")).toBe(false);
