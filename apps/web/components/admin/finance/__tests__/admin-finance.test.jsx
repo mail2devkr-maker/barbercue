@@ -118,6 +118,8 @@ describe('admin finance', () => {
     await act(async () => input('ef-amount').props.onChange({ target: { value: '1000' } }));
     await act(async () => input('ef-cat').props.onChange({ target: { value: 'cat-1' } }));
     await act(async () => input('ef-desc').props.onChange({ target: { value: 'Hosting for November' } }));
+    // "Who spent the money?" is required.
+    await act(async () => input('ef-payer').props.onChange({ target: { value: 'unpaid' } }));
     const form = tree.root.findByType('form');
     await act(async () => form.props.onSubmit({ preventDefault() {} }));
     expect(textOf(tree.root)).toContain('EXP-000001');
@@ -128,6 +130,37 @@ describe('admin finance', () => {
     expect(lastBody).toMatchObject({ confirmDuplicate: true, amount: '1000', categoryId: 'cat-1' });
     // After saving, the new draft opens with its next step.
     expect(textOf(tree.root)).toContain('Submit for approval');
+    delete global.document;
+  });
+
+  it('records who spent the money, including a person and how it is treated', async () => {
+    search = 'tab=expenses';
+    global.document = { activeElement: null, addEventListener() {}, removeEventListener() {} };
+    const founder = { id: 'c-founder', name: 'Nitesh', type: 'FOUNDER', userId: null, userEmail: null, email: null, phone: null, notes: null, isActive: true };
+    let body = null;
+    apiFetch.mockImplementation((path, opts) => {
+      if (opts?.method === 'POST' && path === 'admin/finance/expenses') {
+        body = JSON.parse(opts.body);
+        return Promise.reject(new Error('stop here'));
+      }
+      if (path.endsWith('/contributors')) return Promise.resolve([founder]);
+      return route(company)(path);
+    });
+    let tree;
+    await act(async () => { tree = TestRenderer.create(<AdminFinance />); });
+    const addButton = tree.root.findAll((n) => n.type === 'button' && textOf(n).includes('Add expense'))[0];
+    await act(async () => addButton.props.onClick());
+    const input = (id) => tree.root.find((n) => n.props.id === id);
+    const payerOptions = input('ef-payer').findAllByType('option').map(textOf);
+    expect(payerOptions).toEqual(expect.arrayContaining(['Nitesh (Founder)', '+ Add a new person…', 'Not paid yet (a bill to pay later)']));
+    await act(async () => input('ef-amount').props.onChange({ target: { value: '799' } }));
+    await act(async () => input('ef-cat').props.onChange({ target: { value: 'cat-1' } }));
+    await act(async () => input('ef-desc').props.onChange({ target: { value: 'Domain renewal' } }));
+    await act(async () => input('ef-payer').props.onChange({ target: { value: 'person:c-founder' } }));
+    await act(async () => input('ef-treat').props.onChange({ target: { value: 'FOUNDER_LOAN' } }));
+    await act(async () => tree.root.findByType('form').props.onSubmit({ preventDefault() {} }));
+    expect(body.paidBy).toMatchObject({ payerType: 'PERSON', contributorId: 'c-founder', personalTreatment: 'FOUNDER_LOAN' });
+    expect(body.paidByMe).toBeUndefined();
     delete global.document;
   });
 });

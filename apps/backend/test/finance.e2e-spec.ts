@@ -175,6 +175,34 @@ maybe('Finance (e2e, disposable database)', () => {
     expect(audit.map((a: { action: string }) => a.action)).toEqual(expect.arrayContaining(['created', 'submitted', 'approved', 'expense payment voided']));
   });
 
+  it('records who spent the money when the expense is entered', async () => {
+    // A founder paid personally and it is treated as a founder loan: one expense, one payment,
+    // the founder's loan balance grows, and no company cash moves.
+    const before = (await as('admin').get(`contributors/${ids.founder}/ledger`).expect(200)).body.totals;
+    const amount = String(300 + offset);
+    const created = await as('cofounder').post('expenses', {
+      expenseDate: day, categoryId: ids.tech, description: `Domain renewal ${run}`, amount,
+      paidBy: { payerType: 'PERSON', contributorId: ids.founder, personalTreatment: 'FOUNDER_LOAN', method: 'CARD', reference: `UTR${run}` },
+    }).expect(201);
+    const e = (await as('admin').get(`expenses/${created.body.id}`).expect(200)).body;
+    expect(e.paidBy).toEqual([`Founder ${run}`]);
+    expect(e.payments).toHaveLength(1);
+    expect(e.payments[0]).toMatchObject({ payerType: 'PERSON', personalTreatment: 'FOUNDER_LOAN', method: 'CARD', amount: `${amount}.00` });
+    const after = (await as('admin').get(`contributors/${ids.founder}/ledger`).expect(200)).body.totals;
+    expect(Number(after.loanBalance) - Number(before.loanBalance)).toBe(Number(amount));
+    expect(after.fundedIntoCompany).toBe(before.fundedIntoCompany);
+    // Only finance managers may say someone else paid.
+    await as('hr').post('expenses', {
+      expenseDate: day, categoryId: ids.tech, description: `Not mine ${run}`, amount: String(310 + offset),
+      paidBy: { payerType: 'PERSON', contributorId: ids.founder, personalTreatment: 'REIMBURSABLE' },
+    }).expect(403);
+    // "Paid by me" and "paid by someone" together is rejected.
+    await as('admin').post('expenses', {
+      expenseDate: day, categoryId: ids.tech, description: `Both ${run}`, amount: String(320 + offset), paidByMe: true,
+      paidBy: { payerType: 'COMPANY_ACCOUNT', accountId: ids.account },
+    }).expect(400);
+  });
+
   it('stops a co-founder approving their own expense', async () => {
     const created = await as('cofounder').post('expenses', { expenseDate: day, categoryId: ids.tech, description: `Domain ${run}`, amount: String(700 + offset) }).expect(201);
     await as('cofounder').post(`expenses/${created.body.id}/submit`).expect(201);

@@ -7,6 +7,7 @@ import {
   FINANCE_DEPARTMENTS,
   FINANCE_EXPENSE_STATUS_LABEL,
   FINANCE_PERSONAL_TREATMENT_LABEL,
+  FinanceContributorType,
   FinanceErrorCode,
   FinanceExpenseStatus,
   FinancePaymentMethod,
@@ -228,6 +229,9 @@ export function FinanceExpenses({ me }: { me: FinanceMeDto }) {
           me={me}
           categories={categories}
           vendors={vendors}
+          contributors={contributors}
+          accounts={accounts}
+          onContributorAdded={(c) => setContributors((list) => [...list, c].sort((a, b) => a.name.localeCompare(b.name)))}
           initial={editing === "new" ? null : editing}
           onClose={() => setEditing(null)}
           onSaved={(id) => {
@@ -254,10 +258,16 @@ export function FinanceExpenses({ me }: { me: FinanceMeDto }) {
 
 // ------------------------------------------------------------------ form
 
+/** "Who spent the money?" choice: "unpaid", "me", "person:<id>", "account:<id>" or "new" (add a person). */
+type PayerChoice = string;
+
 function ExpenseForm({
   me,
   categories,
   vendors,
+  contributors,
+  accounts,
+  onContributorAdded,
   initial,
   onClose,
   onSaved,
@@ -265,10 +275,37 @@ function ExpenseForm({
   me: FinanceMeDto;
   categories: FinanceCategoryDto[];
   vendors: FinanceRef[];
+  contributors: FinanceContributorDto[];
+  accounts: FinanceAccountDto[];
+  onContributorAdded: (c: FinanceContributorDto) => void;
   initial: FinanceExpenseDetailDto | null;
   onClose: () => void;
   onSaved: (id: string) => void;
 }) {
+  const [payer, setPayer] = useState<PayerChoice>("");
+  const [treatment, setTreatment] = useState<string>(FinancePersonalTreatment.REIMBURSABLE);
+  const [method, setMethod] = useState<string>(FinancePaymentMethod.UPI);
+  const [reference, setReference] = useState("");
+  const [newPerson, setNewPerson] = useState({ name: "", type: "FOUNDER" as string });
+  const [addingPerson, setAddingPerson] = useState(false);
+  const payerIsPerson = payer.startsWith("person:");
+  const payerIsAccount = payer.startsWith("account:");
+  const reimbursedPayer = payer === "me" || (payerIsPerson && treatment === FinancePersonalTreatment.REIMBURSABLE);
+
+  async function addPerson() {
+    setAddingPerson(true);
+    setError(null);
+    try {
+      const { id } = await apiFetch<{ id: string }>(`${FIN}/contributors`, { method: "POST", body: JSON.stringify({ name: newPerson.name.trim(), type: newPerson.type }) });
+      onContributorAdded({ id, name: newPerson.name.trim(), type: newPerson.type as FinanceContributorDto["type"], userId: null, userEmail: null, email: null, phone: null, notes: null, isActive: true });
+      setPayer(`person:${id}`);
+      setNewPerson({ name: "", type: "FOUNDER" });
+    } catch (err) {
+      setError(errorText(err, "Could not add that person."));
+    } finally {
+      setAddingPerson(false);
+    }
+  }
   const [form, setForm] = useState({
     expenseDate: initial?.expenseDate ?? today(),
     categoryId: initial?.category.id ?? "",
@@ -284,7 +321,6 @@ function ExpenseForm({
     reimbursementRequired: initial?.reimbursementRequired ?? false,
     isRecurring: initial?.isRecurring ?? false,
     notes: initial?.notes ?? "",
-    paidByMe: false,
   });
   const [requestId] = useState(newRequestId);
   const [busy, setBusy] = useState(false);
@@ -311,7 +347,22 @@ function ExpenseForm({
       reimbursementRequired: form.reimbursementRequired,
       isRecurring: form.isRecurring,
       notes: form.notes || undefined,
-      ...(initial ? {} : { paidByMe: form.paidByMe, clientRequestId: requestId }),
+      ...(initial
+        ? {}
+        : {
+            clientRequestId: requestId,
+            ...(payer === "me" ? { paidByMe: true } : {}),
+            ...(payerIsPerson || payerIsAccount
+              ? {
+                  paidBy: {
+                    payerType: payerIsPerson ? "PERSON" : "COMPANY_ACCOUNT",
+                    ...(payerIsPerson ? { contributorId: payer.slice(7), personalTreatment: treatment } : { accountId: payer.slice(8) }),
+                    method,
+                    reference: reference.trim() || undefined,
+                  },
+                }
+              : {}),
+          }),
       confirmDuplicate,
     };
     try {
@@ -329,7 +380,8 @@ function ExpenseForm({
     }
   }
 
-  const valid = form.expenseDate && form.categoryId && form.description.trim().length >= 3 && Number(form.amount) > 0;
+  const payerChosen = !!initial || payer === "unpaid" || payer === "me" || payerIsPerson || payerIsAccount;
+  const valid = form.expenseDate && form.categoryId && form.description.trim().length >= 3 && Number(form.amount) > 0 && payerChosen;
   return (
     <Dialog title={initial ? `Edit ${initial.number}` : "Add expense"} onClose={onClose} wide>
       <form onSubmit={(e) => (e.preventDefault(), void save())} noValidate>
@@ -382,21 +434,73 @@ function ExpenseForm({
           </div>
         </div>
         <datalist id="fin-cities">{FINANCE_CITY_SUGGESTIONS.map((c) => <option key={c} value={c} />)}</datalist>
-        {!initial && (
-          <label className={`${ui.checkRow} ${ui.mt12}`}>
-            <input type="checkbox" checked={form.paidByMe} onChange={(e) => set("paidByMe", e.target.checked)} />
-            <span>I paid this from my own money and need it reimbursed{me.contributorId ? "" : " (your finance record is created automatically)"}.</span>
-          </label>
-        )}
+        <div className={`${ui.formGrid} ${ui.mt12}`}>
+          {initial ? (
+            <div className={css.formWide}>
+              <Field label="Who spent the money" htmlFor="ef-payer-ro" hint="To change who paid, void or add a payment in the expense details — the history is kept.">
+                <input id="ef-payer-ro" className={ui.input} value={initial.paidBy.length ? initial.paidBy.join(", ") : "Not paid yet"} readOnly />
+              </Field>
+            </div>
+          ) : (
+            <>
+              <Field label="Who spent the money? *" htmlFor="ef-payer" hint={payer === "unpaid" ? "Record the payment later from the expense details." : undefined}>
+                <select id="ef-payer" className={ui.select} value={payer} onChange={(e) => setPayer(e.target.value)} required>
+                  <option value="">Choose…</option>
+                  <option value="me">I paid it myself — reimburse me{me.contributorId ? "" : " (your finance record is created automatically)"}</option>
+                  {me.roles.manage && contributors.filter((c) => c.isActive && c.id !== me.contributorId).length > 0 && (
+                    <optgroup label="A person paid from their own money">
+                      {contributors.filter((c) => c.isActive && c.id !== me.contributorId).map((c) => <option key={c.id} value={`person:${c.id}`}>{c.name} ({pretty(c.type)})</option>)}
+                    </optgroup>
+                  )}
+                  {me.roles.manage && accounts.filter((a) => a.isActive).length > 0 && (
+                    <optgroup label="Paid from a FastQue company account">
+                      {accounts.filter((a) => a.isActive).map((a) => <option key={a.id} value={`account:${a.id}`}>Company · {a.name}</option>)}
+                    </optgroup>
+                  )}
+                  {me.roles.manage && <option value="new">+ Add a new person…</option>}
+                  <option value="unpaid">Not paid yet (a bill to pay later)</option>
+                </select>
+              </Field>
+              {payer === "new" && (
+                <>
+                  <Field label="New person's name *" htmlFor="ef-new-name"><input id="ef-new-name" className={ui.input} value={newPerson.name} maxLength={120} onChange={(e) => setNewPerson({ ...newPerson, name: e.target.value })} /></Field>
+                  <Field label="Type" htmlFor="ef-new-type">
+                    <select id="ef-new-type" className={ui.select} value={newPerson.type} onChange={(e) => setNewPerson({ ...newPerson, type: e.target.value })}>
+                      {Object.values(FinanceContributorType).map((t) => <option key={t} value={t}>{pretty(t)}</option>)}
+                    </select>
+                  </Field>
+                  <div className={css.formWide}><Btn small variant="primary" disabled={addingPerson || newPerson.name.trim().length < 2} onClick={() => void addPerson()}>{addingPerson ? "Adding…" : "Add person"}</Btn></div>
+                </>
+              )}
+              {payerIsPerson && (
+                <Field label="Treat this personal payment as" htmlFor="ef-treat" hint="Agreed with the person. It is never counted as company cash received.">
+                  <select id="ef-treat" className={ui.select} value={treatment} onChange={(e) => setTreatment(e.target.value)}>
+                    {Object.values(FinancePersonalTreatment).map((t) => <option key={t} value={t}>{FINANCE_PERSONAL_TREATMENT_LABEL[t]}</option>)}
+                  </select>
+                </Field>
+              )}
+              {(payerIsPerson || payerIsAccount) && (
+                <>
+                  <Field label="Payment method" htmlFor="ef-method">
+                    <select id="ef-method" className={ui.select} value={method} onChange={(e) => setMethod(e.target.value)}>
+                      {Object.values(FinancePaymentMethod).map((m) => <option key={m} value={m}>{pretty(m)}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Payment reference (UTR / txn ID)" htmlFor="ef-ref"><input id="ef-ref" className={ui.input} value={reference} maxLength={120} onChange={(e) => setReference(e.target.value)} /></Field>
+                </>
+              )}
+            </>
+          )}
+        </div>
         <label className={`${ui.checkRow} ${ui.mt12}`}>
-          <input type="checkbox" checked={form.reimbursementRequired || form.paidByMe} disabled={form.paidByMe} onChange={(e) => set("reimbursementRequired", e.target.checked)} />
+          <input type="checkbox" checked={form.reimbursementRequired || reimbursedPayer} disabled={reimbursedPayer} onChange={(e) => set("reimbursementRequired", e.target.checked)} />
           <span>Reimbursement required</span>
         </label>
         <label className={`${ui.checkRow} ${ui.mt12}`}>
           <input type="checkbox" checked={form.isRecurring} onChange={(e) => set("isRecurring", e.target.checked)} />
           <span>Recurring expense (hosting, subscriptions, salaries…)</span>
         </label>
-        <p className={ui.hint}>Saved as a draft. Add receipts and submit it for approval from the expense details. Approval does not mark it paid — payments are recorded separately.</p>
+        <p className={ui.hint}>Saved as a draft with who paid. Add receipts and submit it for approval from the expense details. Approval does not mark it paid — only recorded payments do.</p>
         <div className={ui.dialogActions}>
           <Btn onClick={onClose}>Cancel</Btn>
           <Btn type="submit" variant="primary" disabled={busy || !valid}>{busy ? "Saving…" : initial ? "Save changes" : "Save draft"}</Btn>

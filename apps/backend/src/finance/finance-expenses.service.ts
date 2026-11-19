@@ -614,7 +614,11 @@ export class FinanceExpensesService {
       department: input.department ?? null,
       city: input.city ?? null,
       project: input.project ?? null,
-      reimbursementRequired: input.reimbursementRequired || !!input.paidByMe,
+      reimbursementRequired:
+        input.reimbursementRequired ||
+        !!input.paidByMe ||
+        (input.paidBy?.payerType === 'PERSON' &&
+          input.paidBy.personalTreatment === 'REIMBURSABLE'),
       isRecurring: input.isRecurring,
       notes: input.notes ?? null,
     };
@@ -634,6 +638,12 @@ export class FinanceExpensesService {
         return { id: replay.id };
       }
     }
+    // Recording that SOMEONE ELSE (or a company account) paid is a finance-manager action; anyone
+    // may record that they paid themselves (paidByMe).
+    if (input.paidBy && !actor.manage)
+      throw forbidden(
+        'Only finance managers can record who paid for an expense.',
+      );
     await this.validateRefs(input);
     if (!input.confirmDuplicate) {
       const candidates = await this.findDuplicates(input);
@@ -696,6 +706,56 @@ export class FinanceExpensesService {
             note: 'Paid personally by the person who entered the expense.',
           });
         }
+        if (input.paidBy) {
+          const paidBy = input.paidBy;
+          if (paidBy.payerType === 'COMPANY_ACCOUNT')
+            await this.setup.assertActiveAccount(tx, paidBy.accountId!);
+          else {
+            const contributor = await tx.financeContributor.findUnique({
+              where: { id: paidBy.contributorId! },
+            });
+            if (!contributor) throw notFound('That contributor');
+            if (!contributor.isActive)
+              throw invalid('That contributor is inactive.');
+          }
+          const payment = await tx.financeExpensePayment.create({
+            data: {
+              expenseId: row.id,
+              amount: row.amount,
+              paidOn: row.expenseDate,
+              payerType: paidBy.payerType,
+              accountId:
+                paidBy.payerType === 'COMPANY_ACCOUNT'
+                  ? paidBy.accountId!
+                  : null,
+              contributorId:
+                paidBy.payerType === 'PERSON' ? paidBy.contributorId! : null,
+              personalTreatment:
+                paidBy.payerType === 'PERSON'
+                  ? paidBy.personalTreatment!
+                  : null,
+              method: paidBy.method,
+              reference: paidBy.reference ?? null,
+              createdByUserId: actor.userId,
+            },
+          });
+          await recordFinanceAudit(tx, {
+            entityType: 'EXPENSE_PAYMENT',
+            entityId: payment.id,
+            action: 'RECORDED',
+            actorUserId: actor.userId,
+            after: {
+              amount: payment.amount,
+              payerType: payment.payerType,
+              accountId: payment.accountId,
+              contributorId: payment.contributorId,
+              personalTreatment: payment.personalTreatment,
+              method: payment.method,
+              reference: payment.reference,
+            },
+            note: 'Who paid was recorded when the expense was entered.',
+          });
+        }
         return { id: row.id };
       });
     } catch (error) {
@@ -717,8 +777,10 @@ export class FinanceExpensesService {
     const e = await this.loadVisible(actor, id);
     if (!this.permissions(actor, e).edit)
       throw forbidden('This expense can no longer be edited by you.');
-    if (input.paidByMe)
-      throw invalid('Record a payment instead of "paid by me" when editing.');
+    if (input.paidByMe || input.paidBy)
+      throw invalid(
+        'Record a payment instead of changing who paid when editing.',
+      );
     await this.validateRefs(input);
     const paid = activePaid(e);
     if (new Prisma.Decimal(input.amount).lessThan(paid))

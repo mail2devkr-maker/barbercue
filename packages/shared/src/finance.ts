@@ -539,13 +539,36 @@ export const financeExpenseInputSchema = z
     reimbursementRequired: z.boolean().default(false),
     /** Create-only: "I paid this myself" — records a personal, reimbursable payment of the full amount. */
     paidByMe: z.boolean().optional(),
+    /**
+     * Create-only: who spent the money — a person (with how their payment is treated) or a company
+     * account — recorded as one payment of the full amount on the expense date. Finance managers only.
+     */
+    paidBy: z
+      .object({
+        payerType: z.enum(values(FinancePayerType)),
+        contributorId: z.string().uuid().optional(),
+        accountId: z.string().uuid().optional(),
+        personalTreatment: z.enum(values(FinancePersonalTreatment)).optional(),
+        method: z.enum(values(FinancePaymentMethod)).default("OTHER"),
+        reference: optionalText(120),
+      })
+      .superRefine((v, ctx) => {
+        if (v.payerType === "COMPANY_ACCOUNT" && !v.accountId)
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Choose the company account it was paid from.", path: ["accountId"] });
+        if (v.payerType === "PERSON" && !v.contributorId)
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Choose who spent the money.", path: ["contributorId"] });
+        if (v.payerType === "PERSON" && !v.personalTreatment)
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Choose how this personal payment is treated.", path: ["personalTreatment"] });
+      })
+      .optional(),
     isRecurring: z.boolean().default(false),
     notes: optionalText(1000),
     /** Set after the user has seen the possible-duplicate warning and still wants to save. */
     confirmDuplicate: z.boolean().optional(),
     clientRequestId,
   })
-  .refine((v) => financeToPaise(v.taxAmount) <= financeToPaise(v.amount), { message: "Tax cannot exceed the amount.", path: ["taxAmount"] });
+  .refine((v) => financeToPaise(v.taxAmount) <= financeToPaise(v.amount), { message: "Tax cannot exceed the amount.", path: ["taxAmount"] })
+  .refine((v) => !(v.paidByMe && v.paidBy), { message: "Choose either \"paid by me\" or who paid, not both.", path: ["paidBy"] });
 export type FinanceExpenseInput = z.infer<typeof financeExpenseInputSchema>;
 
 export const financeExpenseListQuerySchema = z.object({
