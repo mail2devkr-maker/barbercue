@@ -111,7 +111,7 @@ export default async function HomePage() {
       <JsonLd data={organizationJsonLd()} />
 
       <main>
-      <section className={styles.hero}>
+      <section className={styles.hero} data-keep-colors>
         <HeroVisual />
         <div className={styles.heroInner}>
           <div className={styles.heroCopy}>
@@ -232,7 +232,7 @@ export default async function HomePage() {
               <Link href="/search" className={styles.textLink}>Find a shop to book <span aria-hidden="true">→</span></Link>
             </article>
 
-            <article className={`${styles.choiceCard} ${styles.queueChoiceCard}`}>
+            <article className={`${styles.choiceCard} ${styles.queueChoiceCard}`} data-keep-colors>
               <div className={styles.choiceHead}>
                 <span className={styles.choiceIcon} aria-hidden="true">02</span>
                 <span className={styles.choiceKicker}>Join live</span>
@@ -369,7 +369,7 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section id="for-shops" className={styles.ownerSection}>
+      <section id="for-shops" className={styles.ownerSection} data-keep-colors>
         <div className={styles.ownerInner}>
           <div>
             <p className={styles.ownerEyebrow}>For modern barbershops</p>

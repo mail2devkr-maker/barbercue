@@ -58,7 +58,7 @@
    weight of action within the customer app shell. */
 .secondary {
   background: var(--bc-brand-navy);
-  color: var(--tv-fg-ffffff, #ffffff);
+  color: #ffffff;
 }
 
 .secondary:hover:not(:disabled) {

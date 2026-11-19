@@ -21,7 +21,7 @@
   max-width: 100%;
   border: 1px solid var(--bc-border, #e7e0d3);
   background: radial-gradient(circle at 76% 20%, rgba(189, 142, 54, 0.16), transparent 30%),
-    linear-gradient(145deg, var(--tv-bg-f8f0e5, #f8f0e5), #eee2d2);
+    linear-gradient(145deg, var(--tv-bg-f8f0e5, #f8f0e5), var(--tvx-bg-eee2d2, #eee2d2));
 }
 
 .image {

@@ -47,8 +47,8 @@
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background: var(--bc-ink);
-  color: var(--tv-fg-ffffff, #ffffff);
+  background: var(--bc-ink-solid);
+  color: #ffffff;
   font-family: var(--font-body);
   font-size: 0.68rem;
   font-weight: 700;
@@ -606,3 +606,7 @@
   .primaryButton:hover:not(:disabled),
   .secondaryButton:hover:not(:disabled) { transform: none; }
 }
+
+/* Light theme: deeper orange for eyebrow labels on the light panels. */
+:global(html[data-theme="light"]) .storyEyebrow,
+:global(html[data-theme="light"]) .audienceLabel { color: #a0390f; }

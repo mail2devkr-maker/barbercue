@@ -81,7 +81,7 @@
 
 .primary,
 .book {
-  background: var(--bc-brand-gradient, var(--bc-accent));
+  background: var(--bc-brand-gradient, var(--bc-accent-solid));
   border-color: transparent;
   color: #fff;
 }

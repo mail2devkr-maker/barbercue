@@ -596,3 +596,9 @@ a.mediaLink {
   color: var(--tv-fg-rgba-255-255-255-a0_5, rgba(255, 255, 255, 0.5));
   font-size: 0.78rem;
 }
+
+/* Light theme: the bright accents were chosen for the dark card; use deeper shades on light. */
+:global(html[data-theme="light"]) .allServices { color: #9a3412; }
+:global(html[data-theme="light"]) .closed { color: #b4232f; }
+
+:global(html[data-theme="light"]) .typeChip { color: rgba(28, 26, 23, 0.8); }

@@ -23,7 +23,7 @@
 .cover {
   position: relative;
   min-width: 0;
-  background: #eee8dd;
+  background: var(--tvx-bg-eee8dd, #eee8dd);
 }
 
 .cover > div {
@@ -93,7 +93,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: #68480d;
+  color: var(--tvx-fg-68480d, #68480d);
   font-size: 0.9rem;
   font-weight: 700;
 }
@@ -245,7 +245,7 @@
 
 .queueNote p {
   margin: 8px 0 0;
-  color: var(--tv-fg-d7d0c5, #d7d0c5);
+  color: #d7d0c5;
   font-size: 0.86rem;
   line-height: 1.55;
 }

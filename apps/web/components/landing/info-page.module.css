@@ -81,7 +81,7 @@
   top: 96px;
   overflow: hidden;
   border-radius: 28px;
-  background: #efe8df;
+  background: var(--tvx-bg-efe8df, #efe8df);
   box-shadow: 0 18px 46px var(--tv-bg-rgba-32-24-20-a0_09, rgba(32, 24, 20, 0.09));
 }
 
@@ -188,7 +188,7 @@
 
 .secondary {
   border: 1px solid var(--tv-bg-rgba-29-26-23-a0_16, rgba(29, 26, 23, 0.16));
-  background: rgba(255, 255, 255, 0.84);
+  background: var(--tvx-glass-0_84, rgba(255, 255, 255, 0.84));
   color: var(--tv-fg-1d1a17, #1d1a17);
 }
 
@@ -229,7 +229,7 @@
   padding: 28px;
   border: 1px solid var(--tv-bg-rgba-29-26-23-a0_1, rgba(29, 26, 23, 0.1));
   border-radius: 24px;
-  background: rgba(255, 255, 255, 0.88);
+  background: var(--tvx-glass-0_88, rgba(255, 255, 255, 0.88));
   box-shadow: 0 14px 38px var(--tv-bg-rgba-32-24-20-a0_055, rgba(32, 24, 20, 0.055));
 }
 
@@ -436,7 +436,7 @@
 .faqItem {
   border: 1px solid var(--tv-bg-rgba-29-26-23-a0_1, rgba(29, 26, 23, 0.1));
   border-radius: 20px;
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--tvx-glass-0_9, rgba(255, 255, 255, 0.9));
   box-shadow: 0 10px 30px var(--tv-bg-rgba-32-24-20-a0_045, rgba(32, 24, 20, 0.045));
 }
 

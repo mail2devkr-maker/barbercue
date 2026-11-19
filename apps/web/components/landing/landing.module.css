@@ -23,6 +23,12 @@
   --fq-glass-border: rgba(255, 62, 87, 0.28);
 }
 
+/* Dark theme: navy display text sits on dark paper there, so it switches to the light ink. */
+:global(html[data-theme="dark"]) .page {
+  --landing-ink: var(--bc-ink);
+  --landing-cream: #1f1a14;
+}
+
 .landingHeader {
   /* Canonical site-wide chrome tokens live on the fixed header itself because the header now
      mounts from RootLayout, outside the Home page's .page token scope. */
@@ -111,6 +117,9 @@
 .siteHeaderSpacer {
   height: 152px;
   flex: 0 0 auto;
+  /* The reserved space is a little taller than the fixed header at most widths; paint it in the
+     header's chrome so it reads as part of the header instead of a light strip (all themes). */
+  background: #09090c;
 }
 
 .siteShopSwitcher,
@@ -1153,7 +1162,7 @@
   gap: 32px;
   padding: clamp(28px, 5vw, 52px);
   border-radius: 26px;
-  background: linear-gradient(135deg, #efe0cd, var(--tv-bg-f8f1e8, #f8f1e8));
+  background: linear-gradient(135deg, var(--tvx-bg-efe0cd, #efe0cd), var(--tv-bg-f8f1e8, #f8f1e8));
 }
 
 .marketplaceEmpty strong {
@@ -1196,15 +1205,15 @@
 .chip {
   padding: 8px 14px;
   border-radius: 999px;
-  background: #efe7dc;
+  background: var(--tvx-bg-efe7dc, #efe7dc);
   color: var(--landing-ink);
   font-size: 0.82rem;
   font-weight: 600;
 }
 
 .chip:hover {
-  background: var(--landing-ink);
-  color: var(--tv-fg-ffffff, #fff);
+  background: var(--bc-brand-navy);
+  color: #fff;
 }
 
 .cityEmpty {
@@ -1213,7 +1222,7 @@
   font-size: 0.88rem;
 }
 
-.advisorSection { background: #f1e6d8; }
+.advisorSection { background: var(--tvx-bg-f1e6d8, #f1e6d8); }
 
 .advisorGrid {
   display: grid;
@@ -1301,7 +1310,7 @@
   padding: 8px 12px;
   border: 1px solid var(--tv-bg-rgba-29-26-23-a0_14, rgba(29, 26, 23, 0.14));
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.42);
+  background: var(--tvx-glass-0_42, rgba(255, 255, 255, 0.42));
   font-size: 0.78rem;
   font-weight: 600;
 }
@@ -1316,8 +1325,8 @@
 .ownerSection {
   scroll-margin-top: 90px;
   padding: 104px 24px;
-  background: var(--landing-ink);
-  color: var(--tv-fg-ffffff, #fff);
+  background: var(--bc-brand-navy);
+  color: #fff;
 }
 
 .ownerInner {
@@ -1381,8 +1390,8 @@
 .ownerCta {
   min-height: 50px;
   padding: 0 22px;
-  background: var(--tv-bg-ffffff, #fff);
-  color: var(--landing-ink);
+  background: #fff;
+  color: #1a1533;
 }
 
 .faqSection {
@@ -1401,7 +1410,7 @@
 .faqItem {
   border: 1px solid var(--tv-bg-rgba-29-26-23-a0_1, rgba(29, 26, 23, 0.1));
   border-radius: 22px;
-  background: rgba(255, 255, 255, 0.92);
+  background: var(--tvx-glass-0_92, rgba(255, 255, 255, 0.92));
   box-shadow: 0 12px 30px rgba(26, 21, 51, 0.05);
 }
 

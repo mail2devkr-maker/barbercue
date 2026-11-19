@@ -58,6 +58,10 @@
   --bc-shadow-sm: var(--os-shadow);
   --bc-shadow-lg: var(--os-shadow);
   --bc-shadow-card: var(--os-shadow);
+  /* buttons drawn with the ink/accent token keep the owner palette in every theme */
+  --bc-ink-solid: var(--os-ink);
+  --bc-accent-solid: var(--os-brand);
+  --bc-navy-text: var(--os-ink);
 
   min-height: 100vh;
   background: var(--os-bg);
@@ -65,6 +69,49 @@
   font-family: var(--font-body), "Work Sans", Arial, sans-serif;
   font-size: 14px;
   line-height: 1.45;
+}
+
+/* Light theme: a complete light palette for the owner workspace (the dark one above is the design). */
+:global(html[data-theme="light"]) .root {
+  --os-bg: #f5f3f7;
+  --os-surface: #ffffff;
+  --os-surface-2: #f1edf4;
+  --os-border: #ddd5e1;
+  --os-border-strong: #a497aa;
+  --os-ink: #1d1721;
+  --os-ink-2: #352c3a;
+  --os-muted: #4f4556;
+  --os-brand: #c2185b;
+  --os-brand-ink: #1d1721;
+  --os-brand-hover: #a3134c;
+  --os-brand-soft: #fce4ee;
+  --os-brand-soft-ink: #9c1449;
+  --os-navy: #2a1f36;
+  --os-navy-ink: #ffffff;
+  --os-navy-muted: #e2d9e8;
+  --os-chrome: #ffffff;
+  --os-chrome-surface: #f4f1f6;
+  --os-chrome-ink: #1d1721;
+  --os-chrome-muted: #4f4556;
+  --os-chrome-border: #ddd5e1;
+  --os-ok-ink: #17663a;
+  --os-ok-bg: #dcf5e6;
+  --os-warn-ink: #8a5200;
+  --os-warn-bg: #fff0d4;
+  --os-bad-ink: #b3202f;
+  --os-bad-bg: #fde3e7;
+  --os-info-ink: #1d4fc4;
+  --os-info-bg: #e2ebff;
+  --os-plum: #7b34ad;
+  --os-plum-ink: #ffffff;
+  --os-plum-soft: #f1e4fb;
+  --os-plum-soft-ink: #692c95;
+  --os-shadow: 0 1px 1px rgba(29, 23, 33, 0.06), 0 10px 28px rgba(29, 23, 33, 0.08);
+  --os-focus: 0 0 0 3px rgba(194, 24, 91, 0.25);
+  --os-focus-ink: #c2185b;
+  --bc-accent-soft: #fce4ee;
+  --bc-gold: #8a5200;
+  --bc-accent-fill-ink: #ffffff;
 }
 
 .root *:focus-visible {
@@ -1350,7 +1397,7 @@
   gap: 18px;
   padding: 20px 22px;
   border-radius: var(--os-radius);
-  background: linear-gradient(120deg, var(--tv-bg-09090c, #09090c) 0%, var(--tv-bg-211722, #211722) 55%, #592039 100%);
+  background: linear-gradient(120deg, var(--tv-bg-09090c, #09090c) 0%, var(--tv-bg-211722, #211722) 55%, var(--tvx-bgd-592039, #592039) 100%);
   color: var(--os-navy-ink);
   margin-bottom: 16px;
   overflow: hidden;
@@ -1831,7 +1878,7 @@
   border: 1px solid var(--tv-bg-5b3a51, #5b3a51);
   border-radius: var(--os-radius);
   background: radial-gradient(circle at 75% 15%, rgba(255, 122, 61, 0.14), transparent 40%),
-    linear-gradient(120deg, var(--tv-bg-231824, #231824), var(--tv-bg-351e32, #351e32) 65%, #421e36);
+    linear-gradient(120deg, var(--tv-bg-231824, #231824), var(--tv-bg-351e32, #351e32) 65%, var(--tvx-bgd-421e36, #421e36));
   box-shadow: var(--os-shadow);
 }
 .ovWelcome {
@@ -2418,3 +2465,5 @@
     bottom: calc(72px + env(safe-area-inset-bottom));
   }
 }
+
+:global(html[data-theme="light"]) .tabActive .tabCount { background: rgba(255, 255, 255, 0.88); color: #1d1721; }

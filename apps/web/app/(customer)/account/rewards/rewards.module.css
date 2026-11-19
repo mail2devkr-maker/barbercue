@@ -11,7 +11,7 @@
   padding: 22px;
   border-radius: 22px;
   background: radial-gradient(circle at 85% 15%, var(--tv-bg-rgba-255-255-255-a0_25, rgba(255, 255, 255, 0.25)), transparent 40%),
-    linear-gradient(135deg, var(--bc-brand-navy) 0%, #3a2366 55%, var(--bc-brand-coral) 130%);
+    linear-gradient(135deg, var(--bc-brand-navy) 0%, var(--tvx-bgd-3a2366, #3a2366) 55%, var(--bc-brand-coral) 130%);
   color: #fff;
   box-shadow: var(--bc-shadow-card);
   overflow: hidden;

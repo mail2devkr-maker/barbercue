@@ -25,8 +25,8 @@
   width: 54px;
   height: 54px;
   place-items: center;
-  color: var(--tv-fg-ffffff, #fff);
-  background: var(--bc-accent);
+  color: #fff;
+  background: var(--bc-accent-solid);
   border-radius: 50%;
   font-family: var(--font-display);
   font-size: 1.45rem;
@@ -57,9 +57,9 @@
 .actions button {
   min-height: 44px;
   padding: 0 18px;
-  color: var(--tv-fg-ffffff, #fff);
-  background: var(--bc-ink);
-  border: 1px solid var(--bc-ink);
+  color: #fff;
+  background: var(--bc-ink-solid);
+  border: 1px solid var(--bc-ink-solid);
   border-radius: var(--bc-radius-sm);
   font: inherit;
   font-size: 0.86rem;
@@ -85,7 +85,7 @@
 .loadingHeader,
 .loadingLine,
 .loadingBlock {
-  background: linear-gradient(90deg, #eee7dc 20%, var(--tv-bg-faf7f1, #faf7f1) 50%, #eee7dc 80%);
+  background: linear-gradient(90deg, var(--tvx-bg-eee7dc, #eee7dc) 20%, var(--tv-bg-faf7f1, #faf7f1) 50%, var(--tvx-bg-eee7dc, #eee7dc) 80%);
   background-size: 220% 100%;
   border-radius: 999px;
   animation: shimmer 1.5s ease-in-out infinite;

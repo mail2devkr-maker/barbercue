@@ -19,7 +19,7 @@
 .imageLink {
   display: block;
   overflow: hidden;
-  background: #eee7dc;
+  background: var(--tvx-bg-eee7dc, #eee7dc);
   border-bottom: 1px solid var(--bc-border);
 }
 
@@ -165,8 +165,8 @@
 }
 
 .secondaryAction:hover {
-  color: var(--tv-fg-ffffff, #fff);
-  background: var(--bc-accent);
+  color: #fff;
+  background: var(--bc-accent-solid);
   border-color: var(--bc-accent);
 }
 

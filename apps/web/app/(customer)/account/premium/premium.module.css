@@ -13,7 +13,7 @@
   overflow: hidden;
   border-radius: 24px;
   background: radial-gradient(circle at 87% 12%, rgba(216, 181, 101, 0.28), transparent 32%),
-    linear-gradient(138deg, var(--tv-bg-211e1a, #211e1a) 0%, #493a27 100%);
+    linear-gradient(138deg, var(--tv-bg-211e1a, #211e1a) 0%, var(--tvx-bgd-493a27, #493a27) 100%);
   box-shadow: var(--bc-shadow-lg);
 }
 
@@ -139,8 +139,8 @@
   position: absolute;
   top: -12px;
   right: 20px;
-  background: var(--bc-ink);
-  color: var(--tv-fg-ffffff, #ffffff);
+  background: var(--bc-ink-solid);
+  color: #ffffff;
   font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -229,7 +229,7 @@
 .loadingCard span {
   height: 20px;
   border-radius: 999px;
-  background: linear-gradient(90deg, #f1eadf 0%, var(--tv-bg-fbf7f0, #fbf7f0) 50%, #f1eadf 100%);
+  background: linear-gradient(90deg, var(--tvx-bg-f1eadf, #f1eadf) 0%, var(--tv-bg-fbf7f0, #fbf7f0) 50%, var(--tvx-bg-f1eadf, #f1eadf) 100%);
   background-size: 200% 100%;
   animation: premium-shimmer 1.5s ease-in-out infinite;
 }

@@ -162,8 +162,8 @@
 }
 
 .empty a:first-child {
-  color: var(--tv-fg-ffffff, #fff);
-  background: var(--bc-accent);
+  color: #fff;
+  background: var(--bc-accent-solid);
   border-color: var(--bc-accent);
 }
 

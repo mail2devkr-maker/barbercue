@@ -403,7 +403,7 @@ export default function SearchClient({ basePath = "/search", enableMap = false, 
 
   return (
     <main className={`${styles.page} ${embedded ? styles.embedded : ""}`}>
-      <section className={styles.intro} aria-labelledby="search-heading">
+      <section className={styles.intro} aria-labelledby="search-heading" data-keep-colors>
         <div className={styles.heroCopy}>
           <h1 id="search-heading">
             Look Good. <span className={styles.heroAccent}>Book Fast.</span>

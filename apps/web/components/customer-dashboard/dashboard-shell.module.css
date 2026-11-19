@@ -104,7 +104,7 @@
   border: 1px solid var(--bc-border);
   border-radius: 14px;
   background: var(--tv-bg-ffffff, #fff);
-  color: var(--bc-brand-navy);
+  color: var(--bc-navy-text);
   font-weight: 600;
   font-size: var(--bc-text-sm);
   text-decoration: none;
