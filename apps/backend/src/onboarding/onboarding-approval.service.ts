@@ -385,11 +385,13 @@ export class OnboardingApprovalService {
     }
     if (serviceRows.length) await tx.service.createMany({ data: serviceRows });
 
-    // 7. CRM attribution: the original lead is now an onboarded shop.
+    // 7. CRM attribution: the original lead now has a salon record. CRM 2.0 keeps approval and
+    // activation apart: the lead is APPROVED here and becomes ONBOARDED ("Activated") when the
+    // salon goes live (see crm/lead-sync.ts).
     await tx.employeeCrmLead.updateMany({
       where: { id: app.leadId, onboardedSalonId: null },
       data: {
-        status: 'ONBOARDED',
+        status: 'APPROVED',
         onboardedSalonId: salon.id,
         onboardedAt: new Date(),
       },

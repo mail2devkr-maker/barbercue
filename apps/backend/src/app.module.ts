@@ -40,6 +40,7 @@ import { SalonDescriptionModule } from './salon-description/salon-description.mo
 import { InventoryModule } from './inventory/inventory.module';
 import { ShopModule } from './shop/shop.module';
 import { OnboardingModule } from './onboarding/onboarding.module';
+import { CrmModule } from './crm/crm.module';
 
 @Module({
   imports: [
@@ -82,6 +83,7 @@ import { OnboardingModule } from './onboarding/onboarding.module';
     SalonSetupModule,
     // Before AdminModule so admin/onboarding/* never meets a broader admin route first.
     OnboardingModule,
+    CrmModule,
     AdminModule,
     DashboardBookingsModule,
     DashboardCustomersModule,

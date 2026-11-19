@@ -57,6 +57,14 @@ export const OnboardingMediaCategory = {
   LOGO: "LOGO",
   MENU: "MENU",
   OTHER: "OTHER",
+  // CRM 2.0 capture slots
+  ENTRANCE: "ENTRANCE",
+  INTERIOR_LEFT: "INTERIOR_LEFT",
+  INTERIOR_RIGHT: "INTERIOR_RIGHT",
+  WASH_STATIONS: "WASH_STATIONS",
+  WAITING_AREA: "WAITING_AREA",
+  EQUIPMENT: "EQUIPMENT",
+  RETAIL_DISPLAY: "RETAIL_DISPLAY",
 } as const;
 export type OnboardingMediaCategory =
   (typeof OnboardingMediaCategory)[keyof typeof OnboardingMediaCategory];
@@ -67,7 +75,45 @@ export const ONBOARDING_SHOP_PHOTO_CATEGORIES: readonly OnboardingMediaCategory[
   "INTERIOR",
   "STATIONS",
   "RECEPTION",
+  "ENTRANCE",
+  "INTERIOR_LEFT",
+  "INTERIOR_RIGHT",
+  "WASH_STATIONS",
+  "WAITING_AREA",
 ];
+
+/** Photo capture slots in the order the field wizard shows them. */
+export const ONBOARDING_PHOTO_SLOTS: ReadonlyArray<{ category: OnboardingMediaCategory; label: string; hint: string }> = [
+  { category: "EXTERIOR", label: "Shop exterior", hint: "Whole shop front from across the street" },
+  { category: "ENTRANCE", label: "Entrance & signage", hint: "Door and the name board" },
+  { category: "RECEPTION", label: "Reception", hint: "Front desk or billing counter" },
+  { category: "INTERIOR_LEFT", label: "Left interior corner", hint: "Stand at the door, photograph the left corner" },
+  { category: "INTERIOR_RIGHT", label: "Right interior corner", hint: "Stand at the door, photograph the right corner" },
+  { category: "STATIONS", label: "Styling chairs", hint: "Working chairs and mirrors" },
+  { category: "WASH_STATIONS", label: "Hair wash stations", hint: "Wash basins / chairs" },
+  { category: "WAITING_AREA", label: "Waiting area", hint: "Where customers wait" },
+  { category: "EQUIPMENT", label: "Equipment", hint: "Steamers, dryers, tools" },
+  { category: "RETAIL_DISPLAY", label: "Retail / product display", hint: "Products for sale" },
+  { category: "INTERIOR", label: "Other interior", hint: "Any other inside view" },
+  { category: "LOGO", label: "Logo", hint: "The logo, if there is one" },
+  { category: "OTHER", label: "Miscellaneous", hint: "Anything else useful" },
+];
+
+/** GPS fixes worse than this are flagged and the employee is asked to recapture. */
+export const ONBOARDING_GPS_GOOD_ACCURACY_METERS = 50;
+export const ONBOARDING_CONSENT_METHODS = ["SIGNED_FORM_PHOTO", "WHATSAPP_CONFIRMATION", "OWNER_ACCOUNT_ACTIVATION", "IN_PERSON_WITH_WITNESS"] as const;
+export type OnboardingConsentMethod = (typeof ONBOARDING_CONSENT_METHODS)[number];
+export const ONBOARDING_CONSENT_METHOD_LABEL: Record<OnboardingConsentMethod, string> = {
+  SIGNED_FORM_PHOTO: "Signed consent form (photo attached)",
+  WHATSAPP_CONFIRMATION: "Owner confirmed on WhatsApp / SMS",
+  OWNER_ACCOUNT_ACTIVATION: "Owner will confirm by activating their FastQue account",
+  IN_PERSON_WITH_WITNESS: "In person, with a named witness",
+};
+export const ONBOARDING_AMENITIES = ["parking", "waitingArea", "wifi", "airConditioning", "wheelchairAccess", "cardPayments", "upiPayments", "cashPayments"] as const;
+export const ONBOARDING_AMENITY_LABEL: Record<(typeof ONBOARDING_AMENITIES)[number], string> = {
+  parking: "Parking", waitingArea: "Waiting area", wifi: "Wi-Fi", airConditioning: "Air conditioning", wheelchairAccess: "Wheelchair accessible",
+  cardPayments: "Card payments", upiPayments: "UPI payments", cashPayments: "Cash",
+};
 
 export const OnboardingPriceType = { FIXED: "FIXED", STARTS_FROM: "STARTS_FROM" } as const;
 export type OnboardingPriceType = (typeof OnboardingPriceType)[keyof typeof OnboardingPriceType];
@@ -336,9 +382,13 @@ export const onboardingDraftSchema = z
         latitude: z.number().min(-90).max(90),
         longitude: z.number().min(-180).max(180),
         source: z.enum(["GPS", "MAP_PIN", "MANUAL"]),
+        /** Device-reported accuracy (metres) for a GPS fix. */
+        accuracyMeters: z.number().min(0).max(100000).nullable().optional(),
       })
       .nullable()
       .optional(),
+    /** The employee confirmed the pin is at the salon entrance. */
+    locationVerified: z.boolean().optional(),
 
     employeeCount: optCount(5000),
     chairCount: optCount(1000),
@@ -352,11 +402,22 @@ export const onboardingDraftSchema = z
     averageServiceMinutes: z.number().int().min(1).max(600).nullable().optional(),
     specialTimings: optText(1000),
     hours: z.array(onboardingHoursRowSchema).max(7).optional(),
+    washStationCount: optCount(500),
+    weeklyHolidays: z.array(z.number().int().min(0).max(6)).max(7).optional(),
+    amenities: z.array(z.enum(ONBOARDING_AMENITIES)).max(ONBOARDING_AMENITIES.length).optional(),
+    qrInstallReady: z.boolean().nullable().optional(),
+    inventoryInterest: z.boolean().nullable().optional(),
+    ownerTrainingStatus: z.enum(["NOT_STARTED", "SCHEDULED", "COMPLETED"]).nullable().optional(),
 
     consentContact: z.boolean().optional(),
     consentListing: z.boolean().optional(),
     consentAccuracy: z.boolean().optional(),
     consentAuthorization: z.boolean().optional(),
+    consentMethod: z.enum(ONBOARDING_CONSENT_METHODS).nullable().optional(),
+    consentByName: optText(120),
+    consentByRole: optText(40),
+    /** e.g. WhatsApp message time, witness name/phone, or the id of the signed-form photo. */
+    consentEvidenceNote: optText(500),
     gstin: z
       .string()
       .trim()
@@ -440,6 +501,11 @@ export type ReplaceOnboardingServicesInput = z.infer<typeof replaceOnboardingSer
 
 export const onboardingMediaUploadMetaSchema = z.object({
   category: z.nativeEnum(OnboardingMediaCategory),
+  // Private capture metadata (with the employee's permission); never published, never the salon location.
+  capturedAt: z.string().datetime({ offset: true }).optional(),
+  captureLatitude: z.coerce.number().min(-90).max(90).optional(),
+  captureLongitude: z.coerce.number().min(-180).max(180).optional(),
+  captureAccuracy: z.coerce.number().min(0).max(100000).optional(),
 });
 
 export const onboardingListQuerySchema = z.object({
@@ -529,6 +595,8 @@ export interface OnboardingCompletenessInput {
   consentListing?: boolean;
   consentAccuracy?: boolean;
   consentAuthorization?: boolean;
+  consentMethod?: string | null;
+  consentByName?: string | null;
   photoExceptionReason?: string | null;
   hours: Array<{ dayOfWeek: number; isClosed: boolean; opensAt?: string | null; closesAt?: string | null }>;
   services: Array<{
@@ -641,6 +709,8 @@ export function onboardingMissingFields(app: OnboardingCompletenessInput): Onboa
     7,
     "All four owner consent confirmations are required",
   );
+  // A checkbox ticked by the employee is not proof on its own: record how the owner consented.
+  need(present(app.consentMethod) && present(app.consentByName), "consent", 7, "Record how the owner gave consent and who gave it");
   return missing;
 }
 
@@ -761,7 +831,8 @@ export interface OnboardingApplicationDto {
   postalCode: string | null;
   country: string | null;
   landmark: string | null;
-  coordinates: { latitude: number; longitude: number; source: string } | null;
+  coordinates: { latitude: number; longitude: number; source: string; accuracyMeters: number | null; capturedAt: string | null } | null;
+  locationVerified: boolean;
 
   employeeCount: number | null;
   chairCount: number | null;
@@ -775,12 +846,22 @@ export interface OnboardingApplicationDto {
   averageServiceMinutes: number | null;
   specialTimings: string | null;
   hours: OnboardingHoursDto[];
+  washStationCount: number | null;
+  weeklyHolidays: number[];
+  amenities: string[];
+  qrInstallReady: boolean | null;
+  inventoryInterest: boolean | null;
+  ownerTrainingStatus: string | null;
 
   consentContact: boolean;
   consentListing: boolean;
   consentAccuracy: boolean;
   consentAuthorization: boolean;
   consentCapturedAt: string | null;
+  consentMethod: string | null;
+  consentByName: string | null;
+  consentByRole: string | null;
+  consentEvidenceNote: string | null;
   gstin: string | null;
   businessRegistration: string | null;
   employeeNotes: string | null;

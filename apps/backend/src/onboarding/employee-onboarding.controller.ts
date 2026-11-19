@@ -152,7 +152,8 @@ export class EmployeeOnboardingController {
     @Body(new ZodValidationPipe(onboardingMediaUploadMetaSchema))
     meta: z.infer<typeof onboardingMediaUploadMetaSchema>,
   ) {
-    return this.media.upload(user.id, id, file, meta.category);
+    const { category, ...capture } = meta;
+    return this.media.upload(user.id, id, file, category, capture);
   }
 
   @Delete(`${ONBOARDING}/:id/${EMPLOYEE_PATHS.media}/:mediaId`)

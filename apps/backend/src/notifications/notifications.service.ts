@@ -82,7 +82,8 @@ const UNLINKED_QUEUE_NOTICE_MAX_AGE_HOURS = 12;
  * so "now" is taken in UTC explicitly (correct whatever the session time zone is).
  */
 function stillCurrentSql(): Prisma.Sql {
-  return Prisma.sql`NOT (
+  // CRM 2.0 notifications ("crm.*") belong to the employee CRM's own inbox, not this list.
+  return Prisma.sql`n."type" NOT LIKE 'crm.%' AND NOT (
       n."type" IN (${Prisma.join([...QUEUE_VISIT_NOTIFICATION_TYPES])})
       AND (
         EXISTS (
