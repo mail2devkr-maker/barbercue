@@ -142,7 +142,7 @@ maybe('Salon onboarding workflow (e2e, disposable local database)', () => {
         data: {
           userId: user.id,
           employeeCode: `ONB-${run}-${label}`,
-          fullName: `Field ${label}`,
+          fullName: `Field ${label} ${run}`,
           territory: territory ?? null,
         },
       });
