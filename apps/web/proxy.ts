@@ -39,4 +39,6 @@ export function proxy(request: NextRequest) {
   return NextResponse.redirect(redirectUrl);
 }
 
-export const config = { matcher: ["/:path*"] };
+// Every page (the www alias must redirect anywhere), but not build assets or image optimisation:
+// running the proxy on each JS/CSS/image request only adds latency.
+export const config = { matcher: ["/((?!_next/static|_next/image).*)"] };

@@ -22,3 +22,14 @@ describe("SEO canonical host proxy", () => {
     expect(response.headers.get("x-middleware-next")).toBe("1");
   });
 });
+
+describe("proxy matcher", () => {
+  it("skips build assets and image optimisation", () => {
+    const { config } = require("../../proxy");
+    const re = new RegExp("^" + config.matcher[0] + "$");
+    expect(re.test("/_next/static/chunks/app.js")).toBe(false);
+    expect(re.test("/_next/image")).toBe(false);
+    expect(re.test("/dashboard/admin")).toBe(true);
+    expect(re.test("/")).toBe(true);
+  });
+});
