@@ -204,7 +204,8 @@ maybe('FastQue Work marketplace (real AppModule, disposable PostgreSQL)', () => 
     expect(evt.processedAt).not.toBeNull();
 
     // ---- published terms cannot be edited
-    const edit = await api('put', `work/orgs/${orgId}/jobs/${jobId}`, 'employer').send(job({ payPerWorkerPaise: 10_000 })).expect(409);
+    // A valid body (pay still covers the 25_000 arrival compensation), so only the state rule can refuse it.
+    const edit = await api('put', `work/orgs/${orgId}/jobs/${jobId}`, 'employer').send(job({ payPerWorkerPaise: 30_000 })).expect(409);
     expect(edit.body.error.code).toBe('WORK_JOB_NOT_EDITABLE');
 
     // ---- worker onboarding and eligibility
