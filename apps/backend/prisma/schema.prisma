@@ -562,6 +562,7 @@ model User {
   manualChairOccupanciesEnded   ManualChairOccupancy[]   @relation("ManualChairOccupancyEndedBy")
   employeeProfile               EmployeeProfile?
   createdDemoWorkspaces         OwnerDemoWorkspace[]     @relation("OwnerDemoWorkspaceCreator")
+  financeContributor            FinanceContributor?
 
   @@map("users")
 }
@@ -3188,4 +3189,362 @@ model AppleAuthNonce {
 
   @@index([expiresAt])
   @@map("apple_auth_nonces")
+}
+
+// ============================================================================================
+// FastQue Finance (admin portal): company expenses, who paid them, funding, reimbursements.
+// Money is DECIMAL(14,2). Contributions are never revenue. Approval never marks an expense paid —
+// only recorded payments do. Personal payments are not company cash. Finalised money rows are
+// never deleted: they are voided with a reason, and every change is in finance_audit_events
+// (append-only, enforced by a trigger). Actor user ids are stored without foreign keys so audit
+// history survives user changes.
+// ============================================================================================
+
+enum FinanceExpenseStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  PARTIALLY_PAID
+  PAID
+  CANCELLED
+}
+
+enum FinanceContributorType {
+  FOUNDER
+  DIRECTOR
+  INVESTOR
+  CITY_PARTNER
+  EMPLOYEE
+  OTHER
+}
+
+enum FinanceFundingKind {
+  CONTRIBUTION
+  REPAYMENT
+}
+
+enum FinanceFundingClassification {
+  SHARE_CAPITAL
+  SHARE_APPLICATION_MONEY
+  SHARE_PREMIUM
+  FOUNDER_LOAN
+  DIRECTOR_LOAN
+  THIRD_PARTY_LOAN
+  REIMBURSABLE_ADVANCE
+  NON_REIMBURSABLE_CONTRIBUTION
+  OTHER_FUNDING
+  UNCLASSIFIED
+}
+
+enum FinanceAccountType {
+  COMPANY_BANK
+  COMPANY_CASH
+  COMPANY_WALLET
+}
+
+enum FinancePaymentMethod {
+  UPI
+  BANK_TRANSFER
+  CARD
+  CASH
+  CHEQUE
+  OTHER
+}
+
+enum FinancePayerType {
+  COMPANY_ACCOUNT
+  PERSON
+}
+
+enum FinancePersonalTreatment {
+  REIMBURSABLE
+  FOUNDER_LOAN
+  NON_REIMBURSABLE_CONTRIBUTION
+}
+
+enum FinanceReimbursementStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  PARTIALLY_REIMBURSED
+  FULLY_REIMBURSED
+  REJECTED
+  CANCELLED
+}
+
+/// Main categories (parentId null) and their subcategories.
+model FinanceCategory {
+  id              String            @id @default(uuid()) @db.Uuid
+  parentId        String?           @db.Uuid
+  parent          FinanceCategory?  @relation("FinanceSubcategories", fields: [parentId], references: [id], onDelete: Restrict)
+  subcategories   FinanceCategory[] @relation("FinanceSubcategories")
+  name            String            @db.VarChar(80)
+  normalizedName  String            @db.VarChar(80)
+  department      String?           @db.VarChar(60)
+  isSystem        Boolean           @default(false)
+  isActive        Boolean           @default(true)
+  sortOrder       Int               @default(0)
+  createdByUserId String?
+  createdAt       DateTime          @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime          @updatedAt @db.Timestamptz(6)
+
+  expensesAsCategory    FinanceExpense[] @relation("FinanceExpenseCategory")
+  expensesAsSubcategory FinanceExpense[] @relation("FinanceExpenseSubcategory")
+
+  @@index([parentId, sortOrder])
+  @@map("finance_categories")
+}
+
+/// A person or entity who funds FastQue or pays its expenses. Linked to a platform user when one
+/// exists (one contributor per user); contributors need not be users.
+model FinanceContributor {
+  id        String                 @id @default(uuid()) @db.Uuid
+  name      String                 @db.VarChar(120)
+  type      FinanceContributorType
+  userId    String?                @unique
+  user      User?                  @relation(fields: [userId], references: [id], onDelete: SetNull)
+  email     String?                @db.VarChar(200)
+  phone     String?                @db.VarChar(20)
+  notes     String?                @db.VarChar(500)
+  isActive  Boolean                @default(true)
+  createdAt DateTime               @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime               @updatedAt @db.Timestamptz(6)
+
+  funding        FinanceFunding[]
+  payments       FinanceExpensePayment[]
+  reimbursements FinanceReimbursement[]
+
+  @@map("finance_contributors")
+}
+
+/// A FastQue company account (bank / cash / wallet). Cash balance = opening balance + movements.
+model FinanceAccount {
+  id                 String             @id @default(uuid()) @db.Uuid
+  name               String             @db.VarChar(120)
+  type               FinanceAccountType
+  institution        String?            @db.VarChar(120)
+  accountLast4       String?            @db.VarChar(4)
+  openingBalance     Decimal            @default(0) @db.Decimal(14, 2)
+  openingBalanceDate DateTime           @db.Date
+  isActive           Boolean            @default(true)
+  createdAt          DateTime           @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime           @updatedAt @db.Timestamptz(6)
+
+  payments FinanceExpensePayment[]
+  funding  FinanceFunding[]
+  payouts  FinanceReimbursementPayout[]
+
+  @@map("finance_accounts")
+}
+
+model FinanceVendor {
+  id            String   @id @default(uuid()) @db.Uuid
+  name          String   @db.VarChar(160)
+  category      String?  @db.VarChar(80)
+  contactPerson String?  @db.VarChar(120)
+  phone         String?  @db.VarChar(20)
+  email         String?  @db.VarChar(200)
+  address       String?  @db.VarChar(400)
+  gstin         String?  @db.VarChar(15)
+  paymentTerms  String?  @db.VarChar(120)
+  /// Restricted (viewBankDetails).
+  bankDetails   String?  @db.VarChar(400)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt     DateTime @updatedAt @db.Timestamptz(6)
+
+  expenses FinanceExpense[]
+
+  @@map("finance_vendors")
+}
+
+model FinanceExpense {
+  id                    String               @id @default(uuid()) @db.Uuid
+  number                String               @unique @default(dbgenerated("('EXP-' || lpad(nextval('finance_expense_number_seq'::regclass)::text, 6, '0'))")) @db.VarChar(20)
+  expenseDate           DateTime             @db.Date
+  categoryId            String               @db.Uuid
+  category              FinanceCategory      @relation("FinanceExpenseCategory", fields: [categoryId], references: [id], onDelete: Restrict)
+  subcategoryId         String?              @db.Uuid
+  subcategory           FinanceCategory?     @relation("FinanceExpenseSubcategory", fields: [subcategoryId], references: [id], onDelete: Restrict)
+  customSubcategory     String?              @db.VarChar(80)
+  description           String               @db.VarChar(1000)
+  /// Total incl. tax.
+  amount                Decimal              @db.Decimal(14, 2)
+  taxAmount             Decimal              @default(0) @db.Decimal(14, 2)
+  currency              String               @default("INR") @db.VarChar(3)
+  vendorId              String?              @db.Uuid
+  vendor                FinanceVendor?       @relation(fields: [vendorId], references: [id], onDelete: Restrict)
+  department            String?              @db.VarChar(60)
+  city                  String?              @db.VarChar(60)
+  project               String?              @db.VarChar(120)
+  reimbursementRequired Boolean              @default(false)
+  isRecurring           Boolean              @default(false)
+  notes                 String?              @db.VarChar(1000)
+  status                FinanceExpenseStatus @default(DRAFT)
+  createdByUserId       String
+  submittedAt           DateTime?            @db.Timestamptz(6)
+  reviewedByUserId      String?
+  reviewedAt            DateTime?            @db.Timestamptz(6)
+  reviewNote            String?              @db.VarChar(500)
+  cancelledAt           DateTime?            @db.Timestamptz(6)
+  clientRequestId       String?              @unique @db.Uuid
+  createdAt             DateTime             @default(now()) @db.Timestamptz(6)
+  updatedAt             DateTime             @updatedAt @db.Timestamptz(6)
+
+  payments    FinanceExpensePayment[]
+  attachments FinanceAttachment[]
+
+  @@index([expenseDate])
+  @@index([status, expenseDate])
+  @@index([categoryId, expenseDate])
+  @@index([createdByUserId, expenseDate])
+  @@map("finance_expenses")
+}
+
+/// One payment toward an expense. Several rows split an expense between payers without
+/// duplicating it; the sum of active rows never exceeds the expense amount.
+model FinanceExpensePayment {
+  id                String                    @id @default(uuid()) @db.Uuid
+  expenseId         String                    @db.Uuid
+  expense           FinanceExpense            @relation(fields: [expenseId], references: [id], onDelete: Restrict)
+  amount            Decimal                   @db.Decimal(14, 2)
+  paidOn            DateTime                  @db.Date
+  payerType         FinancePayerType
+  accountId         String?                   @db.Uuid
+  account           FinanceAccount?           @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  contributorId     String?                   @db.Uuid
+  contributor       FinanceContributor?       @relation(fields: [contributorId], references: [id], onDelete: Restrict)
+  personalTreatment FinancePersonalTreatment?
+  method            FinancePaymentMethod
+  reference         String?                   @db.VarChar(120)
+  voidedAt          DateTime?                 @db.Timestamptz(6)
+  voidReason        String?                   @db.VarChar(500)
+  voidedByUserId    String?
+  createdByUserId   String
+  clientRequestId   String?                   @unique @db.Uuid
+  createdAt         DateTime                  @default(now()) @db.Timestamptz(6)
+
+  reimbursements FinanceReimbursement[]
+
+  @@index([expenseId])
+  @@index([contributorId, paidOn])
+  @@index([accountId, paidOn])
+  @@map("finance_expense_payments")
+}
+
+/// Receipts/invoices, stored privately in the database and served only through authorised routes.
+model FinanceAttachment {
+  id               String                @id @default(uuid()) @db.Uuid
+  expenseId        String?               @db.Uuid
+  expense          FinanceExpense?       @relation(fields: [expenseId], references: [id], onDelete: Restrict)
+  reimbursementId  String?               @db.Uuid
+  reimbursement    FinanceReimbursement? @relation(fields: [reimbursementId], references: [id], onDelete: Restrict)
+  fileName         String                @db.VarChar(200)
+  mimeType         String                @db.VarChar(80)
+  sizeBytes        Int
+  sha256           String                @db.VarChar(64)
+  data             Bytes
+  uploadedByUserId String
+  createdAt        DateTime              @default(now()) @db.Timestamptz(6)
+
+  @@unique([expenseId, sha256])
+  @@unique([reimbursementId, sha256])
+  @@map("finance_attachments")
+}
+
+/// Money received into a company account (CONTRIBUTION) or paid back to a contributor (REPAYMENT).
+model FinanceFunding {
+  id              String                       @id @default(uuid()) @db.Uuid
+  number          String                       @unique @default(dbgenerated("('FND-' || lpad(nextval('finance_funding_number_seq'::regclass)::text, 6, '0'))")) @db.VarChar(20)
+  contributorId   String                       @db.Uuid
+  contributor     FinanceContributor           @relation(fields: [contributorId], references: [id], onDelete: Restrict)
+  kind            FinanceFundingKind
+  classification  FinanceFundingClassification
+  date            DateTime                     @db.Date
+  amount          Decimal                      @db.Decimal(14, 2)
+  accountId       String                       @db.Uuid
+  account         FinanceAccount               @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  method          FinancePaymentMethod
+  sourceAccount   String?                      @db.VarChar(120)
+  reference       String?                      @db.VarChar(120)
+  purpose         String?                      @db.VarChar(300)
+  remarks         String?                      @db.VarChar(500)
+  voidedAt        DateTime?                    @db.Timestamptz(6)
+  voidReason      String?                      @db.VarChar(500)
+  voidedByUserId  String?
+  createdByUserId String
+  clientRequestId String?                      @unique @db.Uuid
+  createdAt       DateTime                     @default(now()) @db.Timestamptz(6)
+
+  @@index([contributorId, date])
+  @@index([date])
+  @@map("finance_funding")
+}
+
+/// A claim to be paid back for one personal expense payment (one open claim per payment).
+model FinanceReimbursement {
+  id               String                     @id @default(uuid()) @db.Uuid
+  number           String                     @unique @default(dbgenerated("('RMB-' || lpad(nextval('finance_reimbursement_number_seq'::regclass)::text, 6, '0'))")) @db.VarChar(20)
+  expensePaymentId String                     @db.Uuid
+  expensePayment   FinanceExpensePayment      @relation(fields: [expensePaymentId], references: [id], onDelete: Restrict)
+  contributorId    String                     @db.Uuid
+  contributor      FinanceContributor         @relation(fields: [contributorId], references: [id], onDelete: Restrict)
+  amountRequested  Decimal                    @db.Decimal(14, 2)
+  amountApproved   Decimal?                   @db.Decimal(14, 2)
+  status           FinanceReimbursementStatus @default(SUBMITTED)
+  note             String?                    @db.VarChar(500)
+  reviewNote       String?                    @db.VarChar(500)
+  reviewedByUserId String?
+  reviewedAt       DateTime?                  @db.Timestamptz(6)
+  createdByUserId  String
+  clientRequestId  String?                    @unique @db.Uuid
+  createdAt        DateTime                   @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime                   @updatedAt @db.Timestamptz(6)
+
+  payouts     FinanceReimbursementPayout[]
+  attachments FinanceAttachment[]
+
+  @@index([contributorId, status])
+  @@index([expensePaymentId])
+  @@map("finance_reimbursements")
+}
+
+/// Company money paid out against a reimbursement — settles the liability, not a new expense.
+model FinanceReimbursementPayout {
+  id              String               @id @default(uuid()) @db.Uuid
+  reimbursementId String               @db.Uuid
+  reimbursement   FinanceReimbursement @relation(fields: [reimbursementId], references: [id], onDelete: Restrict)
+  amount          Decimal              @db.Decimal(14, 2)
+  paidOn          DateTime             @db.Date
+  accountId       String               @db.Uuid
+  account         FinanceAccount       @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  method          FinancePaymentMethod
+  reference       String?              @db.VarChar(120)
+  voidedAt        DateTime?            @db.Timestamptz(6)
+  voidReason      String?              @db.VarChar(500)
+  voidedByUserId  String?
+  createdByUserId String
+  clientRequestId String?              @unique @db.Uuid
+  createdAt       DateTime             @default(now()) @db.Timestamptz(6)
+
+  @@index([reimbursementId])
+  @@index([accountId, paidOn])
+  @@map("finance_reimbursement_payouts")
+}
+
+/// Append-only history of every finance change (a trigger rejects UPDATE and DELETE).
+model FinanceAuditEvent {
+  id          String   @id @default(uuid()) @db.Uuid
+  entityType  String   @db.VarChar(40)
+  entityId    String   @db.Uuid
+  action      String   @db.VarChar(60)
+  actorUserId String?
+  changes     Json?    @db.JsonB
+  note        String?  @db.VarChar(500)
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([entityType, entityId, createdAt])
+  @@map("finance_audit_events")
 }
