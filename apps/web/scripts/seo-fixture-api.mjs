@@ -116,7 +116,7 @@ const server = createServer((request, response) => {
   }
 
   if (segments[0] === "salons") {
-    if (segments[1] === city.countryCode && segments[2] === city.slug && segments[3] === salon.slug) {
+    if (segments[1]?.toLowerCase() === city.countryCode.toLowerCase() && segments[2] === city.slug && segments[3] === salon.slug) {
       if (segments.length === 5 && segments[4] === "status") {
         respond(response, 404, errorBody);
         return;
