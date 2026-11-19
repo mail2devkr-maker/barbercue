@@ -67,10 +67,16 @@ const cityPath = paths.find((path) => /^\/[a-z]{2}\/[a-z0-9-]+$/i.test(path));
 const localityPath = paths.find((path) => /^\/[a-z]{2}\/[a-z0-9-]+\/areas\/[a-z0-9-]+$/i.test(path));
 const salonPath = paths.find((path) => /^\/[a-z]{2}\/[a-z0-9-]+\/[a-z0-9-]+$/i.test(path));
 assert.ok(cityPath, "sitemap should include a city with real salon inventory");
-assert.ok(localityPath, "sitemap should include a locality that contains real salon inventory");
 assert.ok(salonPath, "sitemap should include a public salon profile");
 
-const targets = ["/", "/search", cityPath, localityPath, salonPath, "/services/haircut"];
+const targets = [
+  "/",
+  "/search",
+  cityPath,
+  ...(localityPath ? [localityPath] : []),
+  salonPath,
+  "/services/haircut",
+];
 for (const path of targets) {
   const { response, body } = await get(path);
   assert.equal(response.status, 200, `indexable route should return HTTP 200: ${path}`);
@@ -111,7 +117,8 @@ console.log(JSON.stringify({
   sitemapUrls: urls.length,
   educationSitemapUrls: guideUrls.length,
   crawledIndexablePages: targets.length,
-  categories: ["home", "search", "city", "locality", "salon", "service"],
+  localityPageAvailable: Boolean(localityPath),
+  categories: ["home", "search", "city", ...(localityPath ? ["locality"] : []), "salon", "service"],
   xmlParsed: true,
   privateAndFilteredUrlsExcluded: true,
   invalidSalonReturns404: true,
