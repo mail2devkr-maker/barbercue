@@ -51,7 +51,7 @@ jobs:
         run: >-
           npx eslint
           app/robots.ts
-          app/sitemap-guides.ts
+          app/sitemap-guides.xml/route.ts
           proxy.ts
           'app/(public)/search/page.tsx'
           'app/(public)/search/SearchClient.tsx'
