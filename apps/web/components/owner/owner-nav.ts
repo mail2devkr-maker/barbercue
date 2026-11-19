@@ -72,6 +72,8 @@ export const NAV_ITEMS: ReadonlyArray<NavItem> = [
   { id: "demo-data", label: "Demo Data", icon: "eye", group: "SHOP", audience: "owner", path: "demo", requiresFeature: "demoData", keywords: ["sample data", "try", "practice"] },
   { id: "location", label: "Shop Location", icon: "store", group: "SHOP", audience: "owner", path: "location", keywords: ["map", "address", "coordinates", "gps", "pin"] },
   { id: "inventory", label: "Inventory", icon: "tag", group: "SHOP", audience: "owner", path: "inventory", keywords: ["stock", "products", "suppliers", "purchases", "low stock"] },
+  { id: "sell", label: "Sell on FastQue", icon: "store", group: "SHOP", audience: "owner", path: "sell", keywords: ["online", "marketplace", "orders", "sell products", "e-commerce"] },
+  { id: "glow-shop", label: "✨ Marketplace", icon: "arrowUpRight", group: "SHOP", audience: "both", href: "/shop", newTab: true, keywords: ["shop", "shopping", "buy products", "marketplace"] },
   { id: "hours", label: "Working Hours", icon: "clock", group: "SHOP", audience: "owner", path: "hours", keywords: ["opening", "closing"] },
   { id: "chairs", label: "Chairs", icon: "chair", group: "SHOP", audience: "owner", path: "chairs", keywords: ["seats"] },
   { id: "payment-qr", label: "Payment QR", icon: "qr", group: "SHOP", audience: "owner", path: "payment-qr", keywords: ["upi", "scan"] },

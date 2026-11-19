@@ -34,6 +34,10 @@ export function canOpenAdminPath(roles: Role[], pathname: string): boolean {
   }
   // Inventory overview and catalog: same audience as GET admin/inventory-overview and inventory-catalog.
   // (Catalog review and import are further limited to PLATFORM_ADMIN / CO_FOUNDER on the server.)
+  // Marketplace control: same audience as GET admin/shop/* (approvals are admin/co-founder on the server).
+  if (pathname.startsWith("/dashboard/admin/marketplace")) {
+    return superAdmin || coFounder || roles.includes(Role.PLATFORM_VIEWER);
+  }
   if (pathname.startsWith("/dashboard/admin/inventory")) {
     return superAdmin || coFounder || roles.includes(Role.PLATFORM_VIEWER);
   }

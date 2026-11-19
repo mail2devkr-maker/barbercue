@@ -276,7 +276,10 @@ describe('linking a barcode to a product added by hand', () => {
 describe('admin inventory pages', () => {
   it('all admin viewers see the Inventory menu; others do not', () => {
     const ids = (roles) => adminNavFor(roles).filter((i) => i.group === 'INVENTORY').map((i) => i.id);
-    expect(ids([Role.PLATFORM_VIEWER])).toEqual(['inventory-overview', 'product-catalog', 'catalog-import']);
+    expect(ids([Role.PLATFORM_VIEWER])).toEqual(['inventory-overview', 'product-catalog', 'inventory-upload', 'inventory-upload-history', 'shop-products', 'product-search', 'catalog-review', 'catalog-change-requests', 'catalog-import', 'marketplace', 'marketplace-approvals', 'marketplace-orders']);
+    expect(canOpenAdminPath([Role.PLATFORM_VIEWER], '/dashboard/admin/marketplace')).toBe(true);
+    expect(canOpenAdminPath([Role.HR_ADMIN], '/dashboard/admin/marketplace')).toBe(false);
+    expect(canOpenAdminPath([Role.PLATFORM_VIEWER], '/dashboard/admin/inventory/upload')).toBe(true);
     expect(ids([Role.SALES_ADMIN])).toEqual([]);
     expect(canOpenAdminPath([Role.CO_FOUNDER], '/dashboard/admin/inventory/catalog')).toBe(true);
     expect(canOpenAdminPath([Role.HR_ADMIN], '/dashboard/admin/inventory')).toBe(false);

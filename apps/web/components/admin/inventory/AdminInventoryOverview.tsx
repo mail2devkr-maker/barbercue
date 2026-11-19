@@ -9,6 +9,7 @@ import ui from "../../owner/owner.module.css";
 import { useAdminFilters } from "../shell/admin-filters";
 import { formatRangeLabel } from "../shop-activity-range";
 import css from "./admin-inventory.module.css";
+import { MasterStats } from "./MasterStats";
 
 const inr = (value: string) => `₹${new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(Number(value))}`;
 const when = (iso: string | null) => (iso ? new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", year: "numeric" }).format(new Date(iso)) : "—");
@@ -180,6 +181,7 @@ export function AdminInventoryOverview() {
           )}
         </>
       )}
+      <MasterStats />
     </main>
   );
 }

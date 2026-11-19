@@ -1865,3 +1865,25 @@
   line-height: 18px;
   text-align: center;
 }
+
+/* Marketplace entry (FastQue marketplace) — visible at every breakpoint, no sign-in needed. */
+.glowShopLink {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin: 16px 0 6px;
+  padding: 10px 18px;
+  border-radius: 999px;
+  background: var(--bc-brand-gradient);
+  color: #fff;
+  font-weight: 800;
+  text-decoration: none;
+  box-shadow: 0 10px 28px rgba(242, 41, 92, 0.35);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.glowShopLink:hover { transform: translateY(-1px); box-shadow: 0 14px 32px rgba(242, 41, 92, 0.45); }
+.glowShopLink:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+.glowShopNew { padding: 1px 8px; border-radius: 999px; background: rgba(255, 255, 255, 0.22); font-size: 0.7rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.glowShopSub { flex-basis: 100%; font-size: 0.75rem; font-weight: 600; opacity: 0.9; }
+@media (prefers-reduced-motion: reduce) { .glowShopLink { transition: none; } }
