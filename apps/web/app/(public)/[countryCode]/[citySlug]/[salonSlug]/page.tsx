@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { DISCOVERY_PATHS, SHOP_CLOSED_TODAY_MESSAGE, VERIFICATION_BADGE_CAPTION, formatMoney } from "@barbercue/shared";
+import { DISCOVERY_PATHS, SHOP_CLOSED_TODAY_MESSAGE, VERIFICATION_BADGE_CAPTION } from "@barbercue/shared";
 import type { CityDto, LocalityDto, PublicSalonStatusDto, SalonProfileDto } from "@barbercue/shared";
 import { fetchDiscoveryOrNull } from "../../../../../lib/discovery-api";
 import { absoluteUrl, DISCOVERY_REVALIDATE_SECONDS, SITE_URL } from "../../../../../lib/seo";
@@ -10,6 +10,7 @@ import { PhotoGallery } from "../../../../../components/discovery/PhotoGallery";
 import { ReviewList } from "../../../../../components/discovery/ReviewList";
 import { TeamSection } from "../../../../../components/discovery/TeamSection";
 import { Breadcrumbs, breadcrumbJsonLd } from "../../../../../components/discovery/Breadcrumbs";
+import { buildSalonJsonLd, salonKindLabel } from "../../../../../lib/seo-salon";
 import { JsonLd } from "../../../../../components/discovery/JsonLd";
 import { SalonImage } from "../../../../../components/ui/SalonImage";
 import { LinkButton } from "../../../../../components/ui/Button";
@@ -46,11 +47,19 @@ function salonPath(salon: SalonProfileDto): string {
 export async function generateMetadata({ params }: { params: Promise<SalonPageParams> }): Promise<Metadata> {
   const { countryCode, citySlug, salonSlug } = await params;
   const salon = await loadSalon(countryCode, citySlug, salonSlug);
-  if (!salon) return {};
+  // Unknown entity: a real 404 (crawlers wait for metadata, so this beats the streamed 200).
+  if (!salon) notFound();
 
-  const title = salon.name;
+  const city = await fetchDiscoveryOrNull<CityDto>(
+    `${DISCOVERY_PATHS.cities}/${countryCode}/${citySlug}`,
+    DISCOVERY_REVALIDATE_SECONDS,
+  ).catch(() => null);
+  const where = city ? ` in ${city.name}` : "";
+  // Unique, descriptive title: "Raj Hair Studio — Barbershop in Hajipur".
+  const title = `${salon.name} — ${salonKindLabel(salon)}${where}`;
   const description =
-    salon.description ?? `${salon.name} — services, prices, hours, and reviews. Book your chair online.`;
+    salon.description ??
+    `${salon.name}${where}: services, prices, opening hours, photos and reviews. Book an appointment or join the live queue on FastQue.`;
   const url = absoluteUrl(salonPath(salon));
 
   return {
@@ -64,64 +73,6 @@ export async function generateMetadata({ params }: { params: Promise<SalonPagePa
       type: "website",
       images: salon.coverPhotoUrl ? [{ url: salon.coverPhotoUrl }] : undefined,
     },
-  };
-}
-
-function buildHairSalonJsonLd(salon: SalonProfileDto) {
-  return {
-    "@context": "https://schema.org",
-    "@type": "HairSalon",
-    name: salon.name,
-    url: absoluteUrl(salonPath(salon)),
-    telephone: salon.phone ?? undefined,
-    address: {
-      "@type": "PostalAddress",
-      streetAddress: salon.addressLine,
-      addressLocality: salon.localitySlug ?? salon.citySlug,
-      postalCode: salon.postalCode ?? undefined,
-      addressCountry: salon.countryCode,
-    },
-    geo:
-      salon.lat !== null && salon.lng !== null
-        ? {
-            "@type": "GeoCoordinates",
-            latitude: salon.lat,
-            longitude: salon.lng,
-          }
-        : undefined,
-    openingHoursSpecification: salon.operatingHours
-      .filter((h) => !h.isClosed)
-      .map((h) => ({
-        "@type": "OpeningHoursSpecification",
-        dayOfWeek: [
-          "Sunday",
-          "Monday",
-          "Tuesday",
-          "Wednesday",
-          "Thursday",
-          "Friday",
-          "Saturday",
-        ][h.dayOfWeek],
-        opens: h.openTime,
-        closes: h.closeTime,
-      })),
-    ...(salon.priceMin !== null && salon.priceMax !== null
-      ? {
-          priceRange:
-            salon.priceMin === salon.priceMax
-              ? formatMoney(salon.priceMin, salon.currency, salon.countryCode)
-              : `${formatMoney(salon.priceMin, salon.currency, salon.countryCode)}–${formatMoney(salon.priceMax, salon.currency, salon.countryCode)}`,
-        }
-      : {}),
-    ...(salon.ratingCount > 0
-      ? {
-          aggregateRating: {
-            "@type": "AggregateRating",
-            ratingValue: salon.ratingAverage,
-            reviewCount: salon.ratingCount,
-          },
-        }
-      : {}),
   };
 }
 
@@ -169,7 +120,7 @@ export default async function SalonPage({
   return (
     <main className={styles.page}>
       <JsonLd data={breadcrumbJsonLd(breadcrumbItems, SITE_URL)} />
-      <JsonLd data={buildHairSalonJsonLd(salon)} />
+      <JsonLd data={buildSalonJsonLd(salon, absoluteUrl(salonPath(salon)), city, locality?.name ?? null)} />
 
       <div className={styles.breadcrumbs}>
         <Breadcrumbs items={breadcrumbItems} />
@@ -188,7 +139,7 @@ export default async function SalonPage({
         </div>
 
         <div className={styles.identity}>
-          <p className={styles.eyebrow}>Barbershop in {city?.name ?? citySlug}</p>
+          <p className={styles.eyebrow}>{salonKindLabel(salon)} in {city?.name ?? citySlug}</p>
           <h1>
             {salon.name}
             {salon.verified && (

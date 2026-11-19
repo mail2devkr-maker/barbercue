@@ -129,3 +129,11 @@ export const seoServicesInCategory = (category: SeoCategory): SeoService[] =>
 export function relatedSeoServices(service: SeoService, max = 8): SeoService[] {
   return SEO_SERVICES.filter((x) => x.category === service.category && x.slug !== service.slug).slice(0, max);
 }
+
+/**
+ * The discovery query for "shops in this city that offer this service". Shared by the city
+ * service page and the sitemap so both hit the same cached request.
+ */
+export function citySalonsWithServicePath(city: { slug: string; countryCode: string }, query: string): string {
+  return `salons?city=${city.slug}&countryCode=${city.countryCode}&service=${encodeURIComponent(query)}&limit=50`;
+}

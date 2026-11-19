@@ -1,7 +1,8 @@
 // Small, shared by every public page's generateMetadata (canonical URL, OG url) and by
 // breadcrumbJsonLd — avoids each page re-deriving the site origin independently.
 const LOCAL_SITE_URL = "http://localhost:3001";
-const PRODUCTION_SITE_URL = "https://barbercueweb-production.up.railway.app";
+// The public canonical host. Never the Railway service hostname (issue #429).
+const PRODUCTION_SITE_URL = "https://fastque.com";
 
 // Railway currently has no NEXT_PUBLIC_SITE_URL configured. Production metadata must never
 // advertise localhost, so use the verified public web service as the production fallback while

@@ -22,7 +22,8 @@ export const revalidate = 3600;
 export async function generateMetadata({ params }: { params: Promise<{ serviceSlug: string }> }): Promise<Metadata> {
   const { serviceSlug } = await params;
   const service = seoServiceBySlug(serviceSlug);
-  if (!service) return {};
+  // Unknown entity: a real 404 (crawlers wait for metadata, so this beats the streamed 200).
+  if (!service) notFound();
   const title = `${service.name} near you — best salons, barbers & parlours`;
   const description = `${service.blurb} Compare prices, book ahead or join the live queue on FastQue. Also known as ${service.aka.slice(0, 3).join(", ")}.`;
   const url = absoluteUrl(`/services/${service.slug}`);

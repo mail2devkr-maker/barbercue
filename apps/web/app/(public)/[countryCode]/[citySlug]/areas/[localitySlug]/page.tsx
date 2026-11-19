@@ -24,15 +24,26 @@ async function loadLocality(countryCode: string, citySlug: string, localitySlug:
 export async function generateMetadata({ params }: { params: Promise<LocalityPageParams> }): Promise<Metadata> {
   const { countryCode, citySlug, localitySlug } = await params;
   const locality = await loadLocality(countryCode, citySlug, localitySlug);
-  if (!locality) return {};
+  // Unknown entity: a real 404 (crawlers wait for metadata, so this beats the streamed 200).
+  if (!locality) notFound();
 
-  const title = `Barbershops in ${locality.name}`;
-  const description = `Find and book nearby barbershops in ${locality.name}. See wait times, services, and prices before you go.`;
+  const [city, salons] = await Promise.all([
+    fetchDiscoveryOrNull<CityDto>(`${DISCOVERY_PATHS.cities}/${countryCode}/${citySlug}`, DISCOVERY_REVALIDATE_SECONDS).catch(() => null),
+    fetchDiscoveryOrNull<PaginatedResult<SalonListItemDto>>(
+      `${DISCOVERY_PATHS.salons}?city=${citySlug}&locality=${localitySlug}&countryCode=${countryCode}`,
+      DISCOVERY_REVALIDATE_SECONDS,
+    ).catch(() => null),
+  ]);
+  const place = city ? `${locality.name}, ${city.name}` : locality.name;
+  const title = `Salons & barbershops in ${place}`;
+  const description = `Find and book salons, barbershops and beauty parlours in ${place}. See services, prices and opening hours, book ahead or join the live queue on FastQue.`;
   const url = absoluteUrl(`/${countryCode.toLowerCase()}/${citySlug}/areas/${localitySlug}`);
 
   return {
     title,
     description,
+    // An area with no listed shop is a thin page: keep it out of the index (still followable).
+    robots: salons && salons.items.length > 0 ? undefined : { index: false, follow: true },
     alternates: { canonical: url },
     openGraph: { title, description, url, type: "website" },
   };
@@ -66,7 +77,7 @@ export default async function LocalityPage({ params }: { params: Promise<Localit
     <main style={{ padding: "2rem 1.5rem", maxWidth: 800, margin: "0 auto" }}>
       <JsonLd data={breadcrumbJsonLd(breadcrumbItems, SITE_URL)} />
       <Breadcrumbs items={breadcrumbItems} />
-      <h1>Barbershops in {locality.name}</h1>
+      <h1>Salons &amp; barbershops in {locality.name}{city ? `, ${city.name}` : ""}</h1>
 
       <section style={{ marginTop: 24 }}>
         {salons && salons.items.length > 0 ? (
