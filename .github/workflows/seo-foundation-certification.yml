@@ -113,7 +113,7 @@ jobs:
       - name: Install pinned Lighthouse CI
         run: npm install --global @lhci/cli@0.16.1
 
-      - name: Run Lighthouse CI on real discovery routes
+      - name: Run Lighthouse CI on candidate routes with synthetic discovery data
         run: lhci autorun --config=./lighthouserc.cjs
 
       - name: Preserve Lighthouse lab reports
