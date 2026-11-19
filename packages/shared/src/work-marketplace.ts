@@ -738,7 +738,10 @@ export function draftWorkJobFromText(text: string): WorkJobDraft {
   const city = KNOWN_CITIES.find((c) => new RegExp(`\\b${c.replace(" ", "\\s+")}\\b`, "i").test(t));
   if (city) fields.city = city === "Bangalore" ? "Bengaluru" : city === "Gurgaon" ? "Gurugram" : city;
 
-  const range = /\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(?:-|–|to|till|until)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i.exec(t);
+  // "between 10 AM and 4 PM" is read first; "and" is only a range separator after "between".
+  const range =
+    /\bbetween\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*and\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i.exec(t) ??
+    /\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(?:-|–|to|till|until)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i.exec(t);
   if (range) {
     const endMer = range[6];
     const startMer = range[3] ?? (Number(range[1]) > Number(range[4]) ? "am" : endMer);
@@ -758,7 +761,7 @@ export function draftWorkJobFromText(text: string): WorkJobDraft {
   const toClause = /\bto\s+(.+?)(?:\.\s|\.$|\bpay\b|$)/i.exec(t.replace(/\d{1,2}(:\d{2})?\s*(am|pm)\s*(to|-)\s*\d{1,2}(:\d{2})?\s*(am|pm)/gi, ""));
   if (toClause) {
     const steps = toClause[1]
-      .split(/,\s*|\s+and\s+/i)
+      .split(/,\s*(?:and\s+)?|\s+and\s+/i)
       .map((s) => s.trim().replace(/[.]+$/, ""))
       .filter((s) => s.length >= 4 && s.length <= 120);
     if (steps.length) {
