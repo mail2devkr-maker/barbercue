@@ -21,8 +21,8 @@ jobs:
     timeout-minutes: 45
     env:
       NEXT_PUBLIC_SITE_URL: https://fastque.com
-      NEXT_PUBLIC_API_BASE_URL: https://fastque.com/api/v1
-      BACKEND_INTERNAL_URL: https://fastque.com
+      NEXT_PUBLIC_API_BASE_URL: http://127.0.0.1:4000/api/v1
+      BACKEND_INTERNAL_URL: http://127.0.0.1:4000
       SEO_CRAWL_BASE_URL: http://127.0.0.1:3001
     steps:
       - uses: actions/checkout@v4
@@ -46,6 +46,20 @@ jobs:
           app/__tests__/seo-search-ssr.test.jsx
           app/__tests__/seo-proxy.test.jsx
 
+      - name: Start isolated synthetic discovery API
+        run: node apps/web/scripts/seo-fixture-api.mjs > /tmp/fastque-seo-fixture.log 2>&1 &
+
+      - name: Wait for synthetic discovery API
+        run: |
+          for attempt in $(seq 1 20); do
+            if curl --fail --silent http://127.0.0.1:4000/healthz | grep -q '"synthetic":true'; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/fastque-seo-fixture.log
+          exit 1
+
       - name: Lint changed SEO implementation files
         working-directory: apps/web
         run: >-
@@ -68,6 +82,7 @@ jobs:
           app/__tests__/seo-search-ssr.test.jsx
           app/__tests__/seo-proxy.test.jsx
           scripts/seo-crawl-smoke.mjs
+          scripts/seo-fixture-api.mjs
 
       - name: Check Lighthouse configuration syntax
         run: node --check lighthouserc.cjs
