@@ -72,6 +72,7 @@ jobs:
           'app/(public)/how-to-book/page.tsx'
           'app/(public)/how-live-queue-works/page.tsx'
           'app/(public)/salon-management-software/page.tsx'
+          'app/(public)/list-your-salon/page.tsx'
           components/layout/SiteFooter.tsx
           lib/canonical-host.ts
           lib/brand-social-image.tsx
