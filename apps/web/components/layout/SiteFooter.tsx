@@ -77,7 +77,6 @@ export function SiteFooter() {
           <div>
             <span>FastQue</span>
             <Link href="/employee/login">Employee Login</Link>
-            <Link href="/admin/login">FastQue Admin Login</Link>
             <Link href="/about-us">About Us</Link>
             <Link href="/contact-us">Contact Us</Link>
             <Link href="/careers">Careers</Link>
