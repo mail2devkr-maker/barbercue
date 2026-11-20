@@ -21,10 +21,17 @@ export function WorkerProfileForm({ initial, onSaved }: { initial: WorkerProfile
     collegeName: initial?.collegeName ?? "",
     bio: initial?.bio ?? "",
     payoutUpiVpa: "",
+    bankAccountNumber: "",
+    bankIfsc: "",
+    bankAccountName: initial?.payoutBankMasked?.accountName ?? "",
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const set = (k: keyof typeof form, v: string) => setForm((f) => ({ ...f, [k]: v }));
+  // Before a profile exists the server has not said which method is active; ask for a bank account
+  // only when it has (UPI stays the default the original form used).
+  const bank = initial?.payoutMethod === "BANK";
+  const saved = initial?.payoutBankMasked ?? null;
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -46,6 +53,10 @@ export function WorkerProfileForm({ initial, onSaved }: { initial: WorkerProfile
           bio: form.bio || null,
           // Left blank = keep the saved UPI ID (it is never sent back to the browser in full).
           ...(form.payoutUpiVpa.trim() ? { payoutUpiVpa: form.payoutUpiVpa.trim() } : {}),
+          // Same rule for the bank account: sent only when a new account number is typed.
+          ...(form.bankAccountNumber.trim()
+            ? { payoutBank: { accountNumber: form.bankAccountNumber, ifsc: form.bankIfsc, accountName: form.bankAccountName } }
+            : {}),
         },
         "PUT",
       );
@@ -135,11 +146,35 @@ export function WorkerProfileForm({ initial, onSaved }: { initial: WorkerProfile
         <legend className={styles.pgLegend}>
           <span className={styles.pgLegendNum}>4</span> Get paid
         </legend>
-        <label className={styles.field}>
-          UPI ID for payouts {initial?.payoutUpiVpaMasked && <span className={styles.hint}>(saved: {initial.payoutUpiVpaMasked} — leave blank to keep)</span>}
-          <input value={form.payoutUpiVpa} onChange={(e) => set("payoutUpiVpa", e.target.value)} placeholder="yourname@bank" autoComplete="off" />
-          <span className={styles.hint}>🔒 Only used to pay you. Businesses never see it.</span>
-        </label>
+        {bank ? (
+          <>
+            <p className={styles.hint}>
+              FastQue pays you by bank transfer (NEFT) to your own savings account.
+              {saved && <> Saved: {saved.accountName}, account ending {saved.last4}, IFSC {saved.ifsc}. Leave the account number blank to keep it.</>}
+            </p>
+            <div className={styles.formGrid}>
+              <label className={styles.field}>
+                Name on the bank account
+                <input value={form.bankAccountName} onChange={(e) => set("bankAccountName", e.target.value)} autoComplete="off" required={!!form.bankAccountNumber.trim()} placeholder="Exactly as in your passbook" />
+              </label>
+              <label className={styles.field}>
+                Account number
+                <input value={form.bankAccountNumber} onChange={(e) => set("bankAccountNumber", e.target.value.replace(/[^\d ]/g, ""))} inputMode="numeric" autoComplete="off" placeholder={saved ? `•••• ${saved.last4}` : "9 to 18 digits"} />
+              </label>
+              <label className={styles.field}>
+                IFSC
+                <input value={form.bankIfsc} onChange={(e) => set("bankIfsc", e.target.value.toUpperCase())} autoComplete="off" maxLength={11} required={!!form.bankAccountNumber.trim()} placeholder="e.g. SBIN0001234" />
+              </label>
+            </div>
+            <span className={styles.hint}>🔒 Stored encrypted and only used to pay you. Businesses never see it.</span>
+          </>
+        ) : (
+          <label className={styles.field}>
+            UPI ID for payouts {initial?.payoutUpiVpaMasked && <span className={styles.hint}>(saved: {initial.payoutUpiVpaMasked} — leave blank to keep)</span>}
+            <input value={form.payoutUpiVpa} onChange={(e) => set("payoutUpiVpa", e.target.value)} placeholder="yourname@bank" autoComplete="off" />
+            <span className={styles.hint}>🔒 Only used to pay you. Businesses never see it.</span>
+          </label>
+        )}
       </fieldset>
 
       {error && (

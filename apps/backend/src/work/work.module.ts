@@ -1,7 +1,9 @@
 import { Logger, Module } from '@nestjs/common';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { configuredWorkPaymentProvider } from './work-config';
+import { CryptoService } from '../auth/services/crypto.service';
 import {
+  ManualBankTransferWorkPaymentProvider,
   SandboxWorkPaymentProvider,
   UnconfiguredWorkPaymentProvider,
   WORK_PAYMENT_PROVIDER,
@@ -39,6 +41,7 @@ import { WorkWorkersService } from './work-workers.service';
   ],
   providers: [
     WorkEnabledGuard,
+    CryptoService,
     WorkAccessService,
     WorkAuditService,
     WorkLedgerService,
@@ -59,6 +62,9 @@ import { WorkWorkersService } from './work-workers.service';
           return new SandboxWorkPaymentProvider(
             process.env.WORK_SANDBOX_WEBHOOK_SECRET ?? '',
           );
+        }
+        if (configuredWorkPaymentProvider() === 'manual_bank') {
+          return new ManualBankTransferWorkPaymentProvider();
         }
         return new UnconfiguredWorkPaymentProvider();
       },

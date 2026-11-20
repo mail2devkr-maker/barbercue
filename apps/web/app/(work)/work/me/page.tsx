@@ -204,7 +204,7 @@ function WorkerHome() {
           <div className={styles.pgPills}>
             <span className={`${styles.pgPill} ${p.verificationLevel >= 1 ? styles.pgPillGood : styles.pgPillWarn}`}>{verifiedLabel}</span>
             <span className={styles.pgPill}>📍 {p.city}</span>
-            {!p.payoutUpiVpaMasked && <span className={`${styles.pgPill} ${styles.pgPillWarn}`}>Add a UPI ID to get paid</span>}
+            {!p.canBePaid && <span className={`${styles.pgPill} ${styles.pgPillWarn}`}>{p.payoutMethod === "BANK" ? "Add your bank account to get paid" : "Add a UPI ID to get paid"}</span>}
           </div>
           <div className={styles.pgHeroActions}>
             <Link href="/work" className={styles.pgBtnHot}>
@@ -216,7 +216,7 @@ function WorkerHome() {
           </div>
         </div>
         <div className={styles.pgMoney}>
-          <span className={styles.pgMoneyLabel}>Paid to your UPI</span>
+          <span className={styles.pgMoneyLabel}>{p.payoutMethod === "BANK" ? "Paid to your bank" : "Paid to your UPI"}</span>
           <span className={styles.pgMoneyValue}>{money(data.earnings.paidPaise)}</span>
           <div className={styles.pgMoneyRow}>
             <span>
@@ -229,13 +229,13 @@ function WorkerHome() {
         </div>
       </section>
 
-      {!p.payoutUpiVpaMasked && (
+      {!p.canBePaid && (
         <div className={styles.pgCallout}>
           <p>
-            <strong>Add your UPI ID</strong> so approved gigs can be paid straight to you. Businesses never see it.
+            <strong>{p.payoutMethod === "BANK" ? "Add your bank account" : "Add your UPI ID"}</strong> so approved gigs can be paid straight to you. Businesses never see it.
           </p>
           <button type="button" className={styles.pgBigBtn} onClick={() => setEditing(true)}>
-            Add UPI ID
+            {p.payoutMethod === "BANK" ? "Add bank account" : "Add UPI ID"}
           </button>
         </div>
       )}

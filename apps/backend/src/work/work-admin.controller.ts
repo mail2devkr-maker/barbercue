@@ -23,7 +23,11 @@ import {
   Role,
   workDisputeResolveSchema,
   workJobModerationSchema,
+  workManualFundingConfirmSchema,
+  workManualPayoutConfirmSchema,
   workOrgReviewSchema,
+  type WorkManualFundingConfirmInput,
+  type WorkManualPayoutConfirmInput,
   type AuthenticatedUser,
 } from '@barbercue/shared';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -192,6 +196,65 @@ export class WorkAdminController {
     },
   ) {
     return this.admin.payouts(q.status);
+  }
+
+  /** Which payment method is active, so the console shows the matching controls. */
+  @Get('payments/config')
+  paymentsConfig() {
+    return {
+      provider: this.payments.providerName,
+      sandbox: this.payments.isSandbox,
+      payoutMethod: this.payments.payoutMethod,
+    };
+  }
+
+  /** Manual bank transfer: employer transfers waiting to be matched on the bank statement. */
+  @Get('fundings/manual')
+  manualFundings() {
+    return this.payments.pendingManualFundings();
+  }
+
+  @Post('fundings/:fundingId/manual-confirm')
+  @Roles(Role.PLATFORM_ADMIN)
+  @HttpCode(HttpStatus.OK)
+  confirmManualFunding(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('fundingId', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(workManualFundingConfirmSchema))
+    body: WorkManualFundingConfirmInput,
+  ) {
+    return this.payments.confirmManualFunding(user.id, id, body);
+  }
+
+  @Post('payouts/:payoutId/manual-confirm')
+  @Roles(Role.PLATFORM_ADMIN)
+  @HttpCode(HttpStatus.OK)
+  confirmManualPayout(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('payoutId', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(workManualPayoutConfirmSchema))
+    body: WorkManualPayoutConfirmInput,
+  ) {
+    return this.payments.confirmManualPayout(user.id, id, body);
+  }
+
+  /** NEFT batch with workers' bank account numbers. PLATFORM_ADMIN only; each export is audited. */
+  @Get('payouts/neft-export.csv')
+  @Roles(Role.PLATFORM_ADMIN)
+  async neftExport(
+    @CurrentUser() user: AuthenticatedUser,
+    @Res() res: Response,
+  ) {
+    const csv = await this.payments.manualPayoutCsv(user.id);
+    const stamp = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="fastque-work-neft-${stamp}.csv"`,
+    );
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.send(csv);
   }
 
   @Post('payouts/process')

@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { CryptoService } from '../auth/services/crypto.service';
 import {
   WorkAssignmentStatus,
   WorkParty,
@@ -29,6 +30,7 @@ export class WorkWorkersService {
     private readonly audit: WorkAuditService,
     private readonly ledger: WorkLedgerService,
     private readonly payments: WorkPaymentsService,
+    private readonly crypto: CryptoService,
   ) {}
 
   toDto(p: WorkerProfile, phoneVerified: boolean): WorkerProfileDto {
@@ -47,6 +49,21 @@ export class WorkWorkersService {
       bio: p.bio,
       verificationLevel: p.verificationLevel,
       payoutUpiVpaMasked: maskVpa(p.payoutUpiVpa),
+      payoutBankMasked:
+        p.payoutBankAccountEncrypted &&
+        p.payoutBankIfsc &&
+        p.payoutBankAccountLast4
+          ? {
+              accountName: p.payoutBankAccountName ?? '',
+              ifsc: p.payoutBankIfsc,
+              last4: p.payoutBankAccountLast4,
+            }
+          : null,
+      payoutMethod: this.payments.payoutMethod,
+      canBePaid:
+        this.payments.payoutMethod === 'BANK'
+          ? !!p.payoutBankAccountEncrypted && !!p.payoutBankIfsc
+          : !!p.payoutUpiVpa,
       phoneVerified,
     };
   }
@@ -63,7 +80,8 @@ export class WorkWorkersService {
   /**
    * Creates or updates the caller's own worker profile. Level 1 verification comes only from the
    * phone the user already verified at login; the profile form can never raise its own level.
-   * Leaving payoutUpiVpa out keeps the saved one; sending null removes it.
+   * Leaving payoutUpiVpa / payoutBank out keeps the saved one; sending null removes it. The bank
+   * account number is encrypted before it is stored; only its last 4 digits are kept in clear.
    */
   async upsertProfile(
     userId: string,
@@ -96,6 +114,23 @@ export class WorkWorkersService {
       ...(input.payoutUpiVpa === undefined
         ? {}
         : { payoutUpiVpa: input.payoutUpiVpa }),
+      ...(input.payoutBank === undefined
+        ? {}
+        : input.payoutBank === null
+          ? {
+              payoutBankAccountEncrypted: null,
+              payoutBankAccountLast4: null,
+              payoutBankIfsc: null,
+              payoutBankAccountName: null,
+            }
+          : {
+              payoutBankAccountEncrypted: this.crypto.encrypt(
+                input.payoutBank.accountNumber,
+              ),
+              payoutBankAccountLast4: input.payoutBank.accountNumber.slice(-4),
+              payoutBankIfsc: input.payoutBank.ifsc,
+              payoutBankAccountName: input.payoutBank.accountName,
+            }),
     };
     const profile = await this.prisma.$transaction(async (tx) => {
       const before = await tx.workerProfile.findUnique({ where: { userId } });
@@ -117,12 +152,18 @@ export class WorkWorkersService {
         action: before ? 'PROFILE_UPDATED' : 'PROFILE_CREATED',
         actorUserId: userId,
         actorParty: WorkParty.WORKER,
-        metadata: { payoutMethodChanged: input.payoutUpiVpa !== undefined },
+        metadata: {
+          payoutMethodChanged:
+            input.payoutUpiVpa !== undefined || input.payoutBank !== undefined,
+        },
       });
       return saved;
     });
-    if (profile.payoutUpiVpa)
-      await this.payments.initiatePendingPayoutsFor(userId);
+    const canBePaid =
+      this.payments.payoutMethod === 'BANK'
+        ? !!profile.payoutBankAccountEncrypted && !!profile.payoutBankIfsc
+        : !!profile.payoutUpiVpa;
+    if (canBePaid) await this.payments.initiatePendingPayoutsFor(userId);
     return this.toDto(profile, !!user.phoneVerifiedAt);
   }
 

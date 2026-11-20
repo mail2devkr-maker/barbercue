@@ -47,6 +47,8 @@ export const WorkErrorCode = {
   EVIDENCE_INVALID: "WORK_EVIDENCE_INVALID",
   PAYMENTS_NOT_CONFIGURED: "WORK_PAYMENTS_NOT_CONFIGURED",
   SANDBOX_DISABLED: "WORK_SANDBOX_DISABLED",
+  MANUAL_SETTLEMENT_DISABLED: "WORK_MANUAL_SETTLEMENT_DISABLED",
+  UTR_ALREADY_USED: "WORK_UTR_ALREADY_USED",
   WEBHOOK_SIGNATURE_INVALID: "WORK_WEBHOOK_SIGNATURE_INVALID",
   AMOUNT_INVALID: "WORK_AMOUNT_INVALID",
 } as const;
@@ -446,6 +448,42 @@ export const workOrgUpsertSchema = z.object({
 });
 export type WorkOrgUpsertInput = z.infer<typeof workOrgUpsertSchema>;
 
+export const workerPayoutBankSchema = z.object({
+  accountNumber: z
+    .string()
+    .trim()
+    .transform((v) => v.replace(/\s+/g, ""))
+    .pipe(z.string().regex(/^\d{9,18}$/, "Enter the 9 to 18 digit bank account number")),
+  ifsc: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z]{4}0[A-Z0-9]{6}$/, "Enter a valid 11-character IFSC, like SBIN0001234"),
+  accountName: z.string().trim().min(2, "Enter the name on the bank account").max(120),
+});
+export type WorkerPayoutBankInput = z.infer<typeof workerPayoutBankSchema>;
+
+/** Bank UTR / reference number: letters and digits only, as printed on the bank statement. */
+const utrSchema = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .regex(/^[A-Z0-9]{6,30}$/, "Enter the UTR exactly as on the bank statement (6 to 30 letters and digits)");
+
+/** Platform admin confirms (or rejects) an employer's manual bank transfer. */
+export const workManualFundingConfirmSchema = z.discriminatedUnion("outcome", [
+  z.object({ outcome: z.literal("RECEIVED"), utr: utrSchema, amountPaise: z.number().int().positive() }),
+  z.object({ outcome: z.literal("NOT_RECEIVED"), reason: z.string().trim().min(5).max(200) }),
+]);
+export type WorkManualFundingConfirmInput = z.infer<typeof workManualFundingConfirmSchema>;
+
+/** Platform admin records the result of a NEFT payout sent from the company account. */
+export const workManualPayoutConfirmSchema = z.discriminatedUnion("outcome", [
+  z.object({ outcome: z.literal("PAID"), utr: utrSchema }),
+  z.object({ outcome: z.literal("FAILED"), reason: z.string().trim().min(5).max(200) }),
+]);
+export type WorkManualPayoutConfirmInput = z.infer<typeof workManualPayoutConfirmSchema>;
+
 export const workerProfileUpsertSchema = z.object({
   fullName: z.string().trim().min(2).max(120),
   workerType: z.nativeEnum(WorkerType),
@@ -466,6 +504,11 @@ export const workerProfileUpsertSchema = z.object({
     .regex(/^[a-z0-9.\-_]{2,64}@[a-z][a-z0-9]{1,32}$/, "Enter a UPI ID like name@bank")
     .optional()
     .nullable(),
+  /**
+   * Bank account for NEFT payouts. Leaving it out keeps the saved one; null removes it. The
+   * account number is encrypted at rest and never returned in full to anyone but finance exports.
+   */
+  payoutBank: workerPayoutBankSchema.optional().nullable(),
 });
 export type WorkerProfileUpsertInput = z.infer<typeof workerProfileUpsertSchema>;
 
@@ -868,6 +911,12 @@ export interface WorkerProfileDto {
   bio: string | null;
   verificationLevel: number;
   payoutUpiVpaMasked: string | null;
+  /** Saved NEFT payout account, masked (only the last 4 digits of the account number). */
+  payoutBankMasked: { accountName: string; ifsc: string; last4: string } | null;
+  /** What FastQue pays out with right now: a UPI ID, or a bank account (NEFT). */
+  payoutMethod: "UPI" | "BANK";
+  /** True when the saved details are enough for the active payout method. */
+  canBePaid: boolean;
   phoneVerified: boolean;
 }
 
@@ -987,6 +1036,11 @@ export interface WorkFundingDto {
   provider: string;
   providerOrderId: string;
   sandbox: boolean;
+  /**
+   * Manual bank transfer only: where to send the money and the reference to quote. The job opens
+   * once FastQue finance confirms the transfer on the bank statement.
+   */
+  manualBank: { accountName: string; accountNumber: string; ifsc: string; bankName: string; reference: string } | null;
   createdAt: string;
 }
 
