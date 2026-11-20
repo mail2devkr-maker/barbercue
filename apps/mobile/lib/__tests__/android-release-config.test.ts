@@ -157,3 +157,26 @@ describe('Android R8 optimization plugin', () => {
   });
 });
 
+
+describe('Android resource shrinking (Play Console recommendation, 16 Nov)', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const keep = require('../../plugins/withAndroidResourceKeep');
+  const os = require('node:os');
+
+  it('is enabled together with minify, and the keep plugin is registered', () => {
+    const plugins = appJson.expo.plugins as Array<string | [string, Record<string, unknown>]>;
+    const props = plugins.find((p) => Array.isArray(p) && p[0] === 'expo-build-properties') as [string, { android: Record<string, unknown> }];
+    expect(props[1].android.enableMinifyInReleaseBuilds).toBe(true);
+    expect(props[1].android.enableShrinkResourcesInReleaseBuilds).toBe(true);
+    expect(plugins).toContain('./plugins/withAndroidResourceKeep');
+  });
+
+  it('keeps every drawable, mipmap, raw and font resource that is loaded by name at runtime', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'fq-keep-'));
+    const file = keep.writeKeepFile(root);
+    const xml = fs.readFileSync(file, 'utf8');
+    expect(file.split(path.sep).join('/')).toMatch(/android\/app\/src\/main\/res\/raw\/fastque_keep\.xml$/);
+    expect(xml).toContain('tools:keep="@drawable/*,@mipmap/*,@raw/*,@font/*"');
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+});
