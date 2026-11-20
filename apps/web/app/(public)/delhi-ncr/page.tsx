@@ -12,6 +12,10 @@ import { faqJsonLd } from "../../../lib/seo-service-page";
 import { delhiNcrFaq, delhiNcrIntro, isDelhiNcrCity } from "../../../lib/seo-region";
 import styles from "../[countryCode]/[citySlug]/city.module.css";
 
+// Rendered per request (fetches are cached for DISCOVERY_REVALIDATE_SECONDS): the build cannot
+// reach the backend, and live counts must never be baked in at build time.
+export const dynamic = "force-dynamic";
+
 const PATH = "/delhi-ncr";
 /** Shops shown per city here; the city page lists them all. */
 const SHOPS_PER_CITY = 8;
