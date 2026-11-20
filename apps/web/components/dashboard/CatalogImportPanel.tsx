@@ -59,6 +59,9 @@ export function CatalogImportPanel(props: {
   const [messages, setMessages] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [ocrAvailable, setOcrAvailable] = useState<boolean | null>(null);
+  // Which server-side processor would read PDF/photos ("gemini" | "local"); older backends omit it.
+  const [ocrProvider, setOcrProvider] = useState<"gemini" | "local" | null>(null);
+  const [ocrPdfSupported, setOcrPdfSupported] = useState(true);
   const [useDeviceOcr, setUseDeviceOcr] = useState(true);
   const [ocrProgress, setOcrProgress] = useState("");
   const [recognizedText, setRecognizedText] = useState("");
@@ -68,8 +71,17 @@ export function CatalogImportPanel(props: {
   useEffect(() => {
     let active = true;
     setOcrAvailable(null);
-    void apiFetch<{ pdfPhotoOcrAvailable: boolean }>(basePath + "/import-capabilities")
-      .then((result) => { if (active) setOcrAvailable(result.pdfPhotoOcrAvailable); })
+    void apiFetch<{ pdfPhotoOcrAvailable: boolean; ocrProvider?: "gemini" | "local" | null; ocrPdfSupported?: boolean }>(
+      basePath + "/import-capabilities")
+      .then((result) => {
+        if (!active) return;
+        setOcrAvailable(result.pdfPhotoOcrAvailable);
+        // An older backend only ever used Gemini for this endpoint.
+        const provider = result.ocrProvider === undefined
+          ? (result.pdfPhotoOcrAvailable ? "gemini" : null) : result.ocrProvider;
+        setOcrProvider(provider);
+        setOcrPdfSupported(result.ocrPdfSupported ?? provider !== "local");
+      })
       .catch(() => { /* Older backend versions may not have the status endpoint. */ });
     return () => { active = false; };
   }, [basePath]);
@@ -105,17 +117,26 @@ export function CatalogImportPanel(props: {
     if (!files.length || working || saving) return;
 
     // Keep the Services page uncluttered, but request explicit, just-in-time
-    // consent before transmitting any private PDF/photo catalog to Google Gemini.
+    // consent before transmitting any private PDF/photo catalog to the server-side AI provider
+    // (Google Gemini, or FastQue's own self-hosted model), named exactly in the prompt.
     // A declined confirmation leaves the selected files in place and uploads nothing.
     const needsExternalProcessing = files.some((file) => external.test(file.name));
     if (needsExternalProcessing && !useDeviceOcr && ocrAvailable !== true) {
       setError("Cloud OCR is not configured. Enable private on-device extraction to read PDF/photos.");
       return;
     }
+    if (needsExternalProcessing && !useDeviceOcr && !ocrPdfSupported &&
+      files.some((file) => /\.pdf$/i.test(file.name))) {
+      setError("This server's self-hosted AI reads photos only. Enable on-device extraction for PDFs, or upload a photo of each page.");
+      return;
+    }
     if (needsExternalProcessing && !useDeviceOcr && !window.confirm(
-      "PDF and photo catalogs are sent to Google Gemini for AI extraction. " +
-      "An external provider will process these files, and provider charges may apply. " +
-      "Do you agree to send the selected PDF/photo catalogs?"
+      ocrProvider === "local"
+        ? "Photo catalogs are uploaded to FastQue's server and read by FastQue's self-hosted AI model. " +
+          "No third-party AI provider receives them. Do you agree to upload the selected photo catalogs?"
+        : "PDF and photo catalogs are sent to Google Gemini for AI extraction. " +
+          "An external provider will process these files, and provider charges may apply. " +
+          "Do you agree to send the selected PDF/photo catalogs?"
     )) return;
 
     setWorking(true);
@@ -265,10 +286,16 @@ export function CatalogImportPanel(props: {
   return (
     <section aria-labelledby="catalog-import-heading" style={styles.shell}>
       <h2 id="catalog-import-heading" style={{ marginTop: 0 }}>📁 Import services from catalogs</h2>
+      {ocrAvailable === true && ocrProvider === "local" && (
+        <p role="status" style={styles.help}>
+          Server extraction uses FastQue&apos;s self-hosted AI model (photos only, no third-party provider).
+          It runs on CPU, so a dense menu photo can take a few minutes. PDFs need on-device extraction.
+        </p>
+      )}
       {ocrAvailable === false && (
         <p role="status" style={{ ...styles.help, padding: 12, border: "1px solid #b45309", borderRadius: 9 }}>
           Cloud PDF/photo extraction is not configured. Free on-device OCR is available below
-          without a Gemini API key. Image/PDF bytes stay on your device; OCR models download on first use.
+          without any server AI provider. Image/PDF bytes stay on your device; OCR models download on first use.
           Check extracted prices and durations before saving.
         </p>
       )}

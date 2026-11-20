@@ -25,6 +25,7 @@ Actual service records are saved only on explicit user confirmation via the pre-
 - The text-to-service review parser intentionally recognizes only clear service/price pairs. For multi-column or difficult menus, edit the transcript or manually enter missing rows.
 - OCR models may need a sizable one-time download and can be slow or exhaust browser memory on older phones. Use smaller clear photos or CSV/XLSX when that happens.
 - Cloud Gemini OCR is **optional**, off by default in the UI. It requires a separately configured `GEMINI_API_KEY` and explicit per-upload consent; there is no silent fallback to third-party processing.
+- Server OCR can instead use FastQue's **self-hosted** vision model (`CATALOG_IMPORT_OCR_PROVIDER=local` + a private `LOCAL_VISION_URL`). It reads photos only; PDFs are refused with a pointer to on-device extraction, and the consent prompt names the self-hosted model instead of Google Gemini. See DEPLOYMENT.md "Self-hosted AI".
 - Device/browser runtime QA with genuine text and scanned PDFs and Android phones must be completed before calling the release fully certified. CI confirms TypeScript/build, tests and data handling rules, not real-device OCR accuracy.
 
 ## Release constraints
