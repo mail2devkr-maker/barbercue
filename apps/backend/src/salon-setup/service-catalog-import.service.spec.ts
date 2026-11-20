@@ -235,12 +235,13 @@ describe('ServiceCatalogImportService', () => {
     const previous = process.env.GEMINI_API_KEY;
     try {
       delete process.env.GEMINI_API_KEY;
+      delete process.env.CATALOG_IMPORT_OCR_PROVIDER;
       await expect(subject.capabilities('actor', 'salon')).resolves.toEqual({
-        pdfPhotoOcrAvailable: false,
+        pdfPhotoOcrAvailable: false, ocrProvider: null, ocrPdfSupported: false,
       });
       process.env.GEMINI_API_KEY = 'synthetic-key-not-real';
       await expect(subject.capabilities('actor', 'salon')).resolves.toEqual({
-        pdfPhotoOcrAvailable: true,
+        pdfPhotoOcrAvailable: true, ocrProvider: 'gemini', ocrPdfSupported: true,
       });
       expect(access.assertOwnerOrAdminAccess).toHaveBeenCalledWith('actor', 'salon');
       expect(prisma.$transaction).not.toHaveBeenCalled();

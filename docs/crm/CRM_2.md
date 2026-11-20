@@ -52,7 +52,7 @@ Nothing below is required to run the CRM. Without it the features that depend on
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `SALES_COACH_PROVIDER` | `none` | `gemini` to enable the AI coach provider. |
+| `SALES_COACH_PROVIDER` | `none` | `gemini` (Google, paid) or `local` (self-hosted whisper.cpp + vision/text model on the private network; needs `LOCAL_WHISPER_URL` and `LOCAL_VISION_URL`, see DEPLOYMENT.md "Self-hosted AI"). |
 | `GEMINI_API_KEY` | — | **Paid credential** (Google AI Studio / Vertex). Required for the AI coach (and for menu OCR, if enabled). Server-side only. |
 | `SALES_COACH_ENABLED` | `false` | Master switch; `true` to allow analyses once a provider is configured. |
 | `SALES_COACH_USD_PER_MILLION_TOKENS` | — | Price used for cost estimates. No price → no estimate shown. |

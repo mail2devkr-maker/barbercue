@@ -13,7 +13,9 @@ DATABASE_URL
 JWT_ACCESS_SECRET / JWT_REFRESH_SECRET
 OTP_PROVIDER_API_KEY
 GOOGLE_WEB_CLIENT_ID / GOOGLE_ANDROID_CLIENT_ID   # OAuth client IDs, not secrets — see apps/backend/.env.example
-GEMINI_API_KEY                  # AI Style Advisor image generation; unset = feature disabled, not broken
+GEMINI_API_KEY                  # Gemini provider (style advisor, and menu/catalog/sales-coach when they select gemini); unset = disabled, not broken
+LOCAL_VISION_URL / LOCAL_VISION_MODEL   # self-hosted vision model on the private network (see "Self-hosted AI")
+LOCAL_WHISPER_URL               # self-hosted whisper.cpp for the local sales coach
 PAYMENT_PROVIDER_KEY_ID / PAYMENT_PROVIDER_KEY_SECRET / PAYMENT_WEBHOOK_SECRET
 OBJECT_STORAGE_BUCKET / OBJECT_STORAGE_KEY
 NEXT_PUBLIC_API_BASE_URL        # apps/web → apps/backend
@@ -76,6 +78,58 @@ Note for testers: the renamed app installs **alongside** the old one rather than
 previous `com.dcw.barbercue` install must be removed manually, and because `expo-secure-store` data
 is scoped per package, the first launch of the renamed app starts signed out and registers a new
 push token.
+
+## Self-hosted AI (alternative to Google Gemini)
+
+Three production features can read images or recordings with AI: onboarding menu-photo reading, the owner's PDF/photo catalog import, and the CRM sales coach. Each one picks its provider explicitly. Gemini is still an option and is unchanged. The self-hosted option runs **on FastQue's own Railway project, on the private network**. The backend refuses any model URL that is not loopback, RFC1918, `*.local` or `*.railway.internal`, so it cannot be aimed at a paid cloud API or at a tunnel to someone's PC.
+
+| Feature | Switch | Provider variable | Self-hosted needs |
+|---|---|---|---|
+| Onboarding menu photo | `ONBOARDING_MENU_EXTRACTION_ENABLED=true` | `ONBOARDING_MENU_EXTRACTION_PROVIDER` = `gemini` (default) \| `local` \| `none` | `LOCAL_VISION_URL` |
+| Owner catalog import (PDF/photo) | none; available once a provider is configured | `CATALOG_IMPORT_OCR_PROVIDER` = `gemini` (default) \| `local` \| `none` | `LOCAL_VISION_URL`. **Photos only.** PDFs get a 415 telling the owner to use on-device extraction |
+| CRM sales coach (audio) | `SALES_COACH_ENABLED=true` | `SALES_COACH_PROVIDER` = `none` (default) \| `gemini` \| `local` | `LOCAL_WHISPER_URL` (speech-to-text) **and** `LOCAL_VISION_URL` (analysis of the transcript) |
+
+Defaults keep today's behaviour: with no new variable set, menu reading and catalog import still use Gemini when `GEMINI_API_KEY` is present. A provider that is selected but not fully configured fails closed with the existing "not configured" / 503 responses. Nothing ever falls back silently from `local` to Gemini or the other way round.
+
+**Why PDFs are not supported on the local provider.** Vision models take images, not PDFs. Server-side rasterising would need a PDF renderer such as pdf.js with a native canvas, or poppler/mupdf binaries in the backend image. That means parsing untrusted owner-uploaded PDFs inside the API process, and every extra page multiplies a CPU-only model's run time. The dashboard already has free on-device OCR for PDFs (`apps/web/lib/catalog-local-ocr`), so the server does not need to rasterise. When the local provider is active, the dashboard says PDFs need on-device extraction or one photo per page, and its consent text names "FastQue's self-hosted AI model" rather than Google Gemini.
+
+### Running Ollama + a vision model as a Railway internal service
+
+1. In the same Railway project and environment as the backend, add a service from the Docker image `ollama/ollama` (pin a specific version tag, not `latest`). **Do not generate a public domain** for it. It is reached only over private networking.
+2. Attach a **Volume** mounted at `/root/.ollama`, so models survive redeploys (a 7B vision model is about 6 GB on disk).
+3. Service variables:
+   - `OLLAMA_HOST=[::]:11434` binds dual-stack. Railway private networking can be IPv6-only, and Ollama's default `127.0.0.1` is unreachable from other services.
+   - `OLLAMA_CONTEXT_LENGTH=8192`. Images plus a long JSON menu do not fit the small default context.
+   - `OLLAMA_KEEP_ALIVE=24h` avoids reloading the model on every request (a cold load takes tens of seconds).
+   - `OLLAMA_NUM_PARALLEL=1` keeps one request at a time on CPU, so RAM stays predictable.
+4. Pull the model once, from the service's shell (Railway → service → "Shell") or a one-off command:
+   `ollama pull qwen2.5vl:7b` (or `qwen2.5vl:3b` / `gemma3:4b`, see below).
+5. On the **backend** service, set for example:
+   ```
+   LOCAL_VISION_URL=http://ollama.railway.internal:11434     # use the Ollama service's own private hostname
+   LOCAL_VISION_MODEL=qwen2.5vl:7b
+   LOCAL_VISION_TIMEOUT_MS=300000
+   ONBOARDING_MENU_EXTRACTION_PROVIDER=local                 # plus ONBOARDING_MENU_EXTRACTION_ENABLED=true
+   CATALOG_IMPORT_OCR_PROVIDER=local
+   ```
+6. For the sales coach, also run whisper.cpp's `server` as a second internal service (built with ffmpeg, started with `--convert` so browser webm/ogg/mp4 recordings are accepted, a multilingual model such as `ggml-small.bin` for Hindi/Hinglish, listening on `0.0.0.0`/`::`, port 8080). Then set `LOCAL_WHISPER_URL=http://whisper.railway.internal:8080`, `SALES_COACH_PROVIDER=local` and `SALES_COACH_ENABLED=true`. The Action Assistant's `ASSISTANT_WHISPER_URL` is used as a fallback when `LOCAL_WHISPER_URL` is unset, so one whisper service can serve both.
+
+### Honest cost and latency notes (CPU-only)
+
+These are planning estimates, not measurements on FastQue's Railway plan. **Measure one real menu photo and one real recording before switching production**, and then set `LOCAL_VISION_TIMEOUT_MS` / `LOCAL_WHISPER_TIMEOUT_MS` from that measurement.
+
+| Model (Ollama tag) | Disk | RAM while loaded | Quality for printed menus | Rough CPU-only time per menu photo (8 vCPU) |
+|---|---|---|---|---|
+| `qwen2.5vl:7b` (default) | ~6 GB | ~8–10 GB | best of these at small print, prices, Hindi text | minutes, not seconds (≈2–6 min for a dense menu) |
+| `qwen2.5vl:3b` | ~3 GB | ~5–6 GB | noticeably weaker on small print | ≈1–3 min |
+| `gemma3:4b` | ~3.3 GB | ~5–6 GB | fine for clear menus, weaker on dense tables | ≈1–3 min |
+
+- Most of the time is spent generating output, not encoding the image: a 60-row menu is around 2–4k JSON tokens, and a CPU produces only a handful of tokens per second. The backend downsizes every image to at most 2048 px JPEG before sending it, which bounds the image-encoding cost.
+- RAM is billed while the model is loaded. With `OLLAMA_KEEP_ALIVE=24h` that is all day, so a 7B model is roughly an always-on ~10 GB service. A shorter keep-alive saves RAM but adds a cold load to the first request after idling.
+- One request at a time: concurrent uploads queue behind each other. Catalog import is a synchronous request, so the owner waits for it. Onboarding menu reading also waits. The sales coach runs in the background.
+- whisper.cpp `small` on CPU transcribes very roughly at real time to 3× real time on a few vCPUs (a 20-minute meeting can take 10–20 min), using under 1 GB of RAM. `LOCAL_WHISPER_TIMEOUT_MS` defaults to 10 min (max 30).
+- A GPU host would cut these times by an order of magnitude. Any such host must still be on the private network (no public endpoint).
+- Accuracy: small local models misread prices more often than Gemini. Every path already requires human review before anything is saved: onboarding rows need employee confirmation and catalog rows need owner review. Keep that review.
 
 ## CI/CD
 
