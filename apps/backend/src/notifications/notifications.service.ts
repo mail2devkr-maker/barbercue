@@ -45,6 +45,15 @@ const TYPE_CATEGORY: Record<NotificationType, NotificationCategory> = {
   'onboarding.rejected': NotificationCategory.BOOKING_UPDATES,
   'onboarding.owner_activated': NotificationCategory.BOOKING_UPDATES,
   'onboarding.published': NotificationCategory.BOOKING_UPDATES,
+  // FastQue Work: assignments are the marketplace's bookings, so they share that preference.
+  'work.assignment.accepted': NotificationCategory.BOOKING_UPDATES,
+  'work.offer.received': NotificationCategory.BOOKING_UPDATES,
+  'work.submission.received': NotificationCategory.BOOKING_UPDATES,
+  'work.submission.approved': NotificationCategory.BOOKING_UPDATES,
+  'work.rework.requested': NotificationCategory.BOOKING_UPDATES,
+  'work.payout.sent': NotificationCategory.BOOKING_UPDATES,
+  'work.payout.failed': NotificationCategory.BOOKING_UPDATES,
+  'work.dispute.updated': NotificationCategory.BOOKING_UPDATES,
 };
 
 // ---------- Auto-expiry (live-visit add-on mission, 17 Nov 2026) ----------

@@ -50,6 +50,8 @@ export function canOpenAdminPath(roles: Role[], pathname: string): boolean {
   if (pathname.startsWith("/dashboard/admin/bookings")) return superAdmin || coFounder || roles.includes(Role.PLATFORM_VIEWER);
   // New Shop Onboarding: mirrors GET admin/onboarding (PLATFORM_ADMIN, CO_FOUNDER, SALES_ADMIN, PLATFORM_VIEWER).
   if (pathname.startsWith("/dashboard/admin/onboarding")) return superAdmin || coFounder || sales || roles.includes(Role.PLATFORM_VIEWER);
+  // FastQue Work control centre: mirrors GET work/admin/* (PLATFORM_ADMIN, CO_FOUNDER, PLATFORM_VIEWER; writes PLATFORM_ADMIN).
+  if (pathname.startsWith("/dashboard/admin/work")) return superAdmin || coFounder || roles.includes(Role.PLATFORM_VIEWER);
   if (pathname.startsWith("/dashboard/admin/access")) return superAdmin;
   // Salon onboarding review queue: mirrors GET admin/onboarding-applications (decisions stay PLATFORM_ADMIN / CO_FOUNDER server-side).
   if (pathname.startsWith("/dashboard/admin/onboarding-review")) {

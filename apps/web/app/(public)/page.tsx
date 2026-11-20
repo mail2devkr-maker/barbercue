@@ -14,6 +14,7 @@ import { HeroSearchField } from "../../components/landing/HeroSearchField";
 import { PlayStoreQr } from "../../components/layout/PlayStoreQr";
 import { SearchIcon, PlayIcon } from "../../components/landing/icons";
 import { EditorialImage } from "../../components/editorial/EditorialImage";
+import { workMarketplaceLinksEnabled } from "../../lib/dashboard-flags";
 import styles from "../../components/landing/landing.module.css";
 
 const TITLE = "Find a barbershop, salon or spa near you";
@@ -110,6 +111,7 @@ const HOME_FAQS = [
 ];
 
 export default async function HomePage() {
+  const workLinks = workMarketplaceLinksEnabled();
   const [cities, featured, liveStats] = await Promise.all([
     fetchDiscoveryOrNull<CityDto[]>(DISCOVERY_PATHS.cities, DISCOVERY_REVALIDATE_SECONDS).catch(() => null),
     fetchDiscoveryOrNull<PaginatedResult<SalonListItemDto>>(
@@ -169,10 +171,18 @@ export default async function HomePage() {
                 </span>
               </p>
             )}
-            <Link href="/shop" className={styles.glowShopLink}>
-              <span aria-hidden="true">✨</span> Marketplace <span className={styles.glowShopNew}>New</span>
-              <span className={styles.glowShopSub}>Beauty from salons near you · no login needed</span>
-            </Link>
+            <div className={styles.glowLinkRow}>
+              <Link href="/shop" className={styles.glowShopLink}>
+                <span aria-hidden="true">✨</span> Marketplace <span className={styles.glowShopNew}>New</span>
+                <span className={styles.glowShopSub}>Beauty from salons near you · no login needed</span>
+              </Link>
+              {workLinks && (
+                <Link href="/work" className={`${styles.glowShopLink} ${styles.glowWorkLink}`}>
+                  <span aria-hidden="true">🎓</span> Earn with FastQue <span className={styles.glowShopNew}>Students</span>
+                  <span className={styles.glowShopSub}>Paid gigs between classes · pay funded upfront</span>
+                </Link>
+              )}
+            </div>
             <p className={styles.ownerPrompt}>
               Run a barbershop? <Link href="/owner/register">Register your shop</Link>
             </p>
@@ -181,6 +191,31 @@ export default async function HomePage() {
           <HeroBookingCard />
         </div>
       </section>
+
+      {workLinks && (
+        <section className={styles.workBand} aria-labelledby="earn-with-fastque" data-keep-colors>
+          <div className={styles.workBandInner}>
+            <div className={styles.workBandCopy}>
+              <p className={styles.workBandEyebrow}>🎓 Earn with FastQue</p>
+              <h2 id="earn-with-fastque" className={styles.workBandTitle}>
+                Students: earn <span>between classes.</span>
+              </h2>
+              <p className={styles.workBandText}>
+                Short paid gigs from verified local businesses — event crew, promotions, telecalling, surveys and more. Pay is shown upfront and funded before you
+                accept. Free to join, 18+.
+              </p>
+            </div>
+            <div className={styles.workBandActions}>
+              <Link href="/work" className={styles.workBandPrimary}>
+                Find student gigs →
+              </Link>
+              <Link href="/work/business" className={styles.workBandSecondary}>
+                Hire students
+              </Link>
+            </div>
+          </div>
+        </section>
+      )}
 
       <section
         aria-label="FastQue Android app on Google Play"

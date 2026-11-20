@@ -42,6 +42,7 @@ import { FinanceModule } from './finance/finance.module';
 import { ShopModule } from './shop/shop.module';
 import { OnboardingModule } from './onboarding/onboarding.module';
 import { CrmModule } from './crm/crm.module';
+import { WorkModule } from './work/work.module';
 
 @Module({
   imports: [
@@ -97,6 +98,8 @@ import { CrmModule } from './crm/crm.module';
     ReviewsModule,
     DashboardReviewsModule,
     VerificationModule,
+    // FastQue Work marketplace (work/* routes; off unless WORK_MARKETPLACE_ENABLED=true).
+    WorkModule,
     // Feature modules (staff/chair roster CRUD, payments, admin) are added in later phases per
     // PROJECT_STRUCTURE.md.
   ],
