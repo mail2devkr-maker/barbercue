@@ -9,6 +9,12 @@ export function giftCardsEnabled(env: string | undefined = process.env.NEXT_PUBL
   return env === "true";
 }
 
+/** FastQue Work (student gigs) entry points on the public site — the homepage hero link and banner.
+ *  Keep OFF until the backend runs with WORK_MARKETPLACE_ENABLED=true, otherwise /work answers 404. */
+export function workMarketplaceLinksEnabled(env: string | undefined = process.env.NEXT_PUBLIC_WORK_MARKETPLACE_ENABLED): boolean {
+  return env === "true";
+}
+
 /** Map tiles. Defaults to OpenStreetMap's public tiles (fine for development; set a commercial
  *  provider for production traffic — OSM's tile policy forbids heavy use). */
 export const MAP_TILE_URL = process.env.NEXT_PUBLIC_MAP_TILE_URL ?? "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
