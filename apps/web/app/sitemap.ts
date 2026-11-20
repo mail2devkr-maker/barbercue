@@ -4,6 +4,7 @@ import type { CityDto, LocalityDto, PaginatedResult, SalonListItemDto } from "@b
 import { fetchDiscovery } from "../lib/discovery-api";
 import { SITE_URL } from "../lib/seo";
 import { SEO_SERVICES } from "../lib/seo-services";
+import { isDelhiNcrCity } from "../lib/seo-region";
 
 export const revalidate = 3600;
 // Rendered per request (Next caches the fetches for `revalidate`), never baked at build time: the
@@ -109,6 +110,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     return entries;
   }
 
+  let ncrHasShops = false;
   await mapLimited(cities, 2, async (city) => {
     // B9: country-scoped public URLs. countryCode is lowercased for the URL by convention; the
     // backend uppercases it before the (countryCode, slug) lookup either way.
@@ -125,6 +127,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       }),
     ]);
     if (salons.length === 0) return; // no shop yet: the city page is thin, keep it out
+    if (isDelhiNcrCity(city)) ncrHasShops = true;
 
     entries.push({ url: `${SITE_URL}/${cityPath}`, changeFrequency: "daily", priority: 0.8 });
 
@@ -151,6 +154,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       entries.push({ url: `${SITE_URL}/${cityPath}/services/${svc.slug}`, changeFrequency: "weekly", priority: 0.7 });
     }
   });
+
+  // Region hub: listed only when it shows at least one real shop (same rule as city pages).
+  if (ncrHasShops) entries.push({ url: `${SITE_URL}/delhi-ncr`, changeFrequency: "daily", priority: 0.8 });
 
   if (entries.length > MAX_URLS) {
     console.error(`[sitemap] ${entries.length} URLs is near Google's 50,000 limit; split into a sitemap index`);

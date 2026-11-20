@@ -1461,6 +1461,15 @@ export const NOTIFICATION_TYPES = [
   "onboarding.rejected",
   "onboarding.owner_activated",
   "onboarding.published",
+  // FastQue Work marketplace (docs/work-marketplace/) — assignment, review and payout events.
+  "work.assignment.accepted",
+  "work.offer.received",
+  "work.submission.received",
+  "work.submission.approved",
+  "work.rework.requested",
+  "work.payout.sent",
+  "work.payout.failed",
+  "work.dispute.updated",
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 

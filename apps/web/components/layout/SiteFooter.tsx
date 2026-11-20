@@ -54,6 +54,7 @@ export function SiteFooter() {
             <Link href="/search">Find a barber</Link>
             <Link href="/assistant">Find a time</Link>
             <Link href="/offers">Offers near you</Link>
+            <Link href="/delhi-ncr">Salons in Delhi NCR</Link>
             <Link href="/services">All beauty services</Link>
             <Link href="/services/haircut">Haircut near me</Link>
             <Link href="/services/facial">Facial near me</Link>
@@ -76,6 +77,7 @@ export function SiteFooter() {
           <div>
             <span>FastQue</span>
             <Link href="/employee/login">Employee Login</Link>
+            <Link href="/admin/login">FastQue Admin Login</Link>
             <Link href="/about-us">About Us</Link>
             <Link href="/contact-us">Contact Us</Link>
             <Link href="/careers">Careers</Link>

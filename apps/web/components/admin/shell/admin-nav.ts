@@ -1,6 +1,7 @@
 import { Role } from "@barbercue/shared";
 import type { IconName } from "../../owner/icons";
 import { canOpenAdminPath } from "../../../lib/admin-route-access";
+import { workMarketplaceLinksEnabled } from "../../../lib/dashboard-flags";
 
 // The ONE definition of the admin app's navigation (sidebar, icon rail and the "planned" pages all
 // read it). `live` items are real pages backed by real data. `planned` items exist so the structure
@@ -100,6 +101,10 @@ export const ADMIN_NAV_ITEMS: ReadonlyArray<AdminNavItem> = [
   { id: "shop-status-ops", label: "Open / Closed Monitoring", group: "OPERATIONS", href: STATUS, query: "view=hourly", status: "live" },
   { id: "waiting-time", label: "Waiting Time Analysis", group: "OPERATIONS", href: CHARTS, query: "preset=wait", status: "live" },
   { id: "live-queue", label: "Live Queue Monitoring", group: "OPERATIONS", href: "/dashboard/admin/live-queue", status: "live" },
+  // Shown as live only once the marketplace is switched on (NEXT_PUBLIC_WORK_MARKETPLACE_ENABLED).
+  workMarketplaceLinksEnabled()
+    ? { id: "work-marketplace", label: "FastQue Work", group: "OPERATIONS", href: "/dashboard/admin/work", status: "live" }
+    : planned("OPERATIONS", "work-marketplace", "FastQue Work", "Switched off: set WORK_MARKETPLACE_ENABLED on the backend and NEXT_PUBLIC_WORK_MARKETPLACE_ENABLED on the website."),
   planned("OPERATIONS", "chair-utilization", "Chair Utilization", "Phase 3 utilisation model (chairs × operating hours × sessions)."),
 
   { id: "chart-builder", label: "Chart Builder", group: "ANALYTICS", href: CHARTS, status: "live" },

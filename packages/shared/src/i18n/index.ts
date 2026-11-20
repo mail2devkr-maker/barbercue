@@ -2749,6 +2749,14 @@ const enNotificationTypeLabels: NotificationTypeLabels = {
   'onboarding.rejected': 'Salon application rejected',
   'onboarding.owner_activated': 'Salon owner activated their account',
   'onboarding.published': 'Salon is now live on FastQue',
+  'work.assignment.accepted': 'A worker accepted your job',
+  'work.offer.received': 'You received a job offer',
+  'work.submission.received': 'Work submitted for your review',
+  'work.submission.approved': 'Your work was approved',
+  'work.rework.requested': 'Changes requested on your work',
+  'work.payout.sent': 'Payout sent',
+  'work.payout.failed': 'Payout failed — we will retry',
+  'work.dispute.updated': 'Dispute update',
 };
 
 const hiNotificationTypeLabels: NotificationTypeLabels = {
@@ -2777,6 +2785,14 @@ const hiNotificationTypeLabels: NotificationTypeLabels = {
   'onboarding.rejected': 'सैलून आवेदन अस्वीकृत',
   'onboarding.owner_activated': 'सैलून मालिक ने खाता सक्रिय किया',
   'onboarding.published': 'सैलून अब FastQue पर लाइव है',
+  'work.assignment.accepted': 'एक वर्कर ने आपकी जॉब स्वीकार की',
+  'work.offer.received': 'आपको जॉब ऑफर मिला',
+  'work.submission.received': 'आपकी समीक्षा के लिए काम जमा हुआ',
+  'work.submission.approved': 'आपका काम स्वीकृत हुआ',
+  'work.rework.requested': 'आपके काम में बदलाव का अनुरोध',
+  'work.payout.sent': 'भुगतान भेजा गया',
+  'work.payout.failed': 'भुगतान विफल — हम फिर कोशिश करेंगे',
+  'work.dispute.updated': 'विवाद अपडेट',
 };
 
 export const NOTIFICATION_TYPE_LABELS: Readonly<Record<Language, NotificationTypeLabels>> = {
