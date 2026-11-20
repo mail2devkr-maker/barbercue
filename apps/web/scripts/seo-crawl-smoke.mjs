@@ -50,6 +50,7 @@ assert.deepEqual(guideUrls, [
   "https://fastque.com/how-to-book",
   "https://fastque.com/how-live-queue-works",
   "https://fastque.com/salon-management-software",
+  "https://fastque.com/list-your-salon",
 ]);
 assert.ok(urls.length >= 10, "sitemap should include static and real discovery URLs");
 assert.equal(new Set(urls).size, urls.length, "sitemap URLs should be unique");

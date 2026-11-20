@@ -25,6 +25,7 @@ describe("education sitemap", () => {
       SITE_URL + "/how-to-book",
       SITE_URL + "/how-live-queue-works",
       SITE_URL + "/salon-management-software",
+      SITE_URL + "/list-your-salon",
     ]);
     expect(new Set(urls).size).toBe(urls.length);
     expect(xml).not.toMatch(/<lastmod>/);

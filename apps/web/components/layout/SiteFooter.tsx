@@ -69,6 +69,7 @@ export function SiteFooter() {
           <div>
             <span>Shops</span>
             <Link href="/#for-shops">For shops</Link>
+            <Link href="/list-your-salon">List your salon</Link>
             <Link href="/salon-management-software">Salon management software</Link>
             <Link href="/dashboard/register-shop">Register your shop</Link>
             <Link href="/owner/login">Owner login</Link>

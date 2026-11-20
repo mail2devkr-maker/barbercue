@@ -4,6 +4,7 @@ const GUIDE_PATHS = [
   "/how-to-book",
   "/how-live-queue-works",
   "/salon-management-software",
+  "/list-your-salon",
 ] as const;
 
 function escapeXml(value: string): string {
