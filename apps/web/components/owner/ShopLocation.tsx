@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ChangeEvent } from "react";
 import { DASHBOARD_PATHS } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../lib/api";
 import {
@@ -18,6 +18,7 @@ import {
   type LocationView,
   type ProposalSource,
 } from "../../lib/location-proposal";
+import { PHOTO_HEAD_BYTES, photoGpsMessage, readPhotoGps } from "../../lib/photo-gps";
 import { Badge, Banner, Btn, BtnLink, Card, Field, Skeleton } from "./parts";
 import type { BadgeTone } from "./parts";
 import ui from "./owner.module.css";
@@ -46,6 +47,7 @@ export function ShopLocation({ salonId }: { salonId: string }) {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [photoNote, setPhotoNote] = useState<{ tone: "ok" | "warn"; text: string } | null>(null);
 
   const load = useCallback(async () => {
     setLoadError(null);
@@ -89,6 +91,30 @@ export function ShopLocation({ salonId }: { salonId: string }) {
       },
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
     );
+  }
+
+  async function readPhoto(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    setPhotoNote(null);
+    setNotice(null);
+    if (!file) return;
+    try {
+      const result = readPhotoGps(await file.slice(0, PHOTO_HEAD_BYTES).arrayBuffer());
+      if (!result.ok) {
+        setPhotoNote({ tone: "warn", text: photoGpsMessage(result.reason) });
+        return;
+      }
+      setLatText(String(round6(result.position.latitude)));
+      setLngText(String(round6(result.position.longitude)));
+      // A photo's position is a starting point the owner must check, not a device reading, so it is not sent as "GPS".
+      setSource("MANUAL");
+      setAccuracy(null);
+      setErrors({});
+      setPhotoNote({ tone: "ok", text: "Location read from the photo on this device. Check the point on a map: a photo can be old or taken somewhere else. Nothing is sent until you press Send for review." });
+    } catch {
+      setPhotoNote({ tone: "warn", text: photoGpsMessage("unreadable") });
+    }
   }
 
   function edited(setter: (v: string) => void) {
@@ -183,6 +209,12 @@ export function ShopLocation({ salonId }: { salonId: string }) {
           </div>
           <p className={ui.cardSub}>Your browser will ask permission. The location is used only to fill the boxes below; nothing is sent until you press Send for review.</p>
           {geoError && <Banner tone="warn">{geoError}</Banner>}
+          <div className={ui.mt12}>
+            <Field label="Or read the location from a photo taken at your shop" htmlFor="loc-photo" hint="Choose a JPG from this device. FastQue reads its location here in your browser; the photo and its hidden data are not uploaded. Photos you upload to your shop page have their location removed.">
+              <input id="loc-photo" className={ui.input} type="file" accept="image/jpeg" onChange={(e) => void readPhoto(e)} />
+            </Field>
+            {photoNote && <div role="status" className={ui.mt12}><Banner tone={photoNote.tone}>{photoNote.text}</Banner></div>}
+          </div>
           {source === "GPS" && accuracy !== null && (
             <p className={ui.cardSub} role="status">Device location found, accurate to about {accuracy} m. Check the point on a map before you send it.</p>
           )}

@@ -239,3 +239,48 @@ describe("ShopLocation last review (Codex PR #268)", () => {
     expect(r.root.findAllByType("img")).toHaveLength(0);
   });
 });
+
+describe("ShopLocation photo location (owner issue #13)", () => {
+  const { jpegWithGps } = require("../../../lib/__tests__/photo-gps-fixture");
+  const choose = async (r, buffer) => {
+    const file = { slice: () => ({ arrayBuffer: async () => buffer }) };
+    await act(async () => { await input(r, "loc-photo").props.onChange({ target: { files: [file], value: "x" } }); });
+    await flush();
+  };
+
+  it("fills the boxes from a photo, never sends anything by itself, and says it is not proof", async () => {
+    install();
+    const r = await mount();
+    await choose(r, jpegWithGps());
+    expect(input(r, "loc-lat").props.value).toBe("28.6139");
+    expect(text(r)).toContain("Check the point on a map");
+    expect(text(r)).toContain("Nothing is sent until you press Send for review");
+    expect(calls.filter((c) => c.opts?.method === "PATCH")).toHaveLength(0);
+  });
+
+  it("sends a photo-derived position as typed-in (MANUAL), never as a device GPS reading", async () => {
+    install();
+    const r = await mount();
+    await choose(r, jpegWithGps());
+    await act(async () => { await button(r, "Send for review").props.onClick(); });
+    await flush();
+    const body = JSON.parse(calls.find((c) => c.opts?.method === "PATCH").opts.body);
+    expect(body.source).toBe("MANUAL");
+    expect(JSON.stringify(body)).not.toMatch(/photo|exif|jpg/i);
+  });
+
+  it("says so when the photo has no location or is not a JPEG, and leaves the boxes alone", async () => {
+    install();
+    const r = await mount();
+    await choose(r, jpegWithGps({ gps: false }));
+    expect(text(r)).toContain("has no location in it");
+    expect(input(r, "loc-lat").props.value).toBe("");
+    await choose(r, new Uint8Array([0x89, 0x50]).buffer);
+    expect(text(r)).toContain("Only JPG photos");
+  });
+
+  it("states that the photo is read in the browser and not uploaded", async () => {
+    install();
+    expect(text(await mount())).toContain("not uploaded");
+  });
+});
