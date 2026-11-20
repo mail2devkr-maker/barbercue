@@ -45,3 +45,35 @@ npx jest --config ./test/jest-e2e.json --runInBand test/work-marketplace.e2e-spe
 ```
 
 CI runs the same in `.github/workflows/work-marketplace-certification.yml`.
+
+## Real money by manual bank transfer (NEFT)
+
+`WORK_PAYMENT_PROVIDER=manual_bank` is the production payment method until an RBI-authorised
+payment partner is integrated. No code moves money: people do, and the system records it.
+
+Backend environment (all four bank values are required; otherwise funding fails closed):
+
+```
+WORK_PAYMENT_PROVIDER=manual_bank
+WORK_MANUAL_BANK_ACCOUNT_NAME=<company account name, as registered with the bank>
+WORK_MANUAL_BANK_ACCOUNT_NUMBER=<company current account number>
+WORK_MANUAL_BANK_IFSC=<branch IFSC>
+WORK_MANUAL_BANK_BANK_NAME=<bank name>
+```
+
+`TOTP_ENCRYPTION_KEY` (already set in production) also encrypts workers' bank account numbers.
+
+Daily finance routine (Admin → FastQue Work):
+
+1. **Bank transfers** tab: for each line, find the credit on the company statement with the same
+   reference in the remarks and exactly the amount shown. **Confirm received** with its UTR. A
+   different amount is refused: contact the business instead. **Not received** after a reasonable
+   wait lets the business create a new payment order. A UTR can be recorded only once.
+2. **Payouts** tab: **Prepare pending payouts** (those whose worker has saved bank details), then
+   **Download NEFT file** and upload it to the bank's bulk-NEFT screen. The file contains account
+   numbers: keep it private and delete it after the upload. Every download is audited.
+3. After the bank processes the batch: **Mark paid** with each UTR, or **Mark failed** with the
+   bank's reason, then **Retry** once the worker has corrected their details.
+
+Every confirmation goes through the same exactly-once settlement path as a provider webhook, so the
+ledger, the job opening and the audit trail (who, when, UTR) behave identically.

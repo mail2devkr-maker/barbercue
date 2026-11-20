@@ -11,6 +11,7 @@ on:
       - "apps/backend/src/notifications/notifications.service.ts"
       - "apps/backend/src/common/db-deadline-scheduler/**"
       - "apps/backend/test/work-marketplace.e2e-spec.ts"
+      - "apps/backend/test/work-manual-bank.e2e-spec.ts"
       - "packages/shared/src/work-marketplace.ts"
       - "packages/shared/src/__tests__/work-marketplace.test.ts"
       - "apps/web/app/(work)/**"
@@ -78,5 +79,12 @@ jobs:
           export TOTP_ENCRYPTION_KEY="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
           npx jest --config ./test/jest-e2e.json --runInBand --ci test/work-marketplace.e2e-spec.ts
           npx jest --config ./test/jest-e2e.json --runInBand --ci test/work-marketplace.e2e-spec.ts
+      - name: Work manual bank transfer (NEFT) e2e (real application, twice)
+        working-directory: apps/backend
+        run: |
+          export JWT_ACCESS_SECRET="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
+          export TOTP_ENCRYPTION_KEY="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
+          npx jest --config ./test/jest-e2e.json --runInBand --ci test/work-manual-bank.e2e-spec.ts
+          npx jest --config ./test/jest-e2e.json --runInBand --ci test/work-manual-bank.e2e-spec.ts
       - name: Web TypeScript typecheck
         run: npm run typecheck --workspace=@barbercue/web

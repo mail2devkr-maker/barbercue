@@ -3,16 +3,18 @@
 import { useCallback, useEffect, useState } from "react";
 import { Role, type WorkAdminOverviewDto, type WorkAssignmentDetailDto, type WorkLedgerTrialBalanceDto, type WorkOrgDto } from "@barbercue/shared";
 import { useAuth } from "../../../../../lib/auth-context";
-import { errorText, JOB_STATUS, money, ORG_STATUS, PAYOUT_STATUS, when, workGet, workSend } from "../../../../../lib/work";
+import { apiFetchBlob } from "../../../../../lib/api";
+import { errorText, JOB_STATUS, money, ORG_STATUS, PAYOUT_STATUS, W, when, workGet, workSend } from "../../../../../lib/work";
 import { Badge, EvidenceThumb, SandboxNote, Stat } from "../../../../(work)/work/WorkUi";
 import styles from "../../../../(work)/work/work.module.css";
 
-type Tab = "overview" | "kyc" | "jobs" | "workers" | "payouts" | "disputes" | "ledger" | "audit";
+type Tab = "overview" | "kyc" | "jobs" | "workers" | "transfers" | "payouts" | "disputes" | "ledger" | "audit";
 const TABS: { id: Tab; label: string }[] = [
   { id: "overview", label: "Overview" },
   { id: "kyc", label: "Business KYC" },
   { id: "jobs", label: "Job moderation" },
   { id: "workers", label: "Workers" },
+  { id: "transfers", label: "Bank transfers" },
   { id: "payouts", label: "Payouts" },
   { id: "disputes", label: "Disputes" },
   { id: "ledger", label: "Ledger" },
@@ -21,7 +23,9 @@ const TABS: { id: Tab; label: string }[] = [
 
 interface AdminJob { id: string; title: string; orgName: string; orgStatus: string; category: string; status: keyof typeof JOB_STATUS; city: string; positions: number; filled: number; payPerWorkerPaise: number; startsAt: string; screeningFlags: { code: string; label: string }[]; description: string }
 interface AdminWorker { userId: string; fullName: string; workerType: string; city: string; verificationLevel: number; suspended: boolean; createdAt: string; skills: string[] }
-interface AdminPayout { id: string; assignmentId: string; jobTitle: string; orgName: string; amountPaise: number; attempt: number; provider: string; status: keyof typeof PAYOUT_STATUS; failureReason: string | null; createdAt: string }
+interface AdminPayout { id: string; assignmentId: string; jobTitle: string; orgName: string; amountPaise: number; attempt: number; provider: string; status: keyof typeof PAYOUT_STATUS; failureReason: string | null; manualUtr: string | null; createdAt: string }
+interface PaymentsConfig { provider: string; sandbox: boolean; payoutMethod: "UPI" | "BANK" }
+interface ManualFunding { id: string; reference: string; amountPaise: number; jobId: string; jobTitle: string; orgName: string; orgLegalName: string; jobStillWaiting: boolean; createdAt: string }
 interface AdminDispute { id: string; assignmentId: string; jobTitle: string; orgName: string; openedBy: string; reasonCode: string; description: string; status: string; awardPaise: number | null; resolutionNote: string | null; agreedPayPaise: number; slaDueAt: string; overdue: boolean }
 interface AuditRow { id: string; entityType: string; entityId: string; action: string; fromStatus: string | null; toStatus: string | null; actorParty: string; note: string | null; createdAt: string }
 
@@ -81,7 +85,8 @@ export default function AdminWorkPage() {
       {tab === "kyc" && <Kyc canWrite={canWrite} busy={busy} act={act} ask={ask} />}
       {tab === "jobs" && <Jobs canWrite={canWrite} busy={busy} act={act} ask={ask} />}
       {tab === "workers" && <Workers canWrite={canWrite} busy={busy} act={act} ask={ask} />}
-      {tab === "payouts" && <Payouts canWrite={canWrite} busy={busy} act={act} />}
+      {tab === "transfers" && <Transfers canWrite={canWrite} busy={busy} act={act} ask={ask} />}
+      {tab === "payouts" && <Payouts canWrite={canWrite} busy={busy} act={act} ask={ask} />}
       {tab === "disputes" && <Disputes canWrite={canWrite} busy={busy} act={act} ask={ask} />}
       {tab === "ledger" && <Ledger />}
       {tab === "audit" && <Audit />}
@@ -254,15 +259,106 @@ function Workers({ canWrite, busy, act, ask }: Props) {
   );
 }
 
-function Payouts({ canWrite, busy, act }: Omit<Props, "ask">) {
+/** Asks for a bank UTR; null when cancelled. Letters and digits only, as on the statement. */
+function askUtr(ask: Props["ask"], q: string): string | null {
+  const v = ask(q);
+  if (v === null) return null;
+  const utr = v.trim().toUpperCase();
+  if (!/^[A-Z0-9]{6,30}$/.test(utr)) {
+    window.alert("Enter the UTR exactly as on the bank statement: 6 to 30 letters and digits.");
+    return null;
+  }
+  return utr;
+}
+
+async function downloadNeftFile() {
+  const { blob, filename } = await apiFetchBlob(`${W}/admin/payouts/neft-export.csv`);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename ?? "fastque-work-neft.csv";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function Transfers({ canWrite, busy, act, ask }: Props) {
+  const cfg = useLoad<PaymentsConfig>("admin/payments/config");
+  const manual = cfg.data?.provider === "manual_bank";
+  const { data, error, reload } = useLoad<ManualFunding[]>(manual ? "admin/fundings/manual" : null);
+  if (cfg.error) return <p className={styles.error}>{cfg.error}</p>;
+  if (!cfg.data) return <div className={styles.skeleton} />;
+  if (!manual) return <p className={styles.notice}>Bank transfer is not the active payment method, so there is nothing to confirm here.</p>;
+  if (error) return <p className={styles.error}>{error}</p>;
+  if (!data) return <div className={styles.skeleton} />;
+  return (
+    <>
+      <p className={styles.notice}>
+        Match each transfer on the company bank statement: same reference in the remarks and exactly the amount shown. Confirming opens the job to workers and cannot be undone.
+      </p>
+      {data.length === 0 && <p className={styles.meta}>No transfers waiting.</p>}
+      {data.length > 0 && (
+        <div className={styles.tableWrap}>
+          <table className={styles.table}>
+            <thead><tr><th>Reference</th><th>Business</th><th>Job</th><th>Amount</th><th>Ordered</th><th /></tr></thead>
+            <tbody>
+              {data.map((f) => (
+                <tr key={f.id}>
+                  <td><strong>{f.reference}</strong></td>
+                  <td>{f.orgName}<div className={styles.meta}>{f.orgLegalName}</div></td>
+                  <td>{f.jobTitle}{!f.jobStillWaiting && <div className={styles.meta}>Job changed since: money will be released back to the business balance.</div>}</td>
+                  <td>{money(f.amountPaise)}</td>
+                  <td>{when(f.createdAt)}</td>
+                  <td>
+                    {canWrite && (
+                      <div className={styles.actions}>
+                        <button className={styles.btnPrimary} disabled={busy} onClick={() => {
+                          const utr = askUtr(ask, `UTR of the ${money(f.amountPaise)} credit with reference ${f.reference}:`);
+                          if (!utr) return;
+                          const amt = ask(`Amount credited on the statement, in ₹ (must be exactly ${f.amountPaise / 100}):`);
+                          if (amt === null) return;
+                          void act(() => workSend(`admin/fundings/${f.id}/manual-confirm`, { outcome: "RECEIVED", utr, amountPaise: Math.round(Number(amt) * 100) }), "Transfer confirmed. The job is open to workers.", reload);
+                        }}>Confirm received</button>
+                        <button className={styles.btnGhost} disabled={busy} onClick={() => {
+                          const reason = ask("Why is this transfer being marked as not received? (shown in the audit trail)");
+                          if (reason && reason.trim().length >= 5) void act(() => workSend(`admin/fundings/${f.id}/manual-confirm`, { outcome: "NOT_RECEIVED", reason: reason.trim() }), "Marked not received. The business can create a new payment order.", reload);
+                        }}>Not received</button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
+  );
+}
+
+function Payouts({ canWrite, busy, act, ask }: Props) {
   const { data, error, reload } = useLoad<AdminPayout[]>("admin/payouts");
+  const cfg = useLoad<PaymentsConfig>("admin/payments/config");
   if (error) return <p className={styles.error}>{error}</p>;
   if (!data) return <div className={styles.skeleton} />;
   const sandbox = data.some((p) => p.provider === "sandbox");
+  const manual = cfg.data?.provider === "manual_bank";
   return (
     <>
       {sandbox && <SandboxNote />}
-      {canWrite && <div className={styles.actions}><button className={styles.btn} disabled={busy} onClick={() => void act(() => workSend("admin/payouts/process"), "Pending payouts sent to the provider (those with a UPI ID).", reload)}>Send pending payouts</button><button className={styles.btn} disabled={busy} onClick={() => void act(() => workSend("admin/sweep"), "Review deadlines and expiries processed.", reload)}>Run deadline rules now</button></div>}
+      {manual && (
+        <p className={styles.notice}>
+          Payouts are sent by NEFT from the company account. Payouts marked &ldquo;Sent to bank&rdquo; are in the NEFT file until you record them; after the bank processes them, record each UTR here. Payouts still pending are waiting for the worker to add bank details.
+        </p>
+      )}
+      {canWrite && (
+        <div className={styles.actions}>
+          <button className={styles.btn} disabled={busy} onClick={() => void act(() => workSend("admin/payouts/process"), manual ? "Pending payouts with bank details are now ready to send." : "Pending payouts sent to the provider (those with a UPI ID).", reload)}>{manual ? "Prepare pending payouts" : "Send pending payouts"}</button>
+          {manual && <button className={styles.btnPrimary} disabled={busy} onClick={() => void act(downloadNeftFile, "NEFT file downloaded. It contains bank account numbers: keep it private and delete it after upload.", reload)}>Download NEFT file</button>}
+          <button className={styles.btn} disabled={busy} onClick={() => void act(() => workSend("admin/sweep"), "Review deadlines and expiries processed.", reload)}>Run deadline rules now</button>
+        </div>
+      )}
       <div className={styles.tableWrap}>
         <table className={styles.table}>
           <thead><tr><th>Job</th><th>Amount</th><th>Attempt</th><th>Status</th><th>Created</th><th /></tr></thead>
@@ -272,7 +368,7 @@ function Payouts({ canWrite, busy, act }: Omit<Props, "ask">) {
                 <td>{p.jobTitle}<div className={styles.meta}>{p.orgName}</div></td>
                 <td>{money(p.amountPaise)}</td>
                 <td>{p.attempt}</td>
-                <td><Badge tone={PAYOUT_STATUS[p.status].tone}>{PAYOUT_STATUS[p.status].label}</Badge>{p.failureReason && <div className={styles.meta}>{p.failureReason}</div>}</td>
+                <td><Badge tone={PAYOUT_STATUS[p.status].tone}>{PAYOUT_STATUS[p.status].label}</Badge>{p.manualUtr && <div className={styles.meta}>UTR {p.manualUtr}</div>}{p.failureReason && <div className={styles.meta}>{p.failureReason}</div>}</td>
                 <td>{when(p.createdAt)}</td>
                 <td>
                   {canWrite && (
@@ -281,6 +377,18 @@ function Payouts({ canWrite, busy, act }: Omit<Props, "ask">) {
                         <>
                           <button className={styles.btn} disabled={busy} onClick={() => void act(() => workSend(`sandbox/payouts/${p.id}/settle`, { outcome: "SUCCEEDED" }), "Sandbox payout settled.", reload)}>Settle (sandbox)</button>
                           <button className={styles.btnGhost} disabled={busy} onClick={() => void act(() => workSend(`sandbox/payouts/${p.id}/settle`, { outcome: "FAILED" }), "Sandbox payout failed.", reload)}>Fail (sandbox)</button>
+                        </>
+                      )}
+                      {p.status === "PROCESSING" && p.provider === "manual_bank" && (
+                        <>
+                          <button className={styles.btnPrimary} disabled={busy} onClick={() => {
+                            const utr = askUtr(ask, `UTR of the ${money(p.amountPaise)} NEFT for ${p.jobTitle}:`);
+                            if (utr) void act(() => workSend(`admin/payouts/${p.id}/manual-confirm`, { outcome: "PAID", utr }), "Payout recorded as paid.", reload);
+                          }}>Mark paid</button>
+                          <button className={styles.btnGhost} disabled={busy} onClick={() => {
+                            const reason = ask("Why did the NEFT fail? (shown to the worker as the failure reason)");
+                            if (reason && reason.trim().length >= 5) void act(() => workSend(`admin/payouts/${p.id}/manual-confirm`, { outcome: "FAILED", reason: reason.trim() }), "Payout marked failed. Retry it once the details are fixed.", reload);
+                          }}>Mark failed</button>
                         </>
                       )}
                       {p.status === "FAILED" && <button className={styles.btnPrimary} disabled={busy} onClick={() => void act(() => workSend(`admin/payouts/${p.id}/retry`), "Retry created.", reload)}>Retry</button>}

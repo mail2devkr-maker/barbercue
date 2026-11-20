@@ -4588,6 +4588,12 @@ model WorkerProfile {
   collegeName         String?    @db.VarChar(160)
   bio                 String?    @db.VarChar(600)
   payoutUpiVpa        String?    @db.VarChar(100)
+  // Bank payout details for manual NEFT payouts. The account number is AES-256-GCM encrypted
+  // (CryptoService); only its last 4 digits are stored in clear, for masked display.
+  payoutBankAccountEncrypted String? @db.Text
+  payoutBankAccountLast4     String? @db.VarChar(4)
+  payoutBankIfsc             String? @db.VarChar(11)
+  payoutBankAccountName      String? @db.VarChar(120)
   // 1 = phone verified (granted at profile creation only when User.phoneVerifiedAt is set),
   // 2 = basic eligibility verified by a platform reviewer. 3/4 are reserved.
   verificationLevel   Int        @default(0)
@@ -4759,6 +4765,9 @@ model WorkFunding {
   status          WorkFundingStatus @default(CREATED)
   idempotencyKey  String            @unique @db.VarChar(120)
   confirmedAt     DateTime?
+  // Manual bank transfer: the bank UTR a platform admin recorded, and who recorded it.
+  manualUtr       String?           @unique @db.VarChar(40)
+  manualConfirmedById String?
   createdById     String
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
@@ -4783,6 +4792,9 @@ model WorkPayout {
   idempotencyKey   String           @unique @db.VarChar(120)
   initiatedAt      DateTime?
   settledAt        DateTime?
+  // Manual NEFT payout: the bank UTR a platform admin recorded, and who recorded it.
+  manualUtr        String?          @unique @db.VarChar(40)
+  manualConfirmedById String?
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
 

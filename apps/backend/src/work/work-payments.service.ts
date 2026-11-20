@@ -15,7 +15,11 @@ import {
   WorkErrorCode,
   workPlatformFee,
   type WorkFundingDto,
+  type WorkManualFundingConfirmInput,
+  type WorkManualPayoutConfirmInput,
 } from '@barbercue/shared';
+import { CryptoService } from '../auth/services/crypto.service';
+import { manualBankAccount } from './work-config';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { WorkAuditService } from './work-audit.service';
@@ -73,9 +77,14 @@ export class WorkPaymentsService {
     private readonly audit: WorkAuditService,
     private readonly notifications: NotificationsService,
     private readonly access: WorkAccessService,
+    private readonly crypto: CryptoService,
     @Inject(WORK_PAYMENT_PROVIDER)
     private readonly provider: WorkPaymentProvider,
   ) {}
+
+  get payoutMethod(): 'UPI' | 'BANK' {
+    return this.provider.payoutMethod;
+  }
 
   get providerName(): string {
     return this.provider.name;
@@ -100,8 +109,18 @@ export class WorkPaymentsService {
       provider: f.provider,
       providerOrderId: f.providerOrderId,
       sandbox: f.provider === 'sandbox',
+      manualBank: this.manualBankFor(f),
       createdAt: f.createdAt.toISOString(),
     };
+  }
+
+  private manualBankFor(f: {
+    provider: string;
+    providerOrderId: string;
+  }): WorkFundingDto['manualBank'] {
+    if (f.provider !== 'manual_bank') return null;
+    const account = manualBankAccount();
+    return account ? { ...account, reference: f.providerOrderId } : null;
   }
 
   /**
@@ -207,6 +226,18 @@ export class WorkPaymentsService {
       throw err;
     }
 
+    return this.processEvent(event);
+  }
+
+  /**
+   * Applies a verified settlement event exactly once (the event id is claimed in the same
+   * transaction). `alongside` runs in that transaction after the event is applied: manual
+   * confirmation uses it to store the UTR and the confirming admin atomically with the money.
+   */
+  private processEvent(
+    event: WorkProviderEvent,
+    alongside?: (tx: Prisma.TransactionClient) => Promise<void>,
+  ): Promise<{ received: true; duplicate: boolean }> {
     return this.prisma.$transaction(async (tx) => {
       const claimed = await tx.$queryRaw<{ id: string }[]>`
         INSERT INTO "work_webhook_events" ("id", "provider", "providerEventId", "eventType", "payload", "processedAt")
@@ -224,6 +255,7 @@ export class WorkPaymentsService {
       } else {
         await this.applyPayoutEvent(tx, event);
       }
+      if (alongside) await alongside(tx);
       return { received: true as const, duplicate: false };
     });
   }
@@ -574,15 +606,27 @@ export class WorkPaymentsService {
     if (!payout || payout.status !== WorkPayoutStatus.PENDING) return;
     const profile = await this.prisma.workerProfile.findUnique({
       where: { userId: payout.workerId },
-      select: { payoutUpiVpa: true },
+      select: {
+        payoutUpiVpa: true,
+        payoutBankAccountEncrypted: true,
+        payoutBankIfsc: true,
+      },
     });
-    if (!profile?.payoutUpiVpa) return; // waits until the worker adds a UPI ID; the obligation stays
+    // Waits until the worker adds the payout method this provider needs; the obligation stays.
+    if (!profile) return;
+    if (this.provider.payoutMethod === 'BANK') {
+      if (!profile.payoutBankAccountEncrypted || !profile.payoutBankIfsc)
+        return;
+    } else if (!profile.payoutUpiVpa) {
+      return;
+    }
     let providerPayoutId: string;
     try {
       ({ providerPayoutId } = await this.provider.createPayout({
         payoutId: payout.id,
         amountPaise: payout.amountPaise,
-        upiVpa: profile.payoutUpiVpa,
+        upiVpa:
+          this.provider.payoutMethod === 'UPI' ? profile.payoutUpiVpa : null,
         idempotencyKey: payout.idempotencyKey,
       }));
     } catch (err) {
@@ -728,6 +772,275 @@ export class WorkPaymentsService {
     return remaining;
   }
 
+  // ------------------------------------------------- manual bank transfer (NEFT), admin-confirmed
+
+  private requireManual(): void {
+    if (!this.provider.manualSettlement) {
+      throw workError(
+        WorkErrorCode.MANUAL_SETTLEMENT_DISABLED,
+        'Manual bank transfer is not the active payment method.',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+  }
+
+  private static utrTaken(err: unknown): boolean {
+    return (
+      err instanceof Prisma.PrismaClientKnownRequestError &&
+      err.code === 'P2002'
+    );
+  }
+
+  private static utrAlreadyUsed() {
+    return workError(
+      WorkErrorCode.UTR_ALREADY_USED,
+      'This UTR is already recorded against another payment. Check the bank statement.',
+      HttpStatus.CONFLICT,
+    );
+  }
+
+  /** Employer transfers awaiting confirmation against the bank statement, oldest first. */
+  async pendingManualFundings() {
+    this.requireManual();
+    const rows = await this.prisma.workFunding.findMany({
+      where: {
+        provider: this.provider.name,
+        status: WorkFundingStatus.CREATED,
+      },
+      include: {
+        job: {
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            version: true,
+            org: { select: { displayName: true, legalName: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+      take: 200,
+    });
+    return rows.map((f) => ({
+      id: f.id,
+      reference: f.providerOrderId,
+      amountPaise: f.amountPaise,
+      jobId: f.job.id,
+      jobTitle: f.job.title,
+      orgName: f.job.org.displayName,
+      orgLegalName: f.job.org.legalName,
+      // A transfer for an outdated job version still settles, but its money is released back.
+      jobStillWaiting:
+        f.job.status === WorkJobStatus.FUNDING_REQUIRED &&
+        f.job.version === f.jobVersion,
+      createdAt: f.createdAt.toISOString(),
+    }));
+  }
+
+  /**
+   * Platform admin confirms an employer's bank transfer seen on the company statement (or records
+   * that it never arrived). Runs through the same exactly-once settlement path as a provider
+   * webhook, so the ledger, the job opening and the audit trail behave identically.
+   */
+  async confirmManualFunding(
+    adminUserId: string,
+    fundingId: string,
+    input: WorkManualFundingConfirmInput,
+  ): Promise<{ received: true; duplicate: boolean }> {
+    this.requireManual();
+    const funding = await this.prisma.workFunding.findUnique({
+      where: { id: fundingId },
+      include: { job: { select: { id: true, orgId: true } } },
+    });
+    if (!funding || funding.provider !== this.provider.name)
+      throw workNotFound('Funding not found.');
+    if (funding.status !== WorkFundingStatus.CREATED)
+      throw workInvalidState('This payment is already settled.', {
+        status: funding.status,
+      });
+    if (
+      input.outcome === 'RECEIVED' &&
+      input.amountPaise !== funding.amountPaise
+    ) {
+      throw workValidation(
+        'The amount received does not match the payment order. Do not confirm it: contact the business and reconcile the difference first.',
+        {
+          expectedPaise: funding.amountPaise,
+          receivedPaise: input.amountPaise,
+        },
+      );
+    }
+    const received = input.outcome === 'RECEIVED';
+    const utr = input.outcome === 'RECEIVED' ? input.utr : null;
+    const reason = input.outcome === 'NOT_RECEIVED' ? input.reason : null;
+    const event: WorkProviderEvent = {
+      eventId: `manual:funding:${funding.id}`,
+      type: received ? 'funding.succeeded' : 'funding.failed',
+      reference: funding.providerOrderId,
+      amountPaise: funding.amountPaise,
+      failureReason: reason ?? undefined,
+      createdAt: Math.floor(Date.now() / 1000),
+    };
+    try {
+      return await this.processEvent(event, async (tx) => {
+        await tx.workFunding.update({
+          where: { id: funding.id },
+          data: { manualUtr: utr, manualConfirmedById: adminUserId },
+        });
+        await this.audit.record(tx, {
+          entityType: 'FUNDING',
+          entityId: funding.id,
+          action: received
+            ? 'FUNDING_MANUAL_CONFIRMED'
+            : 'FUNDING_MANUAL_NOT_RECEIVED',
+          actorUserId: adminUserId,
+          actorParty: WorkParty.PLATFORM,
+          orgId: funding.job.orgId,
+          jobId: funding.job.id,
+          note: reason,
+          metadata: utr
+            ? { utr, amountPaise: funding.amountPaise }
+            : { amountPaise: funding.amountPaise },
+        });
+      });
+    } catch (err) {
+      if (WorkPaymentsService.utrTaken(err))
+        throw WorkPaymentsService.utrAlreadyUsed();
+      throw err;
+    }
+  }
+
+  /**
+   * Platform admin records the result of a NEFT payout sent from the company account. Only a
+   * payout already released for sending (PROCESSING) can be settled.
+   */
+  async confirmManualPayout(
+    adminUserId: string,
+    payoutId: string,
+    input: WorkManualPayoutConfirmInput,
+  ): Promise<{ received: true; duplicate: boolean }> {
+    this.requireManual();
+    const payout = await this.prisma.workPayout.findUnique({
+      where: { id: payoutId },
+      include: {
+        assignment: {
+          select: { jobId: true, job: { select: { orgId: true } } },
+        },
+      },
+    });
+    if (!payout || payout.provider !== this.provider.name)
+      throw workNotFound('Payout not found.');
+    if (
+      payout.status !== WorkPayoutStatus.PROCESSING ||
+      !payout.providerPayoutId
+    ) {
+      throw workInvalidState(
+        'Only a payout that is ready to send (the worker has saved bank details) can be settled.',
+        { status: payout.status },
+      );
+    }
+    const paid = input.outcome === 'PAID';
+    const utr = input.outcome === 'PAID' ? input.utr : null;
+    const reason = input.outcome === 'FAILED' ? input.reason : null;
+    const event: WorkProviderEvent = {
+      eventId: `manual:payout:${payout.id}`,
+      type: paid ? 'payout.succeeded' : 'payout.failed',
+      reference: payout.providerPayoutId,
+      amountPaise: payout.amountPaise,
+      failureReason: reason ?? undefined,
+      createdAt: Math.floor(Date.now() / 1000),
+    };
+    try {
+      return await this.processEvent(event, async (tx) => {
+        await tx.workPayout.update({
+          where: { id: payout.id },
+          data: { manualUtr: utr, manualConfirmedById: adminUserId },
+        });
+        await this.audit.record(tx, {
+          entityType: 'PAYOUT',
+          entityId: payout.id,
+          action: paid ? 'PAYOUT_MANUAL_PAID' : 'PAYOUT_MANUAL_FAILED',
+          actorUserId: adminUserId,
+          actorParty: WorkParty.PLATFORM,
+          jobId: payout.assignment.jobId,
+          orgId: payout.assignment.job.orgId,
+          note: reason,
+          metadata: utr
+            ? { utr, amountPaise: payout.amountPaise }
+            : { amountPaise: payout.amountPaise },
+        });
+      });
+    } catch (err) {
+      if (WorkPaymentsService.utrTaken(err))
+        throw WorkPaymentsService.utrAlreadyUsed();
+      throw err;
+    }
+  }
+
+  /**
+   * NEFT batch for finance: every payout ready to send, with the worker's decrypted bank details,
+   * as CSV. Platform admins only; every export is audited because it contains account numbers.
+   */
+  async manualPayoutCsv(adminUserId: string): Promise<string> {
+    this.requireManual();
+    const rows = await this.prisma.workPayout.findMany({
+      where: {
+        provider: this.provider.name,
+        status: WorkPayoutStatus.PROCESSING,
+      },
+      include: {
+        assignment: { select: { job: { select: { title: true } } } },
+      },
+      orderBy: { createdAt: 'asc' },
+      take: 500,
+    });
+    const profiles = await this.prisma.workerProfile.findMany({
+      where: { userId: { in: [...new Set(rows.map((r) => r.workerId))] } },
+      select: {
+        userId: true,
+        payoutBankAccountEncrypted: true,
+        payoutBankIfsc: true,
+        payoutBankAccountName: true,
+      },
+    });
+    const byWorker = new Map(profiles.map((p) => [p.userId, p]));
+    const lines = [
+      csvRow([
+        'Payout reference',
+        'Beneficiary name',
+        'Account number',
+        'IFSC',
+        'Amount (INR)',
+        'Remarks',
+        'Payout id',
+      ]),
+    ];
+    for (const r of rows) {
+      const p = byWorker.get(r.workerId);
+      if (!p?.payoutBankAccountEncrypted || !p.payoutBankIfsc) continue;
+      lines.push(
+        csvRow([
+          r.providerPayoutId ?? '',
+          p.payoutBankAccountName ?? '',
+          this.crypto.decrypt(p.payoutBankAccountEncrypted),
+          p.payoutBankIfsc,
+          (r.amountPaise / 100).toFixed(2),
+          `FastQue Work ${r.assignment.job.title}`.slice(0, 30),
+          r.id,
+        ]),
+      );
+    }
+    await this.audit.record(this.prisma, {
+      entityType: 'PAYOUT',
+      entityId: 'neft-export',
+      action: 'PAYOUT_NEFT_EXPORT',
+      actorUserId: adminUserId,
+      actorParty: WorkParty.PLATFORM,
+      metadata: { rows: lines.length - 1 },
+    });
+    return lines.join('\r\n') + '\r\n';
+  }
+
   // ------------------------------------------------------------------ sandbox (never production)
 
   private sandbox(): SandboxWorkPaymentProvider {
@@ -788,4 +1101,14 @@ export class WorkPaymentsService {
     );
     return this.handleWebhook(headers, event);
   }
+}
+
+/** One CSV row: every value quoted, and spreadsheet formula prefixes neutralised. */
+export function csvRow(values: string[]): string {
+  return values
+    .map((v) => {
+      const safe = /^[=+\-@\t\r]/.test(v) ? `'${v}` : v;
+      return `"${safe.replace(/"/g, '""')}"`;
+    })
+    .join(',');
 }

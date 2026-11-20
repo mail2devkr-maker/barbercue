@@ -151,6 +151,7 @@ export class WorkAdminService {
       provider: p.provider,
       status: p.status,
       failureReason: p.failureReason,
+      manualUtr: p.manualUtr,
       createdAt: p.createdAt.toISOString(),
       settledAt: p.settledAt?.toISOString() ?? null,
     }));

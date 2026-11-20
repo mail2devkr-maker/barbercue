@@ -1,10 +1,12 @@
 import {
+  ManualBankTransferWorkPaymentProvider,
   SANDBOX_SIGNATURE_HEADER,
   SANDBOX_TIMESTAMP_HEADER,
   SandboxWorkPaymentProvider,
   UnconfiguredWorkPaymentProvider,
 } from './work-payment-provider';
-import { configuredWorkPaymentProvider, workMarketplaceEnabled, workPlatformFeeBps } from '../work-config';
+import { configuredWorkPaymentProvider, manualBankAccount, workMarketplaceEnabled, workPlatformFeeBps } from '../work-config';
+import { csvRow } from '../work-payments.service';
 
 describe('SandboxWorkPaymentProvider', () => {
   const provider = new SandboxWorkPaymentProvider('unit-test-sandbox-secret');
@@ -82,5 +84,41 @@ describe('work-config', () => {
     expect(workPlatformFeeBps()).toBe(1000);
     process.env.WORK_PLATFORM_FEE_BPS = '750';
     expect(workPlatformFeeBps()).toBe(750);
+  });
+});
+
+describe('manual bank transfer (NEFT)', () => {
+  const env = { ...process.env };
+  afterEach(() => {
+    process.env = { ...env };
+  });
+  const setBank = () => {
+    process.env.WORK_MANUAL_BANK_ACCOUNT_NAME = 'DEMO COMPANY PRIVATE LIMITED';
+    process.env.WORK_MANUAL_BANK_ACCOUNT_NUMBER = '0001 1122 2333';
+    process.env.WORK_MANUAL_BANK_IFSC = 'demo0001234';
+    process.env.WORK_MANUAL_BANK_BANK_NAME = 'Demo Bank';
+  };
+
+  it('is selectable in production, but only with a complete company account', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.WORK_PAYMENT_PROVIDER = 'manual_bank';
+    expect(configuredWorkPaymentProvider()).toBe('none');
+    setBank();
+    expect(configuredWorkPaymentProvider()).toBe('manual_bank');
+    expect(manualBankAccount()).toEqual({ accountName: 'DEMO COMPANY PRIVATE LIMITED', accountNumber: '000111222333', ifsc: 'DEMO0001234', bankName: 'Demo Bank' });
+    process.env.WORK_MANUAL_BANK_IFSC = 'NOT-AN-IFSC';
+    expect(configuredWorkPaymentProvider()).toBe('none');
+  });
+
+  it('issues bank-remark-safe references and accepts no webhook', async () => {
+    const p = new ManualBankTransferWorkPaymentProvider();
+    expect(p).toMatchObject({ name: 'manual_bank', sandbox: false, payoutMethod: 'BANK', manualSettlement: true });
+    const { providerOrderId } = await p.createFundingOrder({ fundingId: '3f9a1c2b-7d4e-4a00-9b11-000000000000' });
+    expect(providerOrderId).toBe('FQW3F9A1C2B7D4E');
+    expect(() => p.verifyAndParseWebhook()).toThrow();
+  });
+
+  it('quotes CSV values and neutralises spreadsheet formulas', () => {
+    expect(csvRow(['a"b', '=HYPERLINK("x")', '+1', '-2', '@x', 'plain'])).toBe('"a""b","\'=HYPERLINK(""x"")","\'+1","\'-2","\'@x","plain"');
   });
 });

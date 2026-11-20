@@ -142,11 +142,28 @@ function EmployerJob() {
                     </button>
                   </>
                 )}
-                {funding?.status === "CREATED" && !funding.sandbox && <p className={styles.meta}>Waiting for the payment provider to confirm…</p>}
+                {funding?.status === "CREATED" && !funding.sandbox && !funding.manualBank && <p className={styles.meta}>Waiting for the payment provider to confirm…</p>}
                 <button type="button" className={styles.btn} onClick={() => setEditing(true)}>
                   Edit (returns to draft)
                 </button>
               </div>
+              {funding?.status === "CREATED" && funding.manualBank && (
+                <div className={styles.notice} role="note">
+                  <p>
+                    <strong>Pay by bank transfer (NEFT / IMPS / RTGS)</strong> of exactly <strong>{money(funding.amountPaise)}</strong> to:
+                  </p>
+                  <dl className={styles.kv}>
+                    <dt>Account name</dt><dd>{funding.manualBank.accountName}</dd>
+                    <dt>Account number</dt><dd>{funding.manualBank.accountNumber}</dd>
+                    <dt>IFSC</dt><dd>{funding.manualBank.ifsc}</dd>
+                    <dt>Bank</dt><dd>{funding.manualBank.bankName}</dd>
+                    <dt>Remarks / reference</dt><dd><strong>{funding.manualBank.reference}</strong></dd>
+                  </dl>
+                  <p className={styles.meta}>
+                    Write the reference in the transfer remarks. Your job opens to workers once FastQue finance sees the money on the bank statement, usually within one working day. Pay from your business account; FastQue never asks you to pay anyone else.
+                  </p>
+                </div>
+              )}
               {funding?.status === "FAILED" && <p className={styles.error}>The last payment attempt failed. You can try again.</p>}
             </section>
           )}

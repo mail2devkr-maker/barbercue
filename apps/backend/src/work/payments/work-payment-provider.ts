@@ -27,6 +27,13 @@ export interface WorkProviderEvent {
 export interface WorkPaymentProvider {
   readonly name: string;
   readonly sandbox: boolean;
+  /** How a worker must be reachable before a payout can start: a UPI ID, or bank account + IFSC. */
+  readonly payoutMethod: 'UPI' | 'BANK';
+  /**
+   * True when settlement is confirmed by a platform admin entering the bank UTR (manual NEFT),
+   * not by a signed provider webhook. Only then are the admin manual-confirm endpoints open.
+   */
+  readonly manualSettlement: boolean;
   createFundingOrder(input: {
     fundingId: string;
     amountPaise: number;
@@ -35,7 +42,8 @@ export interface WorkPaymentProvider {
   createPayout(input: {
     payoutId: string;
     amountPaise: number;
-    upiVpa: string;
+    /** Set for UPI payout providers; null for bank-transfer ones (details stay encrypted in our DB). */
+    upiVpa: string | null;
     idempotencyKey: string;
   }): Promise<{ providerPayoutId: string }>;
   /** Verifies the signature and freshness, then returns the parsed event. Throws on anything invalid. */
@@ -56,6 +64,8 @@ const notConfigured = () =>
 export class UnconfiguredWorkPaymentProvider implements WorkPaymentProvider {
   readonly name = 'none';
   readonly sandbox = false;
+  readonly payoutMethod = 'UPI' as const;
+  readonly manualSettlement = false;
   createFundingOrder(): Promise<{ providerOrderId: string }> {
     return Promise.reject(notConfigured());
   }
@@ -96,6 +106,8 @@ export function sandboxSigningPayload(e: WorkProviderEvent): string {
 export class SandboxWorkPaymentProvider implements WorkPaymentProvider {
   readonly name = 'sandbox';
   readonly sandbox = true;
+  readonly payoutMethod = 'UPI' as const;
+  readonly manualSettlement = false;
 
   constructor(private readonly secret: string) {
     if (!secret || secret.length < 16) {
@@ -201,5 +213,50 @@ export class SandboxWorkPaymentProvider implements WorkPaymentProvider {
     const age = Math.floor(Date.now() / 1000) - timestamp;
     if (age > SANDBOX_MAX_AGE_SECONDS || age < -60) throw reject();
     return event;
+  }
+}
+
+/**
+ * MANUAL BANK TRANSFER (NEFT/IMPS/RTGS) — real money, moved by people, never by this code.
+ *  - Funding: the employer transfers the exact amount to the company account quoting the order
+ *    reference; a platform admin confirms it with the bank UTR (WorkPaymentsService
+ *    .confirmManualFunding). Until then the job stays FUNDING_REQUIRED.
+ *  - Payouts: approved pay is listed for finance (with the worker's bank details) to send by NEFT
+ *    from the company account; an admin then records the UTR, or marks it failed.
+ * There is no public webhook for this provider: every inbound "event" is rejected.
+ */
+export class ManualBankTransferWorkPaymentProvider implements WorkPaymentProvider {
+  readonly name = 'manual_bank';
+  readonly sandbox = false;
+  readonly payoutMethod = 'BANK' as const;
+  readonly manualSettlement = true;
+
+  /** Short, bank-remark-safe reference the employer quotes on the transfer (e.g. FQW3F9A1C2B7D4E). */
+  static fundingReference(fundingId: string): string {
+    return `FQW${fundingId.replace(/-/g, '').slice(0, 12).toUpperCase()}`;
+  }
+
+  createFundingOrder(input: {
+    fundingId: string;
+  }): Promise<{ providerOrderId: string }> {
+    return Promise.resolve({
+      providerOrderId: ManualBankTransferWorkPaymentProvider.fundingReference(
+        input.fundingId,
+      ),
+    });
+  }
+
+  createPayout(input: {
+    payoutId: string;
+  }): Promise<{ providerPayoutId: string }> {
+    return Promise.resolve({ providerPayoutId: `FQWP-${input.payoutId}` });
+  }
+
+  verifyAndParseWebhook(): WorkProviderEvent {
+    throw workError(
+      WorkErrorCode.WEBHOOK_SIGNATURE_INVALID,
+      'Webhook rejected.',
+      HttpStatus.UNAUTHORIZED,
+    );
   }
 }

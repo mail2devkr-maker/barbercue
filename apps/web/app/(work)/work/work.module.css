@@ -1718,3 +1718,19 @@
     width: 100%;
   }
 }
+
+/* Bank transfer details (manual NEFT funding) */
+.kv {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0.35rem 1rem;
+  margin: 0.5rem 0;
+}
+.kv dt {
+  color: var(--muted, #655c63);
+}
+.kv dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
