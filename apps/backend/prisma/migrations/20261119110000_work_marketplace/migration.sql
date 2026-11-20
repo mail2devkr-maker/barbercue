@@ -523,8 +523,8 @@ ALTER TABLE "work_ledger_entries" ADD CONSTRAINT "work_ledger_entries_journalId_
 -- ---------------------------------------------------------------------------------------------
 
 -- Capacity can never exceed positions or go negative, whatever the application does.
-ALTER TABLE "work_jobs" ADD CONSTRAINT "work_jobs_capacity_check" CHECK ("positions" BETWEEN 1 AND 200 AND "filledCount" BETWEEN 0 AND "positions");
-ALTER TABLE "work_jobs" ADD CONSTRAINT "work_jobs_pay_check" CHECK ("payPerWorkerPaise" BETWEEN 10000 AND 5000000 AND "feeBps" BETWEEN 0 AND 3000);
+ALTER TABLE "work_jobs" ADD CONSTRAINT "work_jobs_capacity_check" CHECK ("positions" >= 1 AND "positions" <= 200 AND "filledCount" >= 0 AND "filledCount" <= "positions");
+ALTER TABLE "work_jobs" ADD CONSTRAINT "work_jobs_pay_check" CHECK ("payPerWorkerPaise" >= 10000 AND "payPerWorkerPaise" <= 5000000 AND "feeBps" >= 0 AND "feeBps" <= 3000);
 ALTER TABLE "work_jobs" ADD CONSTRAINT "work_jobs_min_age_check" CHECK ("minAge" >= 18);
 ALTER TABLE "work_jobs" ADD CONSTRAINT "work_jobs_schedule_check" CHECK ("endsAt" > "startsAt");
 ALTER TABLE "work_assignments" ADD CONSTRAINT "work_assignments_amount_check" CHECK ("agreedPayPaise" > 0 AND ("approvedAmountPaise" IS NULL OR "approvedAmountPaise" BETWEEN 0 AND "agreedPayPaise"));
