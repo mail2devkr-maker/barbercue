@@ -693,6 +693,15 @@ model User {
   supportTicketComments         SupportTicketComment[]  @relation("SupportTicketCommentAuthor")
   financeContributor            FinanceContributor?
 
+  // FastQue Work marketplace
+  workOrgsCreated               WorkOrganization[]       @relation("WorkOrgCreator")
+  workOrgMemberships            WorkOrgMember[]          @relation("WorkOrgMembership")
+  workerProfile                 WorkerProfile?           @relation("WorkerProfile")
+  workApplications              WorkApplication[]        @relation("WorkApplicationWorker")
+  workAssignments               WorkAssignment[]         @relation("WorkAssignmentWorker")
+  workPayouts                   WorkPayout[]             @relation("WorkPayoutWorker")
+  workDisputesOpened            WorkDispute[]            @relation("WorkDisputeOpener")
+
   @@map("users")
 }
 
@@ -4359,4 +4368,515 @@ model FinanceAuditEvent {
 
   @@index([entityType, entityId, createdAt])
   @@map("finance_audit_events")
+}
+
+// =============================================================================================
+// FastQue Work — student and gig workforce marketplace (docs/work-marketplace/ARCHITECTURE.md).
+// Additive only: no existing table, column or enum changes. Every money column is integer paise.
+// Balances are never stored — they are sums over the append-only double-entry ledger below.
+// =============================================================================================
+
+enum WorkOrgStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  VERIFIED
+  REJECTED
+  SUSPENDED
+}
+
+enum WorkOrgMemberRole {
+  OWNER
+  MANAGER
+  BILLING
+}
+
+enum WorkOrgType {
+  INDIVIDUAL
+  MSME
+  STARTUP
+  RETAIL
+  RESTAURANT
+  SALON
+  EVENT_ORGANIZER
+  MARKETING_AGENCY
+  ENTERPRISE
+  WORKFORCE_AGENCY
+}
+
+enum WorkerType {
+  COLLEGE_STUDENT
+  GRADUATE
+  PART_TIME
+  FREELANCER
+  SKILLED_PROFESSIONAL
+  FIELD_SALES
+  SHIFT_WORKER
+  DIGITAL_TASK
+}
+
+enum WorkJobStatus {
+  DRAFT
+  PENDING_VERIFICATION
+  FUNDING_REQUIRED
+  OPEN
+  PARTIALLY_FILLED
+  FILLED
+  IN_PROGRESS
+  COMPLETED
+  CLOSED
+  PAUSED
+  CANCELLED
+  EXPIRED
+  REJECTED
+}
+
+enum WorkHiringMode {
+  INSTANT_ACCEPT
+  APPLY_AND_SELECT
+}
+
+enum WorkPayType {
+  FIXED
+  PER_TASK
+  HOURLY
+  DAILY
+}
+
+enum WorkLocationType {
+  ON_SITE
+  REMOTE
+  HYBRID
+}
+
+enum WorkApplicationStatus {
+  APPLIED
+  OFFERED
+  ACCEPTED
+  REJECTED
+  DECLINED
+  WITHDRAWN
+}
+
+enum WorkAssignmentStatus {
+  ACCEPTED
+  CHECKED_IN
+  SUBMITTED
+  REWORK_REQUESTED
+  DISPUTED
+  PAYABLE
+  PAID
+  NO_SHOW_REVIEW
+  WITHDRAWN
+  CANCELLED
+  CLOSED_UNPAID
+}
+
+enum WorkCheckInMethod {
+  QR_CODE
+  GPS
+  EMPLOYER_CONFIRMED
+  SELF_REPORTED
+}
+
+enum WorkFundingStatus {
+  CREATED
+  SUCCEEDED
+  FAILED
+}
+
+enum WorkPayoutStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  FAILED
+}
+
+enum WorkDisputeStatus {
+  OPEN
+  RESOLVED
+  WITHDRAWN
+}
+
+enum WorkDisputeReason {
+  UNFAIR_REJECTION
+  PARTIAL_PAYMENT
+  QUALITY_ISSUE
+  NO_WORK_AVAILABLE
+  NO_SHOW
+  UNSAFE_CONDITIONS
+  PAYMENT_PROBLEM
+  OTHER
+}
+
+enum WorkParty {
+  WORKER
+  EMPLOYER
+  PLATFORM
+  SYSTEM
+}
+
+// Admin-managed category taxonomy (seeded by the migration, editable without code changes).
+model WorkCategory {
+  id          String    @id @default(uuid())
+  slug        String    @unique @db.VarChar(60)
+  name        String    @db.VarChar(80)
+  description String?   @db.VarChar(300)
+  sortOrder   Int       @default(0)
+  active      Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  jobs        WorkJob[]
+
+  @@map("work_categories")
+}
+
+// An employer organization, separate from the user accounts that act for it.
+model WorkOrganization {
+  id                String            @id @default(uuid())
+  legalName         String            @db.VarChar(160)
+  displayName       String            @db.VarChar(80)
+  orgType           WorkOrgType
+  gstin             String?           @db.VarChar(15)
+  registeredAddress String            @db.VarChar(300)
+  city              String            @db.VarChar(80)
+  contactName       String            @db.VarChar(120)
+  contactPhone      String            @db.VarChar(16)
+  contactEmail      String            @db.VarChar(160)
+  status            WorkOrgStatus     @default(DRAFT)
+  rejectionReason   String?           @db.VarChar(1000)
+  submittedAt       DateTime?
+  reviewedAt        DateTime?
+  reviewedById      String?
+  createdById       String
+  createdBy         User              @relation("WorkOrgCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  members           WorkOrgMember[]
+  jobs              WorkJob[]
+
+  @@index([status, submittedAt])
+  @@map("work_organizations")
+}
+
+model WorkOrgMember {
+  id        String            @id @default(uuid())
+  orgId     String
+  org       WorkOrganization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User              @relation("WorkOrgMembership", fields: [userId], references: [id], onDelete: Restrict)
+  role      WorkOrgMemberRole
+  createdAt DateTime          @default(now())
+
+  @@unique([orgId, userId])
+  @@index([userId])
+  @@map("work_org_members")
+}
+
+model WorkerProfile {
+  userId              String     @id
+  user                User       @relation("WorkerProfile", fields: [userId], references: [id], onDelete: Restrict)
+  fullName            String     @db.VarChar(120)
+  workerType          WorkerType
+  dateOfBirth         DateTime   @db.Date
+  city                String     @db.VarChar(80)
+  locality            String?    @db.VarChar(80)
+  workRadiusKm        Int        @default(10)
+  languages           String[]
+  skills              String[]
+  preferredCategories String[]
+  collegeName         String?    @db.VarChar(160)
+  bio                 String?    @db.VarChar(600)
+  payoutUpiVpa        String?    @db.VarChar(100)
+  // 1 = phone verified (granted at profile creation only when User.phoneVerifiedAt is set),
+  // 2 = basic eligibility verified by a platform reviewer. 3/4 are reserved.
+  verificationLevel   Int        @default(0)
+  verifiedById        String?
+  verifiedAt          DateTime?
+  suspendedAt         DateTime?
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+
+  @@index([city])
+  @@map("worker_profiles")
+}
+
+model WorkJob {
+  id                   String           @id @default(uuid())
+  orgId                String
+  org                  WorkOrganization @relation(fields: [orgId], references: [id], onDelete: Restrict)
+  categoryId           String
+  category             WorkCategory     @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  title                String           @db.VarChar(120)
+  description          String           @db.VarChar(4000)
+  locationType         WorkLocationType
+  addressLine          String?          @db.VarChar(300)
+  city                 String           @db.VarChar(80)
+  locality             String?          @db.VarChar(80)
+  positions            Int
+  // Slot-holding assignments. Only ever changed inside the row-locked accept/release transaction;
+  // a CHECK constraint keeps it within 0..positions.
+  filledCount          Int              @default(0)
+  startsAt             DateTime
+  endsAt               DateTime
+  applicationDeadline  DateTime?
+  payType              WorkPayType
+  payPerWorkerPaise    Int
+  bonusDescription     String?          @db.VarChar(300)
+  feeBps               Int
+  minAge               Int              @default(18)
+  minVerificationLevel Int              @default(1)
+  requiredSkills       String[]
+  languages            String[]
+  hiringMode           WorkHiringMode
+  requiresCheckIn      Boolean          @default(true)
+  checkInCode          String           @db.VarChar(12)
+  checklist            Json
+  completionCriteria   String           @db.VarChar(1000)
+  cancellationTerms    Json
+  reviewWindowHours    Int              @default(72)
+  status               WorkJobStatus    @default(DRAFT)
+  screeningFlags       Json?
+  moderationNote       String?          @db.VarChar(1000)
+  // Bumped on every edit; the publish/fund request must quote the version the employer approved.
+  version              Int              @default(1)
+  publishedAt          DateTime?
+  closedAt             DateTime?
+  createdById          String
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  applications         WorkApplication[]
+  assignments          WorkAssignment[]
+  fundings             WorkFunding[]
+
+  @@index([status, startsAt])
+  @@index([orgId, createdAt])
+  @@index([city, status])
+  @@map("work_jobs")
+}
+
+model WorkApplication {
+  id          String                @id @default(uuid())
+  jobId       String
+  job         WorkJob               @relation(fields: [jobId], references: [id], onDelete: Restrict)
+  workerId    String
+  worker      User                  @relation("WorkApplicationWorker", fields: [workerId], references: [id], onDelete: Restrict)
+  status      WorkApplicationStatus @default(APPLIED)
+  note        String?               @db.VarChar(600)
+  decidedAt   DateTime?
+  decidedById String?
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+
+  @@unique([jobId, workerId])
+  @@index([workerId, createdAt])
+  @@map("work_applications")
+}
+
+model WorkAssignment {
+  id                 String               @id @default(uuid())
+  jobId              String
+  job                WorkJob              @relation(fields: [jobId], references: [id], onDelete: Restrict)
+  workerId           String
+  worker             User                 @relation("WorkAssignmentWorker", fields: [workerId], references: [id], onDelete: Restrict)
+  applicationId      String?              @unique
+  // 1..positions. Partial unique indexes (migration.sql) stop two live assignments sharing a slot
+  // or one worker holding two live slots on the same job.
+  slotNumber         Int
+  status             WorkAssignmentStatus @default(ACCEPTED)
+  agreedPayPaise     Int
+  // The pay, checklist, completion and cancellation terms exactly as shown when the worker accepted.
+  termsSnapshot      Json
+  checkedInAt        DateTime?
+  checkInMethod      WorkCheckInMethod?
+  checkInLatitude    Float?
+  checkInLongitude   Float?
+  submittedAt        DateTime?
+  reviewDueAt        DateTime?
+  reviewedAt         DateTime?
+  reviewNote         String?              @db.VarChar(1000)
+  approvedAmountPaise Int?
+  lateCancellation   Boolean              @default(false)
+  cancelledAt        DateTime?
+  cancelReason       String?              @db.VarChar(500)
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  responses          WorkTaskResponse[]
+  payouts            WorkPayout[]
+  disputes           WorkDispute[]
+
+  @@index([workerId, status])
+  @@index([jobId, status])
+  @@index([status, reviewDueAt])
+  @@map("work_assignments")
+}
+
+model WorkTaskResponse {
+  id             String            @id @default(uuid())
+  assignmentId   String
+  assignment     WorkAssignment    @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+  itemId         String            @db.VarChar(40)
+  confirmed      Boolean           @default(false)
+  text           String?           @db.VarChar(2000)
+  normalizedText String?           @db.VarChar(2000)
+  evidenceFileId String?           @unique
+  evidenceFile   WorkEvidenceFile? @relation(fields: [evidenceFileId], references: [id], onDelete: Restrict)
+  duplicateFlag  Boolean           @default(false)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@unique([assignmentId, itemId])
+  @@map("work_task_responses")
+}
+
+// Task evidence photos are private: stored here (not in the public photo bucket) and served only
+// through an authorized endpoint. Moving them to private object storage with signed URLs is in
+// the backlog; the access rule stays the same.
+model WorkEvidenceFile {
+  id           String            @id @default(uuid())
+  assignmentId String
+  uploadedById String
+  mimeType     String            @db.VarChar(40)
+  sizeBytes    Int
+  sha256       String            @db.VarChar(64)
+  content      Bytes
+  createdAt    DateTime          @default(now())
+  response     WorkTaskResponse?
+
+  @@index([sha256])
+  @@index([assignmentId])
+  @@map("work_evidence_files")
+}
+
+model WorkFunding {
+  id              String            @id @default(uuid())
+  jobId           String
+  job             WorkJob           @relation(fields: [jobId], references: [id], onDelete: Restrict)
+  jobVersion      Int
+  amountPaise     Int
+  provider        String            @db.VarChar(40)
+  providerOrderId String            @unique @db.VarChar(120)
+  status          WorkFundingStatus @default(CREATED)
+  idempotencyKey  String            @unique @db.VarChar(120)
+  confirmedAt     DateTime?
+  createdById     String
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@index([jobId])
+  @@map("work_fundings")
+}
+
+model WorkPayout {
+  id               String           @id @default(uuid())
+  assignmentId     String
+  assignment       WorkAssignment   @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+  workerId         String
+  worker           User             @relation("WorkPayoutWorker", fields: [workerId], references: [id], onDelete: Restrict)
+  amountPaise      Int
+  attempt          Int
+  provider         String           @db.VarChar(40)
+  providerPayoutId String?          @unique @db.VarChar(120)
+  status           WorkPayoutStatus @default(PENDING)
+  failureReason    String?          @db.VarChar(300)
+  // Sent to the provider so a retried HTTP call can never create a second transfer.
+  idempotencyKey   String           @unique @db.VarChar(120)
+  initiatedAt      DateTime?
+  settledAt        DateTime?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@unique([assignmentId, attempt])
+  @@index([status, createdAt])
+  @@map("work_payouts")
+}
+
+model WorkDispute {
+  id             String            @id @default(uuid())
+  assignmentId   String
+  assignment     WorkAssignment    @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+  openedById     String
+  openedBy       User              @relation("WorkDisputeOpener", fields: [openedById], references: [id], onDelete: Restrict)
+  openedByParty  WorkParty
+  reasonCode     WorkDisputeReason
+  description    String            @db.VarChar(2000)
+  // The assignment state the dispute was opened from, restored or settled on resolution.
+  fromStatus     WorkAssignmentStatus
+  status         WorkDisputeStatus @default(OPEN)
+  awardPaise     Int?
+  resolutionNote String?           @db.VarChar(2000)
+  resolvedById   String?
+  slaDueAt       DateTime
+  resolvedAt     DateTime?
+  createdAt      DateTime          @default(now())
+
+  @@index([status, slaDueAt])
+  @@index([assignmentId])
+  @@map("work_disputes")
+}
+
+// Provider webhook deliveries, keyed by the provider's own event id so a replay is a no-op.
+model WorkWebhookEvent {
+  id              String    @id @default(uuid())
+  provider        String    @db.VarChar(40)
+  providerEventId String    @db.VarChar(120)
+  eventType       String    @db.VarChar(60)
+  payload         Json
+  processedAt     DateTime?
+  createdAt       DateTime  @default(now())
+
+  @@unique([provider, providerEventId])
+  @@map("work_webhook_events")
+}
+
+// Double-entry ledger. A journal's entries always sum to zero (deferred constraint trigger), and
+// neither table can be updated or deleted (triggers in migration.sql). Positive = debit.
+model WorkLedgerJournal {
+  id             String            @id @default(uuid())
+  kind           String            @db.VarChar(40)
+  idempotencyKey String            @unique @db.VarChar(160)
+  memo           String?           @db.VarChar(300)
+  jobId          String?
+  assignmentId   String?
+  createdAt      DateTime          @default(now())
+  entries        WorkLedgerEntry[]
+
+  @@index([jobId])
+  @@index([assignmentId])
+  @@map("work_ledger_journals")
+}
+
+model WorkLedgerEntry {
+  id          String            @id @default(uuid())
+  journalId   String
+  journal     WorkLedgerJournal @relation(fields: [journalId], references: [id], onDelete: Restrict)
+  accountCode String            @db.VarChar(120)
+  amountPaise Int
+  createdAt   DateTime          @default(now())
+
+  @@index([accountCode])
+  @@index([journalId])
+  @@map("work_ledger_entries")
+}
+
+// Append-only history of every state change and sensitive action in the marketplace.
+model WorkAuditEvent {
+  id          String    @id @default(uuid())
+  entityType  String    @db.VarChar(40)
+  entityId    String
+  action      String    @db.VarChar(60)
+  fromStatus  String?   @db.VarChar(40)
+  toStatus    String?   @db.VarChar(40)
+  actorUserId String?
+  actorParty  WorkParty
+  orgId       String?
+  jobId       String?
+  note        String?   @db.VarChar(1000)
+  metadata    Json?
+  createdAt   DateTime  @default(now())
+
+  @@index([entityType, entityId, createdAt])
+  @@index([jobId, createdAt])
+  @@index([orgId, createdAt])
+  @@map("work_audit_events")
 }
