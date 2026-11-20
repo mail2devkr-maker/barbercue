@@ -58,6 +58,8 @@ export function SiteFooter() {
             <Link href="/services/haircut">Haircut near me</Link>
             <Link href="/services/facial">Facial near me</Link>
             <Link href="/services/bridal-makeup">Bridal makeup</Link>
+            <Link href="/how-to-book">How salon booking works</Link>
+            <Link href="/how-live-queue-works">How live queues work</Link>
             <Link href="/shop">Marketplace</Link>
             <Link href="/app">Android app & QR</Link>
             <Link href="/account/bookings">My bookings</Link>
@@ -66,6 +68,7 @@ export function SiteFooter() {
           <div>
             <span>Shops</span>
             <Link href="/#for-shops">For shops</Link>
+            <Link href="/salon-management-software">Salon management software</Link>
             <Link href="/dashboard/register-shop">Register your shop</Link>
             <Link href="/owner/login">Owner login</Link>
             <Link href="/staff/login">Staff login</Link>

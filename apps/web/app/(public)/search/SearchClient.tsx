@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import type {
@@ -72,9 +72,20 @@ export interface SearchClientProps {
   enableMap?: boolean;
   /** Compact hero for use inside the dashboard. */
   embedded?: boolean;
+  /** Public /search's first page, fetched server-side for useful initial HTML. */
+  initialResults?: SalonListItemDto[];
+  initialHasMore?: boolean;
+  initialCities?: CityDto[];
 }
 
-export default function SearchClient({ basePath = "/search", enableMap = false, embedded = false }: SearchClientProps = {}) {
+export default function SearchClient({
+  basePath = "/search",
+  enableMap = false,
+  embedded = false,
+  initialResults,
+  initialHasMore,
+  initialCities,
+}: SearchClientProps = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [q, setQ] = useState(searchParams.get("shopName") ?? "");
@@ -92,9 +103,9 @@ export default function SearchClient({ basePath = "/search", enableMap = false, 
   const [selectedCity, setSelectedCity] = useState<CitySearchResultDto | null>(null);
   // Every city with at least one active salon (GET cities) — customers pick from where FastQue
   // actually has salons, never from a global catalogue full of cities with no results.
-  const [salonCities, setSalonCities] = useState<CityDto[] | null>(null);
-  const [results, setResults] = useState<SalonListItemDto[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [salonCities, setSalonCities] = useState<CityDto[] | null>(initialCities ?? null);
+  const [results, setResults] = useState<SalonListItemDto[]>(initialResults ?? []);
+  const [loading, setLoading] = useState(initialResults === undefined);
   const [error, setError] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
   const [locating, setLocating] = useState(false);
@@ -131,7 +142,8 @@ export default function SearchClient({ basePath = "/search", enableMap = false, 
     return { minLat: values[0], maxLat: values[1], minLng: values[2], maxLng: values[3] };
   }, [searchParams]);
   const origin = nearMeActive ? { lat: Number(searchParams.get("lat")), lng: Number(searchParams.get("lng")) } : null;
-  const [hasMore, setHasMore] = useState(false);
+  const [hasMore, setHasMore] = useState(initialHasMore ?? false);
+  const skipInitialServerResultsFetch = useRef(initialResults !== undefined && basePath === "/search" && !embedded);
   const filterCount = activeFilterCount(discovery);
   // Owner (18 Nov): every search option lives behind ONE "Filters" button. Its badge counts the
   // discovery filters plus shop name, city and Near me.
@@ -260,6 +272,7 @@ export default function SearchClient({ basePath = "/search", enableMap = false, 
   }
 
   useEffect(() => {
+    if (initialCities !== undefined) return;
     apiFetch<CityDto[]>(DISCOVERY_PATHS.cities)
       .then((cities) => {
         setSalonCities([...cities].sort((a, b) => a.name.localeCompare(b.name)));
@@ -268,9 +281,15 @@ export default function SearchClient({ basePath = "/search", enableMap = false, 
         if (fromLink) setSelectedCity({ id: fromLink.id, name: fromLink.name, slug: fromLink.slug, countryCode: fromLink.countryCode, region: null });
       })
       .catch(() => setSalonCities([]));
-  }, []);
+  }, [initialCities]);
 
   useEffect(() => {
+    if (skipInitialServerResultsFetch.current) {
+      skipInitialServerResultsFetch.current = false;
+      if (searchParams.size === 0 && retryKey === 0 && !favoritesGate && !mapView) {
+        return;
+      }
+    }
     // city/countryCode already arrive as real slugs/codes here (from CitySearchField's own
     // selection, or a shared/bookmarked URL) — no client-side normalization needed or safe to do.
     const params = new URLSearchParams(searchApiQuery(searchParams, favoriteKey ? favoriteKey.split(",") : undefined));

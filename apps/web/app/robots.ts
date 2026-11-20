@@ -6,14 +6,10 @@ export default function robots(): MetadataRoute.Robots {
     rules: {
       userAgent: "*",
       allow: "/",
-      // "/search?" (note the trailing "?") disallows only query-string variants of the search
-      // page — crawl-budget hygiene, since every filter combination isn't worth indexing
-      // separately. The bare /search page (no query string) does NOT match this prefix, so it
-      // stays crawlable/indexable via its own canonical (see app/(public)/search/page.tsx) —
-      // disallowing "/search" outright would have blocked Googlebot from ever seeing that page
-      // at all, including its canonical/noindex signals.
+      // noindex pages remain crawlable so compliant crawlers can see their directives.
+      // Query-filter variants are excluded; the bare /search page remains crawlable.
       disallow: ["/account", "/dashboard", "/book", "/search?"],
     },
-    sitemap: `${SITE_URL}/sitemap.xml`,
+    sitemap: [`${SITE_URL}/sitemap.xml`, `${SITE_URL}/sitemap-guides.xml`],
   };
 }
