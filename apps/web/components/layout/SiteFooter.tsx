@@ -54,6 +54,7 @@ export function SiteFooter() {
             <Link href="/search">Find a barber</Link>
             <Link href="/assistant">Find a time</Link>
             <Link href="/offers">Offers near you</Link>
+            <Link href="/delhi-ncr">Salons in Delhi NCR</Link>
             <Link href="/services">All beauty services</Link>
             <Link href="/services/haircut">Haircut near me</Link>
             <Link href="/services/facial">Facial near me</Link>
