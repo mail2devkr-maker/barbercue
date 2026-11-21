@@ -180,6 +180,9 @@ export function FinanceOverview() {
             <Card title="Where the money goes" sub={`Incurred ${inr(k.periodExpensesIncurred)} · ${data.period.from} to ${data.period.to}`}>
               <Breakdown rows={data.byCategory} empty="No approved expenses in this period." />
             </Card>
+            <Card title="Company expenses vs. reimbursements" sub="Incurred this period, by expense type">
+              <Breakdown rows={data.byType} empty="No approved expenses in this period." />
+            </Card>
             <Card title="Who paid" sub="Payments toward this period's expenses">
               <Breakdown rows={data.byPaidBy} empty="No payments recorded for this period's expenses." />
             </Card>

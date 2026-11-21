@@ -75,7 +75,7 @@ export function FinanceReimbursements({ me }: { me: FinanceMeDto }) {
     <>
       {error && <Banner tone="error">{error}</Banner>}
       {notice && <Banner tone="ok">{notice}</Banner>}
-      <Card title="Ready to claim" sub="Payments made from personal money and marked “to be reimbursed”, with no claim yet. Expenses marked “reimbursement required” are claimed automatically when submitted.">
+      <Card title="Ready to claim" sub="Payments made from personal money and marked “to be reimbursed”, with no claim yet. Expenses recorded as a reimbursement claim are claimed automatically when submitted; company expenses never appear here.">
         {claimable.length === 0 ? <p className={ui.hint}>Nothing waiting to be claimed.</p> : (
           <div className={ui.tableWrap}>
             <table className={ui.table}>
