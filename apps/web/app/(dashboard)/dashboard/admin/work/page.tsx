@@ -48,7 +48,7 @@ function useLoad<T>(path: string | null) {
 export default function AdminWorkPage() {
   const { user } = useAuth();
   const canWrite = !!user?.roles.includes(Role.PLATFORM_ADMIN);
-  // Junior admin: may take review decisions (KYC, worker verify, job moderation) and nothing else.
+  // Work reviewer: may take review decisions (KYC, worker verify, job moderation) and nothing else.
   const canReview = canWrite || !!user?.roles.includes(Role.WORK_REVIEWER);
   const [tab, setTab] = useState<Tab>("overview");
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -73,7 +73,7 @@ export default function AdminWorkPage() {
     <main className={styles.page} style={{ maxWidth: 1280 }}>
       <div>
         <h1 className={styles.title}>FastQue Work</h1>
-        <p className={styles.sub}>Marketplace control centre. Every action here is recorded in the audit trail. {canWrite ? "" : canReview ? "Junior admin: you can review KYC, verify workers and moderate jobs. Payments and other decisions are read-only." : "You have read-only access."}</p>
+        <p className={styles.sub}>Marketplace control centre. Every action here is recorded in the audit trail. {canWrite ? "" : canReview ? "" : "You have read-only access."}</p>
       </div>
       <div className={styles.tabs} role="tablist">
         {TABS.map((t) => (
