@@ -46,6 +46,7 @@ const ROLES_ALLOWED_FOR_AUDIENCE: Readonly<
     Role.HR_ADMIN,
     Role.SALES_ADMIN,
     Role.PLATFORM_VIEWER,
+    Role.WORK_REVIEWER,
   ]),
 };
 

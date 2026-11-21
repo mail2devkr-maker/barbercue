@@ -43,6 +43,9 @@ import { WorkPaymentsService } from './work-payments.service';
 import { WorkWorkersService } from './work-workers.service';
 
 const READ_ROLES = [Role.PLATFORM_ADMIN, Role.CO_FOUNDER, Role.PLATFORM_VIEWER];
+// WORK_REVIEWER (junior admin) is an add-on to one of the READ_ROLES above, so it inherits read
+// access from that role and is only listed on the three review routes below. Everything that moves
+// money, suspends people, resolves disputes or runs the sweep stays PLATFORM_ADMIN only.
 const statusQuery = <T extends Record<string, string>>(e: T) =>
   z.object({ status: z.nativeEnum(e).optional() });
 const auditQuery = z.object({
@@ -98,7 +101,7 @@ export class WorkAdminController {
   }
 
   @Post('orgs/:orgId/review')
-  @Roles(Role.PLATFORM_ADMIN)
+  @Roles(Role.PLATFORM_ADMIN, Role.WORK_REVIEWER)
   @HttpCode(HttpStatus.OK)
   reviewOrg(
     @CurrentUser() user: AuthenticatedUser,
@@ -120,7 +123,7 @@ export class WorkAdminController {
   }
 
   @Post('jobs/:jobId/moderate')
-  @Roles(Role.PLATFORM_ADMIN)
+  @Roles(Role.PLATFORM_ADMIN, Role.WORK_REVIEWER)
   @HttpCode(HttpStatus.OK)
   moderate(
     @CurrentUser() user: AuthenticatedUser,
@@ -139,7 +142,7 @@ export class WorkAdminController {
   }
 
   @Post('workers/:userId/verify')
-  @Roles(Role.PLATFORM_ADMIN)
+  @Roles(Role.PLATFORM_ADMIN, Role.WORK_REVIEWER)
   @HttpCode(HttpStatus.OK)
   verifyWorker(
     @CurrentUser() user: AuthenticatedUser,

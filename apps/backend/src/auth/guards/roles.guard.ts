@@ -52,7 +52,8 @@ export class RolesGuard {
           role === Role.CO_FOUNDER ||
           role === Role.HR_ADMIN ||
           role === Role.SALES_ADMIN ||
-          role === Role.PLATFORM_VIEWER
+          role === Role.PLATFORM_VIEWER ||
+          role === Role.WORK_REVIEWER
         ) {
           return user.audience === SessionAudience.ADMIN;
         }
