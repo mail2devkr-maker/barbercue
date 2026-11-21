@@ -31,6 +31,11 @@ enum Role {
   HR_ADMIN
   SALES_ADMIN
   PLATFORM_VIEWER
+  // Junior admin, add-on only: lets an existing internal admin (e.g. a read-only CO_FOUNDER /
+  // PLATFORM_VIEWER) take the low-risk FastQue Work review decisions: business KYC verify/reject,
+  // worker verify, job moderation. Never money, payouts, disputes, suspensions or admin management,
+  // and it is NOT a login role on its own (admin login eligibility ignores it).
+  WORK_REVIEWER
 }
 
 // Auth security fix (session-audience scoping): which login SURFACE a session was authenticated

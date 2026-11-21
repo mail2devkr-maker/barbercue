@@ -48,6 +48,8 @@ function useLoad<T>(path: string | null) {
 export default function AdminWorkPage() {
   const { user } = useAuth();
   const canWrite = !!user?.roles.includes(Role.PLATFORM_ADMIN);
+  // Junior admin: may take review decisions (KYC, worker verify, job moderation) and nothing else.
+  const canReview = canWrite || !!user?.roles.includes(Role.WORK_REVIEWER);
   const [tab, setTab] = useState<Tab>("overview");
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -71,7 +73,7 @@ export default function AdminWorkPage() {
     <main className={styles.page} style={{ maxWidth: 1280 }}>
       <div>
         <h1 className={styles.title}>FastQue Work</h1>
-        <p className={styles.sub}>Marketplace control centre. Every action here is recorded in the audit trail. {canWrite ? "" : "You have read-only access."}</p>
+        <p className={styles.sub}>Marketplace control centre. Every action here is recorded in the audit trail. {canWrite ? "" : canReview ? "Junior admin: you can review KYC, verify workers and moderate jobs. Payments and other decisions are read-only." : "You have read-only access."}</p>
       </div>
       <div className={styles.tabs} role="tablist">
         {TABS.map((t) => (
@@ -82,9 +84,9 @@ export default function AdminWorkPage() {
       </div>
       {msg && <p className={msg.ok ? styles.success : styles.error} role="status">{msg.text}</p>}
       {tab === "overview" && <Overview />}
-      {tab === "kyc" && <Kyc canWrite={canWrite} busy={busy} act={act} ask={ask} />}
-      {tab === "jobs" && <Jobs canWrite={canWrite} busy={busy} act={act} ask={ask} />}
-      {tab === "workers" && <Workers canWrite={canWrite} busy={busy} act={act} ask={ask} />}
+      {tab === "kyc" && <Kyc canWrite={canReview} busy={busy} act={act} ask={ask} />}
+      {tab === "jobs" && <Jobs canWrite={canReview} busy={busy} act={act} ask={ask} />}
+      {tab === "workers" && <Workers canWrite={canReview} canSuspend={canWrite} busy={busy} act={act} ask={ask} />}
       {tab === "transfers" && <Transfers canWrite={canWrite} busy={busy} act={act} ask={ask} />}
       {tab === "payouts" && <Payouts canWrite={canWrite} busy={busy} act={act} ask={ask} />}
       {tab === "disputes" && <Disputes canWrite={canWrite} busy={busy} act={act} ask={ask} />}
@@ -219,7 +221,7 @@ function Jobs({ canWrite, busy, act, ask }: Props) {
   );
 }
 
-function Workers({ canWrite, busy, act, ask }: Props) {
+function Workers({ canWrite, canSuspend, busy, act, ask }: Props & { canSuspend: boolean }) {
   const [q, setQ] = useState("");
   const [query, setQuery] = useState("");
   const { data, error, reload } = useLoad<AdminWorker[]>(`admin/workers${query ? `?q=${encodeURIComponent(query)}` : ""}`);
@@ -245,7 +247,7 @@ function Workers({ canWrite, busy, act, ask }: Props) {
                     {canWrite && (
                       <div className={styles.actions}>
                         {w.verificationLevel < 2 && <button className={styles.btn} disabled={busy} onClick={() => { const n = ask("How was eligibility checked? (recorded in the audit trail)"); if (n) void act(() => workSend(`admin/workers/${w.userId}/verify`, { note: n }), "Worker verified (level 2).", reload); }}>Verify eligibility</button>}
-                        <button className={styles.btnGhost} disabled={busy} onClick={() => { const r = ask(w.suspended ? "Reason for reinstating:" : "Reason for suspending (worker can appeal):"); if (r) void act(() => workSend(`admin/workers/${w.userId}/suspension`, { suspended: !w.suspended, reason: r }), w.suspended ? "Worker reinstated." : "Worker suspended.", reload); }}>{w.suspended ? "Reinstate" : "Suspend"}</button>
+                        {canSuspend && <button className={styles.btnGhost} disabled={busy} onClick={() => { const r = ask(w.suspended ? "Reason for reinstating:" : "Reason for suspending (worker can appeal):"); if (r) void act(() => workSend(`admin/workers/${w.userId}/suspension`, { suspended: !w.suspended, reason: r }), w.suspended ? "Worker reinstated." : "Worker suspended.", reload); }}>{w.suspended ? "Reinstate" : "Suspend"}</button>}
                       </div>
                     )}
                   </td>
