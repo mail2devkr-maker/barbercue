@@ -1,5 +1,6 @@
 "use client";
 
+import { LAT_LNG_PAIR, parseManualPin } from "../../lib/manual-pin";
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import Link from "next/link";
 import {
@@ -64,6 +65,8 @@ export function OnboardingWizard({ applicationId }: Props) {
   const [form, setForm] = useState<DraftForm>({});
   const [hours, setHours] = useState<OnboardingHoursDto[]>(initialHours([]));
   const [rows, setRows] = useState<ServiceRow[]>([]);
+  const [pinLat, setPinLat] = useState("");
+  const [pinLng, setPinLng] = useState("");
   const [step, setStep] = useState(0);
   const [dirty, setDirty] = useState(false);
   const [servicesDirty, setServicesDirty] = useState(false);
@@ -295,6 +298,33 @@ export function OnboardingWizard({ applicationId }: Props) {
     }
   };
 
+  const saveManualPin = async () => {
+    setError(null);
+    const pin = parseManualPin(pinLat, pinLng);
+    if (pin.kind !== "ok") {
+      setError(pin.kind === "error" ? pin.message : "Enter latitude and longitude first.");
+      return;
+    }
+    setBusy("pin");
+    try {
+      const next = await apiFetch<OnboardingApplicationDto>(`${EMPLOYEE_ONBOARDING}/${app.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          coordinates: { latitude: pin.lat, longitude: pin.lng, source: "MANUAL", accuracyMeters: null },
+          expectedVersion: app.version,
+        }),
+      });
+      accept(next, false);
+      setPinLat("");
+      setPinLng("");
+      setNotice("Latitude / longitude saved. Check the pin on Google Maps.");
+    } catch (err) {
+      setError(message(err, "Could not save the location."));
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const verifyLocation = async (verified: boolean) => {
     setBusy("gps-verify");
     try {
@@ -498,6 +528,41 @@ export function OnboardingWizard({ applicationId }: Props) {
             {text("shopNumber", "Shop number")}
             {text("buildingName", "Building / market")}
             {text("streetAddress", "Street address", { required: true, full: true })}
+            <div className={`${styles.field} ${styles.full}`}>
+              <span>Latitude / Longitude (optional)</span>
+              <div className={styles.uploadButtons}>
+                <input
+                  aria-label="Latitude"
+                  value={pinLat}
+                  disabled={readOnly}
+                  inputMode="decimal"
+                  autoComplete="off"
+                  maxLength={40}
+                  placeholder="Latitude, e.g. 28.61394"
+                  onChange={(e) => {
+                    const both = e.target.value.match(LAT_LNG_PAIR);
+                    if (both) {
+                      setPinLat(both[1]);
+                      setPinLng(both[2]);
+                    } else setPinLat(e.target.value);
+                  }}
+                />
+                <input
+                  aria-label="Longitude"
+                  value={pinLng}
+                  disabled={readOnly}
+                  inputMode="decimal"
+                  autoComplete="off"
+                  maxLength={20}
+                  placeholder="Longitude, e.g. 77.20902"
+                  onChange={(e) => setPinLng(e.target.value)}
+                />
+                <button type="button" className={base.secondaryButton} disabled={readOnly || busy === "pin"} onClick={() => void saveManualPin()}>
+                  {busy === "pin" ? "Saving…" : "Save lat / long"}
+                </button>
+              </div>
+              <span className={styles.hint}>Google Maps mein shop par long-press karke numbers copy karein aur Latitude box mein paste karein. Saved pin neeche &ldquo;GPS coordinates&rdquo; mein dikhega.</span>
+            </div>
             {text("landmark", "Landmark")}
             {text("locality", "Locality / area", { required: true })}
             {text("city", "City", { required: true })}
