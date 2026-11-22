@@ -36,6 +36,31 @@ interface FormState {
   localitySlug: string;
   landmark: string;
   salonType: "" | "GENTS" | "LADIES" | "UNISEX";
+  /** Optional manual map pin, typed or pasted from Google Maps; filled in by the GPS button too. */
+  latText: string;
+  lngText: string;
+}
+
+/**
+ * Parses the optional manual pin. Empty both = no pin. A Google Maps "lat, lng" pasted into the
+ * latitude box is split automatically by the input handler, so here both boxes are plain numbers.
+ */
+export function parseManualPin(latText: string, lngText: string):
+  | { kind: "none" }
+  | { kind: "ok"; lat: number; lng: number }
+  | { kind: "error"; message: string } {
+  const a = latText.trim();
+  const b = lngText.trim();
+  if (!a && !b) return { kind: "none" };
+  if (!a || !b) return { kind: "error", message: "Please enter both latitude and longitude, or leave both empty." };
+  const num = /^-?\d{1,3}(\.\d+)?$/;
+  if (!num.test(a) || !num.test(b)) return { kind: "error", message: "Latitude and longitude must be numbers, for example 28.61394 and 77.20902." };
+  const lat = Number(a);
+  const lng = Number(b);
+  if (lat < -90 || lat > 90) return { kind: "error", message: "Latitude must be between -90 and 90." };
+  if (lng < -180 || lng > 180) return { kind: "error", message: "Longitude must be between -180 and 180." };
+  if (lat === 0 && lng === 0) return { kind: "error", message: "0, 0 is not a shop location. Please check the numbers." };
+  return { kind: "ok", lat: round5(lat), lng: round5(lng) };
 }
 
 // Shown in customer discovery (Male / Female / Unisex filter). Required here so new shops are never
@@ -57,6 +82,8 @@ const EMPTY: FormState = {
   localitySlug: "",
   landmark: "",
   salonType: "",
+  latText: "",
+  lngText: "",
 };
 
 // Coordinates never enter FormState — they are not something the owner edits, so they live in
@@ -253,6 +280,11 @@ export function RegisterSalonForm() {
     setLocation({ kind: "detecting" });
     navigator.geolocation.getCurrentPosition(
       (position) => {
+        setForm((f) => ({
+          ...f,
+          latText: String(round5(position.coords.latitude)),
+          lngText: String(round5(position.coords.longitude)),
+        }));
         setLocation({
           kind: "detected",
           lat: round5(position.coords.latitude),
@@ -299,6 +331,12 @@ export function RegisterSalonForm() {
       return;
     }
 
+    const pin = parseManualPin(form.latText, form.lngText);
+    if (pin.kind === "error") {
+      setError(pin.message);
+      return;
+    }
+
     const parsed = registerSalonSchema.safeParse({
       name: form.name.trim(),
       phone: form.phone.trim() || undefined,
@@ -311,7 +349,7 @@ export function RegisterSalonForm() {
       localitySlug: form.localitySlug || undefined,
       landmark: form.landmark.trim() || undefined,
       salonType: form.salonType,
-      ...(location.kind === "detected" ? { lat: location.lat, lng: location.lng } : {}),
+      ...(pin.kind === "ok" ? { lat: pin.lat, lng: pin.lng } : {}),
     });
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? "Please check the form for errors.");
@@ -462,6 +500,44 @@ export function RegisterSalonForm() {
           maxLength={300}
           placeholder="Shop no., building, street"
         />
+      </div>
+
+      <div style={fieldWrapStyle}>
+        <span style={labelStyle}>Latitude / Longitude (optional)</span>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <input
+            id="shop-lat"
+            aria-label="Latitude"
+            style={{ ...inputStyle, flex: "1 1 140px", minWidth: 0 }}
+            value={form.latText}
+            onChange={(e) => {
+              const v = e.target.value;
+              // A Google Maps copy ("28.61394, 77.20902") pasted here fills both boxes.
+              const both = v.match(/^\s*(-?\d{1,3}(?:\.\d+)?)\s*,\s*(-?\d{1,3}(?:\.\d+)?)\s*$/);
+              if (both) setForm((f) => ({ ...f, latText: both[1], lngText: both[2] }));
+              else update("latText", v);
+            }}
+            inputMode="decimal"
+            autoComplete="off"
+            maxLength={40}
+            placeholder="Latitude, e.g. 28.61394"
+          />
+          <input
+            id="shop-lng"
+            aria-label="Longitude"
+            style={{ ...inputStyle, flex: "1 1 140px", minWidth: 0 }}
+            value={form.lngText}
+            onChange={(e) => update("lngText", e.target.value)}
+            inputMode="decimal"
+            autoComplete="off"
+            maxLength={20}
+            placeholder="Longitude, e.g. 77.20902"
+          />
+        </div>
+        <p style={hintStyle}>
+          Google Maps mein shop par long-press karke numbers copy karein aur yahan paste karein, ya neeche
+          &ldquo;Use my current location&rdquo; dabayein.
+        </p>
       </div>
 
       <div style={fieldWrapStyle}>
