@@ -7,6 +7,7 @@ import {
   createdAsReimbursement,
 } from './finance-expenses.service';
 import type { FinanceSetupService } from './finance-setup.service';
+import { PrivateObjectStorageService } from '../storage/private-object-storage.service';
 
 const D = (v: string | number) => new Prisma.Decimal(v);
 
@@ -141,6 +142,7 @@ function setup(row: ReturnType<typeof expense>) {
   const service = new FinanceExpensesService(
     prisma as unknown as PrismaService,
     {} as FinanceSetupService,
+    PrivateObjectStorageService.withDriver(null),
   );
   return { service, tx };
 }
