@@ -38,6 +38,8 @@ maybe('Finance (e2e, disposable database)', () => {
   // Amounts unique to this run, so reruns on the same disposable database never look like duplicates.
   const offset = (parseInt(run, 16) % 9000) + 1;
   const claimAmount = 1000 + offset;
+  // Company-account payments made by earlier tests (the overview test checks the resulting balance).
+  let companyPaidExtra = 0;
   const bigAmount = 5000 + offset;
   const tok: Record<string, string> = {};
   const ids: Record<string, string> = {};
@@ -217,6 +219,7 @@ maybe('Finance (e2e, disposable database)', () => {
       expenseDate: day, categoryId: marketing.id, description: `Meta ads ${run}`, amount: String(420 + offset), reimbursementRequired: true,
       paidBy: { payerType: 'COMPANY_ACCOUNT', accountId: ids.account, method: 'UPI' },
     }).expect(201);
+    companyPaidExtra += 420 + offset;
     expect((await as('admin').get(`expenses/${paid.body.id}`).expect(200)).body.reimbursementRequired).toBe(false);
     const claimsOnly = (await as('admin').get('expenses?type=REIMBURSEMENT&pageSize=200').expect(200)).body.items;
     expect(claimsOnly.every((e: { reimbursementRequired: boolean }) => e.reimbursementRequired)).toBe(true);
@@ -258,10 +261,11 @@ maybe('Finance (e2e, disposable database)', () => {
 
   it('calculates the overview from actual transactions', async () => {
     const o = (await as('cofounder').get('overview').expect(200)).body;
-    // Cash = 100000 opening + 50000 funding − the reimbursement payouts − 3000 company payment.
+    // Cash = 100000 opening + 50000 funding − the reimbursement payouts − 3000 company payment
+    // − the company-paid expense recorded by the category test.
     const account = (await as('admin').get('accounts').expect(200)).body.find((a: { id: string }) => a.id === ids.account);
-    expect(account.balance).toBe(`${150000 - claimAmount - 3000}.00`);
-    expect(Number(o.kpis.availableCash)).toBeGreaterThanOrEqual(150000 - claimAmount - 3000);
+    expect(account.balance).toBe(`${150000 - claimAmount - 3000 - companyPaidExtra}.00`);
+    expect(Number(o.kpis.availableCash)).toBeGreaterThanOrEqual(150000 - claimAmount - 3000 - companyPaidExtra);
     expect(Number(o.kpis.totalFundsContributed)).toBeGreaterThanOrEqual(50000);
     expect(o.kpis.revenueReceived).toBeNull();
     expect(Number(o.kpis.expensesAwaitingApproval)).toBeGreaterThanOrEqual(799);
