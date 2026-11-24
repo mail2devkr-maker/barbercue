@@ -5,6 +5,7 @@ import StaffTodayScreen from '../screens/staff/StaffTodayScreen';
 import DashboardAccountStack, { type DashboardAccountStackParamList } from './DashboardAccountStack';
 import { SalonProvider } from '../lib/salon-context';
 import { AssistantFab } from '../components/assistant/AssistantFab';
+import { ThemeFab } from '../components/ThemeFab';
 import { navigationRef } from './navigation-ref';
 import { useUnreadNotificationCount } from '../lib/notifications';
 import { useLanguage } from '../lib/language-context';
@@ -55,6 +56,7 @@ export default function StaffNavigator() {
           }}
         />
       </Tab.Navigator>
+      <ThemeFab tabBarHeight={60 + insets.bottom} includeBottomInset />
       <AssistantFab tabBarHeight={60 + insets.bottom} includeBottomInset onOpen={() => navigationRef.navigate('StaffAccountTab', { screen: 'Assistant', initial: false })} />
     </SalonProvider>
   );

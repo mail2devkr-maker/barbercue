@@ -2,6 +2,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import type { NavigatorScreenParams } from '@react-navigation/native';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { AssistantFab } from '../components/assistant/AssistantFab';
+import { ThemeFab } from '../components/ThemeFab';
 import { OwnerLiveAlerts } from '../components/owner/OwnerLiveAlerts';
 import { SalonStatus, type OwnerBookingFilter } from '@barbercue/shared';
 import OwnerDashboardScreen from '../screens/owner/OwnerDashboardScreen';
@@ -245,6 +246,7 @@ function OwnerTabs() {
       title={language === 'HI' ? 'मेन्यू' : 'Menu'}
       sections={ownerMenuSections(language === 'HI', () => tabNav.current)}
     />
+    <ThemeFab tabBarHeight={60 + insets.bottom} includeBottomInset />
     <AssistantFab tabBarHeight={60 + insets.bottom} includeBottomInset onOpen={() => navigationRef.navigate('OwnerAccountTab', { screen: 'Assistant', initial: false, params: { salonId: selectedSalonId ?? undefined } })} />
     <OwnerLiveAlerts />
     </>

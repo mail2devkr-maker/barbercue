@@ -18,6 +18,7 @@ import { isCreditsEnabled } from '../lib/feature-flags';
 import { fastQue, font } from '../lib/theme';
 import { TabIcon, type TabIconName } from '../components/ui/TabIcon';
 import { AssistantFab } from '../components/assistant/AssistantFab';
+import { ThemeFab } from '../components/ThemeFab';
 import { AppMenuSheet, type AppMenuSection } from '../components/AppMenuSheet';
 import type { TabParamList } from './types';
 import { useThemeTokens } from '../lib/theme-mode';
@@ -237,6 +238,7 @@ export default function RootNavigator() {
         })}
       />
       </Tab.Navigator>
+      <ThemeFab tabBarHeight={60 + insets.bottom} includeBottomInset />
       <AssistantFab
         tabBarHeight={60 + insets.bottom}
         includeBottomInset
