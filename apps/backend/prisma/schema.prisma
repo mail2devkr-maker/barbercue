@@ -4288,7 +4288,8 @@ model FinanceExpensePayment {
   @@map("finance_expense_payments")
 }
 
-/// Receipts/invoices, stored privately in the database and served only through authorised routes.
+/// Receipts/invoices, served only through authorised routes. New files live in private object storage
+/// (storageKey); older rows, and environments without private storage, keep the bytes in `data`.
 model FinanceAttachment {
   id               String                @id @default(uuid()) @db.Uuid
   expenseId        String?               @db.Uuid
@@ -4299,7 +4300,8 @@ model FinanceAttachment {
   mimeType         String                @db.VarChar(80)
   sizeBytes        Int
   sha256           String                @db.VarChar(64)
-  data             Bytes
+  data             Bytes?
+  storageKey       String?               @db.VarChar(200)
   uploadedByUserId String
   createdAt        DateTime              @default(now()) @db.Timestamptz(6)
 
@@ -4768,9 +4770,9 @@ model WorkTaskResponse {
   @@map("work_task_responses")
 }
 
-// Task evidence photos are private: stored here (not in the public photo bucket) and served only
-// through an authorized endpoint. Moving them to private object storage with signed URLs is in
-// the backlog; the access rule stays the same.
+// Task evidence photos are private and served only through an authorized endpoint. New files live in
+// private object storage (storageKey); older rows, and environments without private storage, keep
+// the bytes in `content`.
 model WorkEvidenceFile {
   id           String            @id @default(uuid())
   assignmentId String
@@ -4778,7 +4780,8 @@ model WorkEvidenceFile {
   mimeType     String            @db.VarChar(40)
   sizeBytes    Int
   sha256       String            @db.VarChar(64)
-  content      Bytes
+  content      Bytes?
+  storageKey   String?           @db.VarChar(200)
   createdAt    DateTime          @default(now())
   response     WorkTaskResponse?
 

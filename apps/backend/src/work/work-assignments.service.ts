@@ -1,4 +1,5 @@
-import { createHash } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
+import { PrivateObjectStorageService } from '../storage/private-object-storage.service';
 import {
   HttpStatus,
   Injectable,
@@ -92,6 +93,7 @@ export class WorkAssignmentsService implements OnModuleInit {
     private readonly payments: WorkPaymentsService,
     private readonly workers: WorkWorkersService,
     private readonly notifications: NotificationsService,
+    private readonly files: PrivateObjectStorageService,
     @Optional() private readonly deadlines?: DbDeadlineSchedulerService,
   ) {}
 
@@ -922,59 +924,76 @@ export class WorkAssignmentsService implements OnModuleInit {
         HttpStatus.UNPROCESSABLE_ENTITY,
       );
     const sha256 = createHash('sha256').update(file.buffer).digest('hex');
-    return this.prisma.$transaction(async (tx) => {
-      const a = await this.lockedForWorker(tx, userId, assignmentId);
-      if (!EDITABLE_RESPONSES.includes(a.status))
-        throw workInvalidState(
-          'Evidence can only be added while the work is in progress or after a rework request.',
-        );
-      if (a.status === WorkAssignmentStatus.ACCEPTED && a.job.requiresCheckIn)
-        throw workInvalidState('Check in before recording your work.');
-      const item = snapshotChecklist(a).find((i) => i.id === itemId);
-      if (!item || item.kind !== 'PHOTO')
-        throw workNotFound('Photo checklist item not found.');
-      const reused = await tx.workEvidenceFile.findFirst({
-        where: { sha256, assignmentId: { not: a.id } },
-        select: { id: true },
-      });
-      const fileRow = await tx.workEvidenceFile.create({
-        data: {
-          assignmentId: a.id,
-          uploadedById: userId,
-          mimeType: mime,
-          sizeBytes: file.buffer.length,
-          sha256,
-          content: file.buffer,
-        },
-      });
-      const prior = await tx.workTaskResponse.findUnique({
-        where: { assignmentId_itemId: { assignmentId: a.id, itemId } },
-      });
-      await tx.workTaskResponse.upsert({
-        where: { assignmentId_itemId: { assignmentId: a.id, itemId } },
-        create: {
-          assignmentId: a.id,
-          itemId,
-          confirmed: true,
-          evidenceFileId: fileRow.id,
-          duplicateFlag: !!reused,
-        },
-        update: {
-          confirmed: true,
-          evidenceFileId: fileRow.id,
-          duplicateFlag: !!reused,
-        },
-      });
-      if (prior?.evidenceFileId)
-        await tx.workEvidenceFile.delete({
-          where: { id: prior.evidenceFileId },
+    // Private object storage (Cloudflare R2) when configured; the database keeps only the key.
+    const storageKey = this.files.isConfigured
+      ? `work/evidence/${assignmentId}/${randomUUID()}`
+      : null;
+    if (storageKey) await this.files.put(storageKey, file.buffer, mime);
+    let replacedKey: string | null = null;
+    let result: { itemId: string; evidenceFileId: string; sizeBytes: number };
+    try {
+      result = await this.prisma.$transaction(async (tx) => {
+        const a = await this.lockedForWorker(tx, userId, assignmentId);
+        if (!EDITABLE_RESPONSES.includes(a.status))
+          throw workInvalidState(
+            'Evidence can only be added while the work is in progress or after a rework request.',
+          );
+        if (a.status === WorkAssignmentStatus.ACCEPTED && a.job.requiresCheckIn)
+          throw workInvalidState('Check in before recording your work.');
+        const item = snapshotChecklist(a).find((i) => i.id === itemId);
+        if (!item || item.kind !== 'PHOTO')
+          throw workNotFound('Photo checklist item not found.');
+        const reused = await tx.workEvidenceFile.findFirst({
+          where: { sha256, assignmentId: { not: a.id } },
+          select: { id: true },
         });
-      return {
-        itemId,
-        evidenceFileId: fileRow.id,
-        sizeBytes: fileRow.sizeBytes,
-      };
-    });
+        const fileRow = await tx.workEvidenceFile.create({
+          data: {
+            assignmentId: a.id,
+            uploadedById: userId,
+            mimeType: mime,
+            sizeBytes: file.buffer.length,
+            sha256,
+            ...(storageKey ? { storageKey } : { content: file.buffer }),
+          },
+        });
+        const prior = await tx.workTaskResponse.findUnique({
+          where: { assignmentId_itemId: { assignmentId: a.id, itemId } },
+        });
+        await tx.workTaskResponse.upsert({
+          where: { assignmentId_itemId: { assignmentId: a.id, itemId } },
+          create: {
+            assignmentId: a.id,
+            itemId,
+            confirmed: true,
+            evidenceFileId: fileRow.id,
+            duplicateFlag: !!reused,
+          },
+          update: {
+            confirmed: true,
+            evidenceFileId: fileRow.id,
+            duplicateFlag: !!reused,
+          },
+        });
+        if (prior?.evidenceFileId) {
+          const old = await tx.workEvidenceFile.delete({
+            where: { id: prior.evidenceFileId },
+            select: { storageKey: true },
+          });
+          replacedKey = old.storageKey;
+        }
+        return {
+          itemId,
+          evidenceFileId: fileRow.id,
+          sizeBytes: fileRow.sizeBytes,
+        };
+      });
+    } catch (err) {
+      if (storageKey) await this.files.delete(storageKey);
+      throw err;
+    }
+    if (replacedKey) await this.files.delete(replacedKey);
+    return result;
   }
 
   async evidenceFile(userId: string, fileId: string, asAdmin = false) {
@@ -983,7 +1002,13 @@ export class WorkAssignmentsService implements OnModuleInit {
     });
     if (!file) throw workNotFound('File not found.');
     if (!asAdmin) await this.loadForParty(userId, file.assignmentId); // worker or employer of that assignment only
-    return { mimeType: file.mimeType, content: Buffer.from(file.content) };
+    const content = file.storageKey
+      ? await this.files.get(file.storageKey)
+      : file.content
+        ? Buffer.from(file.content)
+        : null;
+    if (!content) throw workNotFound('File not found.');
+    return { mimeType: file.mimeType, content };
   }
 
   async submit(userId: string, assignmentId: string) {
