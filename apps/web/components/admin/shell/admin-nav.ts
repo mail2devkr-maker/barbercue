@@ -1,7 +1,7 @@
 import { Role } from "@barbercue/shared";
 import type { IconName } from "../../owner/icons";
 import { canOpenAdminPath } from "../../../lib/admin-route-access";
-import { workMarketplaceLinksEnabled } from "../../../lib/dashboard-flags";
+import { directCommerceLinksEnabled, workMarketplaceLinksEnabled } from "../../../lib/dashboard-flags";
 
 // The ONE definition of the admin app's navigation (sidebar, icon rail and the "planned" pages all
 // read it). `live` items are real pages backed by real data. `planned` items exist so the structure
@@ -19,6 +19,7 @@ export type AdminNavGroupId =
   | "SALES"
   | "OPERATIONS"
   | "INVENTORY"
+  | "COMMERCE"
   | "FINANCE"
   | "ANALYTICS"
   | "ALERTS"
@@ -48,6 +49,7 @@ export const ADMIN_NAV_GROUPS: ReadonlyArray<{ id: AdminNavGroupId; label: strin
   { id: "SALES", label: "Regional Sales", icon: "trend" },
   { id: "OPERATIONS", label: "Operations", icon: "queue" },
   { id: "INVENTORY", label: "Inventory", icon: "tag" },
+  ...(directCommerceLinksEnabled() ? [{ id: "COMMERCE" as const, label: "FastQue Commerce", icon: "store" as const }] : []),
   { id: "FINANCE", label: "Finance", icon: "card" },
   { id: "ANALYTICS", label: "Analytics", icon: "chart" },
   { id: "ALERTS", label: "Alerts", icon: "alert" },
@@ -65,6 +67,26 @@ const planned = (group: AdminNavGroupId, id: string, label: string, needs: strin
   status: "planned",
   needs,
 });
+
+const COMMERCE = "/dashboard/admin/commerce";
+const COMMERCE_TABS: ReadonlyArray<readonly [string, string]> = [
+  ["overview", "Overview"],
+  ["products", "Products & Pricing"],
+  ["inventory", "Inventory"],
+  ["warehouses", "Warehouses"],
+  ["suppliers", "Suppliers & Distributors"],
+  ["procurement", "Procurement"],
+  ["orders", "Orders"],
+  ["shipping", "Shipping & Delivery"],
+  ["cod", "COD Management"],
+  ["returns", "Returns & Replacements"],
+  ["promotions", "Promotions"],
+  ["serviceability", "Delivery Serviceability"],
+  ["reports", "Analytics & Reports"],
+  ["insights", "AI Insights"],
+  ["quality", "Product Data Quality"],
+  ["settings", "Settings"],
+];
 
 export const ADMIN_NAV_ITEMS: ReadonlyArray<AdminNavItem> = [
   { id: "executive", label: "Executive Overview", group: "DASHBOARD", href: "/dashboard/admin/command-center", status: "live" },
@@ -122,6 +144,14 @@ export const ADMIN_NAV_ITEMS: ReadonlyArray<AdminNavItem> = [
   { id: "marketplace", label: "Marketplace", group: "INVENTORY", href: "/dashboard/admin/marketplace", status: "live" },
   { id: "marketplace-approvals", label: "Listing Approvals", group: "INVENTORY", href: "/dashboard/admin/marketplace", query: "tab=listings", status: "live" },
   { id: "marketplace-orders", label: "Shop Orders", group: "INVENTORY", href: "/dashboard/admin/marketplace", query: "tab=orders", status: "live" },
+
+  // FastQue Direct Commerce appears only once it is switched on for this website build.
+  ...(directCommerceLinksEnabled()
+    ? [
+        ...COMMERCE_TABS.map(([id, label]): AdminNavItem => ({ id: `commerce-${id}`, label, group: "COMMERCE", href: COMMERCE, ...(id === "overview" ? {} : { query: `tab=${id}` }), status: "live" })),
+        planned("COMMERCE", "commerce-support", "Customer Support", "Commerce categories and order links on the support-ticket system."),
+      ]
+    : []),
 
   { id: "finance-overview", label: "Overview", group: "FINANCE", href: "/dashboard/admin/finance", status: "live" },
   { id: "finance-expenses", label: "Expenses", group: "FINANCE", href: "/dashboard/admin/finance", query: "tab=expenses", status: "live" },
