@@ -1,5 +1,5 @@
+import { useRealInsets } from './TopBrandBar';
 import { FlatList, Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SERVICE_CATALOG, type ServiceCatalogItem } from '../lib/service-catalog';
 import { fastQue, font, fontSize, lineHeightFor, radius, space } from '../lib/theme';
 import { SafeImage } from './ui';
@@ -21,7 +21,7 @@ export function AllServicesModal({
   onPick: (value: string) => void;
 }) {
   const styles = useThemedStyles(makeStyles);
-  const insets = useSafeAreaInsets();
+  const insets = useRealInsets();
   const { width } = useWindowDimensions();
   const columns = width >= 600 ? 4 : 3;
   const gap = space[3];
