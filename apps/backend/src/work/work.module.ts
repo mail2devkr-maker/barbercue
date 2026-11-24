@@ -1,3 +1,4 @@
+import { StorageModule } from '../storage/storage.module';
 import { Logger, Module } from '@nestjs/common';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { configuredWorkPaymentProvider } from './work-config';
@@ -31,7 +32,7 @@ import { WorkWorkersService } from './work-workers.service';
  * Off by default (WORK_MARKETPLACE_ENABLED); payments default to "not configured".
  */
 @Module({
-  imports: [NotificationsModule],
+  imports: [NotificationsModule, StorageModule],
   controllers: [
     WorkPublicController,
     WorkWorkerController,

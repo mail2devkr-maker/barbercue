@@ -1,4 +1,4 @@
-import { createHash } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
@@ -26,6 +26,7 @@ import {
   type FinanceExpenseStatus,
 } from '@barbercue/shared';
 import { AppException } from '../common/exceptions/app.exception';
+import { PrivateObjectStorageService } from '../storage/private-object-storage.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { recordFinanceAudit } from './finance-audit';
 import {
@@ -142,6 +143,7 @@ export class FinanceExpensesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly setup: FinanceSetupService,
+    private readonly files: PrivateObjectStorageService,
   ) {}
 
   // ------------------------------------------------------------ access
@@ -1195,7 +1197,13 @@ export class FinanceExpensesService {
       throw invalidState(
         'Only a draft without payments can be deleted. Cancel it instead.',
       );
-    return this.prisma.$transaction(async (tx) => {
+    const keys = (
+      await this.prisma.financeAttachment.findMany({
+        where: { expenseId: id, storageKey: { not: null } },
+        select: { storageKey: true },
+      })
+    ).map((r) => r.storageKey as string);
+    const result = await this.prisma.$transaction(async (tx) => {
       await tx.financeAttachment.deleteMany({ where: { expenseId: id } });
       const { count } = await tx.financeExpense.deleteMany({
         where: { id, status: 'DRAFT' },
@@ -1213,6 +1221,8 @@ export class FinanceExpensesService {
       });
       return { id };
     });
+    for (const k of keys) await this.files.delete(k);
+    return result;
   }
 
   // ------------------------------------------------------------ payments
@@ -1463,32 +1473,43 @@ export class FinanceExpensesService {
         HttpStatus.CONFLICT,
         { expenseId: same.expense?.id, expenseNumber: same.expense?.number },
       );
-    return this.prisma.$transaction(async (tx) => {
-      const row = await tx.financeAttachment.create({
-        data: {
-          expenseId: id,
-          fileName: file.originalname.slice(0, 200) || 'receipt',
-          mimeType: file.mimetype,
-          sizeBytes: file.size,
-          sha256,
-          data: file.buffer,
-          uploadedByUserId: actor.userId,
-        },
+    // Private object storage (Cloudflare R2) when configured; the database keeps only the key.
+    const storageKey = this.files.isConfigured
+      ? `finance/receipts/${id}/${randomUUID()}`
+      : null;
+    if (storageKey)
+      await this.files.put(storageKey, file.buffer, file.mimetype);
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const row = await tx.financeAttachment.create({
+          data: {
+            expenseId: id,
+            fileName: file.originalname.slice(0, 200) || 'receipt',
+            mimeType: file.mimetype,
+            sizeBytes: file.size,
+            sha256,
+            ...(storageKey ? { storageKey } : { data: file.buffer }),
+            uploadedByUserId: actor.userId,
+          },
+        });
+        await recordFinanceAudit(tx, {
+          entityType: 'ATTACHMENT',
+          entityId: row.id,
+          action: 'UPLOADED',
+          actorUserId: actor.userId,
+          after: {
+            expenseId: id,
+            fileName: row.fileName,
+            sizeBytes: row.sizeBytes,
+            sha256,
+          },
+        });
+        return { id: row.id };
       });
-      await recordFinanceAudit(tx, {
-        entityType: 'ATTACHMENT',
-        entityId: row.id,
-        action: 'UPLOADED',
-        actorUserId: actor.userId,
-        after: {
-          expenseId: id,
-          fileName: row.fileName,
-          sizeBytes: row.sizeBytes,
-          sha256,
-        },
-      });
-      return { id: row.id };
-    });
+    } catch (err) {
+      if (storageKey) await this.files.delete(storageKey);
+      throw err;
+    }
   }
 
   private contentMatchesType(buffer: Buffer, mime: string): boolean {
@@ -1514,10 +1535,16 @@ export class FinanceExpensesService {
     });
     if (!a?.expenseId) throw notFound('That receipt');
     await this.loadVisible(actor, a.expenseId);
+    const data = a.storageKey
+      ? await this.files.get(a.storageKey)
+      : a.data
+        ? Buffer.from(a.data)
+        : null;
+    if (!data) throw notFound('That receipt');
     return {
       fileName: a.fileName,
       mimeType: a.mimeType,
-      data: Buffer.from(a.data),
+      data,
     };
   }
 
@@ -1527,7 +1554,13 @@ export class FinanceExpensesService {
   ): Promise<{ id: string }> {
     const a = await this.prisma.financeAttachment.findUnique({
       where: { id: attachmentId },
-      select: { id: true, expenseId: true, fileName: true, sha256: true },
+      select: {
+        id: true,
+        expenseId: true,
+        fileName: true,
+        sha256: true,
+        storageKey: true,
+      },
     });
     if (!a?.expenseId) throw notFound('That receipt');
     const e = await this.loadVisible(actor, a.expenseId);
@@ -1535,7 +1568,7 @@ export class FinanceExpensesService {
       throw forbidden(
         'Receipts can only be removed while the expense is still editable.',
       );
-    return this.prisma.$transaction(async (tx) => {
+    const removed = await this.prisma.$transaction(async (tx) => {
       await tx.financeAttachment.delete({ where: { id: attachmentId } });
       await recordFinanceAudit(tx, {
         entityType: 'ATTACHMENT',
@@ -1550,5 +1583,7 @@ export class FinanceExpensesService {
       });
       return { id: attachmentId };
     });
+    if (a.storageKey) await this.files.delete(a.storageKey);
+    return removed;
   }
 }
