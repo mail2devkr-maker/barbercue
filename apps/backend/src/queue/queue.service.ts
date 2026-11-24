@@ -767,13 +767,27 @@ export class QueueService {
   // this phase (see API.md's Discovery section).
   async getQueueStatus(salonId: string): Promise<QueueStatusDto> {
     await this.availability.getSalonOrThrow(salonId);
-    const { waitingCount, estimatedWaitMinutes } =
-      await this.estimateNewJoinerWait(salonId);
+    const [{ waitingCount, estimatedWaitMinutes }, serving] = await Promise.all([
+      this.estimateNewJoinerWait(salonId),
+      // "Now serving": the token numbers currently in a chair. Token numbers are per salon-local
+      // day and carry no customer details; the 24-hour bound keeps a forgotten entry from showing.
+      this.prisma.queueEntry.findMany({
+        where: {
+          salonId,
+          status: QueueEntryStatus.IN_SERVICE,
+          joinedAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+        },
+        orderBy: [{ serviceStartedAt: 'asc' }, { tokenNumber: 'asc' }],
+        take: 3,
+        select: { tokenNumber: true },
+      }),
+    ]);
     return {
       salonId,
       waitingCount,
       estimatedWaitMinutes,
       estimatedWaitRangeMinutes: estimateWaitRangeMinutes(estimatedWaitMinutes),
+      nowServingTokens: serving.map((e) => e.tokenNumber),
     };
   }
 

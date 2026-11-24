@@ -11,7 +11,8 @@ export type TabIconName =
   | 'today'
   | 'offer'
   | 'scissors'
-  | 'salon';
+  | 'salon'
+  | 'menu';
 
 interface TabIconProps {
   name: TabIconName;
@@ -136,6 +137,14 @@ export function TabIcon({ name, color, size = 22 }: TabIconProps) {
               { width: size * 0.26, height: size * 0.26, borderRadius: size * 0.13, backgroundColor: color, marginTop: -size * 0.13, marginLeft: -size * 0.13 },
             ]}
           />
+        </View>
+      );
+    case 'menu':
+      return (
+        <View style={[styles.icon, base, { justifyContent: 'space-evenly', paddingVertical: size * 0.14 }]} accessible={false}>
+          <View style={{ width: size * 0.78, height: stroke, borderRadius: stroke, backgroundColor: color }} />
+          <View style={{ width: size * 0.78, height: stroke, borderRadius: stroke, backgroundColor: color }} />
+          <View style={{ width: size * 0.78, height: stroke, borderRadius: stroke, backgroundColor: color }} />
         </View>
       );
   }

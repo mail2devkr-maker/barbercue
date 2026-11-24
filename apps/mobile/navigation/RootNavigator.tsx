@@ -1,4 +1,5 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { View } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import HomeStack from './HomeStack';
@@ -17,10 +18,54 @@ import { isCreditsEnabled } from '../lib/feature-flags';
 import { fastQue, font } from '../lib/theme';
 import { TabIcon, type TabIconName } from '../components/ui/TabIcon';
 import { AssistantFab } from '../components/assistant/AssistantFab';
+import { AppMenuSheet, type AppMenuSection } from '../components/AppMenuSheet';
 import type { TabParamList } from './types';
 import { useThemeTokens } from '../lib/theme-mode';
 
 const Tab = createBottomTabNavigator<TabParamList>();
+
+/** Placeholder for the Menu tab: pressing it opens the menu sheet and never navigates here. */
+function MenuTabPlaceholder() {
+  return <View />;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- the tab navigator's own navigation object, captured on press
+type TabNav = { navigate: (...args: any[]) => void };
+
+function customerMenuSections(hi: boolean, go: (tab: string, screen: string) => void, creditsEnabled: boolean): AppMenuSection[] {
+  const L = (en: string, hin: string) => (hi ? hin : en);
+  return [
+    {
+      title: L('Explore', 'खोजें'),
+      items: [
+        { key: 'home', label: L('Home', 'होम'), onPress: () => go('HomeTab', 'CustomerDashboard') },
+        { key: 'search', label: L('Find a salon', 'सैलून खोजें'), onPress: () => go('SearchTab', 'SalonSearch') },
+        { key: 'offers', label: L('Offers', 'ऑफ़र'), onPress: () => go('SearchTab', 'Offers') },
+        { key: 'style', label: L('AI Style Advisor', 'AI स्टाइल सलाहकार'), onPress: () => go('HomeTab', 'StyleAdvisor') },
+        { key: 'recent', label: L('Recently viewed', 'हाल में देखे गए'), onPress: () => go('AccountTab', 'RecentlyViewed') },
+      ],
+    },
+    {
+      title: L('My activity', 'मेरी गतिविधि'),
+      items: [
+        { key: 'bookings', label: L('My bookings', 'मेरी बुकिंग'), onPress: () => go('BookingsTab', 'MyBookings') },
+        { key: 'queue', label: L('My queue', 'मेरी कतार'), onPress: () => go('QueueTab', 'QueueHome') },
+        { key: 'invoices', label: L('My invoices', 'मेरे बिल'), onPress: () => go('BookingsTab', 'MyInvoices') },
+        { key: 'reviews', label: L('My reviews', 'मेरे रिव्यू'), onPress: () => go('AccountTab', 'MyReviews') },
+        ...(creditsEnabled ? [{ key: 'credits', label: L('Credits', 'क्रेडिट'), onPress: () => go('AccountTab', 'CreditsHistory') }] : []),
+        { key: 'notifications', label: L('Notifications', 'सूचनाएँ'), onPress: () => go('AccountTab', 'Notifications') },
+      ],
+    },
+    {
+      title: L('Account', 'खाता'),
+      items: [
+        { key: 'account', label: L('My account', 'मेरा खाता'), onPress: () => go('AccountTab', 'Account') },
+        { key: 'assistant', label: L('FastQue Assistant', 'FastQue असिस्टेंट'), onPress: () => go('AccountTab', 'Assistant') },
+        { key: 'register', label: L('Register your shop', 'अपनी दुकान रजिस्टर करें'), onPress: () => go('AccountTab', 'RegisterShop') },
+      ],
+    },
+  ];
+}
 
 /**
  * Issue 2 (mobile launch mission) — replays a guest's in-progress booking/queue-join selection
@@ -107,11 +152,20 @@ function CustomerQueueArrivalPushNavigationBridge() {
 export default function RootNavigator() {
   const { fastQue } = useThemeTokens();
   const unreadCount = useUnreadNotificationCount();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const insets = useSafeAreaInsets();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const tabNav = useRef<TabNav | null>(null);
+  const go = (tab: string, screen: string) => tabNav.current?.navigate(tab, { screen, initial: false });
 
   return (
     <>
+      <AppMenuSheet
+        visible={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        title={language === 'HI' ? 'मेन्यू' : 'Menu'}
+        sections={customerMenuSections(language === 'HI', go, isCreditsEnabled())}
+      />
       <GuestBookingHandoffBridge />
       <CustomerDestinationHandoffBridge />
       <CustomerBookingPushNavigationBridge />
@@ -170,6 +224,18 @@ export default function RootNavigator() {
           popToTopOnBlur: true,
         }}
         />
+      <Tab.Screen
+        name="MenuTab"
+        component={MenuTabPlaceholder}
+        options={tabOptions(language === 'HI' ? 'मेन्यू' : 'Menu', 'menu')}
+        listeners={({ navigation }) => ({
+          tabPress: (e) => {
+            e.preventDefault();
+            tabNav.current = navigation as TabNav;
+            setMenuOpen(true);
+          },
+        })}
+      />
       </Tab.Navigator>
       <AssistantFab
         tabBarHeight={60 + insets.bottom}
