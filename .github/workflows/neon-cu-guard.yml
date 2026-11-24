@@ -2,12 +2,17 @@ name: Neon CU guard
 
 # Watches Neon compute (CU-hours) for the live FastQue database every day and, when the live project
 # passes 90% of its monthly allowance, moves production to the other FastQue project between
-# 02:00 and 05:00 IST. Runs in GitHub's cloud: no local machine has to be awake.
+# 00:00 and 06:00 IST. Runs in GitHub's cloud: no local machine has to be awake.
 # Setup and runbook: scripts/ops/neon-cu-guard/README.md
 on:
   schedule:
     - cron: "30 3 * * *" # 09:00 IST daily report
-    - cron: "*/20 20-22 * * *" # 01:30-04:10 IST, every 20 min: switch window checks (the script enforces 02:00-04:30)
+    # Switch window 00:00-06:00 IST (= 18:30-00:30 UTC). GitHub runs these late and skips many, so the
+    # checks are frequent; the script enforces the window (and switches at once only when urgent).
+    - cron: "*/15 18-23 * * *"
+    - cron: "*/15 0 * * *"
+    # Daytime safety checks (auto mode): act only if the allowance would run out before the next night.
+    - cron: "17 */3 * * *"
   workflow_dispatch:
     inputs:
       mode:

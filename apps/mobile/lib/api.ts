@@ -2,6 +2,7 @@ import { AUTH_PATHS } from '@barbercue/shared';
 import * as FileSystem from 'expo-file-system/legacy';
 import { deleteItem, getItem, setItem } from './secure-storage';
 import { reportNetworkFailure, reportNetworkSuccess } from './network-status';
+import { checkMaintenance, setMaintenance } from './maintenance';
 import { getCurrentUiStrings } from './current-language';
 
 // A release binary must never silently point at localhost when an EAS public variable is absent.
@@ -109,6 +110,8 @@ async function fetchOrOffline(path: string, options: RequestInit): Promise<Respo
   try {
     const res = await rawFetch(path, options);
     reportNetworkSuccess();
+    if (res.ok) setMaintenance(false);
+    else await checkMaintenance(res);
     return res;
   } catch (error) {
     if (typeof __DEV__ !== 'undefined' && __DEV__) {
