@@ -13,7 +13,20 @@ export function useCrmMe() {
   const [me, setMe] = useState<CrmMeDto | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
-    apiFetch<CrmMeDto>("crm/me").then(setMe).catch((err) => setError(errorText(err, "Could not load your CRM profile.")));
+    let alive = true;
+    const load = (attempt: number) => {
+      apiFetch<CrmMeDto>("crm/me")
+        .then((m) => alive && setMe(m))
+        .catch((err) => {
+          if (!alive) return;
+          if (attempt < 2) setTimeout(() => alive && load(attempt + 1), 1500 * (attempt + 1));
+          else setError(errorText(err, "Could not load your CRM profile."));
+        });
+    };
+    load(0);
+    return () => {
+      alive = false;
+    };
   }, []);
   return { me, error };
 }

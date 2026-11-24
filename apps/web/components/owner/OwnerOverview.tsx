@@ -13,6 +13,7 @@ import { formatMoney, formatPercentChange, formatShopDate, formatShopTime, initi
 import { NewQueueCustomerDialog } from "./NewQueueCustomerDialog";
 import { Banner, Btn, BtnLink, Card, EmptyState, PageHead, Skeleton, Tabs } from "./parts";
 import { Icon, type IconName } from "./icons";
+import { IntakeControls } from "./IntakeControls";
 import ui from "./owner.module.css";
 import { setVisibleInterval } from "../../lib/visible-interval";
 
@@ -558,6 +559,8 @@ export function OwnerOverview({ salonId }: { salonId: string }) {
             </div>
           )}
         </Card>
+
+        <IntakeControls salonId={salonId} />
 
         <Card title="Shop controls">
           <div className={ui.quickGrid} style={{ gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))" }}>

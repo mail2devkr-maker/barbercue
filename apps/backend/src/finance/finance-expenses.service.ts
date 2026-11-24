@@ -6,11 +6,14 @@ import {
   FINANCE_ATTACHMENT_MIME_TYPES,
   FINANCE_EDITABLE_STATUSES,
   FINANCE_EXPENSE_STATUS_LABEL,
+  FINANCE_EXPENSE_TYPE_LABEL,
   FINANCE_PAYABLE_STATUSES,
   FINANCE_PENDING_STATUSES,
+  FINANCE_RECLASSIFIABLE_STATUSES,
   FINANCE_RECOGNISED_STATUSES,
   FinanceErrorCode,
   expenseStatusAfterPayments,
+  financeExpenseType,
   type FinanceAuditEventDto,
   type FinanceDuplicateCandidateDto,
   type FinanceExpenseDetailDto,
@@ -64,6 +67,25 @@ type ExpenseRow = Prisma.FinanceExpenseGetPayload<{
 
 const DUPLICATE_WINDOW_DAYS = 3;
 const EXPORT_LIMIT = 5000;
+
+/** A payment from someone's own money that is to be paid back — the only basis for a claim. */
+function isReimbursablePersonal(p: {
+  payerType: string;
+  personalTreatment?: string | null;
+}): boolean {
+  return p.payerType === 'PERSON' && p.personalTreatment === 'REIMBURSABLE';
+}
+
+/**
+ * The type a new expense is saved as. When a payer is given it decides: paid personally and "to be
+ * reimbursed" is a claim; a company account, a founder loan or a contribution is a company expense.
+ * With no payer yet (a bill to pay later) the explicit choice stands; the default is a company expense.
+ */
+export function createdAsReimbursement(input: FinanceExpenseInput): boolean {
+  if (input.paidByMe) return true;
+  if (input.paidBy) return isReimbursablePersonal(input.paidBy);
+  return input.reimbursementRequired;
+}
 
 function activePaid(e: ExpenseRow): Prisma.Decimal {
   return e.payments
@@ -170,6 +192,8 @@ export class FinanceExpensesService {
         editable &&
         (actor.manage ||
           (own && (e.status === 'DRAFT' || e.status === 'SUBMITTED'))),
+      reclassify:
+        actor.manage && FINANCE_RECLASSIFIABLE_STATUSES.includes(e.status),
       submit: e.status === 'DRAFT' && (own || actor.manage),
       review:
         actor.approve &&
@@ -303,6 +327,9 @@ export class FinanceExpensesService {
         ? { department: { equals: query.department, mode: 'insensitive' } }
         : {}),
       ...(query.vendorId ? { vendorId: query.vendorId } : {}),
+      ...(query.type
+        ? { reimbursementRequired: query.type === 'REIMBURSEMENT' }
+        : {}),
       ...(query.paidByContributorId
         ? {
             payments: {
@@ -485,6 +512,7 @@ export class FinanceExpensesService {
       'Expense date',
       'Main category',
       'Subcategory',
+      'Type',
       'Description',
       'Amount (INR)',
       'Tax (INR)',
@@ -514,6 +542,7 @@ export class FinanceExpensesService {
           d.expenseDate,
           d.category.name,
           d.subcategory?.name ?? d.customSubcategory ?? '',
+          FINANCE_EXPENSE_TYPE_LABEL[financeExpenseType(d)],
           d.description,
           d.amount,
           d.taxAmount,
@@ -599,7 +628,7 @@ export class FinanceExpensesService {
     }));
   }
 
-  private data(input: FinanceExpenseInput) {
+  private data(input: FinanceExpenseInput, reimbursementRequired: boolean) {
     return {
       expenseDate: dateOnly(input.expenseDate),
       categoryId: input.categoryId,
@@ -614,11 +643,7 @@ export class FinanceExpensesService {
       department: input.department ?? null,
       city: input.city ?? null,
       project: input.project ?? null,
-      reimbursementRequired:
-        input.reimbursementRequired ||
-        !!input.paidByMe ||
-        (input.paidBy?.payerType === 'PERSON' &&
-          input.paidBy.personalTreatment === 'REIMBURSABLE'),
+      reimbursementRequired,
       isRecurring: input.isRecurring,
       notes: input.notes ?? null,
     };
@@ -659,7 +684,7 @@ export class FinanceExpensesService {
       return await this.prisma.$transaction(async (tx) => {
         const row = await tx.financeExpense.create({
           data: {
-            ...this.data(input),
+            ...this.data(input, createdAsReimbursement(input)),
             status: 'DRAFT',
             createdByUserId: actor.userId,
             clientRequestId: input.clientRequestId ?? null,
@@ -775,47 +800,209 @@ export class FinanceExpensesService {
     input: FinanceExpenseInput,
   ): Promise<{ id: string }> {
     const e = await this.loadVisible(actor, id);
-    if (!this.permissions(actor, e).edit)
+    const can = this.permissions(actor, e);
+    if (!can.edit && !can.reclassify)
       throw forbidden('This expense can no longer be edited by you.');
     if (input.paidByMe || input.paidBy)
       throw invalid(
         'Record a payment instead of changing who paid when editing.',
       );
     await this.validateRefs(input);
-    const paid = activePaid(e);
-    if (new Prisma.Decimal(input.amount).lessThan(paid))
+    if (!can.edit) {
+      // Approved / paid: the money is settled, only the classification may be corrected.
+      const moneyChanged =
+        input.amount !== money(e.amount) ||
+        input.taxAmount !== money(e.taxAmount) ||
+        input.expenseDate !== isoDay(e.expenseDate) ||
+        input.description !== e.description ||
+        (input.vendorId ?? null) !== e.vendorId;
+      if (moneyChanged)
+        throw invalidState(
+          'This expense is already approved. Only its category, department, city, project, notes and type can be changed.',
+        );
+    } else {
+      const paid = activePaid(e);
+      if (new Prisma.Decimal(input.amount).lessThan(paid))
+        throw invalid(
+          `The amount cannot be less than what is already paid (${money(paid)}).`,
+        );
+      if (
+        !input.confirmDuplicate &&
+        (input.amount !== money(e.amount) ||
+          input.expenseDate !== isoDay(e.expenseDate))
+      ) {
+        const candidates = await this.findDuplicates(input, id);
+        if (candidates.length)
+          throw new AppException(
+            FinanceErrorCode.DUPLICATE_SUSPECTED,
+            'This looks like an expense that is already recorded. Check it, then save again to confirm.',
+            HttpStatus.CONFLICT,
+            { candidates },
+          );
+      }
+    }
+
+    // Type change: company expense <-> reimbursement claim.
+    const toCompany = e.reimbursementRequired && !input.reimbursementRequired;
+    const toReimbursement =
+      !e.reimbursementRequired && input.reimbursementRequired;
+    const active = e.payments.filter((p) => !p.voidedAt);
+    const personal = active.filter(isReimbursablePersonal);
+    if (toReimbursement && active.length && !personal.length)
       throw invalid(
-        `The amount cannot be less than what is already paid (${money(paid)}).`,
+        "Only an expense paid from someone's own money can be a reimbursement claim. This one was paid by the company or is not to be paid back — void that payment first.",
       );
     if (
-      !input.confirmDuplicate &&
-      (input.amount !== money(e.amount) ||
-        input.expenseDate !== isoDay(e.expenseDate))
-    ) {
-      const candidates = await this.findDuplicates(input, id);
-      if (candidates.length)
-        throw new AppException(
-          FinanceErrorCode.DUPLICATE_SUSPECTED,
-          'This looks like an expense that is already recorded. Check it, then save again to confirm.',
-          HttpStatus.CONFLICT,
-          { candidates },
-        );
-    }
+      toCompany &&
+      !actor.manage &&
+      personal.some((p) => p.createdByUserId !== actor.userId)
+    )
+      throw forbidden(
+        'Only finance managers can change who is owed for this expense.',
+      );
+
     return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "finance_expenses" WHERE "id" = ${id}::uuid FOR UPDATE`;
       const row = await tx.financeExpense.update({
         where: { id },
-        data: this.data(input),
+        data: this.data(input, input.reimbursementRequired),
       });
       await recordFinanceAudit(tx, {
         entityType: 'EXPENSE',
         entityId: id,
-        action: 'EDITED',
+        action: can.edit ? 'EDITED' : 'RECLASSIFIED',
         actorUserId: actor.userId,
         before: snapshot(e),
         after: snapshot(row),
+        note: toCompany
+          ? 'Changed to a company expense (not a reimbursement claim).'
+          : toReimbursement
+            ? 'Changed to a reimbursement claim.'
+            : null,
       });
+      if (toCompany && personal.length) {
+        // The personal "to be reimbursed" payment no longer stands: cancel its open claim and void
+        // it, so the expense waits for the real (company) payment and leaves the Reimbursements tab.
+        for (const p of personal)
+          await this.withdrawPersonalPayment(tx, actor, p);
+        const left = await tx.financeExpensePayment.aggregate({
+          where: { expenseId: id, voidedAt: null },
+          _sum: { amount: true },
+        });
+        const next = expenseStatusAfterPayments(
+          row.status,
+          money(row.amount),
+          money(left._sum.amount),
+        );
+        if (next !== row.status) {
+          await tx.financeExpense.update({
+            where: { id },
+            data: { status: next },
+          });
+          await recordFinanceAudit(tx, {
+            entityType: 'EXPENSE',
+            entityId: id,
+            action: 'PAYMENT_STATUS_CHANGED',
+            actorUserId: actor.userId,
+            before: { status: row.status },
+            after: { status: next },
+          });
+        }
+      }
+      if (toReimbursement && e.status !== 'DRAFT')
+        await this.openClaims(
+          tx,
+          actor,
+          e,
+          `Created when ${e.number} was changed to a reimbursement claim.`,
+        );
       return { id };
     });
+  }
+
+  /** Cancels a personal payment's open claims (none may be paid out) and voids the payment. */
+  private async withdrawPersonalPayment(
+    tx: Tx,
+    actor: FinanceActor,
+    p: ExpenseRow['payments'][number],
+  ) {
+    const claimIds = p.reimbursements.map((r) => r.id);
+    if (claimIds.length) {
+      const paidOut = await tx.financeReimbursementPayout.count({
+        where: { reimbursementId: { in: claimIds }, voidedAt: null },
+      });
+      if (paidOut)
+        throw invalidState(
+          'This expense has already been reimbursed. Void the reimbursement payout first.',
+        );
+      for (const claimId of claimIds) {
+        await tx.financeReimbursement.update({
+          where: { id: claimId },
+          data: { status: 'CANCELLED' },
+        });
+        await recordFinanceAudit(tx, {
+          entityType: 'REIMBURSEMENT',
+          entityId: claimId,
+          action: 'CANCELLED',
+          actorUserId: actor.userId,
+          after: { status: 'CANCELLED' },
+          note: 'The expense was changed to a company expense.',
+        });
+      }
+    }
+    const reason =
+      'The expense was changed to a company expense — not to be reimbursed.';
+    const { count } = await tx.financeExpensePayment.updateMany({
+      where: { id: p.id, voidedAt: null },
+      data: {
+        voidedAt: new Date(),
+        voidReason: reason,
+        voidedByUserId: actor.userId,
+      },
+    });
+    if (count !== 1)
+      throw invalidState(
+        'This expense was changed by someone else. Reload and try again.',
+      );
+    await recordFinanceAudit(tx, {
+      entityType: 'EXPENSE_PAYMENT',
+      entityId: p.id,
+      action: 'VOIDED',
+      actorUserId: actor.userId,
+      note: reason,
+    });
+  }
+
+  /** Opens a reimbursement claim for each personal "to be reimbursed" payment that has none. */
+  private async openClaims(
+    tx: Tx,
+    actor: FinanceActor,
+    e: ExpenseRow,
+    note: string,
+  ) {
+    for (const p of e.payments) {
+      if (p.voidedAt || !isReimbursablePersonal(p)) continue;
+      if (p.reimbursements.length) continue;
+      const claim = await tx.financeReimbursement.create({
+        data: {
+          expensePaymentId: p.id,
+          contributorId: p.contributorId!,
+          amountRequested: p.amount,
+          createdByUserId: actor.userId,
+        },
+      });
+      await recordFinanceAudit(tx, {
+        entityType: 'REIMBURSEMENT',
+        entityId: claim.id,
+        action: 'SUBMITTED',
+        actorUserId: actor.userId,
+        after: {
+          amountRequested: claim.amountRequested,
+          expensePaymentId: p.id,
+        },
+        note,
+      });
+    }
   }
 
   async submit(actor: FinanceActor, id: string): Promise<{ id: string }> {
@@ -835,37 +1022,14 @@ export class FinanceExpensesService {
         before: { status: 'DRAFT' },
         after: { status: 'SUBMITTED' },
       });
-      // A personal reimbursable payment on a "reimbursement required" expense becomes a claim now.
-      if (e.reimbursementRequired) {
-        for (const p of e.payments) {
-          if (
-            p.voidedAt ||
-            p.payerType !== 'PERSON' ||
-            p.personalTreatment !== 'REIMBURSABLE'
-          )
-            continue;
-          if (p.reimbursements.length) continue;
-          const claim = await tx.financeReimbursement.create({
-            data: {
-              expensePaymentId: p.id,
-              contributorId: p.contributorId!,
-              amountRequested: p.amount,
-              createdByUserId: actor.userId,
-            },
-          });
-          await recordFinanceAudit(tx, {
-            entityType: 'REIMBURSEMENT',
-            entityId: claim.id,
-            action: 'SUBMITTED',
-            actorUserId: actor.userId,
-            after: {
-              amountRequested: claim.amountRequested,
-              expensePaymentId: p.id,
-            },
-            note: `Created when ${e.number} was submitted.`,
-          });
-        }
-      }
+      // A personal reimbursable payment on a reimbursement-claim expense becomes a claim now.
+      if (e.reimbursementRequired)
+        await this.openClaims(
+          tx,
+          actor,
+          e,
+          `Created when ${e.number} was submitted.`,
+        );
       return { id };
     });
   }
@@ -1153,6 +1317,22 @@ export class FinanceExpensesService {
           before: { status: e.status },
           after: { status: next },
         });
+      // Someone paid it from their own money and is to be paid back: that makes it a claim.
+      if (isReimbursablePersonal(payment) && !e.reimbursementRequired) {
+        await tx.financeExpense.update({
+          where: { id },
+          data: { reimbursementRequired: true },
+        });
+        await recordFinanceAudit(tx, {
+          entityType: 'EXPENSE',
+          entityId: id,
+          action: 'EDITED',
+          actorUserId: actor.userId,
+          before: { reimbursementRequired: false },
+          after: { reimbursementRequired: true },
+          note: 'Changed to a reimbursement claim: a personal payment to be reimbursed was recorded.',
+        });
+      }
       return { id: payment.id };
     });
   }

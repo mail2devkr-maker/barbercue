@@ -6,12 +6,15 @@ import {
   FINANCE_CITY_SUGGESTIONS,
   FINANCE_DEPARTMENTS,
   FINANCE_EXPENSE_STATUS_LABEL,
+  FINANCE_EXPENSE_TYPE_LABEL,
   FINANCE_PERSONAL_TREATMENT_LABEL,
   FinanceContributorType,
   FinanceErrorCode,
   FinanceExpenseStatus,
+  FinanceExpenseType,
   FinancePaymentMethod,
   FinancePersonalTreatment,
+  financeExpenseType,
   type FinanceAccountDto,
   type FinanceAuditEventDto,
   type FinanceCategoryDto,
@@ -43,7 +46,15 @@ export function StatusBadge({ status }: { status: FinanceExpenseStatus }) {
   return <Badge tone={STATUS_TONE[status]}>{FINANCE_EXPENSE_STATUS_LABEL[status]}</Badge>;
 }
 
-const EMPTY_FILTERS = { q: "", status: "", categoryId: "", city: "", department: "", paidByContributorId: "", from: "", to: "" };
+const EMPTY_FILTERS = { q: "", status: "", type: "", categoryId: "", city: "", department: "", paidByContributorId: "", from: "", to: "" };
+
+export function TypeBadge({ reimbursementRequired }: { reimbursementRequired: boolean }) {
+  const type = financeExpenseType({ reimbursementRequired });
+  return <Badge tone={type === "REIMBURSEMENT" ? "brand" : "neutral"}>{FINANCE_EXPENSE_TYPE_LABEL[type]}</Badge>;
+}
+
+/** Personal-payment treatments that keep an expense a company expense (the person is not paid back). */
+const COMPANY_PERSONAL_TREATMENTS = Object.values(FinancePersonalTreatment).filter((t) => t !== FinancePersonalTreatment.REIMBURSABLE);
 
 async function openFile(path: string) {
   const { blob } = await apiFetchBlob(path);
@@ -134,6 +145,12 @@ export function FinanceExpenses({ me }: { me: FinanceMeDto }) {
               {Object.values(FinanceExpenseStatus).map((s) => <option key={s} value={s}>{FINANCE_EXPENSE_STATUS_LABEL[s]}</option>)}
             </select>
           </Field>
+          <Field label="Type" htmlFor="fx-type">
+            <select id="fx-type" className={ui.select} value={filters.type} onChange={(e) => setFilter("type", e.target.value)}>
+              <option value="">All types</option>
+              {Object.values(FinanceExpenseType).map((t) => <option key={t} value={t}>{FINANCE_EXPENSE_TYPE_LABEL[t]}</option>)}
+            </select>
+          </Field>
           <Field label="Category" htmlFor="fx-cat">
             <select id="fx-cat" className={ui.select} value={filters.categoryId} onChange={(e) => setFilter("categoryId", e.target.value)}>
               <option value="">All categories</option>
@@ -186,7 +203,7 @@ export function FinanceExpenses({ me }: { me: FinanceMeDto }) {
               <table className={ui.table}>
                 <thead>
                   <tr>
-                    <th>Date</th><th>Category</th><th>Description</th><th className={ui.num}>Amount</th><th>Paid by</th>
+                    <th>Date</th><th>Category</th><th>Type</th><th>Description</th><th className={ui.num}>Amount</th><th>Paid by</th>
                     <th>City</th><th>Department</th><th>Vendor</th><th>Status</th><th>Receipt</th>
                   </tr>
                 </thead>
@@ -195,6 +212,7 @@ export function FinanceExpenses({ me }: { me: FinanceMeDto }) {
                     <tr key={e.id}>
                       <td className={css.money}>{e.expenseDate}<div className={ui.cardSub}>{e.number}</div></td>
                       <td>{e.category.name}<div className={ui.cardSub}>{e.subcategory?.name ?? e.customSubcategory ?? ""}</div></td>
+                      <td><TypeBadge reimbursementRequired={e.reimbursementRequired} /></td>
                       <td>
                         <button type="button" className={css.rowButton} onClick={() => setOpenId(e.id)}>
                           <span className={css.rowTitle}>{e.description}</span>
@@ -282,15 +300,28 @@ function ExpenseForm({
   onClose: () => void;
   onSaved: (id: string) => void;
 }) {
-  const [payer, setPayer] = useState<PayerChoice>("");
-  const [treatment, setTreatment] = useState<string>(FinancePersonalTreatment.REIMBURSABLE);
+  // A new expense is a company expense unless the user says it was paid from personal money.
+  const [type, setType] = useState<FinanceExpenseType>(initial ? financeExpenseType(initial) : FinanceExpenseType.COMPANY);
+  const isClaim = type === FinanceExpenseType.REIMBURSEMENT;
+  const [payer, setPayer] = useState<PayerChoice>(initial ? "" : "unpaid");
+  const [treatment, setTreatment] = useState<string>(FinancePersonalTreatment.FOUNDER_LOAN);
   const [method, setMethod] = useState<string>(FinancePaymentMethod.UPI);
   const [reference, setReference] = useState("");
   const [newPerson, setNewPerson] = useState({ name: "", type: "FOUNDER" as string });
   const [addingPerson, setAddingPerson] = useState(false);
   const payerIsPerson = payer.startsWith("person:");
   const payerIsAccount = payer.startsWith("account:");
-  const reimbursedPayer = payer === "me" || (payerIsPerson && treatment === FinancePersonalTreatment.REIMBURSABLE);
+  const chooseType = (next: FinanceExpenseType) => {
+    setType(next);
+    if (!initial) setPayer(next === FinanceExpenseType.REIMBURSEMENT ? "me" : "unpaid");
+  };
+  // Editing: the money is locked once approved (finance managers may still reclassify it).
+  const locked = !!initial && !initial.can.edit;
+  const activePayments = initial?.payments.filter((p) => !p.voided) ?? [];
+  const claimPayments = activePayments.filter((p) => p.contributor && p.personalTreatment === FinancePersonalTreatment.REIMBURSABLE);
+  const switchingToCompany = !!initial?.reimbursementRequired && !isClaim;
+  const switchingToClaim = !!initial && !initial.reimbursementRequired && isClaim;
+  const claimBlocked = switchingToClaim && activePayments.length > 0 && claimPayments.length === 0;
 
   async function addPerson() {
     setAddingPerson(true);
@@ -318,7 +349,6 @@ function ExpenseForm({
     department: initial?.department ?? "",
     city: initial?.city ?? "",
     project: initial?.project ?? "",
-    reimbursementRequired: initial?.reimbursementRequired ?? false,
     isRecurring: initial?.isRecurring ?? false,
     notes: initial?.notes ?? "",
   });
@@ -344,7 +374,7 @@ function ExpenseForm({
       department: form.department || undefined,
       city: form.city || undefined,
       project: form.project || undefined,
-      reimbursementRequired: form.reimbursementRequired,
+      reimbursementRequired: isClaim,
       isRecurring: form.isRecurring,
       notes: form.notes || undefined,
       ...(initial
@@ -356,7 +386,9 @@ function ExpenseForm({
               ? {
                   paidBy: {
                     payerType: payerIsPerson ? "PERSON" : "COMPANY_ACCOUNT",
-                    ...(payerIsPerson ? { contributorId: payer.slice(7), personalTreatment: treatment } : { accountId: payer.slice(8) }),
+                    ...(payerIsPerson
+                      ? { contributorId: payer.slice(7), personalTreatment: isClaim ? FinancePersonalTreatment.REIMBURSABLE : treatment }
+                      : { accountId: payer.slice(8) }),
                     method,
                     reference: reference.trim() || undefined,
                   },
@@ -380,10 +412,21 @@ function ExpenseForm({
     }
   }
 
-  const payerChosen = !!initial || payer === "unpaid" || payer === "me" || payerIsPerson || payerIsAccount;
-  const valid = form.expenseDate && form.categoryId && form.description.trim().length >= 3 && Number(form.amount) > 0 && payerChosen;
+  const payerChosen = !!initial || (isClaim ? payer === "me" || payerIsPerson : payer === "unpaid" || payerIsPerson || payerIsAccount);
+  const valid = form.expenseDate && form.categoryId && form.description.trim().length >= 3 && Number(form.amount) > 0 && payerChosen && !claimBlocked;
+  const otherPeople = me.roles.manage ? contributors.filter((c) => c.isActive && c.id !== me.contributorId) : [];
+  const activeAccounts = me.roles.manage ? accounts.filter((a) => a.isActive) : [];
+  const typeHint = claimBlocked
+    ? "This expense was paid by the company (or is not to be paid back), so it cannot be a reimbursement claim. Void that payment in the expense details first."
+    : switchingToCompany && claimPayments.length
+      ? `The personal payment by ${claimPayments.map((p) => p.contributor!.name).join(", ")} will be voided and any open claim cancelled. Record the company payment afterwards.`
+      : switchingToClaim && claimPayments.length && initial?.status !== "DRAFT"
+        ? "A reimbursement claim is opened for the personal payment."
+        : isClaim
+          ? "Money someone paid from their own pocket for FastQue and wants back. It appears under Reimbursements."
+          : "FastQue's own spend — paid from a company account or card, or a bill to pay. It is tracked by category, not as a reimbursement.";
   return (
-    <Dialog title={initial ? `Edit ${initial.number}` : "Add expense"} onClose={onClose} wide>
+    <Dialog title={initial ? (locked ? `Reclassify ${initial.number}` : `Edit ${initial.number}`) : "Add expense"} onClose={onClose} wide>
       <form onSubmit={(e) => (e.preventDefault(), void save())} noValidate>
         {error && <Banner tone="error">{error}</Banner>}
         {duplicates && (
@@ -394,8 +437,8 @@ function ExpenseForm({
           </Banner>
         )}
         <div className={ui.formGrid}>
-          <Field label="Expense date *" htmlFor="ef-date"><input id="ef-date" type="date" className={ui.input} value={form.expenseDate} max={today()} onChange={(e) => set("expenseDate", e.target.value)} required /></Field>
-          <Field label="Amount (₹, incl. tax) *" htmlFor="ef-amount"><input id="ef-amount" inputMode="decimal" className={ui.input} value={form.amount} onChange={(e) => set("amount", e.target.value)} placeholder="0.00" required /></Field>
+          <Field label="Expense date *" htmlFor="ef-date"><input id="ef-date" type="date" className={ui.input} value={form.expenseDate} max={today()} disabled={locked} onChange={(e) => set("expenseDate", e.target.value)} required /></Field>
+          <Field label="Amount (₹, incl. tax) *" htmlFor="ef-amount"><input id="ef-amount" inputMode="decimal" className={ui.input} value={form.amount} disabled={locked} onChange={(e) => set("amount", e.target.value)} placeholder="0.00" required /></Field>
           <Field label="Main category *" htmlFor="ef-cat">
             <select id="ef-cat" className={ui.select} value={form.categoryId} onChange={(e) => (set("categoryId", e.target.value), set("subcategoryId", ""), set("department", form.department || categories.find((c) => c.id === e.target.value)?.department || ""))} required>
               <option value="">Choose…</option>
@@ -411,12 +454,12 @@ function ExpenseForm({
           {!form.subcategoryId && (
             <Field label="Custom subcategory" htmlFor="ef-custom"><input id="ef-custom" className={ui.input} value={form.customSubcategory} maxLength={80} onChange={(e) => set("customSubcategory", e.target.value)} /></Field>
           )}
-          <Field label="GST / tax included (₹)" htmlFor="ef-tax"><input id="ef-tax" inputMode="decimal" className={ui.input} value={form.taxAmount} onChange={(e) => set("taxAmount", e.target.value)} /></Field>
+          <Field label="GST / tax included (₹)" htmlFor="ef-tax"><input id="ef-tax" inputMode="decimal" className={ui.input} value={form.taxAmount} disabled={locked} onChange={(e) => set("taxAmount", e.target.value)} /></Field>
           <div className={css.formWide}>
-            <Field label="Exact description *" htmlFor="ef-desc"><textarea id="ef-desc" className={ui.textarea} value={form.description} maxLength={1000} rows={2} onChange={(e) => set("description", e.target.value)} required /></Field>
+            <Field label="Exact description *" htmlFor="ef-desc"><textarea id="ef-desc" className={ui.textarea} value={form.description} maxLength={1000} rows={2} disabled={locked} onChange={(e) => set("description", e.target.value)} required /></Field>
           </div>
           <Field label="Vendor / payee" htmlFor="ef-vendor">
-            <select id="ef-vendor" className={ui.select} value={form.vendorId} onChange={(e) => set("vendorId", e.target.value)}>
+            <select id="ef-vendor" className={ui.select} value={form.vendorId} disabled={locked} onChange={(e) => set("vendorId", e.target.value)}>
               <option value="">None</option>
               {vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
             </select>
@@ -435,6 +478,14 @@ function ExpenseForm({
         </div>
         <datalist id="fin-cities">{FINANCE_CITY_SUGGESTIONS.map((c) => <option key={c} value={c} />)}</datalist>
         <div className={`${ui.formGrid} ${ui.mt12}`}>
+          <div className={css.formWide}>
+            <Field label="Expense type *" htmlFor="ef-type" hint={typeHint}>
+              <select id="ef-type" className={ui.select} value={type} onChange={(e) => chooseType(e.target.value as FinanceExpenseType)}>
+                <option value={FinanceExpenseType.COMPANY}>Company expense — paid or to be paid by FastQue</option>
+                <option value={FinanceExpenseType.REIMBURSEMENT}>Reimbursement claim — paid from personal money, to be paid back</option>
+              </select>
+            </Field>
+          </div>
           {initial ? (
             <div className={css.formWide}>
               <Field label="Who spent the money" htmlFor="ef-payer-ro" hint="To change who paid, void or add a payment in the expense details — the history is kept.">
@@ -443,22 +494,37 @@ function ExpenseForm({
             </div>
           ) : (
             <>
-              <Field label="Who spent the money? *" htmlFor="ef-payer" hint={payer === "unpaid" ? "Record the payment later from the expense details." : undefined}>
+              <Field
+                label={isClaim ? "Who paid from their own money? *" : "Payment source *"}
+                htmlFor="ef-payer"
+                hint={payer === "unpaid" ? (me.roles.manage ? "Record the company payment later from the expense details." : "Finance records the company payment.") : undefined}
+              >
                 <select id="ef-payer" className={ui.select} value={payer} onChange={(e) => setPayer(e.target.value)} required>
-                  <option value="">Choose…</option>
-                  <option value="me">I paid it myself — reimburse me{me.contributorId ? "" : " (your finance record is created automatically)"}</option>
-                  {me.roles.manage && contributors.filter((c) => c.isActive && c.id !== me.contributorId).length > 0 && (
-                    <optgroup label="A person paid from their own money">
-                      {contributors.filter((c) => c.isActive && c.id !== me.contributorId).map((c) => <option key={c.id} value={`person:${c.id}`}>{c.name} ({pretty(c.type)})</option>)}
-                    </optgroup>
-                  )}
-                  {me.roles.manage && accounts.filter((a) => a.isActive).length > 0 && (
-                    <optgroup label="Paid from a FastQue company account">
-                      {accounts.filter((a) => a.isActive).map((a) => <option key={a.id} value={`account:${a.id}`}>Company · {a.name}</option>)}
-                    </optgroup>
+                  {isClaim ? (
+                    <>
+                      <option value="me">I paid it myself — reimburse me{me.contributorId ? "" : " (your finance record is created automatically)"}</option>
+                      {otherPeople.length > 0 && (
+                        <optgroup label="Someone else paid — reimburse them">
+                          {otherPeople.map((c) => <option key={c.id} value={`person:${c.id}`}>{c.name} ({pretty(c.type)})</option>)}
+                        </optgroup>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <option value="unpaid">{me.roles.manage ? "Not paid yet (a bill to pay later)" : "Paid or to be paid by FastQue (company account, card or bill)"}</option>
+                      {activeAccounts.length > 0 && (
+                        <optgroup label="Paid from a FastQue company account">
+                          {activeAccounts.map((a) => <option key={a.id} value={`account:${a.id}`}>Company · {a.name}</option>)}
+                        </optgroup>
+                      )}
+                      {otherPeople.length > 0 && (
+                        <optgroup label="A person paid, not to be paid back">
+                          {otherPeople.map((c) => <option key={c.id} value={`person:${c.id}`}>{c.name} ({pretty(c.type)})</option>)}
+                        </optgroup>
+                      )}
+                    </>
                   )}
                   {me.roles.manage && <option value="new">+ Add a new person…</option>}
-                  <option value="unpaid">Not paid yet (a bill to pay later)</option>
                 </select>
               </Field>
               {payer === "new" && (
@@ -472,10 +538,10 @@ function ExpenseForm({
                   <div className={css.formWide}><Btn small variant="primary" disabled={addingPerson || newPerson.name.trim().length < 2} onClick={() => void addPerson()}>{addingPerson ? "Adding…" : "Add person"}</Btn></div>
                 </>
               )}
-              {payerIsPerson && (
-                <Field label="Treat this personal payment as" htmlFor="ef-treat" hint="Agreed with the person. It is never counted as company cash received.">
+              {payerIsPerson && !isClaim && (
+                <Field label="Treat this personal payment as" htmlFor="ef-treat" hint="Agreed with the person. It is never counted as company cash received. To pay them back, choose “Reimbursement claim” above.">
                   <select id="ef-treat" className={ui.select} value={treatment} onChange={(e) => setTreatment(e.target.value)}>
-                    {Object.values(FinancePersonalTreatment).map((t) => <option key={t} value={t}>{FINANCE_PERSONAL_TREATMENT_LABEL[t]}</option>)}
+                    {COMPANY_PERSONAL_TREATMENTS.map((t) => <option key={t} value={t}>{FINANCE_PERSONAL_TREATMENT_LABEL[t]}</option>)}
                   </select>
                 </Field>
               )}
@@ -493,13 +559,10 @@ function ExpenseForm({
           )}
         </div>
         <label className={`${ui.checkRow} ${ui.mt12}`}>
-          <input type="checkbox" checked={form.reimbursementRequired || reimbursedPayer} disabled={reimbursedPayer} onChange={(e) => set("reimbursementRequired", e.target.checked)} />
-          <span>Reimbursement required</span>
-        </label>
-        <label className={`${ui.checkRow} ${ui.mt12}`}>
           <input type="checkbox" checked={form.isRecurring} onChange={(e) => set("isRecurring", e.target.checked)} />
           <span>Recurring expense (hosting, subscriptions, salaries…)</span>
         </label>
+        {locked && <p className={ui.hint}>This expense is already approved: its amount, date, description and vendor are locked. You can still correct its category, department, city, project, notes and type.</p>}
         <p className={ui.hint}>Saved as a draft with who paid. Add receipts and submit it for approval from the expense details. Approval does not mark it paid — only recorded payments do.</p>
         <div className={ui.dialogActions}>
           <Btn onClick={onClose}>Cancel</Btn>
@@ -586,10 +649,11 @@ function ExpenseDrawer({
         <Skeleton height={300} />
       ) : (
         <div className={ui.stackSm}>
-          <div className={ui.rowWrap}><StatusBadge status={e.status} />{e.isRecurring && <Badge tone="info">Recurring</Badge>}{e.reimbursementRequired && <Badge tone="brand">Reimbursement required</Badge>}</div>
+          <div className={ui.rowWrap}><StatusBadge status={e.status} />{e.isRecurring && <Badge tone="info">Recurring</Badge>}<TypeBadge reimbursementRequired={e.reimbursementRequired} /></div>
           <p>{e.description}</p>
           <dl className={ui.kv}>
             <dt>Expense date</dt><dd>{e.expenseDate}</dd>
+            <dt>Type</dt><dd>{FINANCE_EXPENSE_TYPE_LABEL[financeExpenseType(e)]}</dd>
             <dt>Category</dt><dd>{e.category.name}{e.subcategory || e.customSubcategory ? ` › ${e.subcategory?.name ?? e.customSubcategory}` : ""}</dd>
             <dt>Amount</dt><dd>{inr(e.amount)} (tax {inr(e.taxAmount)})</dd>
             <dt>Paid so far</dt><dd>{inr(e.paidAmount)}</dd>
@@ -604,6 +668,7 @@ function ExpenseDrawer({
 
           <div className={ui.rowWrap}>
             {e.can.edit && <Btn small onClick={() => onEdit(e)}>Edit</Btn>}
+            {!e.can.edit && e.can.reclassify && <Btn small onClick={() => onEdit(e)}>Change category or type</Btn>}
             {e.can.submit && <Btn small variant="primary" disabled={busy} onClick={() => void act(() => post(`expenses/${id}/submit`), "Submitted for approval.")}>Submit for approval</Btn>}
             {e.can.review && e.status === "SUBMITTED" && <Btn small disabled={busy} onClick={() => void act(() => post(`expenses/${id}/review`, { action: "START_REVIEW" }), "Marked under review.")}>Start review</Btn>}
             {e.can.review && <Btn small variant="primary" disabled={busy} onClick={() => void act(() => post(`expenses/${id}/review`, { action: "APPROVE" }), "Approved. It stays unpaid until a payment is recorded.")}>Approve</Btn>}
@@ -719,7 +784,9 @@ function PaymentForm({
     payerType: accounts.length ? "COMPANY_ACCOUNT" : "PERSON",
     accountId: accounts.find((a) => a.isActive)?.id ?? "",
     contributorId: "",
-    personalTreatment: "REIMBURSABLE",
+    // A personal payment on a reimbursement claim is to be paid back; on a company expense the
+    // treatment must be chosen (choosing "to be reimbursed" turns the expense into a claim).
+    personalTreatment: expense.reimbursementRequired ? "REIMBURSABLE" : "",
     method: "UPI",
     reference: "",
   });
@@ -776,8 +843,9 @@ function PaymentForm({
                 {contributors.filter((c) => c.isActive).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </Field>
-            <Field label="Treated as" htmlFor="pf-treat" hint="Agreed with the person. It is never recorded as company cash received.">
+            <Field label="Treated as" htmlFor="pf-treat" hint="Agreed with the person. It is never recorded as company cash received. “To be reimbursed” makes this expense a reimbursement claim.">
               <select id="pf-treat" className={ui.select} value={f.personalTreatment} onChange={(e) => setF({ ...f, personalTreatment: e.target.value })}>
+                <option value="">Choose…</option>
                 {Object.values(FinancePersonalTreatment).map((t) => <option key={t} value={t}>{FINANCE_PERSONAL_TREATMENT_LABEL[t]}</option>)}
               </select>
             </Field>
@@ -792,7 +860,7 @@ function PaymentForm({
       </div>
       <div className={ui.rowWrap}>
         <Btn small onClick={onCancel}>Cancel</Btn>
-        <Btn small variant="primary" disabled={busy || !(Number(f.amount) > 0) || (f.payerType === "COMPANY_ACCOUNT" ? !f.accountId : !f.contributorId)} onClick={() => void save()}>{busy ? "Saving…" : "Record payment"}</Btn>
+        <Btn small variant="primary" disabled={busy || !(Number(f.amount) > 0) || (f.payerType === "COMPANY_ACCOUNT" ? !f.accountId : !f.contributorId || !f.personalTreatment)} onClick={() => void save()}>{busy ? "Saving…" : "Record payment"}</Btn>
       </div>
     </div>
   );

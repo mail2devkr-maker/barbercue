@@ -3,7 +3,7 @@ import "./fonts.css";
 import "./globals.css";
 import "./theme-vars.css";
 import "./theme-fixes.css";
-import { ThemeSwitcher, THEME_BOOT_SCRIPT } from "../components/theme/ThemeSwitcher";
+import { THEME_BOOT_SCRIPT } from "../components/theme/ThemeSwitcher";
 import { AuthProvider } from "../lib/auth-context";
 import { SiteHeader } from "../components/layout/SiteHeader";
 import { SiteFooter } from "../components/layout/SiteFooter";
@@ -71,7 +71,6 @@ export default function RootLayout({
             <SiteFooter />
           </HideOnOwnerShell>
         </AuthProvider>
-        <ThemeSwitcher />
       </body>
     </html>
   );

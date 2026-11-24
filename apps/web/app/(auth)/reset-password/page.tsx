@@ -13,7 +13,7 @@ function ResetPasswordForm() {
   const token = searchParams.get("token") ?? "";
   const audienceResult = passwordAudienceSchema.safeParse(searchParams.get("audience"));
   const audience = audienceResult.success ? audienceResult.data : "staff";
-  const loginPath = audience === "owner" ? "/owner/login" : audience === "admin" ? "/admin/login" : "/staff/login";
+  const loginPath = audience === "owner" ? "/owner/login" : audience === "admin" ? "/admin/login" : audience === "employee" ? "/employee/login" : "/staff/login";
   // Invitation links (staff invites, salon-onboarding owner invites) set a first password.
   const invite = searchParams.get("intent") === "invite";
 
@@ -71,7 +71,7 @@ function ResetPasswordForm() {
       subtitle={
         invite
           ? "Choose your own password to activate your account. This link works once; FastQue never sends passwords."
-          : "Set the new password for this owner, staff or administrator account."
+          : "Set the new password for this owner, staff, employee or administrator account."
       }
       showAudienceLinks={false}
     >

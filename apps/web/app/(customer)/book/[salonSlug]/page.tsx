@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { DISCOVERY_PATHS } from "@barbercue/shared";
+import { BOOKINGS_PAUSED_MESSAGE, DISCOVERY_PATHS } from "@barbercue/shared";
 import type { PublicSalonStatusDto, SalonProfileDto } from "@barbercue/shared";
 import { fetchDiscoveryOrNull } from "../../../../lib/discovery-api";
 import { BookingFlow } from "../../../../components/booking/BookingFlow";
@@ -68,6 +68,7 @@ export default async function BookPage({
         <p className={styles.address}>{salon.addressLine}</p>
       </div>
 
+      {salon.bookingsPaused && <p role="alert" className={styles.address}><strong>{BOOKINGS_PAUSED_MESSAGE}</strong></p>}
       {publicStatus && <PublicSalonStatus status={publicStatus} compact />}
 
       <CampaignCapture salonKey={campaignKey} />

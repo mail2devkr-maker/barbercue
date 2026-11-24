@@ -34,6 +34,8 @@ export const CRM_PATHS = {
   attachments: "attachments",
   analytics: "analytics",
   notifications: "notifications",
+  announcements: "announcements",
+  video: "video",
 } as const;
 
 // ---------- Lead statuses (configurable labels + order; values are the shared enum) ----------
@@ -71,7 +73,9 @@ export const CRM_MANUAL_LEAD_STATUSES: readonly CrmLeadStatus[] = [
   "NEW", "ASSIGNED", "CALL_PENDING", "CONTACT_ATTEMPTED", "NO_ANSWER", "CALLBACK_REQUESTED", "CONTACTED",
   "INTERESTED", "DEMO_SCHEDULED", "MEETING_COMPLETED", "FOLLOW_UP", "LOST", "DUPLICATE", "INVALID_CONTACT",
 ];
-/** Statuses that are milestones of the onboarding workflow (set by the system). */
+/** Once submitted, only managers/admins may move the lead by hand. */
+export const CRM_WORKFLOW_LOCKED_STATUSES: readonly CrmLeadStatus[] = ["PENDING_APPROVAL", "APPROVED", "ONBOARDED"];
+/** Statuses that are milestones of the onboarding workflow (set by the system or an admin). */
 export const CRM_WORKFLOW_LEAD_STATUSES: readonly CrmLeadStatus[] = ["ONBOARDING_STARTED", "PENDING_APPROVAL", "APPROVED", "ONBOARDED", "REJECTED"];
 
 export const CrmLeadPriority = { LOW: "LOW", NORMAL: "NORMAL", HIGH: "HIGH", URGENT: "URGENT" } as const;
@@ -497,6 +501,35 @@ export function crmRange(query: Pick<CrmAnalyticsQuery, "preset" | "from" | "to"
   }
   if (from > to) [from, to] = [to, from];
   return { from, to, start: new Date(Date.parse(`${from}T00:00:00Z`) - IST), end: new Date(Date.parse(`${to}T00:00:00Z`) + 864e5 - IST) };
+}
+
+// ---------- CEO message ----------
+
+export const CRM_VIDEO_MAX_BYTES = 50 * 1024 * 1024;
+export const crmAnnouncementSchema = z
+  .object({
+    title: text(160),
+    body: optText(4000),
+    videoUrl: z
+      .string()
+      .trim()
+      .max(500)
+      .refine((v) => v === "" || /^https:\/\/\S+$/i.test(v), "Use a full https:// link")
+      .optional()
+      .nullable(),
+  })
+  .strict();
+export type CrmAnnouncementInput = z.infer<typeof crmAnnouncementSchema>;
+export const crmAnnouncementUpdateSchema = crmAnnouncementSchema.partial().extend({ isActive: z.boolean().optional() }).strict();
+export type CrmAnnouncementUpdateInput = z.infer<typeof crmAnnouncementUpdateSchema>;
+export interface CrmAnnouncementDto {
+  id: string;
+  title: string;
+  body: string | null;
+  videoUrl: string | null;
+  hasVideo: boolean;
+  isActive: boolean;
+  createdAt: string;
 }
 
 // ---------- DTOs ----------

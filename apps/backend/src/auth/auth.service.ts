@@ -2203,7 +2203,8 @@ export class AuthService {
         role === Role.CO_FOUNDER ||
         role === Role.HR_ADMIN ||
         role === Role.SALES_ADMIN ||
-        role === Role.PLATFORM_VIEWER,
+        role === Role.PLATFORM_VIEWER ||
+        role === Role.FIELD_EXECUTIVE,
     );
     if (!user || !eligible) {
       return {};

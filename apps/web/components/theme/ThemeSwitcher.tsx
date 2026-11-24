@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import styles from "./theme-switcher.module.css";
 
 /**
@@ -43,6 +43,22 @@ function readChoice(): WebThemeChoice {
 export function ThemeSwitcher() {
   const [choice, setChoice] = useState<WebThemeChoice>("designed");
   const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  // Close on an outside click or Escape: the menu now drops over page content.
+  useEffect(() => {
+    if (!open) return undefined;
+    const onDown = (e: MouseEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
 
   useEffect(() => {
     const saved = readChoice();
@@ -68,7 +84,7 @@ export function ThemeSwitcher() {
   }
 
   return (
-    <div className={styles.root}>
+    <div className={styles.root} ref={rootRef}>
       {open && (
         <div className={styles.menu} role="radiogroup" aria-label="Appearance">
           {OPTIONS.map((o) => (
@@ -90,9 +106,13 @@ export function ThemeSwitcher() {
         className={styles.toggle}
         aria-expanded={open}
         aria-label="Appearance: light or dark theme"
-        onClick={() => setOpen((v) => !v)}
+        title="Theme"
+        onClick={() => {
+          setChoice(readChoice());
+          setOpen((v) => !v);
+        }}
       >
-        ◐ Theme
+        <span aria-hidden="true">◐</span>
       </button>
     </div>
   );

@@ -230,6 +230,11 @@ export function CrmProfile() {
         <Field label="Territory"><span style={{ color: "var(--c-text)" }}>{me.employee?.territory ?? "Not set"}</span></Field>
         <Field label="CRM role"><span><Pill tone="brand">{roleLabel}</Pill></span></Field>
       </div>
+      {me.role === "FIELD_EMPLOYEE" && (
+        <p style={{ marginTop: 14 }}>
+          <Link className={s.btn} href="/forgot-password?audience=employee">Reset my password</Link>
+        </p>
+      )}
       <p className={s.faint} style={{ marginTop: 14 }}>To change your details or territory, contact your sales manager or HR.</p>
     </section>
   );

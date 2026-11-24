@@ -860,6 +860,8 @@ export class SalonsService {
         ? false
         : isOpenNow(salon.operatingHours, salon),
       isClosedForToday: salon.isClosedForToday,
+      queuePaused: salon.queuePaused,
+      bookingsPaused: salon.bookingsPaused,
       // Pre-confirmation timezone fix: the salon's resolved IANA zone, so the booking flow (date
       // picker, slot times, pre-confirm summary) can render in the SALON's local time instead of
       // the customer device's, the same way BookingDetailDto.salonTimezone already does for
@@ -1517,6 +1519,8 @@ export class SalonsService {
         opensNext:
           openNow === true ? null : nextOpeningOf(salon.operatingHours, salon),
         isClosedForToday: salon.isClosedForToday,
+        queuePaused: salon.queuePaused,
+        bookingsPaused: salon.bookingsPaused,
         verified: salon.verification?.status === VerificationStatus.APPROVED,
         waitingCount: waitingBy.get(salon.id) ?? 0,
         onlineBookingDiscountPercent: salon.onlineBookingDiscountPercent,

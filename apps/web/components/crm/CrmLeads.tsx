@@ -8,6 +8,7 @@ import {
   CRM_LEAD_STATUS_META,
   CRM_LEAD_STATUSES,
   CRM_MANUAL_LEAD_STATUSES,
+  CRM_WORKFLOW_LOCKED_STATUSES,
   CrmLeadPriority,
   CrmLeadSource,
   type CrmActivityDto,
@@ -297,6 +298,7 @@ function LeadDrawer({ id, onClose, onChanged }: { id: string; onClose: () => voi
   const [note, setNote] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
   const canWrite = me?.role !== "VIEWER";
+  const statusLocked = me?.role === "FIELD_EMPLOYEE" && !!lead && CRM_WORKFLOW_LOCKED_STATUSES.includes(lead.status);
 
   function changed(l: CrmLeadDto) {
     setData(l);
@@ -371,11 +373,12 @@ function LeadDrawer({ id, onClose, onChanged }: { id: string; onClose: () => voi
           <div className={s.formGrid} style={{ marginBottom: 14 }}>
             {canWrite && (
               <Field label="Status">
-                <select className={s.select} value={lead.status} disabled={!CRM_MANUAL_LEAD_STATUSES.includes(lead.status) && me?.role === "FIELD_EMPLOYEE"} onChange={(e) => void patch({ status: e.target.value })}>
-                  {(CRM_MANUAL_LEAD_STATUSES.includes(lead.status) ? CRM_MANUAL_LEAD_STATUSES : [lead.status, ...CRM_MANUAL_LEAD_STATUSES]).map((st) => (
+                <select className={s.select} value={lead.status} disabled={statusLocked} onChange={(e) => void patch({ status: e.target.value })}>
+                  {(me?.role === "ADMIN" ? CRM_LEAD_STATUSES : CRM_MANUAL_LEAD_STATUSES.includes(lead.status) ? CRM_MANUAL_LEAD_STATUSES : [lead.status, ...CRM_MANUAL_LEAD_STATUSES]).map((st) => (
                     <option key={st} value={st}>{CRM_LEAD_STATUS_META[st].label}</option>
                   ))}
                 </select>
+                {statusLocked && <span className={s.faint}>Submitted for approval. A manager or admin can change this.</span>}
               </Field>
             )}
             {team && (

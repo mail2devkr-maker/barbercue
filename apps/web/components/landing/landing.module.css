@@ -1618,7 +1618,8 @@
   .mobileNavHost { display: block; }
 
   .siteHeaderSpacer { height: 112px; }
-  .siteMobileBell { display: block; }
+  .siteMobileBell { display: flex; align-items: center; gap: 8px; color: #fff; }
+  .siteMobileBell + .mobileNavHost { margin-left: 8px; }
 
   /* Header space is now reserved globally by SiteHeader; this is only hero breathing room. */
   .hero { padding-top: 48px; }
@@ -1664,7 +1665,10 @@
   .headerInner,
   .inner { width: min(100% - 32px, 1180px); }
 
-  .headerInner { min-height: 64px; }
+  .headerInner { min-height: 64px; gap: 8px; }
+  .siteMobileBell { gap: 6px; }
+  .siteMobileBell + .mobileNavHost { margin-left: 0; }
+  .wordmark { min-width: 0; flex: 0 1 auto; overflow: hidden; }
   .utilityInner { min-height: 34px; font-size: 0.7rem; }
   .utilityLeft { gap: 12px; }
   .utilityRight { gap: 12px; }
