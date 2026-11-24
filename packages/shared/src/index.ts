@@ -37,3 +37,4 @@ export * from './customer-dashboard';
 export * from './onboarding';
 export * from './crm';
 export * from './work-marketplace';
+export * from './maintenance';

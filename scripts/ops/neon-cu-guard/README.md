@@ -5,11 +5,11 @@ live project runs out, Neon suspends the database and FastQue goes down. The gua
 
 - **Every day at 09:00 IST** it posts the usage of both FastQue projects to the GitHub issue labelled
   `neon-cu-guard` (you are assigned, so GitHub e-mails you).
-- **Every night between 02:00 and 04:30 IST** it checks again. If the live project is at **90% or more**
+- **Every night between 00:00 and 05:30 IST** (a switch must start by 05:30 to finish before 06:00) it checks again. Daytime checks every 3 hours switch at once only when the allowance would run out before the next night (urgent, alert with @mention). If the live project is at **90% or more**
   (or would run out before the next night), and the standby project is less than 50% used, it moves
   production to the standby project. That is the same procedure that was done by hand on 15 Nov 2026:
   1. Create a NEW EMPTY database `fq_guard_YYYYMMDDHHMM` on the standby project.
-  2. Stop the Railway backend and website (writer freeze). The site is down for about 5-10 minutes.
+  2. Stop the Railway backend (writer freeze). The website stays up and every visitor, on the site and in the app, sees an "under maintenance" screen for about 5-10 minutes; it clears by itself.
   3. Copy with `pg_dump | pg_restore --single-transaction`. The source database is only read.
   4. Prove the copy: same tables, same migration ledger, same per-table row digest.
   5. Point `DATABASE_URL` and `DIRECT_DATABASE_URL` of the backend at the new database.

@@ -403,9 +403,11 @@ async function switchOver(s, d) {
     dstUrl = await connUri(p, dstBranch.id, newDb);
     log(`target ${newDb} created on ${s.otherCfg.id}`);
     stage = "freeze";
+    // Only the backend (the only database writer) is stopped. The website keeps running and shows
+    // every visitor the "under maintenance" screen while the API is unreachable (owner, 24 Nov);
+    // the mobile app shows the same screen.
     await rwRemove(backendLive.id);
-    await rwRemove(webLive.id);
-    log("frozen: backend and website stopped");
+    log("frozen: backend stopped; website stays up showing the maintenance screen");
     stage = "copy";
     const facts = await copyAndProve(srcUrl, dstUrl, { requireFrozen: true });
     log("parity PASS", JSON.stringify(facts));
@@ -420,7 +422,6 @@ async function switchOver(s, d) {
       if (!sessions) await sleep(10000);
     }
     if (!sessions) throw new Error("backend is up but has no session on the new database");
-    await rwDeploy(RW.web, webLive.sha, "website");
     const siteOk = await httpOk(SITE_URL);
     let cleaned = [];
     for (const [proj, branch, liveName] of [[p, dstBranch.id, newDb], [s.activeCfg.id, srcBranch.id, s.live.database]]) {
@@ -430,13 +431,13 @@ async function switchOver(s, d) {
       }
     }
     await post([
-      `### ✅ Automatic database switch done`,
+      d.urgent ? `### ✅ URGENT automatic database switch done (outside the night window)` : `### ✅ Automatic database switch done`,
       `Production moved from **${s.active.name}** (\`${s.live.database}\`, ${(s.active.pct * 100).toFixed(1)}% used) to **${s.other.name}** \`${newDb}\`${createdProject ? ` - a NEW Neon project \`${createdProject.id}\` was created for this switch` : ""}.`,
       `Why: ${d.reasons.join("; ")}`,
       `Copy ${facts.seconds} s · tables ${facts.tables} · rows ${facts.rows} · digest \`${facts.digest}\` · migration ledger equal ${facts.ledgerEqual}`,
-      `Backend and website redeployed at their previous commits (${backendLive.sha.slice(0, 8)} / ${webLive.sha.slice(0, 8)}); health OK; website ${siteOk ? "OK" : "**not 200 - check**"}; backend sessions on the new database: ${sessions}.`,
+      `Backend redeployed at its previous commit (${backendLive.sha.slice(0, 8)}); the website stayed up (maintenance screen during the copy). Health OK; website ${siteOk ? "OK" : "**not 200 - check**"}; backend sessions on the new database: ${sessions}.`,
       `The old database \`${s.live.database}\` is kept unchanged as the previous copy.${cleaned.length ? ` Removed older guard copies: ${cleaned.join(", ")}.` : ""}`,
-    ].join("\n"), { mention: !siteOk });
+    ].join("\n"), { mention: !siteOk || !!d.urgent });
   } catch (err) {
     log(`switch failed at stage ${stage}: ${err.message}`);
     const restore = [];
