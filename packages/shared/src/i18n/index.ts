@@ -2757,6 +2757,9 @@ const enNotificationTypeLabels: NotificationTypeLabels = {
   'work.payout.sent': 'Payout sent',
   'work.payout.failed': 'Payout failed — we will retry',
   'work.dispute.updated': 'Dispute update',
+  'commerce.order.updated': 'Your FastQue order was updated',
+  'commerce.return.updated': 'Your return was updated',
+  'shop.order.updated': 'Marketplace order update',
 };
 
 const hiNotificationTypeLabels: NotificationTypeLabels = {
@@ -2793,6 +2796,9 @@ const hiNotificationTypeLabels: NotificationTypeLabels = {
   'work.payout.sent': 'भुगतान भेजा गया',
   'work.payout.failed': 'भुगतान विफल — हम फिर कोशिश करेंगे',
   'work.dispute.updated': 'विवाद अपडेट',
+  'commerce.order.updated': 'आपका FastQue ऑर्डर अपडेट हुआ',
+  'commerce.return.updated': 'आपकी वापसी अपडेट हुई',
+  'shop.order.updated': 'मार्केटप्लेस ऑर्डर अपडेट',
 };
 
 export const NOTIFICATION_TYPE_LABELS: Readonly<Record<Language, NotificationTypeLabels>> = {

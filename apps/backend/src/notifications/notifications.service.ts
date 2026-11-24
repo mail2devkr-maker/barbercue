@@ -54,6 +54,9 @@ const TYPE_CATEGORY: Record<NotificationType, NotificationCategory> = {
   'work.payout.sent': NotificationCategory.BOOKING_UPDATES,
   'work.payout.failed': NotificationCategory.BOOKING_UPDATES,
   'work.dispute.updated': NotificationCategory.BOOKING_UPDATES,
+  'commerce.order.updated': NotificationCategory.BOOKING_UPDATES,
+  'commerce.return.updated': NotificationCategory.BOOKING_UPDATES,
+  'shop.order.updated': NotificationCategory.BOOKING_UPDATES,
 };
 
 // ---------- Auto-expiry (live-visit add-on mission, 17 Nov 2026) ----------
