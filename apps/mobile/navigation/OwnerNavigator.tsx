@@ -183,7 +183,9 @@ function OwnerTabs() {
       // Owner (18 Nov): Back (the new in-app button and the phone's own) returns to the PREVIOUS tab.
       backBehavior="history"
       screenListeners={({ route }) => ({
-        focus: () => setStatusBarStyle(statusBarStyleFor(resolved, route.name === 'OwnerDashboardTab' ? 'light' : 'dark')),
+        // Every owner page now sits under the dark FastQue brand bar (components/TopBrandBar), so the
+        // status bar icons above it stay light on every tab.
+        focus: () => setStatusBarStyle('light'),
       })}
       screenOptions={{
         headerShown: false,

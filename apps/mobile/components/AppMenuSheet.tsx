@@ -1,5 +1,5 @@
+import { useRealInsets } from './TopBrandBar';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { font, fontSize, radius, space } from '../lib/theme';
 import { useThemedStyles, type ThemeTokens } from '../lib/theme-mode';
 
@@ -31,7 +31,7 @@ export function AppMenuSheet({
   sections: AppMenuSection[];
 }) {
   const styles = useThemedStyles(makeStyles);
-  const insets = useSafeAreaInsets();
+  const insets = useRealInsets();
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.backdrop}>

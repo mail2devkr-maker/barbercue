@@ -19,13 +19,18 @@ import { ThemeProvider, useStatusBarStyle } from './lib/theme-mode';
 
 /** The app-wide status bar, following the theme ("As designed": light text, as before). */
 function ThemedStatusBar() {
-  return <StatusBar style={useStatusBarStyle('light')} />;
+  const themed = useStatusBarStyle('light');
+  const { status } = useAuth();
+  // Signed in, every page sits under the dark FastQue brand bar (components/TopBrandBar), so the
+  // status bar icons are always light there.
+  return <StatusBar style={status === 'authenticated' ? 'light' : themed} />;
 }
 import { hasIntroPlayed, markIntroPlayed } from './lib/startup-intro';
 import { color } from './lib/theme';
 import { OfflineBanner } from './components/OfflineBanner';
 import { StartupIntro, StartupIntroErrorBoundary } from './components/StartupIntro';
 import AuthStack from './navigation/AuthStack';
+import { BrandedShell } from './components/TopBrandBar';
 import RootNavigator from './navigation/RootNavigator';
 import OwnerNavigator from './navigation/OwnerNavigator';
 import StaffNavigator from './navigation/StaffNavigator';
@@ -114,7 +119,13 @@ function Root() {
   return (
     <NavigationContainer ref={navigationRef} onReady={replayPendingOwnerBookingPushNavigation}>
       <OfflineBanner />
-      {status === 'authenticated' && user ? <AuthenticatedNavigator user={user} /> : <AuthStack />}
+      {status === 'authenticated' && user ? (
+        <BrandedShell>
+          <AuthenticatedNavigator user={user} />
+        </BrandedShell>
+      ) : (
+        <AuthStack />
+      )}
     </NavigationContainer>
   );
 }
