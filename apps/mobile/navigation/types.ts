@@ -128,4 +128,6 @@ export type TabParamList = {
   BookingsTab: NavigatorScreenParams<BookingsStackParamList>;
   QueueTab: NavigatorScreenParams<QueueStackParamList>;
   AccountTab: NavigatorScreenParams<AccountStackParamList>;
+  // Not a real page: pressing the Menu tab opens the menu sheet (RootNavigator) instead.
+  MenuTab: undefined;
 };

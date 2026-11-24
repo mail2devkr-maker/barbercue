@@ -9,6 +9,7 @@ import { useRecordSalonView } from '../lib/record-salon-view';
 import { color, fastQue, font, fontSize, radius, space } from '../lib/theme';
 import { Skeleton, ErrorState, SafeImage, PhotoGalleryViewer, PremiumButton, PremiumScreen } from '../components/ui';
 import { PublicSalonStatus } from '../components/PublicSalonStatus';
+import { LiveQueueCard } from '../components/LiveQueueCard';
 import { useLanguage } from '../lib/language-context';
 import type { SearchStackParamList } from '../navigation/types';
 import { useThemedStyles, useThemeTokens, type ThemeTokens } from '../lib/theme-mode';
@@ -195,6 +196,8 @@ export default function SalonProfileScreen({ route, navigation }: Props) {
             <Text style={styles.closedTodayText}>{SHOP_CLOSED_TODAY_MESSAGE}</Text>
           </View>
         )}
+
+        {!salon.isClosedForToday && <LiveQueueCard salonId={salon.id} />}
 
         {publicStatus && <PublicSalonStatus status={publicStatus} />}
 

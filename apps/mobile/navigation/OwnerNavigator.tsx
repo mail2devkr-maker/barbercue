@@ -16,7 +16,8 @@ import { useUnreadNotificationCount } from '../lib/notifications';
 import { useLanguage } from '../lib/language-context';
 import { fastQue, font } from '../lib/theme';
 import { TabIcon, type TabIconName } from '../components/ui/TabIcon';
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { AppMenuSheet, type AppMenuSection } from '../components/AppMenuSheet';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { setStatusBarStyle } from 'expo-status-bar';
 import { useSalon } from '../lib/salon-context';
@@ -34,9 +35,76 @@ export type OwnerTabParamList = {
   OwnerBookingsTab: { filter?: OwnerBookingFilter } | undefined;
   OwnerShopTab: NavigatorScreenParams<OwnerShopStackParamList> | undefined;
   OwnerAccountTab: NavigatorScreenParams<DashboardAccountStackParamList> | undefined;
+  // Not a real page: pressing the Menu tab opens the menu sheet instead.
+  OwnerMenuTab: undefined;
 };
 
 const Tab = createBottomTabNavigator<OwnerTabParamList>();
+
+/** Placeholder for the Menu tab: pressing it opens the menu sheet and never navigates here. */
+function OwnerMenuTabPlaceholder() {
+  return <View />;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- the tab navigator's own navigation object, captured on press
+type TabNav = { navigate: (...args: any[]) => void };
+
+type BusinessPanel = NonNullable<NonNullable<OwnerShopStackParamList['OwnerBusiness']>['initialPanel']>;
+
+function ownerMenuSections(hi: boolean, nav: () => TabNav | null): AppMenuSection[] {
+  const L = (en: string, hin: string) => (hi ? hin : en);
+  const tab = (name: string, params?: object) => () => nav()?.navigate(name, params);
+  const shop = (screen: string, params?: object) => () => nav()?.navigate('OwnerShopTab', { screen, params, initial: false });
+  const panel = (p: BusinessPanel) => shop('OwnerBusiness', { initialPanel: p });
+  const filter = (f: OwnerBookingFilter) => tab('OwnerBookingsTab', { filter: f });
+  return [
+    {
+      title: L('Today', 'आज'),
+      items: [
+        { key: 'dash', label: L('Dashboard', 'डैशबोर्ड'), onPress: tab('OwnerDashboardTab') },
+        { key: 'queue', label: L('Live queue', 'लाइव कतार'), onPress: tab('OwnerQueueTab') },
+        { key: 'b-today', label: L("Today's bookings", 'आज की बुकिंग'), onPress: filter('today') },
+        { key: 'b-up', label: L('Upcoming bookings', 'आने वाली बुकिंग'), onPress: filter('upcoming') },
+        { key: 'b-done', label: L('Completed bookings', 'पूरी हुई बुकिंग'), onPress: filter('completed') },
+        { key: 'b-cancel', label: L('Cancelled bookings', 'रद्द बुकिंग'), onPress: filter('cancelled') },
+      ],
+    },
+    {
+      title: L('Shop', 'दुकान'),
+      items: [
+        { key: 'shop', label: L('Shop, services & team', 'दुकान, सेवाएँ और टीम'), onPress: shop('OwnerShop') },
+        { key: 'settings', label: L('Shop settings', 'दुकान की सेटिंग'), onPress: shop('OwnerSettings') },
+        { key: 'customers', label: L('Customers', 'ग्राहक'), onPress: shop('OwnerCustomers') },
+        { key: 'inventory', label: L('Inventory', 'इन्वेंटरी'), onPress: shop('OwnerInventory') },
+        { key: 'qr', label: L('Shop QR poster', 'दुकान का QR पोस्टर'), onPress: shop('OwnerQrPoster') },
+      ],
+    },
+    {
+      title: L('Business', 'बिज़नेस'),
+      items: [
+        { key: 'analytics', label: L('Analytics', 'एनालिटिक्स'), onPress: panel('analytics') },
+        { key: 'report', label: L('Reports', 'रिपोर्ट'), onPress: panel('report') },
+        { key: 'sources', label: L('Booking sources', 'बुकिंग कहाँ से आई'), onPress: panel('sources') },
+        { key: 'team', label: L('Team performance', 'टीम का प्रदर्शन'), onPress: panel('team') },
+        { key: 'contacts', label: L('Contacts', 'संपर्क'), onPress: panel('contacts') },
+        { key: 'invoices', label: L('Invoices', 'बिल'), onPress: panel('invoices') },
+        { key: 'payments', label: L('Payments', 'भुगतान'), onPress: panel('payments') },
+        { key: 'offers', label: L('Offers', 'ऑफ़र'), onPress: panel('offers') },
+        { key: 'reviews', label: L('Reviews', 'रिव्यू'), onPress: panel('reviews') },
+        { key: 'cancellations', label: L('Cancellations', 'रद्दीकरण'), onPress: panel('cancellations') },
+        { key: 'verification', label: L('Verification', 'सत्यापन'), onPress: panel('verification') },
+      ],
+    },
+    {
+      title: L('Account', 'खाता'),
+      items: [
+        { key: 'account', label: L('My account', 'मेरा खाता'), onPress: tab('OwnerAccountTab', { screen: 'DashboardAccount' }) },
+        { key: 'notifications', label: L('Notifications', 'सूचनाएँ'), onPress: tab('OwnerAccountTab', { screen: 'Notifications', initial: false }) },
+        { key: 'assistant', label: L('FastQue Assistant', 'FastQue असिस्टेंट'), onPress: tab('OwnerAccountTab', { screen: 'Assistant', initial: false }) },
+      ],
+    },
+  ];
+}
 
 // Mounted only for an authenticated user whose roles include SALON_OWNER (see App.tsx).
 // SalonProvider scopes salon selection to this navigator's lifetime only — a customer or staff
@@ -97,8 +165,10 @@ function OwnerNavigatorGate() {
 function OwnerTabs() {
   const { fastQue } = useThemeTokens();
   const unreadCount = useUnreadNotificationCount();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { selectedSalonId } = useSalon();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const tabNav = useRef<TabNav | null>(null);
   // Owner report (16 Nov): on phones with Android's back/home bar the 5 tabs sat underneath it. The
   // fixed 60px bar ignored the bottom inset (the customer bar already adds it).
   const insets = useSafeAreaInsets();
@@ -154,7 +224,25 @@ function OwnerTabs() {
           popToTopOnBlur: true,
         }}
       />
+      <Tab.Screen
+        name="OwnerMenuTab"
+        component={OwnerMenuTabPlaceholder}
+        options={tabOptions(language === 'HI' ? 'मेन्यू' : 'Menu', 'menu')}
+        listeners={({ navigation }) => ({
+          tabPress: (e) => {
+            e.preventDefault();
+            tabNav.current = navigation as TabNav;
+            setMenuOpen(true);
+          },
+        })}
+      />
     </Tab.Navigator>
+    <AppMenuSheet
+      visible={menuOpen}
+      onClose={() => setMenuOpen(false)}
+      title={language === 'HI' ? 'मेन्यू' : 'Menu'}
+      sections={ownerMenuSections(language === 'HI', () => tabNav.current)}
+    />
     <AssistantFab tabBarHeight={60 + insets.bottom} includeBottomInset onOpen={() => navigationRef.navigate('OwnerAccountTab', { screen: 'Assistant', initial: false, params: { salonId: selectedSalonId ?? undefined } })} />
     <OwnerLiveAlerts />
     </>

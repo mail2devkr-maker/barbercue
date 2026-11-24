@@ -1521,6 +1521,9 @@ export interface QueueStatusDto {
   estimatedWaitMinutes: number | null;
   // Smart Queue (Phase 5) — see QueueEntryDetailDto's own doc comment.
   estimatedWaitRangeMinutes: { min: number; max: number } | null;
+  // Token numbers in a chair right now (up to 3, oldest service first). Optional so older
+  // servers/clients stay compatible; no customer details.
+  nowServingTokens?: number[];
 }
 
 // Booking/queue resource-reservation mission — SalonStaff.status stays exactly what it always
