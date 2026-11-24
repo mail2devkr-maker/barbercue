@@ -21,8 +21,11 @@ import { memoryStorage } from 'multer';
 import { z } from 'zod';
 import {
   CRM_PATHS as P,
+  CRM_VIDEO_MAX_BYTES,
   SALES_RECORDING_MAX_BYTES,
   crmAnalyticsQuerySchema,
+  crmAnnouncementSchema,
+  crmAnnouncementUpdateSchema,
   crmAssignSchema,
   crmBulkAssignSchema,
   crmBulkTaskSchema,
@@ -47,6 +50,8 @@ import {
   supportTicketUpdateSchema,
   type AuthenticatedUser,
   type CrmAnalyticsQuery,
+  type CrmAnnouncementInput,
+  type CrmAnnouncementUpdateInput,
   type CrmCallInput,
   type CrmCallLogInput,
   type CrmLeadInput,
@@ -72,6 +77,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CRM_ROLES, CrmAccessService } from './crm-access.service';
 import { CrmActivityService } from './crm-activity.service';
 import { CrmAnalyticsService } from './crm-analytics.service';
+import { CrmAnnouncementsService } from './crm-announcements.service';
 import {
   CrmLeadsService,
   employeeSelect,
@@ -87,6 +93,10 @@ const leadImportUpload = FileInterceptor('file', {
 const recordingUpload = FileInterceptor('audio', {
   storage: memoryStorage(),
   limits: { fileSize: SALES_RECORDING_MAX_BYTES, files: 1, fields: 12 },
+});
+const videoUpload = FileInterceptor('video', {
+  storage: memoryStorage(),
+  limits: { fileSize: CRM_VIDEO_MAX_BYTES, files: 1 },
 });
 const attachmentUpload = FileInterceptor('file', {
   storage: memoryStorage(),
@@ -117,6 +127,7 @@ export class CrmController {
     private readonly recordings: CrmRecordingsService,
     private readonly tickets: CrmTicketsService,
     private readonly analyticsService: CrmAnalyticsService,
+    private readonly announcements: CrmAnnouncementsService,
     private readonly prisma: PrismaService,
   ) {}
 
@@ -602,5 +613,71 @@ export class CrmController {
         HttpStatus.NOT_FOUND,
       );
     await this.analyticsService.markRead(await this.access.actor(user), id);
+  }
+
+  // ---------- CEO message ----------
+
+  @Get(P.announcements)
+  @Header('Cache-Control', 'private, no-store')
+  async listAnnouncements(@CurrentUser() user: AuthenticatedUser) {
+    return this.announcements.list(await this.access.actor(user));
+  }
+
+  @Post(P.announcements)
+  async createAnnouncement(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body(new ZodValidationPipe(crmAnnouncementSchema))
+    body: CrmAnnouncementInput,
+  ) {
+    return this.announcements.create(await this.access.actor(user), body);
+  }
+
+  @Patch(`${P.announcements}/:id`)
+  async updateAnnouncement(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(crmAnnouncementUpdateSchema))
+    body: CrmAnnouncementUpdateInput,
+  ) {
+    return this.announcements.update(await this.access.actor(user), id, body);
+  }
+
+  @Post(`${P.announcements}/:id/${P.video}`)
+  @UseInterceptors(videoUpload)
+  async uploadAnnouncementVideo(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @UploadedFile() file: Express.Multer.File | undefined,
+  ) {
+    return this.announcements.uploadVideo(
+      await this.access.actor(user),
+      id,
+      file,
+    );
+  }
+
+  @Get(`${P.announcements}/:id/${P.video}`)
+  async announcementVideo(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Res() res: Response,
+  ) {
+    const { body, mimeType } = await this.announcements.video(
+      await this.access.actor(user),
+      id,
+    );
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('Content-Disposition', 'inline');
+    res.send(body);
+  }
+
+  @Delete(`${P.announcements}/:id`)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteAnnouncement(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    await this.announcements.remove(await this.access.actor(user), id);
   }
 }

@@ -97,6 +97,14 @@ export function formFromApplication(app: OnboardingApplicationDto): DraftForm {
   return form;
 }
 
+const URL_FIELDS = new Set(["websiteUrl", "instagramUrl", "mapsUrl"]);
+/** "fastque.com" -> "https://fastque.com"; anything that is not link-shaped is left for the server to explain. */
+function completeUrl(value: unknown): string {
+  const v = value === null || value === undefined ? "" : String(value).trim();
+  if (!v || /^https?:\/\//i.test(v)) return v;
+  return /^[\w-]+(\.[\w-]+)+(\/\S*)?$/.test(v) ? `https://${v}` : v;
+}
+
 /** Converts the wizard's form into a PATCH body. Blank text -> null; never invents a value. */
 export function draftPayload(form: DraftForm): Record<string, unknown> {
   const out: Record<string, unknown> = {};
@@ -116,6 +124,8 @@ export function draftPayload(form: DraftForm): Record<string, unknown> {
       out[key] = value === true;
     } else if (key === "salonName") {
       if (typeof value === "string" && value.trim()) out[key] = value;
+    } else if (URL_FIELDS.has(key)) {
+      out[key] = completeUrl(value);
     } else {
       out[key] = value === null ? "" : String(value);
     }

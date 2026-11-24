@@ -29,6 +29,7 @@ import { Icon } from "./icons";
 import { BrandLockup } from "../ui/BrandLockup";
 import { NAV_GROUPS, NAV_ITEMS, activeItemId, hrefFor, navItemsFor, type NavItem } from "./owner-nav";
 import { initialsOf, shortName } from "./format";
+import { ThemeSwitcher } from "../theme/ThemeSwitcher";
 import ui from "./owner.module.css";
 import { setVisibleInterval } from "../../lib/visible-interval";
 
@@ -355,6 +356,7 @@ function ShellInner({ salonId, children }: { salonId: string; children: ReactNod
                     ))}
                   </select>
                 )}
+                <ThemeSwitcher />
                 <Link
                   href={`/dashboard/salons/${salonId}/notifications`}
                   className={ui.iconBtn}

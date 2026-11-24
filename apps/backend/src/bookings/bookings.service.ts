@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
+  BOOKINGS_PAUSED_MESSAGE,
   BookingErrorCode,
   BookingSource,
   BookingStatus,
@@ -144,6 +145,13 @@ export class BookingsService {
     idempotencyKey: string,
   ): Promise<BookingDetailDto> {
     const salon = await this.availability.getSalonOrThrow(input.salonId);
+    // Owner paused NEW online bookings while the shop is open (in-shop appointments still work).
+    if (salon.bookingsPaused)
+      throw new AppException(
+        BookingErrorCode.BOOKINGS_PAUSED,
+        BOOKINGS_PAUSED_MESSAGE,
+        HttpStatus.CONFLICT,
+      );
     // Multi-service booking core mission — every selected service is loaded and validated (real,
     // ACTIVE, belongs to this salon, no duplicates) before any duration/price is trusted. The
     // client never supplies duration/price directly; only ids.

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { employeeLoginSchema } from "@barbercue/shared";
 import { ApiError } from "../../lib/api";
@@ -65,6 +66,9 @@ export function EmployeeLoginForm({
       <button type="submit" className={styles.primaryButton} disabled={submitting}>
         {submitting ? "Signing in…" : "Sign in as employee"}
       </button>
+      <p className={styles.formFootnote}>
+        <Link href="/forgot-password?audience=employee">Forgot or reset password?</Link>
+      </p>
       <p className={styles.formFootnote}>
         Employee accounts are issued and managed by FastQue administrators.
       </p>

@@ -639,7 +639,75 @@ export const ONBOARDING_FIELD_LABELS: Record<string, string> = {
   consent: "Owner consent",
   gstin: "GSTIN",
   description: "Description",
+  brandName: "Business / brand name",
+  websiteUrl: "Website",
+  instagramUrl: "Instagram profile",
+  mapsUrl: "Google Maps link",
+  isFranchise: "Ownership",
+  branchCount: "Number of branches",
+  alternatePhone: "Alternate contact",
+  managerName: "Manager name",
+  managerPhone: "Manager phone",
+  preferredLanguage: "Preferred language",
+  shopNumber: "Shop number",
+  buildingName: "Building / market",
+  landmark: "Landmark",
+  activeChairCount: "Active chairs",
+  maleStaffCount: "Male staff",
+  femaleStaffCount: "Female staff",
+  appointmentIntervalMinutes: "Appointment interval (min)",
+  averageServiceMinutes: "Average service time (min)",
+  specialTimings: "Special timings",
+  washStationCount: "Hair wash stations",
+  weeklyHolidays: "Weekly holidays",
+  amenities: "Amenities",
+  ownerTrainingStatus: "Owner training",
+  consentMethod: "How the owner gave consent",
+  consentByName: "Consent given by",
+  consentByRole: "Role of the person giving consent",
+  consentEvidenceNote: "Consent evidence note",
+  businessRegistration: "Business registration",
+  employeeNotes: "Employee notes",
+  openQuestions: "Unresolved questions",
+  serviceName: "Service name",
+  basePrice: "Price",
+  discountedPrice: "Discounted price",
+  durationMinutes: "Duration (min)",
 };
+
+const plainIssue = (message: string): string => {
+  let m = /^Number must be greater than or equal to (.+)$/.exec(message);
+  if (m) return `must be ${m[1]} or more`;
+  m = /^Number must be less than or equal to (.+)$/.exec(message);
+  if (m) return `must be ${m[1]} or less`;
+  m = /^String must contain at most (\d+) character/.exec(message);
+  if (m) return `must be ${m[1]} characters or fewer`;
+  if (/received float/.test(message)) return "must be a whole number";
+  if (/received nan/i.test(message)) return "must be a number";
+  if (message === "Required") return "is required";
+  return message;
+};
+
+/**
+ * Turns the API's validation issues into sentences that name the field ("Number of branches: must be
+ * 1 or more"). Service rows are named by position ("Service 2 - Price: ...").
+ */
+export function onboardingIssueMessages(details: unknown): string[] {
+  const issues = (details as { issues?: unknown } | null | undefined)?.issues;
+  if (!Array.isArray(issues)) return [];
+  const out: string[] = [];
+  for (const raw of issues as Array<{ path?: unknown; message?: unknown }>) {
+    const message = plainIssue(typeof raw?.message === "string" ? raw.message : "is not valid");
+    const parts = typeof raw?.path === "string" ? raw.path.split(".").filter(Boolean) : [];
+    let label = "";
+    if (parts[0] === "services" && parts.length > 1) {
+      const field = parts[2] ? ` - ${ONBOARDING_FIELD_LABELS[parts[2]] ?? parts[2]}` : "";
+      label = `Service ${Number(parts[1]) + 1}${field}`;
+    } else if (parts.length) label = ONBOARDING_FIELD_LABELS[parts[0]] ?? parts[0];
+    out.push(label ? `${label}: ${message}` : message);
+  }
+  return [...new Set(out)];
+}
 
 export function onboardingMissingFields(app: OnboardingCompletenessInput): OnboardingMissingItem[] {
   const missing: OnboardingMissingItem[] = [];

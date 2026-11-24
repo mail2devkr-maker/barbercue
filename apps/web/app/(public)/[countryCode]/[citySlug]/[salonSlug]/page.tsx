@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { DISCOVERY_PATHS, SHOP_CLOSED_TODAY_MESSAGE, VERIFICATION_BADGE_CAPTION } from "@barbercue/shared";
+import { DISCOVERY_PATHS, BOOKINGS_PAUSED_MESSAGE, QUEUE_PAUSED_MESSAGE, SHOP_CLOSED_TODAY_MESSAGE, VERIFICATION_BADGE_CAPTION } from "@barbercue/shared";
 import type { CityDto, LocalityDto, PublicSalonStatusDto, SalonProfileDto } from "@barbercue/shared";
 import { fetchDiscoveryOrNull } from "../../../../../lib/discovery-api";
 import { absoluteUrl, DISCOVERY_REVALIDATE_SECONDS, SITE_URL } from "../../../../../lib/seo";
@@ -174,17 +174,23 @@ export default async function SalonPage({
           {!salon.isClosedForToday && (
             <>
               <div className={styles.actions}>
-                <LinkButton href={bookHref} variant="primary" className={styles.action}>
-                  Book an appointment
-                </LinkButton>
-                <LinkButton
-                  href={`/queue/${salon.slug}?${cityQuery}`}
-                  variant="outline"
-                  className={styles.action}
-                >
-                  Join live queue
-                </LinkButton>
+                {!salon.bookingsPaused && (
+                  <LinkButton href={bookHref} variant="primary" className={styles.action}>
+                    Book an appointment
+                  </LinkButton>
+                )}
+                {!salon.queuePaused && (
+                  <LinkButton
+                    href={`/queue/${salon.slug}?${cityQuery}`}
+                    variant="outline"
+                    className={styles.action}
+                  >
+                    Join live queue
+                  </LinkButton>
+                )}
               </div>
+              {salon.bookingsPaused && <p className={styles.closedToday} role="status">{BOOKINGS_PAUSED_MESSAGE}</p>}
+              {salon.queuePaused && <p className={styles.closedToday} role="status">{QUEUE_PAUSED_MESSAGE}</p>}
               <p className={styles.assurance}>Availability and queue details are confirmed in the next step.</p>
             </>
           )}

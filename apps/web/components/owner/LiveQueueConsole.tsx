@@ -23,6 +23,7 @@ import { NewQueueCustomerDialog } from "./NewQueueCustomerDialog";
 import { ServiceUsageDialog } from "./inventory/ServiceUsageDialog";
 import { useOwnerShell, useShopTimeZone } from "./OwnerShell";
 import { Badge, Banner, Btn, BtnLink, Card, Dialog, EmptyState, Field, PageHead, Skeleton, Tabs } from "./parts";
+import { IntakeControls } from "./IntakeControls";
 import ui from "./owner.module.css";
 import { claimOwnerAlert } from "../../lib/owner-alert-dedupe";
 import { setVisibleInterval } from "../../lib/visible-interval";
@@ -678,6 +679,8 @@ export function LiveQueueConsole({ salonId }: { salonId: string }) {
               </div>
             )}
           </Card>
+
+          {kind === "owner" && <IntakeControls salonId={salonId} />}
 
           {kind === "owner" && (
             <Card title="Automatic assignment">

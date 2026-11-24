@@ -3,6 +3,7 @@
 import { use, useState } from "react";
 import { CrmCalls, CrmMeetings, CrmTasks } from "../../../../../components/crm/CrmActivity";
 import { CrmAnalytics } from "../../../../../components/crm/CrmAnalytics";
+import { CeoMessageAdmin } from "../../../../../components/crm/CrmAnnouncements";
 import { CrmConversations } from "../../../../../components/crm/CrmConversations";
 import { CrmDashboard } from "../../../../../components/crm/CrmDashboard";
 import { CrmLeads } from "../../../../../components/crm/CrmLeads";
@@ -19,6 +20,7 @@ const TABS = [
   ["conversations", "Conversations & AI coach"],
   ["support", "Support queue"],
   ["analytics", "Team analytics"],
+  ["ceo", "CEO message"],
 ] as const;
 type Tab = (typeof TABS)[number][0];
 
@@ -62,6 +64,7 @@ export default function AdminFieldCrmPage({ searchParams }: { searchParams: Prom
       {tab === "conversations" && <CrmConversations />}
       {tab === "support" && <CrmSupport />}
       {tab === "analytics" && <CrmAnalytics />}
+      {tab === "ceo" && <CeoMessageAdmin />}
     </CrmEmbedded>
   );
 }

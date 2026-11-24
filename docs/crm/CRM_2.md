@@ -97,3 +97,11 @@ Verified with `apps/backend/scripts/verify-migration-chain.sh` against a disposa
 - Push/WhatsApp/SMS notifications for CRM events (in-app only).
 - Server-side transcoding of audio; AI analysis runs inline on request (no background queue/worker).
 - Real-time OCR price comparison against approved pricing beyond the notes the coach receives.
+
+## Feedback release (24 Nov 2026)
+
+- Migration `20261124120000_intake_pause_and_ceo_message` (additive): `salons.queuePaused`, `salons.bookingsPaused`, table `crm_announcements`.
+- `PINCODE_LOOKUP_ENABLED` (default on): the API asks India Post's public service (`api.postalpincode.in`) about a typed 6-digit PIN. Nothing else is sent; a failure only means manual entry.
+- Private files: with neither `PRIVATE_STORAGE_DIR` nor `OBJECT_STORAGE_PRIVATE_BUCKET` set, the API uses the attached Railway volume (`RAILWAY_VOLUME_MOUNT_PATH`) in a folder that is never served. Without a volume, uploads stay off.
+- Lead status: employees may change it until the salon is submitted; managers may always use manual statuses; admins may set any status. Changing a lead status never approves or publishes a salon.
+- CEO message: Admin, Field CRM 2.0, "CEO message" (PLATFORM_ADMIN / CO_FOUNDER). Video up to 50 MB or an https link.

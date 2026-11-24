@@ -1,7 +1,7 @@
 "use client";
 
 import { parseManualPin } from "../../lib/manual-pin";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   COUNTRY_PATHS,
@@ -23,6 +23,7 @@ import { newIdempotencyKey } from "../../lib/idempotency";
 import { useAuth } from "../../lib/auth-context";
 import { orderCountriesForDisplay } from "../../lib/country-order";
 import { Button } from "../ui/Button";
+import { lookupPincode } from "../../lib/pincode";
 import { CitySearchField } from "./CitySearchField";
 import { fieldWrapStyle, hintStyle, inputStyle, labelStyle } from "./form-styles";
 
@@ -117,6 +118,9 @@ export function RegisterSalonForm() {
   const [error, setError] = useState<string | null>(null);
   const [location, setLocation] = useState<LocationState>({ kind: "idle" });
 
+  const [pinNote, setPinNote] = useState<string | null>(null);
+  // The PIN lookup answers later: it must see the city chosen by then, not when it was sent.
+  const selectedCityRef = useRef<CitySearchResultDto | null>(null);
   // The single source of truth for the city, derived rather than stored: with only one writer
   // (the picker's onSelect) the slug can never drift out of sync with the city shown on screen.
   const citySlug = selectedCity?.slug ?? "";
@@ -214,6 +218,7 @@ export function RegisterSalonForm() {
     setRegions([]);
     setRegionId("");
     setSelectedCity(null);
+    selectedCityRef.current = null;
     setLocalities([]);
     setForm((prev) => ({
       ...prev,
@@ -227,14 +232,38 @@ export function RegisterSalonForm() {
   function selectRegion(nextRegionId: string) {
     setRegionId(nextRegionId);
     setSelectedCity(null);
+    selectedCityRef.current = null;
     setLocalities([]);
     setForm((prev) => ({ ...prev, localityText: "", localitySlug: "" }));
   }
 
   function selectCity(city: CitySearchResultDto | null) {
+    selectedCityRef.current = city;
     setSelectedCity(city);
     setLocalities([]);
     setForm((prev) => ({ ...prev, localityText: "", localitySlug: "" }));
+  }
+
+  /** PIN -> city: selects the matching city when none is chosen, otherwise points out a mismatch. */
+  async function fillFromPin(pin: string) {
+    const found = await lookupPincode(pin);
+    if (!found) return;
+    const place = `${found.district}, ${found.state}`;
+    const city = found.city;
+    if (!selectedCityRef.current) {
+      if (city) {
+        selectCity(city);
+        setPinNote(`PIN ${pin} is in ${place}. City set to ${city.name}; change it if needed.`);
+      } else setPinNote(`PIN ${pin} is in ${place}. Please pick your city below.`);
+    } else {
+      const chosen = selectedCityRef.current.name.toLowerCase();
+      const known = [found.district, city?.name ?? "", ...found.areas].filter(Boolean).map((v) => v.toLowerCase());
+      setPinNote(
+        known.some((k) => k.includes(chosen) || chosen.includes(k))
+          ? `PIN ${pin}: ${place}`
+          : `PIN ${pin} is in ${place}. Please check the selected city.`,
+      );
+    }
   }
 
   function updateLocality(value: string) {
@@ -538,8 +567,14 @@ export function RegisterSalonForm() {
           placeholder={postalRule.example}
           style={{ ...inputStyle, maxWidth: 180, letterSpacing: "0.06em" }}
           value={form.postalCode}
-          onChange={(e) => update("postalCode", e.target.value.slice(0, 12))}
+          onChange={(e) => {
+            const value = e.target.value.slice(0, 12);
+            update("postalCode", value);
+            setPinNote(null);
+            if (form.countryCode === "IN" && /^[1-9]\d{5}$/.test(value.trim())) void fillFromPin(value.trim());
+          }}
         />
+        {pinNote && <p style={hintStyle} role="status">{pinNote}</p>}
         <p style={hintStyle}>
           {postalRule.required
             ? `The ${postalRule.label.toLowerCase()} of your shop's area.`
