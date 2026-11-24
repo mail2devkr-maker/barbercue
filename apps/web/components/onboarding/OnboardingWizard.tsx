@@ -12,8 +12,11 @@ import {
   ONBOARDING_GPS_GOOD_ACCURACY_METERS,
   ONBOARDING_MEDIA_LIMITS,
   ONBOARDING_PHOTO_SLOTS,
+  ONBOARDING_SALON_KIND_LABEL,
   ONBOARDING_SHOP_PHOTO_CATEGORIES,
   ONBOARDING_STATUS_LABELS,
+  onboardingIssueMessages,
+  salonKindsText,
   type MenuExtractionResultDto,
   type OnboardingApplicationDto,
   type OnboardingHoursDto,
@@ -42,13 +45,18 @@ import {
   type DraftForm,
   type ServiceRow,
 } from "../../lib/onboarding";
+import { CityTypeahead } from "../locations/CityTypeahead";
+import { lookupPincode } from "../../lib/pincode";
 import { PrivateImage } from "./PrivateImage";
 import base from "../../app/employee/employee.module.css";
 import styles from "../../app/employee/onboarding/onboarding.module.css";
 
 
 function message(error: unknown, fallback: string): string {
-  return error instanceof ApiError ? error.message : fallback;
+  if (!(error instanceof ApiError)) return fallback;
+  // Name the exact field(s) instead of "Request validation failed".
+  const issues = onboardingIssueMessages(error.details);
+  return issues.length ? `Please correct: ${issues.join("; ")}` : error.message;
 }
 
 interface Props {
@@ -75,6 +83,7 @@ export function OnboardingWizard({ applicationId }: Props) {
   const [notice, setNotice] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const [pinNote, setPinNote] = useState<string | null>(null);
   const loaded = useRef(false);
 
   const accept = useCallback((next: OnboardingApplicationDto, resetLocal: boolean) => {
@@ -275,6 +284,35 @@ export function OnboardingWizard({ applicationId }: Props) {
         setError("Location permission was not given. Coordinates were left empty.");
       },
       { enableHighAccuracy: true, timeout: 15000 },
+    );
+  };
+
+  /** PIN -> city, district and state. Only empty fields are filled; a conflict is pointed out. */
+  const fillFromPin = async (pin: string) => {
+    setPinNote("Looking up this PIN code…");
+    const found = await lookupPincode(pin);
+    if (!found) {
+      setPinNote("PIN code not found. Please enter the city yourself.");
+      return;
+    }
+    const city = found.city?.name ?? found.district;
+    setForm((current) => {
+      const empty = (k: string) => !String(current[k] ?? "").trim();
+      return {
+        ...current,
+        ...(empty("city") ? { city } : {}),
+        ...(empty("district") ? { district: found.district } : {}),
+        ...(empty("state") ? { state: found.state } : {}),
+        ...(empty("country") ? { country: "India" } : {}),
+      };
+    });
+    setDirty(true);
+    const typed = String(form.city ?? "").trim().toLowerCase();
+    const known = [city, found.district, ...found.areas].map((v) => v.toLowerCase());
+    setPinNote(
+      typed && !known.some((k) => k.includes(typed) || typed.includes(k))
+        ? `PIN ${pin} is in ${found.district}, ${found.state}. Please check the city.`
+        : `PIN ${pin}: ${found.district}, ${found.state}`,
     );
   };
 
@@ -487,12 +525,21 @@ export function OnboardingWizard({ applicationId }: Props) {
           <div className={styles.fields}>
             {text("salonName", "Salon name", { required: true, full: true, maxLength: 160 })}
             {choice("genderCategory", "Salon category", [["MEN", "Men"], ["WOMEN", "Women"], ["UNISEX", "Unisex"]], true)}
-            {choice(
-              "salonKind",
-              "Salon type",
-              [["BARBER_SHOP", "Barber shop"], ["BEAUTY_SALON", "Beauty salon"], ["UNISEX_SALON", "Unisex salon"], ["SPA", "Spa"], ["OTHER", "Other"]],
-              true,
-            )}
+            <div className={`${styles.field} ${styles.full}`}>
+              <span className={styles.required}>Salon type (choose all that apply)</span>
+              <div className={styles.segmented} role="group" aria-label="Salon type">
+                {Object.entries(ONBOARDING_SALON_KIND_LABEL).map(([value, label]) => {
+                  const on = listHas(form.salonKinds, value);
+                  return (
+                    <button key={value} type="button" aria-pressed={on} className={on ? styles.segmentedActive : undefined} disabled={readOnly} onClick={() => set("salonKinds", toggleListValue(form.salonKinds, value))}>
+                      {on ? "✓ " : ""}{label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            {listHas(form.salonKinds, "OTHER") &&
+              text("salonKindOther", "Other: please specify", { required: true, full: true, maxLength: 160, placeholder: "e.g. Tattoo studio, piercing, nail art" })}
             {text("brandName", "Business / brand name")}
             {text("websiteUrl", "Website", { inputMode: "url", placeholder: "https://" })}
             {text("instagramUrl", "Instagram profile", { inputMode: "url", placeholder: "https://instagram.com/…" })}
@@ -565,10 +612,37 @@ export function OnboardingWizard({ applicationId }: Props) {
             </div>
             {text("landmark", "Landmark")}
             {text("locality", "Locality / area", { required: true })}
-            {text("city", "City", { required: true })}
+            <label>
+              <span className={styles.required}>City</span>
+              <CityTypeahead
+                value={(form.city as string) ?? ""}
+                disabled={readOnly}
+                onText={(v) => set("city", v)}
+                onPick={(c) => {
+                  set("city", c.name);
+                  if (c.region) set("state", c.region.name);
+                  if (!form.country) set("country", "India");
+                }}
+              />
+            </label>
             {text("district", "District")}
             {text("state", "State", { required: true })}
-            {text("postalCode", "PIN code", { required: true, inputMode: "numeric", maxLength: 6 })}
+            <label>
+              <span className={styles.required}>PIN code</span>
+              <input
+                inputMode="numeric"
+                maxLength={6}
+                value={(form.postalCode as string) ?? ""}
+                disabled={readOnly}
+                onChange={(e) => {
+                  const v = e.target.value.replace(/\D/g, "").slice(0, 6);
+                  set("postalCode", v);
+                  if (v.length === 6) void fillFromPin(v);
+                  else setPinNote(null);
+                }}
+              />
+              {pinNote && <small className={styles.hint} role="status">{pinNote}</small>}
+            </label>
             {text("country", "Country", { required: true })}
             {text("mapsUrl", "Google Maps link", { inputMode: "url", full: true })}
             <div className={`${styles.field} ${styles.full}`}>
@@ -993,7 +1067,7 @@ function ReviewStep({
           <dl>
             <dt>Name</dt><dd>{v("salonName")}</dd>
             <dt>Category</dt><dd>{v("genderCategory")}</dd>
-            <dt>Type</dt><dd>{v("salonKind")}</dd>
+            <dt>Type</dt><dd>{salonKindsText(String(form.salonKinds ?? "").split(",").filter(Boolean), String(form.salonKindOther ?? "")) || "—"}</dd>
             <dt>Employee</dt><dd>{app.assignedEmployee.fullName} ({app.assignedEmployee.employeeCode})</dd>
           </dl>
         </section>

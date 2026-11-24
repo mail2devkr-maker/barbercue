@@ -32,14 +32,38 @@ export class LocalPrivateStorageDriver implements PrivateStorageDriver {
    * publicly). A private directory nested in the public one would silently publish every file.
    */
   static fromEnv(): LocalPrivateStorageDriver | null {
-    const dir = process.env.PRIVATE_STORAGE_DIR?.trim();
-    if (!dir) return null;
     const publicDir = process.env.LOCAL_STORAGE_DIR?.trim();
+    const configured = process.env.PRIVATE_STORAGE_DIR?.trim();
+    const dir =
+      configured ||
+      (S3PrivateStorageDriver.fromEnv()
+        ? undefined
+        : LocalPrivateStorageDriver.volumeDir(publicDir));
+    if (!dir) return null;
+    if (!configured) return new LocalPrivateStorageDriver(resolve(dir));
     if (publicDir) {
       const root = resolve(publicDir) + sep;
       if ((resolve(dir) + sep).startsWith(root)) return null;
     }
     return new LocalPrivateStorageDriver(resolve(dir));
+  }
+
+  /**
+   * Nothing configured: keep private files on the same persistent Railway volume as the public
+   * photos. When the photos use a sub-folder, a sibling folder is never served. When they use the
+   * whole volume, a dot-folder is used - main.ts refuses every dotfile path under the static mount.
+   * No volume means no safe default, so uploads stay off.
+   */
+  static volumeDir(publicDir: string | undefined): string | undefined {
+    const mount = process.env.RAILWAY_VOLUME_MOUNT_PATH?.trim();
+    if (!mount) return undefined;
+    const root = resolve(mount);
+    if (!publicDir) return join(root, 'private-files');
+    const pub = resolve(publicDir);
+    if (pub === root) return join(root, '.private-files');
+    // A public folder elsewhere, or inside the volume: a sibling folder is outside it.
+    const sibling = join(root, 'private-files');
+    return (sibling + sep).startsWith(pub + sep) ? undefined : sibling;
   }
 
   private path(key: string): string {

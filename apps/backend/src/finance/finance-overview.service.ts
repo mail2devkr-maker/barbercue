@@ -3,6 +3,8 @@ import { Prisma } from '@prisma/client';
 import {
   averageMoney,
   computeRunway,
+  FINANCE_EXPENSE_TYPE_LABEL,
+  financeExpenseType,
   type FinanceBreakdownRowDto,
   type FinanceOverviewDto,
   type FinanceOverviewQuery,
@@ -170,6 +172,7 @@ export class FinanceOverviewService {
           amount: true,
           city: true,
           department: true,
+          reimbursementRequired: true,
           category: { select: { id: true, name: true, department: true } },
           payments: {
             where: { voidedAt: null },
@@ -270,6 +273,10 @@ export class FinanceOverviewService {
       string,
       { label: string; amount: Prisma.Decimal; count: number }
     >();
+    const byType = new Map<
+      string,
+      { label: string; amount: Prisma.Decimal; count: number }
+    >();
     const byCity = new Map<
       string,
       { label: string; amount: Prisma.Decimal; count: number }
@@ -286,6 +293,8 @@ export class FinanceOverviewService {
     for (const e of periodExpenses) {
       periodIncurred = periodIncurred.plus(e.amount);
       bump(byCategory, e.category.id, e.category.name, e.amount);
+      const type = financeExpenseType(e);
+      bump(byType, type, FINANCE_EXPENSE_TYPE_LABEL[type], e.amount);
       bump(
         byCity,
         (e.city ?? '').toLowerCase() || 'unassigned',
@@ -427,6 +436,7 @@ export class FinanceOverviewService {
         budgetUtilizationPercent: null,
       },
       byCategory: breakdown(byCategory),
+      byType: breakdown(byType),
       byCity: breakdown(byCity),
       byDepartment: breakdown(byDepartment),
       byPaidBy: breakdown(byPaidBy),

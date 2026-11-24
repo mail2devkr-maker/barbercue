@@ -587,3 +587,7 @@
     justify-content: flex-end;
   }
 }
+
+/* Native date and time pickers (icon and popup) follow the dark surface they sit on. */
+.hoursRow input:is([type="date"], [type="time"], [type="datetime-local"], [type="month"]) { color-scheme: dark; }
+.hoursRow input::-webkit-calendar-picker-indicator { opacity: 1; cursor: pointer; }

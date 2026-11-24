@@ -1,4 +1,12 @@
-import { Controller, Get, Param, Query, UsePipes } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  HttpStatus,
+  Param,
+  Query,
+  UsePipes,
+} from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import {
   DISCOVERY_PATHS,
   citySearchQuerySchema,
@@ -6,12 +14,17 @@ import {
 } from '@barbercue/shared';
 import { Public } from '../auth/decorators/public.decorator';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
+import { AppException } from '../common/exceptions/app.exception';
 import { CitiesService } from './cities.service';
+import { PincodeService } from './pincode.service';
 
 // Public, unauthenticated, SEO-facing per API.md's Discovery section.
 @Controller(DISCOVERY_PATHS.cities)
 export class CitiesController {
-  constructor(private readonly citiesService: CitiesService) {}
+  constructor(
+    private readonly citiesService: CitiesService,
+    private readonly pincodes: PincodeService,
+  ) {}
 
   @Public()
   @Get()
@@ -36,6 +49,21 @@ export class CitiesController {
   @UsePipes(new ZodValidationPipe(citySearchQuerySchema))
   searchCities(@Query() query: CitySearchQueryInput) {
     return this.citiesService.searchCities(query);
+  }
+
+  /** Typing aid for Indian addresses: PIN -> district, state, areas and the matching city. */
+  @Public()
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
+  @Get('pincode/:pin')
+  async pincode(@Param('pin') pin: string) {
+    const found = await this.pincodes.lookup(pin);
+    if (!found)
+      throw new AppException(
+        'PINCODE_NOT_FOUND',
+        'We could not find that PIN code. Enter the city yourself.',
+        HttpStatus.NOT_FOUND,
+      );
+    return found;
   }
 
   // B9: country-scoped city URLs (/{countryCode}/{citySlug}/...). countryCode is case-insensitive

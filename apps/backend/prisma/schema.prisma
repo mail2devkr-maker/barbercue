@@ -638,6 +638,7 @@ model User {
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
 
+  crmAnnouncements              CrmAnnouncement[] @relation("CrmAnnouncementCreator")
   roles                         UserRole[]
   authIdentities                AuthIdentity[]
   accountDeletionRequest AccountDeletionRequest?
@@ -1226,6 +1227,11 @@ model Salon {
   // keep the shop visible with an explicit "This shop is closed for today." notice, while booking
   // and queue entry are blocked until the owner reopens it.
   isClosedForToday                  Boolean     @default(false)
+  // Owner-controlled intake pauses while the shop itself stays open. They stop NEW customer joins /
+  // NEW online bookings only; existing bookings, the current queue and entries the shop adds itself
+  // are untouched.
+  queuePaused                       Boolean     @default(false)
+  bookingsPaused                    Boolean     @default(false)
   // Owner-selected service audience used to filter onboarding presets. Existing salons default to
   // UNISEX so the migration is backwards-compatible and never hides already-configured services.
   salonType                         SalonType   @default(UNISEX)
@@ -2822,6 +2828,25 @@ model CrmLeadActivity {
   @@map("crm_lead_activities")
 }
 
+// A message (text, link and/or uploaded video) from the CEO shown on the employee dashboard.
+model CrmAnnouncement {
+  id               String   @id @default(uuid()) @db.Uuid
+  title            String   @db.VarChar(160)
+  body             String?  @db.VarChar(4000)
+  videoUrl         String?  @db.VarChar(500)
+  videoStorageKey  String?  @db.VarChar(200)
+  videoMimeType    String?  @db.VarChar(60)
+  videoSizeBytes   Int?
+  isActive         Boolean  @default(true)
+  createdByUserId  String
+  createdBy        User     @relation("CrmAnnouncementCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  createdAt        DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime @updatedAt @db.Timestamptz(6)
+
+  @@index([isActive, createdAt])
+  @@map("crm_announcements")
+}
+
 model CrmTask {
   id                String          @id @default(uuid()) @db.Uuid
   number            Int             @unique @default(autoincrement())
@@ -3723,6 +3748,9 @@ model SalonOnboardingApplication {
   salonName                  String               @db.VarChar(160)
   genderCategory             OnboardingGender?
   salonKind                  OnboardingSalonKind?
+  // Every type the employee ticked; salonKind stays the first one for existing readers.
+  salonKinds                 OnboardingSalonKind[] @default([])
+  salonKindOther             String?              @db.VarChar(160)
   description                String?              @db.VarChar(2000)
   brandName                  String?              @db.VarChar(160)
   websiteUrl                 String?              @db.VarChar(500)
@@ -4261,7 +4289,8 @@ model FinanceExpensePayment {
   @@map("finance_expense_payments")
 }
 
-/// Receipts/invoices, stored privately in the database and served only through authorised routes.
+/// Receipts/invoices, served only through authorised routes. New files live in private object storage
+/// (storageKey); older rows, and environments without private storage, keep the bytes in `data`.
 model FinanceAttachment {
   id               String                @id @default(uuid()) @db.Uuid
   expenseId        String?               @db.Uuid
@@ -4272,7 +4301,8 @@ model FinanceAttachment {
   mimeType         String                @db.VarChar(80)
   sizeBytes        Int
   sha256           String                @db.VarChar(64)
-  data             Bytes
+  data             Bytes?
+  storageKey       String?               @db.VarChar(200)
   uploadedByUserId String
   createdAt        DateTime              @default(now()) @db.Timestamptz(6)
 
@@ -4741,9 +4771,9 @@ model WorkTaskResponse {
   @@map("work_task_responses")
 }
 
-// Task evidence photos are private: stored here (not in the public photo bucket) and served only
-// through an authorized endpoint. Moving them to private object storage with signed URLs is in
-// the backlog; the access rule stays the same.
+// Task evidence photos are private and served only through an authorized endpoint. New files live in
+// private object storage (storageKey); older rows, and environments without private storage, keep
+// the bytes in `content`.
 model WorkEvidenceFile {
   id           String            @id @default(uuid())
   assignmentId String
@@ -4751,7 +4781,8 @@ model WorkEvidenceFile {
   mimeType     String            @db.VarChar(40)
   sizeBytes    Int
   sha256       String            @db.VarChar(64)
-  content      Bytes
+  content      Bytes?
+  storageKey   String?           @db.VarChar(200)
   createdAt    DateTime          @default(now())
   response     WorkTaskResponse?
 

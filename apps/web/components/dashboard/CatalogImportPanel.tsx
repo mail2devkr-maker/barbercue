@@ -30,6 +30,8 @@ interface ImportResult {
 const supported = ".xlsx,.csv,.tsv,.txt,.pdf,.jpg,.jpeg,.png,.webp";
 const external = /\.(pdf|jpe?g|png|webp)$/i;
 const fileLimit = 6 * 1024 * 1024;
+// Rows per request. The server accepts up to 200; smaller batches keep each request quick.
+const SAVE_BATCH = 50;
 const styles = {
   shell: { border: "1px solid var(--bc-border)", background: "var(--bc-surface)", borderRadius: 16, padding: 20, margin: "22px 0" } as const,
   help: { color: "var(--bc-muted)", fontSize: 14, lineHeight: 1.6 } as const,
@@ -55,6 +57,7 @@ export function CatalogImportPanel(props: {
   const [rows, setRows] = useState<ReviewRow[]>([]);
   const [working, setWorking] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveProgress, setSaveProgress] = useState("");
   const [selectionFeedback, setSelectionFeedback] = useState<string | null>(null);
   const [messages, setMessages] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -218,7 +221,7 @@ export function CatalogImportPanel(props: {
         return;
       }
     }
-    if (!importable.length || importable.length > 200) return;
+    if (!importable.length) return;
     const confirmation = mode === "imported"
       ? "Add " + importable.length + " VALID imported services to this shop? " +
         needsAttention.length + " selected service(s) require correction and will REMAIN in review, not be saved. " +
@@ -230,36 +233,57 @@ export function CatalogImportPanel(props: {
     setSelectionFeedback(null);
     setSaving(true);
     setError(null);
+    // Any number of rows: saved in small batches, each one complete on the server before the next.
+    const total: ImportResult = { createdCount: 0, skippedCount: 0, added: [], skipped: [] };
+    let savedRows = 0;
+    let failed = false;
     try {
-      const result = await apiFetch<ImportResult>(basePath + "/import-reviewed", {
-        method: "POST",
-        body: JSON.stringify({
-          services: importable.map((row) => ({
-            name: row.name.trim(),
-            category: row.category.trim() || undefined,
-            description: row.description.trim() || undefined,
-            price: row.price,
-            durationMinutes: row.durationMinutes,
-          })),
-        }),
-      });
-      setRows((current) => current.filter((row) => !importable.some((item) => item.key === row.key)));
+      for (let start = 0; start < importable.length; start += SAVE_BATCH) {
+        const batch = importable.slice(start, start + SAVE_BATCH);
+        setSaveProgress("Saving " + (start + 1) + "–" + (start + batch.length) + " of " + importable.length + "…");
+        const result = await apiFetch<ImportResult>(basePath + "/import-reviewed", {
+          method: "POST",
+          body: JSON.stringify({
+            services: batch.map((row) => ({
+              name: row.name.trim(),
+              category: row.category.trim() || undefined,
+              description: row.description.trim() || undefined,
+              price: row.price,
+              durationMinutes: row.durationMinutes,
+            })),
+          }),
+        });
+        total.createdCount += result.createdCount;
+        total.skippedCount += result.skippedCount;
+        total.skipped.push(...result.skipped);
+        savedRows += batch.length;
+        const done = new Set(batch.map((row) => row.key));
+        setRows((current) => current.filter((row) => !done.has(row.key)));
+      }
+    } catch (cause) {
+      failed = true;
+      setError(
+        (cause instanceof ApiError ? cause.message : "Import stopped; the last batch was not confirmed.") +
+        (savedRows ? " The first " + savedRows + " rows were saved; the rest are still in review, so you can try again." : ""),
+      );
+    }
+    setSaveProgress("");
+    if (savedRows > 0) {
       setMessages([
-        result.createdCount + " services added; " + result.skippedCount + " already existed.",
-        ...(mode === "imported" && needsAttention.length > 0
+        total.createdCount + " services added; " + total.skippedCount + " already existed.",
+        ...(mode === "imported" && !failed && needsAttention.length > 0
           ? [needsAttention.length + " selected service(s) remain in review. Correct their prices/durations before adding."]
           : []),
-        ...(result.skipped.length ? ["Skipped: " + result.skipped.join(", ")] : []),
+        ...(total.skipped.length ? ["Skipped: " + total.skipped.join(", ")] : []),
       ]);
       try {
         await onImported();
       } catch {
-        // POST succeeded; do not invite a retry that could duplicate created services.
+        // The saves succeeded; do not invite a retry that could duplicate created services.
         setError("Services were saved, but the list could not refresh. Reload to see them.");
       }
-    } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : "Import failed; no confirmation of saved services.");
-    } finally { setSaving(false); }
+    }
+    setSaving(false);
   }
 
   return (
@@ -361,17 +385,17 @@ export function CatalogImportPanel(props: {
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12, marginBottom: 14 }}>
             <button type="button" style={styles.button}
-              disabled={saving || working || importable.length === 0 || importable.length > 200}
+              disabled={saving || working || importable.length === 0}
               onClick={() => void save("ready")}>
               {saving ? "Saving…" : "Import " + importable.length + " reviewed services"}
             </button>
             <button type="button" style={styles.secondary}
-              disabled={saving || working || selectedRows.length === 0 || selectedRows.length > 200}
+              disabled={saving || working || selectedRows.length === 0}
               onClick={() => void save("selected")}>
               {saving ? "Saving…" : "Add selected services (" + selectedRows.length + ")"}
             </button>
             <button type="button" style={styles.secondary}
-              disabled={saving || working || importable.length === 0 || importable.length > 200}
+              disabled={saving || working || importable.length === 0}
               onClick={() => void save("imported")}>
               {saving ? "Saving…" : "Add Imported Services (" + importable.length + " ready)"}
             </button>
@@ -425,17 +449,17 @@ export function CatalogImportPanel(props: {
           {needsAttention.length > 0 && <p style={styles.help}>{needsAttention.length} selected entries need correction, are duplicates, or already exist. They will not be imported.</p>}
           <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10 }}>
             <button type="button" style={styles.button}
-              disabled={saving || working || importable.length === 0 || importable.length > 200}
+              disabled={saving || working || importable.length === 0}
               onClick={() => void save("ready")}>
               {saving ? "Saving…" : "Import " + importable.length + " reviewed services"}
             </button>
             <button type="button" style={styles.secondary}
-              disabled={saving || working || selectedRows.length === 0 || selectedRows.length > 200}
+              disabled={saving || working || selectedRows.length === 0}
               onClick={() => void save("selected")}>
               {saving ? "Saving…" : "Add selected services (" + selectedRows.length + ")"}
             </button>
             <button type="button" style={styles.secondary}
-              disabled={saving || working || importable.length === 0 || importable.length > 200}
+              disabled={saving || working || importable.length === 0}
               onClick={() => void save("imported")}>
               {saving ? "Saving…" : "Add Imported Services (" + importable.length + " ready)"}
             </button>
@@ -445,7 +469,7 @@ export function CatalogImportPanel(props: {
             Add services is disabled because no selected row has an approved name, exact price,
             and duration yet. Edit the fields above (or select eligible rows) to enable it.
           </p>}
-          {importable.length > 200 && <p role="alert">Import up to 200 rows at a time. Deselect some rows and import in batches.</p>}
+          {saveProgress && <p role="status" aria-live="polite" style={styles.help}>{saveProgress}</p>}
         </div>
       )}
     </section>

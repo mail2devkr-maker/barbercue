@@ -8,6 +8,8 @@ import {
   SalonStatus,
   StaffMemberStatus,
   salonPhotoUrlSchema,
+  type SalonIntakeDto,
+  type SalonIntakeInput,
   type SalonPhotoActivationReadinessDto,
   type SalonSetupReadinessDto,
   type SalonStatusResultDto,
@@ -94,6 +96,35 @@ export class SalonActivationService {
       status: updated.status,
       isClosedForToday: updated.isClosedForToday,
     };
+  }
+
+  async getIntake(userId: string, salonId: string): Promise<SalonIntakeDto> {
+    await this.salonAccess.assertOwnerAccess(userId, salonId);
+    const salon = await this.prisma.salon.findUnique({
+      where: { id: salonId },
+      select: { queuePaused: true, bookingsPaused: true },
+    });
+    if (!salon)
+      throw new AppException(
+        BookingErrorCode.SALON_NOT_FOUND,
+        'Salon not found.',
+        HttpStatus.NOT_FOUND,
+      );
+    return salon;
+  }
+
+  /** Owner pauses/resumes NEW queue joins or online bookings; the shop itself stays open. */
+  async updateIntake(
+    userId: string,
+    salonId: string,
+    input: SalonIntakeInput,
+  ): Promise<SalonIntakeDto> {
+    await this.salonAccess.assertOwnerAccess(userId, salonId);
+    return this.prisma.salon.update({
+      where: { id: salonId },
+      data: input,
+      select: { queuePaused: true, bookingsPaused: true },
+    });
   }
 
   /** Platform-admin lifecycle control. The admin actor is never treated as the shop owner. */

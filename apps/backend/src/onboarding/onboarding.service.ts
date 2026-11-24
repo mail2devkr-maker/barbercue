@@ -55,6 +55,13 @@ export function draftToData(
   const data: Prisma.SalonOnboardingApplicationUncheckedUpdateInput = {
     ...rest,
   };
+  if (input.salonKinds !== undefined) {
+    const kinds = [...new Set(input.salonKinds)];
+    data.salonKinds = kinds;
+    data.salonKind = kinds[0] ?? null;
+    if (!kinds.includes('OTHER')) data.salonKindOther = null;
+  } else if (input.salonKind !== undefined)
+    data.salonKinds = input.salonKind ? [input.salonKind] : [];
   if (coordinates !== undefined) {
     data.latitude = coordinates?.latitude ?? null;
     data.longitude = coordinates?.longitude ?? null;

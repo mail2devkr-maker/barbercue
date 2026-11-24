@@ -38,6 +38,8 @@ maybe('Finance (e2e, disposable database)', () => {
   // Amounts unique to this run, so reruns on the same disposable database never look like duplicates.
   const offset = (parseInt(run, 16) % 9000) + 1;
   const claimAmount = 1000 + offset;
+  // Company-account payments made by earlier tests (the overview test checks the resulting balance).
+  let companyPaidExtra = 0;
   const bigAmount = 5000 + offset;
   const tok: Record<string, string> = {};
   const ids: Record<string, string> = {};
@@ -46,6 +48,8 @@ maybe('Finance (e2e, disposable database)', () => {
     get: (p: string) => request(app.getHttpServer()).get(`${base}/${p}`).set('Authorization', `Bearer ${tok[who]}`),
     post: (p: string, body?: object) =>
       request(app.getHttpServer()).post(`${base}/${p}`).set('Authorization', `Bearer ${tok[who]}`).send(body ?? {}),
+    patch: (p: string, body: object) =>
+      request(app.getHttpServer()).patch(`${base}/${p}`).set('Authorization', `Bearer ${tok[who]}`).send(body),
   });
   /** A date in the current month (India), so "this month" figures include it. */
   const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
@@ -203,6 +207,51 @@ maybe('Finance (e2e, disposable database)', () => {
     }).expect(400);
   });
 
+  it('records company expenses by category without making them reimbursement claims', async () => {
+    const marketing = (await as('hr').get('categories').expect(200)).body.find(
+      (c: { name: string }) => c.name === 'Marketing & Customer Acquisition',
+    );
+    // Staff record a company expense (finance records the company payment later): not a claim.
+    const company = await as('sales').post('expenses', { expenseDate: day, categoryId: marketing.id, description: `QR posters ${run}`, amount: String(410 + offset) }).expect(201);
+    expect((await as('sales').get(`expenses/${company.body.id}`).expect(200)).body.reimbursementRequired).toBe(false);
+    // Paid from a company account: never a claim, even if the flag is sent.
+    const paid = await as('admin').post('expenses', {
+      expenseDate: day, categoryId: marketing.id, description: `Meta ads ${run}`, amount: String(420 + offset), reimbursementRequired: true,
+      paidBy: { payerType: 'COMPANY_ACCOUNT', accountId: ids.account, method: 'UPI' },
+    }).expect(201);
+    companyPaidExtra += 420 + offset;
+    expect((await as('admin').get(`expenses/${paid.body.id}`).expect(200)).body.reimbursementRequired).toBe(false);
+    const claimsOnly = (await as('admin').get('expenses?type=REIMBURSEMENT&pageSize=200').expect(200)).body.items;
+    expect(claimsOnly.every((e: { reimbursementRequired: boolean }) => e.reimbursementRequired)).toBe(true);
+    expect(claimsOnly.some((e: { id: string }) => e.id === paid.body.id || e.id === company.body.id)).toBe(false);
+    // It cannot be turned into a claim while a company payment stands.
+    const blocked = await as('admin').patch(`expenses/${paid.body.id}`, { expenseDate: day, categoryId: marketing.id, description: `Meta ads ${run}`, amount: String(420 + offset), reimbursementRequired: true }).expect(400);
+    expect(blocked.body.error.message).toMatch(/own money/);
+
+    // Recorded by mistake as "I paid it myself": the owner changes it to a company expense and
+    // another category. The claim is cancelled and the personal payment voided.
+    const wrong = await as('sales').post('expenses', { expenseDate: day, categoryId: ids.tech, description: `Flyers ${run}`, amount: String(430 + offset), paidByMe: true }).expect(201);
+    await as('sales').post(`expenses/${wrong.body.id}/submit`).expect(201);
+    let claim = (await as('sales').get('reimbursements').expect(200)).body.find((r: { expense: { id: string } }) => r.expense.id === wrong.body.id);
+    expect(claim.status).toBe('SUBMITTED');
+    await as('sales').patch(`expenses/${wrong.body.id}`, { expenseDate: day, categoryId: marketing.id, description: `Flyers ${run}`, amount: String(430 + offset), reimbursementRequired: false }).expect(200);
+    const e = (await as('sales').get(`expenses/${wrong.body.id}`).expect(200)).body;
+    expect(e).toMatchObject({ reimbursementRequired: false, category: { id: marketing.id }, status: 'SUBMITTED', paidAmount: '0.00' });
+    expect(e.payments[0].voided).toBe(true);
+    claim = (await as('sales').get('reimbursements').expect(200)).body.find((r: { expense: { id: string } }) => r.expense.id === wrong.body.id);
+    expect(claim.status).toBe('CANCELLED');
+    const claimable = (await as('sales').get('reimbursements/claimable').expect(200)).body;
+    expect(claimable.some((p: { expense: { id: string } }) => p.expense.id === wrong.body.id)).toBe(false);
+
+    // An approved expense can still be reclassified by a finance manager, but its money is locked.
+    await as('cofounder').post(`expenses/${paid.body.id}/submit`).expect(201);
+    await as('cofounder').post(`expenses/${paid.body.id}/review`, { action: 'APPROVE' }).expect(201);
+    await as('cofounder').patch(`expenses/${paid.body.id}`, { expenseDate: day, categoryId: ids.tech, description: `Meta ads ${run}`, amount: String(420 + offset) }).expect(200);
+    await as('cofounder').patch(`expenses/${paid.body.id}`, { expenseDate: day, categoryId: ids.tech, description: `Meta ads ${run}`, amount: '1' }).expect(409);
+    const o = (await as('cofounder').get('overview').expect(200)).body;
+    expect(o.byType.map((r: { key: string }) => r.key)).toEqual(expect.arrayContaining(['COMPANY', 'REIMBURSEMENT']));
+  });
+
   it('stops a co-founder approving their own expense', async () => {
     const created = await as('cofounder').post('expenses', { expenseDate: day, categoryId: ids.tech, description: `Domain ${run}`, amount: String(700 + offset) }).expect(201);
     await as('cofounder').post(`expenses/${created.body.id}/submit`).expect(201);
@@ -212,10 +261,11 @@ maybe('Finance (e2e, disposable database)', () => {
 
   it('calculates the overview from actual transactions', async () => {
     const o = (await as('cofounder').get('overview').expect(200)).body;
-    // Cash = 100000 opening + 50000 funding − the reimbursement payouts − 3000 company payment.
+    // Cash = 100000 opening + 50000 funding − the reimbursement payouts − 3000 company payment
+    // − the company-paid expense recorded by the category test.
     const account = (await as('admin').get('accounts').expect(200)).body.find((a: { id: string }) => a.id === ids.account);
-    expect(account.balance).toBe(`${150000 - claimAmount - 3000}.00`);
-    expect(Number(o.kpis.availableCash)).toBeGreaterThanOrEqual(150000 - claimAmount - 3000);
+    expect(account.balance).toBe(`${150000 - claimAmount - 3000 - companyPaidExtra}.00`);
+    expect(Number(o.kpis.availableCash)).toBeGreaterThanOrEqual(150000 - claimAmount - 3000 - companyPaidExtra);
     expect(Number(o.kpis.totalFundsContributed)).toBeGreaterThanOrEqual(50000);
     expect(o.kpis.revenueReceived).toBeNull();
     expect(Number(o.kpis.expensesAwaitingApproval)).toBeGreaterThanOrEqual(799);

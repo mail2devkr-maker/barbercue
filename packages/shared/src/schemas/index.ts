@@ -506,6 +506,13 @@ export const citySearchQuerySchema = z.object({
 });
 export type CitySearchQueryInput = z.infer<typeof citySearchQuerySchema>;
 
+/** PATCH dashboard/salons/:salonId/intake - stop NEW queue joins / online bookings while open. */
+export const salonIntakeSchema = z
+  .object({ queuePaused: z.boolean().optional(), bookingsPaused: z.boolean().optional() })
+  .strict()
+  .refine((v) => v.queuePaused !== undefined || v.bookingsPaused !== undefined, "Choose what to change.");
+export type SalonIntakeInput = z.infer<typeof salonIntakeSchema>;
+
 export const otpRequestSchema = z.object({
   phone: z
     .string()
@@ -958,7 +965,7 @@ export const logoutRequestSchema = z.object({
 });
 export type LogoutRequestInput = z.infer<typeof logoutRequestSchema>;
 
-export const passwordAudienceSchema = z.enum(["owner", "staff", "admin"]);
+export const passwordAudienceSchema = z.enum(["owner", "staff", "admin", "employee"]);
 export type PasswordAudience = z.infer<typeof passwordAudienceSchema>;
 
 export const forgotPasswordSchema = z.object({

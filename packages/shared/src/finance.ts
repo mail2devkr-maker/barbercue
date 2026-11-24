@@ -97,6 +97,29 @@ export const FINANCE_PENDING_STATUSES: readonly FinanceExpenseStatus[] = ["SUBMI
 export const FINANCE_PAYABLE_STATUSES: readonly FinanceExpenseStatus[] = ["DRAFT", "SUBMITTED", "UNDER_REVIEW", "APPROVED", "PARTIALLY_PAID", "PAID"];
 /** Content (amount, category…) is editable only before a decision. */
 export const FINANCE_EDITABLE_STATUSES: readonly FinanceExpenseStatus[] = ["DRAFT", "SUBMITTED", "UNDER_REVIEW"];
+/**
+ * After a decision the money fields are locked, but a finance manager may still correct how the
+ * expense is classified (category, department, city, project, notes, recurring, type).
+ */
+export const FINANCE_RECLASSIFIABLE_STATUSES: readonly FinanceExpenseStatus[] = ["APPROVED", "PARTIALLY_PAID", "PAID"];
+
+/**
+ * What kind of expense this is. A COMPANY expense is FastQue's own spend (paid from a company account,
+ * a bill to pay, or a personal payment that is not paid back). A REIMBURSEMENT is money a person paid
+ * from their own pocket on FastQue's behalf and wants back — only these become reimbursement claims.
+ * Stored as `reimbursementRequired` on the expense.
+ */
+export const FinanceExpenseType = {
+  COMPANY: "COMPANY",
+  REIMBURSEMENT: "REIMBURSEMENT",
+} as const;
+export type FinanceExpenseType = (typeof FinanceExpenseType)[keyof typeof FinanceExpenseType];
+export const FINANCE_EXPENSE_TYPE_LABEL: Record<FinanceExpenseType, string> = {
+  COMPANY: "Company expense",
+  REIMBURSEMENT: "Reimbursement claim",
+};
+export const financeExpenseType = (e: { reimbursementRequired: boolean }): FinanceExpenseType =>
+  e.reimbursementRequired ? "REIMBURSEMENT" : "COMPANY";
 
 export const FinanceContributorType = {
   FOUNDER: "FOUNDER",
@@ -536,6 +559,11 @@ export const financeExpenseInputSchema = z
     department: optionalText(60),
     city: optionalText(60),
     project: optionalText(120),
+    /**
+     * The expense type (see FinanceExpenseType): true = a reimbursement claim. On create it follows
+     * from who paid when a payer is given (paid by me / a person "to be reimbursed" → true; a company
+     * account or a non-reimbursable personal payment → false). On edit it switches the type.
+     */
     reimbursementRequired: z.boolean().default(false),
     /** Create-only: "I paid this myself" — records a personal, reimbursable payment of the full amount. */
     paidByMe: z.boolean().optional(),
@@ -580,6 +608,7 @@ export const financeExpenseListQuerySchema = z.object({
   vendorId: z.string().uuid().optional(),
   /** Expenses with at least one payment by this person. */
   paidByContributorId: z.string().uuid().optional(),
+  type: z.enum(values(FinanceExpenseType)).optional(),
   from: isoDate.optional(),
   to: isoDate.optional(),
   sort: z.enum(["date_desc", "date_asc", "amount_desc", "amount_asc"]).default("date_desc"),
@@ -785,7 +814,16 @@ export interface FinanceExpenseDto {
   reviewNote: string | null;
   createdAt: string;
   /** What the current user may do with this expense. */
-  can: { edit: boolean; submit: boolean; review: boolean; cancel: boolean; pay: boolean; delete: boolean };
+  can: {
+    edit: boolean;
+    /** Only the classification (category, department, type…) may be changed — the amounts are locked. */
+    reclassify: boolean;
+    submit: boolean;
+    review: boolean;
+    cancel: boolean;
+    pay: boolean;
+    delete: boolean;
+  };
 }
 
 export interface FinanceExpenseDetailDto extends FinanceExpenseDto {
@@ -940,6 +978,8 @@ export interface FinanceOverviewDto {
     budgetUtilizationPercent: null;
   };
   byCategory: FinanceBreakdownRowDto[];
+  /** Company expenses vs. reimbursement claims (keys are FinanceExpenseType). */
+  byType: FinanceBreakdownRowDto[];
   byCity: FinanceBreakdownRowDto[];
   byDepartment: FinanceBreakdownRowDto[];
   byPaidBy: FinanceBreakdownRowDto[];

@@ -32,6 +32,7 @@ import {
   updateSalonServiceSchema,
   updateSalonStaffSchema,
   updateSalonTypeSchema,
+  salonIntakeSchema,
   updateSalonStatusSchema,
   updateSalonTimezoneSchema,
   serviceTaxonomyNodeInputSchema,
@@ -53,6 +54,7 @@ import {
   type UpdateSalonServiceInput,
   type UpdateSalonStaffInput,
   type UpdateSalonTypeInput,
+  type SalonIntakeInput,
   type UpdateSalonStatusInput,
   type UpdateSalonTimezoneInput,
   type SubmitSalonLocationProposalInput,
@@ -161,6 +163,23 @@ export class SalonSetupController {
     body: UpdateSalonStatusInput,
   ) {
     return this.activation.updateStatus(user.id, salonId, body);
+  }
+
+  @Get(`${SALON_SCOPE}/${DASHBOARD_PATHS.intake}`)
+  getIntake(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+  ) {
+    return this.activation.getIntake(user.id, salonId);
+  }
+
+  @Patch(`${SALON_SCOPE}/${DASHBOARD_PATHS.intake}`)
+  updateIntake(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+    @Body(new ZodValidationPipe(salonIntakeSchema)) body: SalonIntakeInput,
+  ) {
+    return this.activation.updateIntake(user.id, salonId, body);
   }
 
   // ---------- Timezone ----------

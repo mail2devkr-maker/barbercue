@@ -7,6 +7,7 @@ import {
   ChairStatus,
   QueueEntrySource,
   QueueEntryStatus,
+  QUEUE_PAUSED_MESSAGE,
   QueueErrorCode,
   OwnerOpsErrorCode,
   ServiceSessionStatus,
@@ -338,6 +339,7 @@ export class QueueService {
     contact?: { name?: string; phone?: string },
   ): Promise<QueueEntryDetailDto> {
     const salon = await this.availability.getSalonOrThrow(salonId);
+    this.assertQueueNotPaused(salon);
     const joinService = serviceId
       ? await this.availability.getServiceOrThrow(salonId, serviceId)
       : null;
@@ -413,6 +415,7 @@ export class QueueService {
     contactPhone: string,
   ): Promise<QueueEntryDetailDto & { guestAccessToken: string }> {
     const salon = await this.availability.getSalonOrThrow(salonId);
+    this.assertQueueNotPaused(salon);
     const joinService = await this.availability.getServiceOrThrow(
       salonId,
       serviceId,
@@ -854,6 +857,16 @@ export class QueueService {
       activeRemaining,
     );
     return { waitingCount, estimatedWaitMinutes };
+  }
+
+  /** Owner paused NEW customer joins while the shop is open (staff can still add people). */
+  private assertQueueNotPaused(salon: { queuePaused?: boolean }): void {
+    if (salon.queuePaused)
+      throw new AppException(
+        QueueErrorCode.QUEUE_CLOSED,
+        QUEUE_PAUSED_MESSAGE,
+        HttpStatus.CONFLICT,
+      );
   }
 
   /**

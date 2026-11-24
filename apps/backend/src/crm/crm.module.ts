@@ -3,6 +3,7 @@ import { StorageModule } from '../storage/storage.module';
 import { CrmAccessService } from './crm-access.service';
 import { CrmActivityService } from './crm-activity.service';
 import { CrmAnalyticsService } from './crm-analytics.service';
+import { CrmAnnouncementsService } from './crm-announcements.service';
 import { CrmController } from './crm.controller';
 import { CrmLeadsService } from './crm-leads.service';
 import { CrmRecordingsService } from './crm-recordings.service';
@@ -20,6 +21,7 @@ import { CrmTicketsService } from './crm-tickets.service';
     CrmRecordingsService,
     CrmTicketsService,
     CrmAnalyticsService,
+    CrmAnnouncementsService,
     CrmSchedulerService,
   ],
 })
