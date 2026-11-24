@@ -5,6 +5,7 @@ import {
   onboardingClosesNextDay,
   onboardingDraftSchema,
   onboardingMissingFields,
+  salonKindsText,
   onboardingServiceKey,
   onboardingServiceRowSchema,
   type OnboardingCompletenessInput,
@@ -55,6 +56,15 @@ describe('normalizeIndianMobile', () => {
 describe('onboardingMissingFields', () => {
   it('passes a complete application', () => {
     expect(onboardingMissingFields(complete)).toEqual([]);
+  });
+
+  it('accepts several salon types and asks what "Other" means', () => {
+    const fields = (p: object) => onboardingMissingFields({ ...complete, salonKind: null, ...p }).map((m) => m.field);
+    expect(fields({ salonKinds: ['BARBER_SHOP', 'SPA'] })).toEqual([]);
+    expect(fields({ salonKinds: [] })).toEqual(['salonKind']);
+    expect(fields({ salonKinds: ['SPA', 'OTHER'] })).toEqual(['salonKindOther']);
+    expect(fields({ salonKinds: ['SPA', 'OTHER'], salonKindOther: 'Tattoo studio' })).toEqual([]);
+    expect(salonKindsText(['SPA', 'OTHER'], 'Tattoo studio')).toBe('Spa, Tattoo studio');
   });
 
   it('requires a documented consent method and the person who gave consent', () => {

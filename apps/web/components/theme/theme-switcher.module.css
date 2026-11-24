@@ -1,11 +1,11 @@
-.root { position: fixed; left: 16px; bottom: 16px; z-index: 900; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+/* Sits inside the page header (never floating over other buttons). */
+.root { position: relative; display: inline-flex; flex: 0 0 auto; }
 .toggle {
-  min-height: 40px; padding: 0 14px; border-radius: 999px; cursor: pointer;
-  border: 1px solid rgba(127, 127, 127, 0.45); background: rgba(20, 18, 18, 0.88); color: #fff;
-  font: 600 0.85rem var(--font-body); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  width: 38px; height: 38px; display: inline-grid; place-items: center; padding: 0; border-radius: 12px; cursor: pointer;
+  border: 1px solid rgba(127, 127, 127, 0.4); background: transparent; color: inherit; font-size: 1.05rem; line-height: 1;
 }
-html[data-theme="light"] .toggle { background: rgba(255, 253, 249, 0.95); color: #1c1a17; }
 .menu {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 1100;
   display: grid; gap: 4px; padding: 6px; border-radius: 14px; min-width: 170px;
   background: #fff; border: 1px solid #e7e0d3; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
 }

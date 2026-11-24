@@ -8,6 +8,7 @@ jest.mock('next/navigation', () => ({ usePathname: jest.fn(), useRouter: () => (
 jest.mock('../../../lib/auth-context', () => ({ useAuth: jest.fn() }));
 jest.mock('../../../lib/api', () => ({ apiFetch: jest.fn(() => Promise.resolve([])) }));
 jest.mock('../NotificationBell', () => ({ NotificationBell: () => null }));
+jest.mock('../../theme/ThemeSwitcher', () => ({ ThemeSwitcher: () => null }));
 jest.mock('../../ui/BrandLockup', () => ({ BrandLockup: () => null }));
 // Preserves href and onClick — these tests assert destinations and that every link closes the menu.
 jest.mock('next/link', () => ({

@@ -18,7 +18,10 @@ export interface CatalogCandidate {
 }
 
 const MAX_BYTES = 6 * 1024 * 1024;
+// PDF/photo (AI) extraction only. Spreadsheets are read in full: the 6 MB file size is their limit.
 const MAX_ROWS = 300;
+// Memory guard, far above any real price list.
+const MAX_SHEET_ROWS = 20_000;
 
 /** PostgreSQL returns void for this lock. Use executeRaw, not queryRaw: Prisma cannot deserialize void. */
 export const CATALOG_IMPORT_ADVISORY_LOCK_SQL = 'SELECT pg_advisory_xact_lock(hashtext($1))';
@@ -70,7 +73,7 @@ function csvRows(text: string): string[][] {
       current.push(value); value = '';
       if (current.some((v) => v.trim())) result.push(current);
       current = [];
-      if (result.length > 1500) failure('CATALOG_TOO_MANY_ROWS', 'Maximum catalog length exceeded.');
+      if (result.length > MAX_SHEET_ROWS) failure('CATALOG_TOO_MANY_ROWS', 'Maximum catalog length exceeded.');
     } else value += char;
   }
   if (quoted) failure('CATALOG_INVALID_CSV', 'CSV contains an unclosed quote.');
@@ -136,7 +139,7 @@ export function parseXlsxTables(buffer: Buffer): Array<{ source: string; rows: s
           : xmlDecode(v);
       }
       if (row.some((v) => v?.trim())) rows.push(row);
-      if (rows.length > 1500) failure('CATALOG_TOO_MANY_ROWS', 'Too many Excel rows.');
+      if (rows.length > MAX_SHEET_ROWS) failure('CATALOG_TOO_MANY_ROWS', 'Too many Excel rows.');
     }
     return { source: name.split('/').pop() ?? name, rows };
   });
@@ -180,8 +183,7 @@ function candidates(rows: string[][], source: string, requireHeader = false): Ca
     category: category < 0 ? '' : trim(row[category], 60),
     subcategory: subcategory < 0 ? '' : trim(row[subcategory], 60),
     description: description < 0 ? '' : trim(row[description], 1000), source,
-  })).filter((v) => !!v.name && !/^(total|subtotal|discount|tax|gst|service|price list)$/i.test(v.name))
-    .slice(0, MAX_ROWS);
+  })).filter((v) => !!v.name && !/^(total|subtotal|discount|tax|gst|service|price list)$/i.test(v.name));
 }
 
 function type(file: Express.Multer.File): 'csv' | 'xlsx' | 'pdf' | 'jpeg' | 'png' | 'webp' {
@@ -239,7 +241,7 @@ export class ServiceCatalogImportService {
           deduplicated.set(key, { ...previous, description: item.description });
         }
       }
-      services = [...deduplicated.values()].slice(0, MAX_ROWS);
+      services = [...deduplicated.values()];
       if (!services.length) {
         failure('CATALOG_XLSX_NO_SERVICE_TABLE',
           'No Excel service table found. Use columns Name, Price, Duration Minutes, Category, Description.');

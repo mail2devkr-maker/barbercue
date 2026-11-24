@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { CRM_KPI_DEFINITIONS, type CrmDashboardDto, type CrmKpiKey } from "@barbercue/shared";
 import { pretty, useCrmData, when } from "../../lib/crm";
+import { CeoMessage } from "./CrmAnnouncements";
 import { useMe } from "./CrmShell";
 import s from "./crm.module.css";
 
@@ -52,6 +53,7 @@ export function CrmDashboard({ base = "/employee", embedded = false }: { base?: 
   ];
   return (
     <>
+      {!embedded && <CeoMessage />}
       {me?.role === "FIELD_EMPLOYEE" && (
         <section className={s.hero} aria-label="Your next move">
           <div>

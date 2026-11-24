@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client';
 import {
   CRM_LEAD_STATUS_META,
   CRM_MANUAL_LEAD_STATUSES,
+  CRM_WORKFLOW_LOCKED_STATUSES,
   CrmLeadSource,
   type CrmActivityDto,
   type CrmEmployeeRefDto,
@@ -455,7 +456,8 @@ export class CrmLeadsService {
     if (
       input.status &&
       input.status !== lead.status &&
-      !CRM_MANUAL_LEAD_STATUSES.includes(input.status)
+      !CRM_MANUAL_LEAD_STATUSES.includes(input.status) &&
+      a.kind !== 'ADMIN'
     )
       throw new AppException(
         'CRM_STATUS_NOT_MANUAL',
@@ -465,17 +467,12 @@ export class CrmLeadsService {
     if (
       input.status &&
       input.status !== lead.status &&
-      [
-        'ONBOARDING_STARTED',
-        'PENDING_APPROVAL',
-        'APPROVED',
-        'ONBOARDED',
-      ].includes(lead.status) &&
+      CRM_WORKFLOW_LOCKED_STATUSES.includes(lead.status) &&
       !a.manage
     )
       throw new AppException(
         'CRM_STATUS_LOCKED',
-        'This lead is in onboarding; its status follows the onboarding application.',
+        'This salon has been submitted for approval, so only a manager or admin can change its status.',
         HttpStatus.CONFLICT,
       );
     if (input.assignToEmployeeId)

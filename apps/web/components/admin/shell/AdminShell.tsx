@@ -7,6 +7,7 @@ import { Role } from "@barbercue/shared";
 import { useAuth } from "../../../lib/auth-context";
 import { BrandLockup } from "../../ui/BrandLockup";
 import { NotificationBell } from "../../layout/NotificationBell";
+import { ThemeSwitcher } from "../../theme/ThemeSwitcher";
 import { Icon } from "../../owner/icons";
 import { initialsOf, shortName } from "../../owner/format";
 import ui from "../../owner/owner.module.css";
@@ -238,6 +239,7 @@ function ShellInner({ children }: { children: ReactNode }) {
               <span className={shell.scope} title="Geography filters arrive with sales territories (Phase 2)">
                 All India · IST
               </span>
+              <ThemeSwitcher />
               {user && <NotificationBell />}
               <div className={ui.menuWrap} ref={menuRef}>
                 <button

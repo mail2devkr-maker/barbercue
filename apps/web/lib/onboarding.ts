@@ -59,7 +59,7 @@ export type DraftForm = Record<string, string | number | boolean | null>;
 
 /** Editable scalar fields, as the wizard holds them (blank strings mean "not entered"). */
 export const DRAFT_FIELDS = [
-  "salonName", "genderCategory", "salonKind", "description", "brandName", "websiteUrl", "instagramUrl",
+  "salonName", "genderCategory", "salonKinds", "salonKindOther", "description", "brandName", "websiteUrl", "instagramUrl",
   "mapsUrl", "isFranchise", "branchCount", "ownerName", "ownerPhone", "ownerWhatsapp", "ownerEmail",
   "alternatePhone", "managerName", "managerPhone", "preferredLanguage", "shopNumber", "buildingName",
   "streetAddress", "locality", "city", "district", "state", "postalCode", "country", "landmark",
@@ -76,11 +76,11 @@ const NUMBER_FIELDS = new Set([
   "branchCount", "employeeCount", "chairCount", "activeChairCount", "maleStaffCount", "femaleStaffCount",
   "appointmentIntervalMinutes", "averageServiceMinutes", "washStationCount",
 ]);
-const ENUM_FIELDS = new Set(["genderCategory", "salonKind", "ownerTrainingStatus", "consentMethod"]);
+const ENUM_FIELDS = new Set(["genderCategory", "ownerTrainingStatus", "consentMethod"]);
 const TRISTATE_FIELDS = new Set(["isFranchise", "walkInsAccepted", "bookingsAccepted", "liveQueueSupported", "qrInstallReady", "inventoryInterest"]);
 const CONSENT_FLAGS = new Set(["consentContact", "consentListing", "consentAccuracy", "consentAuthorization"]);
 /** Array fields, held in the form as comma-separated strings ("0,6", "parking,wifi"). */
-const LIST_FIELDS = new Set(["weeklyHolidays", "amenities"]);
+const LIST_FIELDS = new Set(["weeklyHolidays", "amenities", "salonKinds"]);
 
 export function formFromApplication(app: OnboardingApplicationDto): DraftForm {
   const form: DraftForm = {};
@@ -95,6 +95,14 @@ export function formFromApplication(app: OnboardingApplicationDto): DraftForm {
     if (typeof form[key] === "string") form[key] = (form[key] as string).replace(/^\+91/, "");
   }
   return form;
+}
+
+const URL_FIELDS = new Set(["websiteUrl", "instagramUrl", "mapsUrl"]);
+/** "fastque.com" -> "https://fastque.com"; anything that is not link-shaped is left for the server to explain. */
+function completeUrl(value: unknown): string {
+  const v = value === null || value === undefined ? "" : String(value).trim();
+  if (!v || /^https?:\/\//i.test(v)) return v;
+  return /^[\w-]+(\.[\w-]+)+(\/\S*)?$/.test(v) ? `https://${v}` : v;
 }
 
 /** Converts the wizard's form into a PATCH body. Blank text -> null; never invents a value. */
@@ -116,6 +124,8 @@ export function draftPayload(form: DraftForm): Record<string, unknown> {
       out[key] = value === true;
     } else if (key === "salonName") {
       if (typeof value === "string" && value.trim()) out[key] = value;
+    } else if (URL_FIELDS.has(key)) {
+      out[key] = completeUrl(value);
     } else {
       out[key] = value === null ? "" : String(value);
     }

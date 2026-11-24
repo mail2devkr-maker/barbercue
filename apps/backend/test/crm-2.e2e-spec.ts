@@ -9,6 +9,8 @@ import { Role, SessionAudience } from '@barbercue/shared';
 import { AppModule } from '../src/app.module';
 import { AllExceptionsFilter } from '../src/common/filters/all-exceptions.filter';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { BookingsService } from '../src/bookings/bookings.service';
+import { QueueService } from '../src/queue/queue.service';
 import { TokenService } from '../src/auth/services/token.service';
 import { CrmActivityService } from '../src/crm/crm-activity.service';
 
@@ -583,5 +585,165 @@ maybe('Employee CRM 2.0 (authenticated, disposable PostgreSQL)', () => {
     await api('post', 'crm/leads', 'viewer')
       .send({ shopName: 'v' })
       .expect(403);
+  });
+
+  it('CEO message: admins publish text + video; employees see only visible ones and cannot manage', async () => {
+    await api('post', 'crm/announcements', 'manager')
+      .send({ title: 'no' })
+      .expect(403);
+    await api('post', 'crm/announcements', 'empA')
+      .send({ title: 'no' })
+      .expect(403);
+    await api('get', 'crm/announcements', 'customer').expect(403);
+    const m = await api('post', 'crm/announcements', 'admin')
+      .send({ title: 'Diwali', body: 'Great work' })
+      .expect(201);
+    const id = m.body.id as string;
+    await api('post', `crm/announcements/${id}/video`, 'admin')
+      .attach('video', png, 'fake.mp4')
+      .expect(400);
+    await api('post', `crm/announcements/${id}/video`, 'empA')
+      .attach('video', webm, 'v.webm')
+      .expect(403);
+    await api('post', `crm/announcements/${id}/video`, 'admin')
+      .attach('video', webm, 'v.webm')
+      .expect(201);
+    const seen = await api('get', 'crm/announcements', 'empA').expect(200);
+    expect(seen.body[0]).toMatchObject({ id, hasVideo: true });
+    expect(JSON.stringify(seen.body)).not.toContain('crm/announcements/');
+    const v = await api('get', `crm/announcements/${id}/video`, 'empB').expect(
+      200,
+    );
+    expect(v.headers['content-type']).toContain('video/webm');
+    await api('patch', `crm/announcements/${id}`, 'admin')
+      .send({ isActive: false })
+      .expect(200);
+    expect(
+      (await api('get', 'crm/announcements', 'empA')).body.some(
+        (x: { id: string }) => x.id === id,
+      ),
+    ).toBe(false);
+    await api('get', `crm/announcements/${id}/video`, 'empA').expect(404);
+    await api('delete', `crm/announcements/${id}`, 'admin').expect(204);
+  });
+
+  it('lead status: employees keep the menu during onboarding, submitted leads need a manager, admins may set any', async () => {
+    const lead = await prisma.employeeCrmLead.create({
+      data: {
+        employeeProfileId: ids.empAProfile,
+        shopName: `Status ${run}`,
+        status: 'ONBOARDING_STARTED',
+      },
+    });
+    const url = `crm/leads/${lead.id}`;
+    await api('patch', url, 'empA').send({ status: 'APPROVED' }).expect(400);
+    await api('patch', url, 'empA').send({ status: 'FOLLOW_UP' }).expect(200);
+    await api('patch', url, 'manager').send({ status: 'APPROVED' }).expect(400);
+    await api('patch', url, 'admin')
+      .send({ status: 'PENDING_APPROVAL' })
+      .expect(200);
+    await api('patch', url, 'empA').send({ status: 'LOST' }).expect(409);
+    await api('patch', url, 'manager')
+      .send({ status: 'INTERESTED' })
+      .expect(200);
+  });
+
+  it('owner closes the live queue and online booking while the shop stays open', async () => {
+    const owner = await prisma.user.create({
+      data: { email: `crm2-${run}-owner@example.test` },
+    });
+    const city = await prisma.city.create({
+      data: {
+        name: `Pause ${run}`,
+        slug: `pause-${run}`,
+        countryCode: 'IN',
+        state: 'UP',
+        country: 'India',
+      },
+    });
+    const salon = await prisma.salon.create({
+      data: {
+        ownerUserId: owner.id,
+        name: 'Pause',
+        slug: `pause-${run}`,
+        cityId: city.id,
+        addressLine: 'x',
+        status: 'ACTIVE',
+      },
+    });
+    await prisma.userRole.create({
+      data: { userId: owner.id, role: Role.SALON_OWNER, salonId: salon.id },
+    });
+    const service = await prisma.service.create({
+      data: { salonId: salon.id, name: 'Cut', durationMinutes: 30, price: 100 },
+    });
+    tok.owner = app
+      .get(TokenService)
+      .signAccessToken(owner.id, [Role.SALON_OWNER], SessionAudience.STAFF);
+    const url = `dashboard/salons/${salon.id}/intake`;
+    expect((await api('get', url, 'owner').expect(200)).body).toEqual({
+      queuePaused: false,
+      bookingsPaused: false,
+    });
+    await api('patch', url, 'customer').send({ queuePaused: true }).expect(403);
+    await api('patch', url, 'owner').send({}).expect(400);
+    const queue = app.get(QueueService);
+    const bookings = app.get(BookingsService);
+    const book = () =>
+      bookings.create(
+        ids.customer,
+        {
+          salonId: salon.id,
+          serviceIds: [service.id],
+          slotStart: new Date(Date.now() + 864e5).toISOString(),
+        } as never,
+        'WEB' as never,
+        `k-${run}-${Math.random()}`,
+      );
+    await api('patch', url, 'owner')
+      .send({ queuePaused: true, bookingsPaused: true })
+      .expect(200);
+    await expect(queue.joinWalkIn(ids.customer, salon.id)).rejects.toThrow(
+      /not taking new live queue/,
+    );
+    await expect(
+      queue.joinGuestWalkIn(salon.id, service.id, 'G', '+919800000009'),
+    ).rejects.toThrow(/not taking new live queue/);
+    await expect(book()).rejects.toThrow(/not taking new online bookings/);
+    const row = await prisma.salon.findUniqueOrThrow({
+      where: { id: salon.id },
+    });
+    expect([row.status, row.isClosedForToday]).toEqual(['ACTIVE', false]);
+    await api('patch', url, 'owner').send({ queuePaused: false }).expect(200);
+    const joined = await queue.joinWalkIn(ids.customer, salon.id, service.id, {
+      name: 'G',
+      phone: '+919800000009',
+    });
+    expect(joined.id).toBeTruthy();
+  });
+
+  it('employee password reset: an employee gets a working single-use link', async () => {
+    const r = await request(app.getHttpServer())
+      .post('/api/v1/auth/forgot-password')
+      .send({ email: `crm2-${run}-empB@example.test`, audience: 'employee' })
+      .expect(200);
+    const link = new URL(r.body.devResetUrl as string);
+    expect(link.searchParams.get('audience')).toBe('employee');
+    const newPassword = `Reset-${run}-9x!`;
+    const body = {
+      token: link.searchParams.get('token'),
+      newPassword,
+      confirmPassword: newPassword,
+    };
+    const post = () =>
+      request(app.getHttpServer())
+        .post('/api/v1/auth/reset-password')
+        .send(body);
+    await post().expect(200);
+    await post().expect(400);
+    const profile = await prisma.user.findUniqueOrThrow({
+      where: { id: ids.empB },
+    });
+    expect(profile.passwordHash).toBeTruthy();
   });
 });

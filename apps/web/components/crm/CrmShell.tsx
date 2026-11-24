@@ -96,7 +96,7 @@ export function CrmShell({ title, eyebrow = "FastQue / Employee workspace", sub,
             <button type="button" className={s.link} style={{ marginTop: 8 }} onClick={() => void logout()}>Sign out</button>
           </div>
         </aside>
-        {open && <div className={s.overlay} style={{ zIndex: 65, background: "rgba(5,3,10,0.5)" }} onClick={() => setOpen(false)} aria-hidden="true" />}
+        {open && <div className={s.overlay} style={{ zIndex: 1140, background: "rgba(5,3,10,0.5)" }} onClick={() => setOpen(false)} aria-hidden="true" />}
         <main className={s.main}>
           <div className={s.head}>
             <div>

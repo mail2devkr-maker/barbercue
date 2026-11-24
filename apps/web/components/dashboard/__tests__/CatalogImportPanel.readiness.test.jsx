@@ -169,3 +169,54 @@ it('Add Imported Services saves eligible rows and keeps unpriced services for re
     else globalThis.window = priorWindow;
   }
 });
+
+describe('importing more than 200 services', () => {
+  const services = Array.from({ length: 259 }, (_, i) => ({ name: `Service ${i}`, price: 100, durationMinutes: 30, category: '', description: '', source: 's' }));
+  async function open(onImported) {
+    apiFetch.mockResolvedValue({ pdfPhotoOcrAvailable: false });
+    extractCatalogLocally.mockResolvedValue({ text: '', services, notes: [] });
+    let renderer;
+    await act(async () => {
+      renderer = TestRenderer.create(<CatalogImportPanel basePath="b" existingServices={[]} onImported={onImported} />);
+    });
+    await act(async () => renderer.root.findByProps({ id: 'catalog-multiple-input' }).props.onChange({ target: { files: [{ name: 'c.pdf', size: 10, lastModified: 1 }] } }));
+    const click = async (label) => {
+      const b = renderer.root.findAllByType('button').find((n) => n.props.children === label);
+      expect(b.props.disabled).toBeFalsy();
+      await act(async () => b.props.onClick());
+    };
+    await click('Step 1: Extract & preview (1)');
+    return { renderer, click };
+  }
+  const originalWindow = globalThis.window;
+  beforeEach(() => { globalThis.window = { confirm: () => true }; });
+  afterEach(() => {
+    if (originalWindow === undefined) delete globalThis.window;
+    else globalThis.window = originalWindow;
+  });
+  const saves = () => apiFetch.mock.calls.filter(([url]) => url.endsWith('import-reviewed')).map(([, o]) => JSON.parse(o.body).services);
+
+  it('saves every row in small batches from one click', async () => {
+    const onImported = jest.fn();
+    const { renderer, click } = await open(onImported);
+    apiFetch.mockImplementation((_, o) => Promise.resolve({ createdCount: JSON.parse(o.body).services.length, skippedCount: 0, added: [], skipped: [] }));
+    await click('Import 259 reviewed services');
+    expect(saves().map((s) => s.length)).toEqual([50, 50, 50, 50, 50, 9]);
+    expect(new Set(saves().flat().map((s) => s.name)).size).toBe(259);
+    expect(JSON.stringify(renderer.toJSON())).toContain('259 services added; 0 already existed.');
+    expect(onImported).toHaveBeenCalledTimes(1);
+    await act(async () => renderer.unmount());
+  });
+
+  it('keeps unsaved rows in review when a batch fails, without re-sending saved ones', async () => {
+    const { renderer, click } = await open(jest.fn());
+    let n = 0;
+    apiFetch.mockImplementation((_, o) => (++n === 3 ? Promise.reject(new Error('x')) : Promise.resolve({ createdCount: JSON.parse(o.body).services.length, skippedCount: 0, added: [], skipped: [] })));
+    await click('Import 259 reviewed services');
+    expect(n).toBe(3);
+    expect(JSON.stringify(renderer.toJSON())).toContain('The first 100 rows were saved');
+    await click('Import 159 reviewed services');
+    expect(saves().flat().filter((s) => s.name === 'Service 0')).toHaveLength(1);
+    await act(async () => renderer.unmount());
+  });
+});

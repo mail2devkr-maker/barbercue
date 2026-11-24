@@ -9,7 +9,7 @@ import { AuthCard, AuthPageFallback } from "../../../components/auth/AuthCard";
 import authStyles from "../../../components/auth/customer-auth.module.css";
 
 // Staff/owner/admin only — customers authenticate via OTP and have no password to reset.
-const LOGIN_PATHS = { owner: "/owner/login", staff: "/staff/login", admin: "/admin/login" } as const;
+const LOGIN_PATHS = { owner: "/owner/login", staff: "/staff/login", admin: "/admin/login", employee: "/employee/login" } as const;
 
 function ForgotPasswordForm() {
   const searchParams = useSearchParams();
@@ -73,7 +73,7 @@ function ForgotPasswordForm() {
     <AuthCard
       audience="recovery"
       title="Reset your password"
-      subtitle="For shop owner, barber/staff and administrator password accounts. Customer accounts use Google or phone sign-in."
+      subtitle="For shop owner, barber/staff, employee and administrator password accounts. Customer accounts use Google or phone sign-in."
     >
       <form onSubmit={handleSubmit} className={authStyles.form}>
         {error && <p className={authStyles.errorMessage} role="alert">{error}</p>}

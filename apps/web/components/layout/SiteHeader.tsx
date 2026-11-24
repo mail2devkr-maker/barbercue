@@ -15,6 +15,7 @@ import {
   workspaceNavigationLabel,
 } from "../../lib/workspace-route";
 import { BrandLockup } from "../ui/BrandLockup";
+import { ThemeSwitcher } from "../theme/ThemeSwitcher";
 import { NotificationBell } from "./NotificationBell";
 import { CloseIcon, LocationIcon, MenuIcon } from "../landing/icons";
 import styles from "../landing/landing.module.css";
@@ -160,6 +161,7 @@ export function SiteHeader() {
               <Link href="/dashboard/register-shop">Partner With Us</Link>
               <ShopSwitcher />
               {authenticatedUser && <NotificationBell />}
+              <ThemeSwitcher />
               <span className={styles.utilityDivider} aria-hidden="true" />
               <div className={styles.utilityAuth}>
                 <Link href={workspaceHref} className={styles.utilityLink}>
@@ -205,6 +207,7 @@ export function SiteHeader() {
               <ShopSwitcher />
               <FavoritesLink />
               {authenticatedUser && <NotificationBell />}
+              <ThemeSwitcher />
               <Link href={workspaceHref} className={styles.headerSignIn}>
                 {workspaceLabel}
               </Link>
@@ -215,11 +218,10 @@ export function SiteHeader() {
               )}
             </div>
 
-            {authenticatedUser && (
-              <div className={styles.siteMobileBell}>
-                <NotificationBell />
-              </div>
-            )}
+            <div className={styles.siteMobileBell}>
+              <ThemeSwitcher />
+              {authenticatedUser && <NotificationBell />}
+            </div>
 
             <div className={styles.mobileNavHost} onKeyDown={handleMobileNavKeyDown}>
               <button

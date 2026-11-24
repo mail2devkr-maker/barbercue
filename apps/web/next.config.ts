@@ -30,6 +30,9 @@ const nextConfig: NextConfig = {
   experimental: {
     // Next.js upgrade assistant: offer security-only upgrades for this app.
     agentUpgrade: "security",
+    // proxy.ts runs on /api too, and Next truncates proxied bodies above 10 MB by default. CRM
+    // recordings (40 MB) and CEO videos (50 MB) are larger; the API enforces each real limit.
+    proxyClientMaxBodySize: "60mb",
   },
   images: {
     // BarberCue's own editorial asset library (apps/web/public/editorial/**) is hand-authored,

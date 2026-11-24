@@ -172,6 +172,8 @@ export const VERIFICATION_BADGE_CAPTION =
 
 // Exact customer-facing copy for an owner-paused shop. Shared so web/mobile cannot drift.
 export const SHOP_CLOSED_TODAY_MESSAGE = 'This shop is closed for today.';
+export const QUEUE_PAUSED_MESSAGE = 'This shop is not taking new live queue entries right now.';
+export const BOOKINGS_PAUSED_MESSAGE = 'This shop is not taking new online bookings right now.';
 
 // Name of the httpOnly cookie the backend sets/reads for web refresh-token delivery. Shared so
 // the web app's fetch wrapper knows to send credentials, without needing to know the token value.
@@ -389,6 +391,7 @@ export const DASHBOARD_PATHS = {
   // PATCH dashboard/salons/:salonId/service-buffer.
   addOns: 'add-ons',
   serviceBuffer: 'service-buffer',
+  intake: 'intake',
   noShow: 'no-show',
   cancel: 'cancel',
   complete: 'complete',

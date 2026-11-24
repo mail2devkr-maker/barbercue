@@ -206,6 +206,12 @@ export function toApplicationDto(
     salonName: app.salonName,
     genderCategory: app.genderCategory,
     salonKind: app.salonKind,
+    salonKinds: app.salonKinds.length
+      ? app.salonKinds
+      : app.salonKind
+        ? [app.salonKind]
+        : [],
+    salonKindOther: app.salonKindOther,
     description: app.description,
     brandName: app.brandName,
     websiteUrl: app.websiteUrl,

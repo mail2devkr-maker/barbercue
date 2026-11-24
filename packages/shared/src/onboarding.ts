@@ -48,6 +48,15 @@ export const OnboardingSalonKind = {
   OTHER: "OTHER",
 } as const;
 export type OnboardingSalonKind = (typeof OnboardingSalonKind)[keyof typeof OnboardingSalonKind];
+export const ONBOARDING_SALON_KIND_LABEL: Record<OnboardingSalonKind, string> = {
+  BARBER_SHOP: "Barber shop", BEAUTY_SALON: "Beauty salon", UNISEX_SALON: "Unisex salon", SPA: "Spa", OTHER: "Other",
+};
+/** "Barber shop, Spa, Tattoo studio" - the text typed for Other replaces the word. */
+export function salonKindsText(kinds: readonly string[], other?: string | null): string {
+  return kinds
+    .map((k) => (k === "OTHER" && other?.trim() ? other.trim() : (ONBOARDING_SALON_KIND_LABEL[k as OnboardingSalonKind] ?? k)))
+    .join(", ");
+}
 
 export const OnboardingMediaCategory = {
   EXTERIOR: "EXTERIOR",
@@ -342,6 +351,9 @@ export const onboardingDraftSchema = z
     salonName: z.string().trim().min(1, "Salon name is required").max(160).optional(),
     genderCategory: z.nativeEnum(OnboardingGender).nullable().optional(),
     salonKind: z.nativeEnum(OnboardingSalonKind).nullable().optional(),
+    salonKinds: z.array(z.nativeEnum(OnboardingSalonKind)).max(5).optional(),
+    /** What "Other" means, e.g. "Tattoo studio". */
+    salonKindOther: optText(160),
     description: optText(2000),
     brandName: optText(160),
     websiteUrl: optUrl,
@@ -581,6 +593,8 @@ export interface OnboardingCompletenessInput {
   salonName?: string | null;
   genderCategory?: string | null;
   salonKind?: string | null;
+  salonKinds?: readonly string[];
+  salonKindOther?: string | null;
   ownerName?: string | null;
   ownerPhone?: string | null;
   streetAddress?: string | null;
@@ -619,6 +633,8 @@ export const ONBOARDING_FIELD_LABELS: Record<string, string> = {
   salonName: "Salon name",
   genderCategory: "Salon category (Men / Women / Unisex)",
   salonKind: "Salon type",
+  salonKinds: "Salon type",
+  salonKindOther: "Other salon type (please specify)",
   ownerName: "Owner's full name",
   ownerPhone: "Owner's mobile number",
   ownerEmail: "Owner's email",
@@ -639,7 +655,75 @@ export const ONBOARDING_FIELD_LABELS: Record<string, string> = {
   consent: "Owner consent",
   gstin: "GSTIN",
   description: "Description",
+  brandName: "Business / brand name",
+  websiteUrl: "Website",
+  instagramUrl: "Instagram profile",
+  mapsUrl: "Google Maps link",
+  isFranchise: "Ownership",
+  branchCount: "Number of branches",
+  alternatePhone: "Alternate contact",
+  managerName: "Manager name",
+  managerPhone: "Manager phone",
+  preferredLanguage: "Preferred language",
+  shopNumber: "Shop number",
+  buildingName: "Building / market",
+  landmark: "Landmark",
+  activeChairCount: "Active chairs",
+  maleStaffCount: "Male staff",
+  femaleStaffCount: "Female staff",
+  appointmentIntervalMinutes: "Appointment interval (min)",
+  averageServiceMinutes: "Average service time (min)",
+  specialTimings: "Special timings",
+  washStationCount: "Hair wash stations",
+  weeklyHolidays: "Weekly holidays",
+  amenities: "Amenities",
+  ownerTrainingStatus: "Owner training",
+  consentMethod: "How the owner gave consent",
+  consentByName: "Consent given by",
+  consentByRole: "Role of the person giving consent",
+  consentEvidenceNote: "Consent evidence note",
+  businessRegistration: "Business registration",
+  employeeNotes: "Employee notes",
+  openQuestions: "Unresolved questions",
+  serviceName: "Service name",
+  basePrice: "Price",
+  discountedPrice: "Discounted price",
+  durationMinutes: "Duration (min)",
 };
+
+const plainIssue = (message: string): string => {
+  let m = /^Number must be greater than or equal to (.+)$/.exec(message);
+  if (m) return `must be ${m[1]} or more`;
+  m = /^Number must be less than or equal to (.+)$/.exec(message);
+  if (m) return `must be ${m[1]} or less`;
+  m = /^String must contain at most (\d+) character/.exec(message);
+  if (m) return `must be ${m[1]} characters or fewer`;
+  if (/received float/.test(message)) return "must be a whole number";
+  if (/received nan/i.test(message)) return "must be a number";
+  if (message === "Required") return "is required";
+  return message;
+};
+
+/**
+ * Turns the API's validation issues into sentences that name the field ("Number of branches: must be
+ * 1 or more"). Service rows are named by position ("Service 2 - Price: ...").
+ */
+export function onboardingIssueMessages(details: unknown): string[] {
+  const issues = (details as { issues?: unknown } | null | undefined)?.issues;
+  if (!Array.isArray(issues)) return [];
+  const out: string[] = [];
+  for (const raw of issues as Array<{ path?: unknown; message?: unknown }>) {
+    const message = plainIssue(typeof raw?.message === "string" ? raw.message : "is not valid");
+    const parts = typeof raw?.path === "string" ? raw.path.split(".").filter(Boolean) : [];
+    let label = "";
+    if (parts[0] === "services" && parts.length > 1) {
+      const field = parts[2] ? ` - ${ONBOARDING_FIELD_LABELS[parts[2]] ?? parts[2]}` : "";
+      label = `Service ${Number(parts[1]) + 1}${field}`;
+    } else if (parts.length) label = ONBOARDING_FIELD_LABELS[parts[0]] ?? parts[0];
+    out.push(label ? `${label}: ${message}` : message);
+  }
+  return [...new Set(out)];
+}
 
 export function onboardingMissingFields(app: OnboardingCompletenessInput): OnboardingMissingItem[] {
   const missing: OnboardingMissingItem[] = [];
@@ -650,7 +734,9 @@ export function onboardingMissingFields(app: OnboardingCompletenessInput): Onboa
 
   need(present(app.salonName), "salonName", 1);
   need(present(app.genderCategory), "genderCategory", 1);
-  need(present(app.salonKind), "salonKind", 1);
+  const kinds = app.salonKinds ?? [];
+  need(kinds.length > 0 || present(app.salonKind), "salonKind", 1);
+  if (kinds.includes("OTHER")) need(present(app.salonKindOther), "salonKindOther", 1);
 
   need(present(app.ownerName), "ownerName", 2);
   need(!!normalizeIndianMobile(app.ownerPhone ?? null), "ownerPhone", 2, "A valid owner mobile number is required");
@@ -808,6 +894,8 @@ export interface OnboardingApplicationDto {
   salonName: string;
   genderCategory: OnboardingGender | null;
   salonKind: OnboardingSalonKind | null;
+  salonKinds: OnboardingSalonKind[];
+  salonKindOther: string | null;
   description: string | null;
   brandName: string | null;
   websiteUrl: string | null;

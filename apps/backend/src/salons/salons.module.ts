@@ -7,6 +7,7 @@ import { CitiesController } from './cities.controller';
 import { CountriesController } from './countries.controller';
 import { SalonsController } from './salons.controller';
 import { CitiesService } from './cities.service';
+import { PincodeService } from './pincode.service';
 import { CountriesService } from './countries.service';
 import { SalonsService } from './salons.service';
 import { FavoritesController } from './favorites.controller';
@@ -29,6 +30,7 @@ import { RecentlyViewedService } from './recently-viewed.service';
   ],
   providers: [
     CitiesService,
+    PincodeService,
     CountriesService,
     SalonsService,
     CustomerAssistantSearchService,

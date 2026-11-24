@@ -45,6 +45,8 @@ async function bootstrap() {
     mkdirSync(localStorageDir, { recursive: true });
     app.useStaticAssets(localStorageDir, {
       prefix: `${LOCAL_STORAGE_URL_PREFIX}/`,
+      // Dot-folders are never public (private uploads may live in one - see LocalPrivateStorageDriver).
+      dotfiles: 'deny',
     });
     const storage = inspectLocalStorageConfig();
     logger.log(

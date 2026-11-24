@@ -533,6 +533,9 @@ export interface SalonListItemDto extends SalonSummary {
   // Owner's temporary same-day pause. The shop remains discoverable; clients show
   // SHOP_CLOSED_TODAY_MESSAGE and suppress booking/queue CTAs while true.
   isClosedForToday?: boolean;
+  /** Owner intake pauses: the shop is open but takes no NEW queue joins / online bookings. */
+  queuePaused?: boolean;
+  bookingsPaused?: boolean;
   ratingAverage: number | null; // null when the salon has zero reviews yet
   ratingCount: number;
   priceMin: number | null; // computed from active services, null if none
@@ -1783,6 +1786,20 @@ export interface StaffInviteResultDto {
   staff: SalonStaffDto;
   invitationSent: boolean;
   inviteUrl?: string;
+}
+
+export interface SalonIntakeDto {
+  queuePaused: boolean;
+  bookingsPaused: boolean;
+}
+
+/** GET cities/pincode/:pin - what India Post lists for a PIN, plus the matching FastQue city. */
+export interface PincodeLookupDto {
+  pin: string;
+  district: string;
+  state: string;
+  areas: string[];
+  city: CitySearchResultDto | null;
 }
 
 // PATCH dashboard/salons/:salonId/status response — the owner-visible activation state.

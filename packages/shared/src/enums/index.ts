@@ -436,6 +436,7 @@ export type NotificationCategory = (typeof NotificationCategory)[keyof typeof No
 // strings.
 // Stable machine-readable error codes for the booking flow — same convention as AuthErrorCode.
 export const BookingErrorCode = {
+  BOOKINGS_PAUSED: 'BOOKINGS_PAUSED',
   SALON_NOT_FOUND: 'SALON_NOT_FOUND',
   SERVICE_NOT_FOUND: 'SERVICE_NOT_FOUND',
   STAFF_NOT_FOUND: 'STAFF_NOT_FOUND',
