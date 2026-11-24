@@ -48,6 +48,15 @@ export const OnboardingSalonKind = {
   OTHER: "OTHER",
 } as const;
 export type OnboardingSalonKind = (typeof OnboardingSalonKind)[keyof typeof OnboardingSalonKind];
+export const ONBOARDING_SALON_KIND_LABEL: Record<OnboardingSalonKind, string> = {
+  BARBER_SHOP: "Barber shop", BEAUTY_SALON: "Beauty salon", UNISEX_SALON: "Unisex salon", SPA: "Spa", OTHER: "Other",
+};
+/** "Barber shop, Spa, Tattoo studio" - the text typed for Other replaces the word. */
+export function salonKindsText(kinds: readonly string[], other?: string | null): string {
+  return kinds
+    .map((k) => (k === "OTHER" && other?.trim() ? other.trim() : (ONBOARDING_SALON_KIND_LABEL[k as OnboardingSalonKind] ?? k)))
+    .join(", ");
+}
 
 export const OnboardingMediaCategory = {
   EXTERIOR: "EXTERIOR",
@@ -342,6 +351,9 @@ export const onboardingDraftSchema = z
     salonName: z.string().trim().min(1, "Salon name is required").max(160).optional(),
     genderCategory: z.nativeEnum(OnboardingGender).nullable().optional(),
     salonKind: z.nativeEnum(OnboardingSalonKind).nullable().optional(),
+    salonKinds: z.array(z.nativeEnum(OnboardingSalonKind)).max(5).optional(),
+    /** What "Other" means, e.g. "Tattoo studio". */
+    salonKindOther: optText(160),
     description: optText(2000),
     brandName: optText(160),
     websiteUrl: optUrl,
@@ -581,6 +593,8 @@ export interface OnboardingCompletenessInput {
   salonName?: string | null;
   genderCategory?: string | null;
   salonKind?: string | null;
+  salonKinds?: readonly string[];
+  salonKindOther?: string | null;
   ownerName?: string | null;
   ownerPhone?: string | null;
   streetAddress?: string | null;
@@ -619,6 +633,8 @@ export const ONBOARDING_FIELD_LABELS: Record<string, string> = {
   salonName: "Salon name",
   genderCategory: "Salon category (Men / Women / Unisex)",
   salonKind: "Salon type",
+  salonKinds: "Salon type",
+  salonKindOther: "Other salon type (please specify)",
   ownerName: "Owner's full name",
   ownerPhone: "Owner's mobile number",
   ownerEmail: "Owner's email",
@@ -718,7 +734,9 @@ export function onboardingMissingFields(app: OnboardingCompletenessInput): Onboa
 
   need(present(app.salonName), "salonName", 1);
   need(present(app.genderCategory), "genderCategory", 1);
-  need(present(app.salonKind), "salonKind", 1);
+  const kinds = app.salonKinds ?? [];
+  need(kinds.length > 0 || present(app.salonKind), "salonKind", 1);
+  if (kinds.includes("OTHER")) need(present(app.salonKindOther), "salonKindOther", 1);
 
   need(present(app.ownerName), "ownerName", 2);
   need(!!normalizeIndianMobile(app.ownerPhone ?? null), "ownerPhone", 2, "A valid owner mobile number is required");
@@ -876,6 +894,8 @@ export interface OnboardingApplicationDto {
   salonName: string;
   genderCategory: OnboardingGender | null;
   salonKind: OnboardingSalonKind | null;
+  salonKinds: OnboardingSalonKind[];
+  salonKindOther: string | null;
   description: string | null;
   brandName: string | null;
   websiteUrl: string | null;

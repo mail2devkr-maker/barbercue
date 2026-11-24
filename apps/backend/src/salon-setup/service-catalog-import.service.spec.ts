@@ -101,6 +101,12 @@ describe('ServiceCatalogImportService', () => {
     }) });
   });
 
+  it('reads every spreadsheet row, beyond the old 300-row cut', async () => {
+    const csv = ['Name,Price,Duration', ...Array.from({ length: 2500 }, (_, i) => `Service ${i},100,30`)].join('\n');
+    const preview = await subject.preview('actor', 'salon', file('big.csv', csv), false);
+    expect(preview.services).toHaveLength(2500);
+  });
+
   it('rejects disguised image content before OCR and always checks salon access', async () => {
     await expect(subject.preview('actor', 'salon', file('menu.jpg', 'not a jpeg'), true))
       .rejects.toThrow(/Supported formats/);

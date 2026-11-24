@@ -457,3 +457,7 @@
   .compactRow,
   .overdueRow { align-items: flex-start; flex-direction: column; }
 }
+
+/* Native date and time pickers (icon and popup) follow the dark surface they sit on. */
+.page input:is([type="date"], [type="time"], [type="datetime-local"], [type="month"]) { color-scheme: dark; }
+.page input::-webkit-calendar-picker-indicator { opacity: 1; cursor: pointer; }

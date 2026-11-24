@@ -7,6 +7,7 @@ import {
   ONBOARDING_CONSENT_METHOD_LABEL,
   ONBOARDING_FIELD_LABELS,
   ONBOARDING_STATUS_LABELS,
+  salonKindsText,
   type AdminOnboardingApplicationDto,
   type OnboardingApprovalResultDto,
   type OnboardingDuplicateDto,
@@ -276,7 +277,7 @@ export default function AdminOnboardingReviewPage() {
             <h2>Salon identity</h2>
             <dl>
               <dt>Category</dt><dd><Value v={app.genderCategory} /></dd>
-              <dt>Type</dt><dd><Value v={app.salonKind} /></dd>
+              <dt>Type</dt><dd><Value v={salonKindsText(app.salonKinds, app.salonKindOther) || null} /></dd>
               <dt>Brand</dt><dd><Value v={app.brandName} /></dd>
               <dt>Franchise</dt><dd><Value v={app.isFranchise} /></dd>
               <dt>Branches</dt><dd><Value v={app.branchCount} /></dd>

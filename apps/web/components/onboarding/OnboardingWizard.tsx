@@ -12,9 +12,11 @@ import {
   ONBOARDING_GPS_GOOD_ACCURACY_METERS,
   ONBOARDING_MEDIA_LIMITS,
   ONBOARDING_PHOTO_SLOTS,
+  ONBOARDING_SALON_KIND_LABEL,
   ONBOARDING_SHOP_PHOTO_CATEGORIES,
   ONBOARDING_STATUS_LABELS,
   onboardingIssueMessages,
+  salonKindsText,
   type MenuExtractionResultDto,
   type OnboardingApplicationDto,
   type OnboardingHoursDto,
@@ -523,12 +525,21 @@ export function OnboardingWizard({ applicationId }: Props) {
           <div className={styles.fields}>
             {text("salonName", "Salon name", { required: true, full: true, maxLength: 160 })}
             {choice("genderCategory", "Salon category", [["MEN", "Men"], ["WOMEN", "Women"], ["UNISEX", "Unisex"]], true)}
-            {choice(
-              "salonKind",
-              "Salon type",
-              [["BARBER_SHOP", "Barber shop"], ["BEAUTY_SALON", "Beauty salon"], ["UNISEX_SALON", "Unisex salon"], ["SPA", "Spa"], ["OTHER", "Other"]],
-              true,
-            )}
+            <div className={`${styles.field} ${styles.full}`}>
+              <span className={styles.required}>Salon type (choose all that apply)</span>
+              <div className={styles.segmented} role="group" aria-label="Salon type">
+                {Object.entries(ONBOARDING_SALON_KIND_LABEL).map(([value, label]) => {
+                  const on = listHas(form.salonKinds, value);
+                  return (
+                    <button key={value} type="button" aria-pressed={on} className={on ? styles.segmentedActive : undefined} disabled={readOnly} onClick={() => set("salonKinds", toggleListValue(form.salonKinds, value))}>
+                      {on ? "✓ " : ""}{label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            {listHas(form.salonKinds, "OTHER") &&
+              text("salonKindOther", "Other: please specify", { required: true, full: true, maxLength: 160, placeholder: "e.g. Tattoo studio, piercing, nail art" })}
             {text("brandName", "Business / brand name")}
             {text("websiteUrl", "Website", { inputMode: "url", placeholder: "https://" })}
             {text("instagramUrl", "Instagram profile", { inputMode: "url", placeholder: "https://instagram.com/…" })}
@@ -1056,7 +1067,7 @@ function ReviewStep({
           <dl>
             <dt>Name</dt><dd>{v("salonName")}</dd>
             <dt>Category</dt><dd>{v("genderCategory")}</dd>
-            <dt>Type</dt><dd>{v("salonKind")}</dd>
+            <dt>Type</dt><dd>{salonKindsText(String(form.salonKinds ?? "").split(",").filter(Boolean), String(form.salonKindOther ?? "")) || "—"}</dd>
             <dt>Employee</dt><dd>{app.assignedEmployee.fullName} ({app.assignedEmployee.employeeCode})</dd>
           </dl>
         </section>

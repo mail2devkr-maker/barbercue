@@ -3747,6 +3747,9 @@ model SalonOnboardingApplication {
   salonName                  String               @db.VarChar(160)
   genderCategory             OnboardingGender?
   salonKind                  OnboardingSalonKind?
+  // Every type the employee ticked; salonKind stays the first one for existing readers.
+  salonKinds                 OnboardingSalonKind[] @default([])
+  salonKindOther             String?              @db.VarChar(160)
   description                String?              @db.VarChar(2000)
   brandName                  String?              @db.VarChar(160)
   websiteUrl                 String?              @db.VarChar(500)
