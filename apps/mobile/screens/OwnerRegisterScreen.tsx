@@ -1,3 +1,4 @@
+import { AuthBackButton } from '../components/AuthBackButton';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -47,6 +48,7 @@ export default function OwnerRegisterScreen({ navigation }: Props) {
 
   return (
     <PremiumScreen contentStyle={styles.screenContent}>
+      <AuthBackButton />
       <BrandLockup variant="auth" style={styles.brandLockup} />
       <PremiumSectionHeader
         eyebrow="SHOP OWNER"

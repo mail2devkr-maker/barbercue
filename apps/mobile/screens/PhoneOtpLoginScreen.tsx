@@ -1,3 +1,4 @@
+import { AuthBackButton } from '../components/AuthBackButton';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -210,6 +211,7 @@ export default function PhoneOtpLoginScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
+          <AuthBackButton />
           <BrandLockup variant="auth" style={styles.brandLockup} />
 
           <Text style={styles.eyebrow}>{t.signInTitle}</Text>

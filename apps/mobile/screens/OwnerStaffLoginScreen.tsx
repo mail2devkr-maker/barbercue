@@ -1,3 +1,4 @@
+import { AuthBackButton } from '../components/AuthBackButton';
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { PasswordVisibilityButton, PASSWORD_FIELD_PADDING } from '../components/ui/PasswordVisibilityButton';
@@ -85,6 +86,7 @@ export default function OwnerStaffLoginScreen({ route, navigation }: Props) {
 
   return (
     <PremiumScreen contentStyle={styles.screenContent}>
+      <AuthBackButton />
       <BrandLockup variant="auth" style={styles.brandLockup} />
       <PremiumSectionHeader eyebrow={copy.eyebrow} title={copy.title} subtitle={t.useYourDashboardAccount} />
 

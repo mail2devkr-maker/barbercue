@@ -1,3 +1,4 @@
+import { AuthBackButton } from '../components/AuthBackButton';
 import { useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { PasswordVisibilityButton, PASSWORD_FIELD_PADDING } from '../components/ui/PasswordVisibilityButton';
@@ -47,6 +48,7 @@ export default function EmployeeLoginScreen() {
 
   return (
     <PremiumScreen contentStyle={styles.content}>
+      <AuthBackButton />
       <BrandLockup variant="auth" style={styles.brand} />
       <PremiumSectionHeader
         eyebrow={t.employeeLoginEyebrow}
