@@ -122,11 +122,11 @@ export function PlacePicker({ onDone }: { onDone?: () => void }) {
         onDone?.();
       }}
     >
-      <label className={s.grow} style={{ maxWidth: 220 }}>
+      <label className={s.wide}>
         <span className={s.meta} style={{ color: "inherit" }}>{t("where")}</span>
         <input className={s.input} inputMode="numeric" maxLength={6} placeholder={place.pincode ?? t("pincode")} value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))} aria-label={t("pincode")} />
       </label>
-      <button className={`${s.btn} ${s.small}`}>{t("find")}</button>
+      <button className={`${s.btn} ${s.small}`}>{t("setPlace")}</button>
       <button type="button" className={`${s.ghost} ${s.small}`} onClick={locate}>{t("useLocation")}</button>
       {hasPlace(place) && <span className={s.meta} style={{ color: "inherit" }}>{place.pincode ? `PIN ${place.pincode}` : "Your location"} ✓</span>}
       {msg && <p className={s.error} role="alert">{msg}</p>}

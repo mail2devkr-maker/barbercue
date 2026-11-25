@@ -61,7 +61,7 @@ export function HomeLanding() {
         <p>Book a barber, stylist or beautician from a salon near you, or an independent professional. See the full price first. Pay them directly after the service.</p>
         <PlacePicker />
         <form className={s.row} onSubmit={ask}>
-          <input className={`${s.input} ${s.grow}`} style={{ color: "#1c1a20", background: "#fff" }} value={text} onChange={(e) => setText(e.target.value)} placeholder={lang === "hi" ? "जैसे: रविवार सुबह हेयरकट, ₹500 से कम" : "e.g. haircut Sunday morning under ₹500"} aria-label={t("search")} maxLength={300} />
+          <input className={`${s.input} ${s.wide}`} style={{ color: "#1c1a20", background: "#fff" }} value={text} onChange={(e) => setText(e.target.value)} placeholder={lang === "hi" ? "जैसे: रविवार सुबह हेयरकट, ₹500 से कम" : "e.g. haircut Sunday morning under ₹500"} aria-label={t("search")} maxLength={300} />
           <button className={s.btn} disabled={busy}>{t("find")}</button>
         </form>
         <div className={s.row}>

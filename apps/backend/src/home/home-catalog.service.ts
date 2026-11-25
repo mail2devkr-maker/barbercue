@@ -477,7 +477,10 @@ export class HomeCatalogService {
       total: cards.length,
       page: q.page,
       pageSize: size,
-      items: cards.slice((q.page - 1) * size, q.page * size),
+      // With a service chosen, "from" is that service's own price.
+      items: cards
+        .slice((q.page - 1) * size, q.page * size)
+        .map((c) => ({ ...c, fromPaise: codes.length ? price(c) : c.fromPaise })),
       salons: covering
         .filter((c) => c.provider.kind === 'SALON_MANAGED')
         .slice(0, 12)

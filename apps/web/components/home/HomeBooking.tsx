@@ -32,7 +32,7 @@ export function HomeBooking() {
   const [links, setLinks] = useGuestLinks();
   const signedIn = status === "authenticated";
   const me = signedIn ? "home/me" : "home";
-  const { data: addresses } = useLoad<Address[]>(signedIn ? "home/me/addresses" : null);
+  const { data: addresses, reload: reloadAddresses } = useLoad<Address[]>(signedIn ? "home/me/addresses" : null);
   const { data: config } = useLoad<{ flags: Record<string, boolean> }>("home/config");
   const pkg = params.get("package");
   const groups = useMemo(() => groupBag(bag), [bag]);
@@ -40,6 +40,7 @@ export function HomeBooking() {
   const pkgItems = useMemo<BagItem[] | null>(() => (pkg ? (params.get("offers") ?? "").split(",").filter(Boolean).map((id) => ({ offeringId: id, serviceCode: "", name: "Package service", quantity: 1, providerId: params.get("provider") ?? undefined })) : null), [pkg, params]);
   const group = pkgItems ? { key: "package", title: "Package", items: pkgItems } : (groups.find((g) => g.key === groupKey) ?? groups[0]);
   const [addressId, setAddressId] = useState<string | null>(null);
+  const [newAddress, setNewAddress] = useState(false);
   const [form, setForm] = useState({ ...EMPTY, postalCode: place.pincode ?? "" });
   const [modeChoice, setMode] = useState<"INSTANT" | "SCHEDULED" | null>(null);
   const mode = modeChoice ?? (params.get("instant") && config?.flags.HOME_INSTANT_BOOKING_ENABLED ? "INSTANT" : "SCHEDULED");
@@ -62,7 +63,7 @@ export function HomeBooking() {
   const [guest, setGuest] = useState({ name: "", phone: "" });
   const [key, setKey] = useState(() => newKey());
   const { act, busy, banner, setMsg } = useAct();
-  const chosenAddress = addressId ?? (form.house ? null : (addresses?.[0]?.id ?? null));
+  const chosenAddress = newAddress ? null : (addressId ?? addresses?.[0]?.id ?? null);
 
   function base() {
     const g = group!;
@@ -185,8 +186,8 @@ export function HomeBooking() {
         <h2 className={s.h2}>{t("address")}</h2>
         {signedIn && addresses && addresses.length > 0 && (
           <div className={s.scroll}>
-            {addresses.map((a) => <button key={a.id} className={s.chip} aria-pressed={chosenAddress === a.id} onClick={() => { setAddressId(a.id); setForm({ ...EMPTY }); reset(); }}>{a.label}: {a.house}, {a.locality}</button>)}
-            <button className={s.chip} aria-pressed={!chosenAddress} onClick={() => { setAddressId(null); setForm({ ...EMPTY, house: " " }); reset(); }}>+ New</button>
+            {addresses.map((a) => <button key={a.id} className={s.chip} aria-pressed={chosenAddress === a.id} onClick={() => { setAddressId(a.id); setNewAddress(false); reset(); }}>{a.label}: {a.house}, {a.locality}</button>)}
+            <button className={s.chip} aria-pressed={!chosenAddress} onClick={() => { setAddressId(null); setNewAddress(true); reset(); }}>+ New</button>
           </div>
         )}
         {!(signedIn && chosenAddress) && (
@@ -203,7 +204,7 @@ export function HomeBooking() {
               <Field label={t("access")}><input {...f("accessNotes")} /></Field>
               <Field label={t("mobile")}><input {...f("contactPhone")} placeholder="+919812345678" inputMode="tel" /></Field>
             </div>
-            {signedIn && addressReady && <button className={`${s.ghost} ${s.small}`} disabled={busy} onClick={() => void act(async () => { const a = await homeApi<Address>("home/me/addresses", "POST", Object.fromEntries(Object.entries(form).filter(([, v]) => v.trim()))); setAddressId(a.id); }, "Address saved")}>{t("save")}</button>}
+            {signedIn && addressReady && <button className={`${s.ghost} ${s.small}`} disabled={busy} onClick={() => void act(async () => { const a = await homeApi<Address>("home/me/addresses", "POST", Object.fromEntries(Object.entries(form).filter(([, v]) => v.trim()))); reloadAddresses(); setAddressId(a.id); setNewAddress(false); }, "Address saved")}>{t("save")}</button>}
             <p className={s.meta}>Only the assigned professional sees the full address, and only until the visit ends.</p>
           </>
         )}

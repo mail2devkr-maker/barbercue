@@ -145,6 +145,7 @@ const T = {
   where: ["Where should we come?", "हम कहाँ आएँ?"],
   useLocation: ["Use my location", "मेरी लोकेशन लें"],
   pincode: ["PIN code", "पिन कोड"],
+  setPlace: ["Set place", "जगह चुनें"],
   find: ["Find professionals", "प्रोफेशनल खोजें"],
   search: ["Search a service or name", "सेवा या नाम खोजें"],
   bag: ["Your services", "आपकी सेवाएँ"],

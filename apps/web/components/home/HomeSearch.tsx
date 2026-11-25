@@ -33,7 +33,7 @@ export function HomeSearch() {
       <HomeNav />
       <PlacePicker />
       <form className={s.row} onSubmit={(e) => { e.preventDefault(); set("q", new FormData(e.currentTarget).get("q") as string); }}>
-        <input name="q" defaultValue={get("q") ?? ""} className={`${s.input} ${s.grow}`} placeholder={t("search")} aria-label={t("search")} maxLength={80} />
+        <input name="q" defaultValue={get("q") ?? ""} className={`${s.input} ${s.wide}`} placeholder={t("search")} aria-label={t("search")} maxLength={80} />
         <button className={`${s.btn} ${s.small}`}>{t("find")}</button>
       </form>
       <div className={s.scroll}>
