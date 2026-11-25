@@ -708,6 +708,12 @@ model User {
   workPayouts                   WorkPayout[]             @relation("WorkPayoutWorker")
   workDisputesOpened            WorkDispute[]            @relation("WorkDisputeOpener")
 
+  homeProvider                  HomeProvider?            @relation("HomeProviderUser")
+  homeProfessionals             HomeProfessional[]       @relation("HomeProfessionalUser")
+  homeAddresses                 HomeAddress[]            @relation("HomeAddresses")
+  homeBookings                  HomeBooking[]            @relation("HomeBookingCustomer")
+  professionalCommitments       ProfessionalCommitment[] @relation("ProfessionalCommitments")
+
   @@map("users")
 }
 
@@ -1320,6 +1326,7 @@ model Salon {
   inventoryAlerts          InventoryAlert[]
   demoWorkspace               OwnerDemoWorkspace?
   onboardingApplication       SalonOnboardingApplication?
+  homeProvider                HomeProvider?
 
   @@unique([cityId, slug])
   @@map("salons")
@@ -1446,6 +1453,7 @@ model SalonStaff {
   // Phase 18 — at most one row (VerificationRequest.staffId is @@unique).
   verification         VerificationRequest?
   serviceUsages        ServiceUsage[]
+  homeProfessional     HomeProfessional?
 
   @@map("salon_staff")
 }
@@ -2427,6 +2435,8 @@ model InventoryProduct {
   recipeDefaults    ServiceProductRule[]
   serviceUsageItems ServiceUsageItem[]
   alerts            InventoryAlert[]
+  homeOfferingProducts HomeOfferingProduct[]
+  homeProductUses   HomeProductUse[]
 
   @@unique([id, salonId])
   @@unique([salonId, sku])
@@ -4928,6 +4938,1180 @@ model WorkAuditEvent {
   @@index([jobId, createdAt])
   @@index([orgId, createdAt])
   @@map("work_audit_events")
+}
+
+// ============================ FastQue Home (home beauty services) ============================
+// Off unless FASTQUE_HOME_ENABLED=true. See docs/home/. Additive only: existing tables are not
+// changed (relation fields add no columns). Money is in paise; times are timestamptz (UTC).
+
+enum HomeProviderKind {
+  SALON_MANAGED
+  INDEPENDENT_PROFESSIONAL
+}
+
+enum HomeProviderStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum HomeServiceStatus {
+  DRAFT
+  ACTIVE
+  INACTIVE
+}
+
+enum HomeAreaKind {
+  RADIUS
+  PINCODE
+  LOCALITY
+  CITY
+  SOCIETY
+}
+
+enum HomeTravelMode {
+  WALK
+  BICYCLE
+  TWO_WHEELER
+  CAR
+  PUBLIC_TRANSPORT
+}
+
+enum ProfessionalCommitmentKind {
+  HOME_HOLD
+  HOME_BOOKING
+  BREAK
+  TIME_OFF
+}
+
+enum HomeBookingMode {
+  INSTANT
+  SCHEDULED
+}
+
+enum HomePreference {
+  SPECIFIC_PROFESSIONAL
+  SPECIFIC_PROVIDER
+  FASTEST
+}
+
+enum HomeBookingStatus {
+  DRAFT
+  REQUESTED
+  AWAITING_ASSIGNMENT
+  INVITED
+  ACCEPTED
+  CONFIRMED
+  PREPARING
+  ON_THE_WAY
+  ARRIVED
+  CHECKED_IN
+  IN_PROGRESS
+  COMPLETED
+  PAYMENT_PENDING
+  PAYMENT_CONFIRMED
+  CLOSED
+  NO_PROFESSIONAL
+  EXPIRED
+  RESCHEDULE_REQUESTED
+  REPLACEMENT_REQUESTED
+  CANCELLED_BY_CUSTOMER
+  CANCELLED_BY_PROFESSIONAL
+  CANCELLED_BY_SALON
+  CANCELLED_BY_PLATFORM
+  CUSTOMER_NO_SHOW
+  PROFESSIONAL_NO_SHOW
+  ADDRESS_ISSUE
+  INTERRUPTED
+}
+
+enum HomePaymentStatus {
+  NOT_DUE
+  PENDING
+  PARTIAL
+  CONFIRMED
+  DISPUTED
+}
+
+enum HomePaymentMethod {
+  CASH
+  DIRECT_UPI
+  OTHER_OFFLINE
+}
+
+enum HomeComplaintStatus {
+  NONE
+  RAISED
+  UNDER_REVIEW
+  RESOLVED
+}
+
+enum HomeRefundStatus {
+  NONE
+  APPROVED
+  RECORDED
+}
+
+enum HomeInvitationStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  EXPIRED
+  WITHDRAWN
+}
+
+enum HomeAssignmentStatus {
+  ACTIVE
+  RELEASED
+  COMPLETED
+}
+
+enum HomeCodePurpose {
+  START
+  COMPLETE
+}
+
+enum HomeVerificationScope {
+  MOBILE
+  IDENTITY
+  EXPERIENCE
+  TRAINING_CERTIFICATE
+  REFERENCES
+  SKILL_ASSESSMENT
+  EQUIPMENT
+  HYGIENE_TRAINING
+  SERVICE_QUALIFICATION
+  BACKGROUND_CHECK
+}
+
+enum HomeVerificationStatus {
+  NOT_SUBMITTED
+  PENDING
+  UNDER_REVIEW
+  VERIFIED
+  REJECTED
+  EXPIRED
+  SUSPENDED
+}
+
+enum HomeAdjustmentStatus {
+  PENDING
+  APPROVED
+  DECLINED
+}
+
+model HomeProvider {
+  id                  String             @id @default(uuid())
+  kind                HomeProviderKind
+  status              HomeProviderStatus @default(DRAFT)
+  // Exactly one of salonId / userId is set (CHECK constraint in the migration).
+  salonId             String?            @unique
+  salon               Salon?             @relation(fields: [salonId], references: [id], onDelete: Restrict)
+  userId              String?            @unique
+  user                User?              @relation("HomeProviderUser", fields: [userId], references: [id], onDelete: Restrict)
+  displayName         String             @db.VarChar(120)
+  bio                 String?            @db.VarChar(1000)
+  category            String?            @db.VarChar(60)
+  city                String             @db.VarChar(80)
+  locality            String?            @db.VarChar(120)
+  // Where travel normally starts. Never returned by a public API.
+  baseLat             Float?
+  baseLng             Float?
+  languages           String[]
+  equipment           String[]
+  productsCarried     String[]
+  travelMode          HomeTravelMode     @default(TWO_WHEELER)
+  maxTravelMinutes    Int                @default(60)
+  instantEnabled      Boolean            @default(false)
+  scheduledEnabled    Boolean            @default(true)
+  paused              Boolean            @default(false)
+  autoDispatch        Boolean            @default(true)
+  minOrderPaise       Int                @default(0)
+  travelFeePaise      Int                @default(0)
+  weekendSurchargePct Int                @default(0)
+  peakSurchargePct    Int                @default(0)
+  peakStart           String?            @db.VarChar(5)
+  peakEnd             String?            @db.VarChar(5)
+  groupDiscountPct    Int                @default(0)
+  groupDiscountMin    Int                @default(3)
+  upiVpa              String?            @db.VarChar(100)
+  invoiceIssuer       String?            @db.VarChar(160)
+  // Salon capacity protection (SALON_MANAGED only).
+  minStaffInSalon     Int                @default(1)
+  maxHomeStaff        Int                @default(1)
+  queueWaitingLimit   Int                @default(3)
+  manualApproval      Boolean            @default(false)
+  blockWeekends       Boolean            @default(false)
+  blockedStart        String?            @db.VarChar(5)
+  blockedEnd          String?            @db.VarChar(5)
+  // Emergency contact (independents): private, never public.
+  emergencyName       String?            @db.VarChar(120)
+  emergencyPhone      String?            @db.VarChar(20)
+  compensation        Json?
+  termsVersion        String?            @db.VarChar(20)
+  termsAcceptedAt     DateTime?          @db.Timestamptz(6)
+  publicConsentAt     DateTime?          @db.Timestamptz(6)
+  adultDeclaredAt     DateTime?          @db.Timestamptz(6)
+  assistedByUserId    String?
+  submittedAt         DateTime?          @db.Timestamptz(6)
+  reviewedByUserId    String?
+  reviewedAt          DateTime?          @db.Timestamptz(6)
+  reviewNote          String?            @db.VarChar(1000)
+  createdAt           DateTime           @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime           @updatedAt @db.Timestamptz(6)
+
+  professionals HomeProfessional[]
+  offerings     HomeOffering[]
+  areas         HomeServiceArea[]
+  bookings      HomeBooking[]
+  promotions    HomePromotion[]
+  packages      HomePackage[]
+  fees          HomePlatformFee[]
+  settlements   HomeSettlement[]
+  feeRules      HomeFeeRule[]
+  campaigns     HomeCampaign[]
+
+  @@index([status, city])
+  @@index([kind, status])
+  @@map("home_providers")
+}
+
+model HomeProfessional {
+  id              String       @id @default(uuid())
+  providerId      String
+  provider        HomeProvider @relation(fields: [providerId], references: [id], onDelete: Restrict)
+  userId          String
+  user            User         @relation("HomeProfessionalUser", fields: [userId], references: [id], onDelete: Restrict)
+  salonStaffId    String?      @unique
+  salonStaff      SalonStaff?  @relation(fields: [salonStaffId], references: [id], onDelete: Restrict)
+  displayName     String       @db.VarChar(120)
+  photoUrl        String?      @db.VarChar(500)
+  bio             String?      @db.VarChar(1000)
+  yearsExperience Int?
+  skills          String[]
+  languages       String[]
+  portfolioUrls   String[]
+  // The professional's own consent to appear and be booked in this channel. No consent = never listed.
+  consentAt       DateTime?    @db.Timestamptz(6)
+  active          Boolean      @default(true)
+  suspendedAt     DateTime?    @db.Timestamptz(6)
+  dedicated       Boolean      @default(false)
+  isOnline        Boolean      @default(false)
+  onlineSince     DateTime?    @db.Timestamptz(6)
+  maxPerDay       Int          @default(6)
+  priceUpliftPct  Int          @default(0)
+  trustedContact  String?      @db.VarChar(20)
+  createdAt       DateTime     @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime     @updatedAt @db.Timestamptz(6)
+
+  services      HomeProfessionalService[]
+  schedules     HomeSchedule[]
+  invitations   HomeInvitation[]
+  assignments   HomeAssignment[]
+  verifications HomeVerification[]
+  favorites     HomeFavorite[]
+  reviews       HomeReview[]
+  productUses   HomeProductUse[]
+  recurring     HomeRecurringPlan[]
+
+  @@unique([providerId, userId])
+  @@index([userId])
+  @@index([active, isOnline])
+  @@map("home_professionals")
+}
+
+model HomeCategory {
+  id                    String           @id @default(uuid())
+  code                  String           @unique @db.VarChar(60)
+  groupCode             String           @db.VarChar(30)
+  name                  String           @db.VarChar(120)
+  nameHi                String           @db.VarChar(120)
+  sortOrder             Int              @default(0)
+  active                Boolean          @default(true)
+  // Requires a VERIFIED SERVICE_QUALIFICATION before a professional may be booked for it.
+  requiresQualification Boolean          @default(false)
+  services              HomeServiceDef[]
+
+  @@map("home_categories")
+}
+
+model HomeServiceDef {
+  id                  String            @id @default(uuid())
+  categoryId          String
+  category            HomeCategory      @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  code                String            @unique @db.VarChar(60)
+  name                String            @db.VarChar(120)
+  nameHi              String            @db.VarChar(120)
+  description         String?           @db.VarChar(1000)
+  imageUrl            String?           @db.VarChar(500)
+  synonyms            String[]
+  durationMinutes     Int
+  prepMinutes         Int               @default(5)
+  cleanupMinutes      Int               @default(5)
+  requiredSkills      String[]
+  requiredEquipment   String[]
+  productNotes        String?           @db.VarChar(500)
+  customerPreparation String?           @db.VarChar(500)
+  eligibility         String?           @db.VarChar(500)
+  safetyInstructions  String?           @db.VarChar(1000)
+  addOnCodes          String[]
+  cancellationNote    String?           @db.VarChar(500)
+  pricingModel        String            @default("FIXED") @db.VarChar(20)
+  customerProducts    Boolean           @default(false)
+  forChildren         Boolean           @default(false)
+  minPricePaise       Int?
+  maxPricePaise       Int?
+  status              HomeServiceStatus @default(ACTIVE)
+  createdAt           DateTime          @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime          @updatedAt @db.Timestamptz(6)
+  offerings           HomeOffering[]
+
+  @@index([categoryId, status])
+  @@map("home_service_defs")
+}
+
+model HomeOffering {
+  id              String         @id @default(uuid())
+  providerId      String
+  provider        HomeProvider   @relation(fields: [providerId], references: [id], onDelete: Restrict)
+  serviceDefId    String
+  serviceDef      HomeServiceDef @relation(fields: [serviceDefId], references: [id], onDelete: Restrict)
+  // The in-salon service it was created from, for reference. Home code never writes that service.
+  salonServiceId  String?
+  title           String?        @db.VarChar(120)
+  pricePaise      Int
+  productPaise    Int            @default(0)
+  disposablePaise Int            @default(0)
+  equipmentPaise  Int            @default(0)
+  durationMinutes Int
+  variants        Json?
+  active          Boolean        @default(true)
+  createdAt       DateTime       @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime       @updatedAt @db.Timestamptz(6)
+
+  professionals HomeProfessionalService[]
+  items         HomeBookingItem[]
+  productRules  HomeOfferingProduct[]
+
+  @@unique([providerId, serviceDefId])
+  @@index([serviceDefId, active])
+  @@map("home_offerings")
+}
+
+model HomeOfferingProduct {
+  id         String           @id @default(uuid())
+  offeringId String
+  offering   HomeOffering     @relation(fields: [offeringId], references: [id], onDelete: Cascade)
+  productId  String
+  product    InventoryProduct @relation(fields: [productId], references: [id], onDelete: Restrict)
+  quantity   Decimal          @db.Decimal(12, 3)
+
+  @@unique([offeringId, productId])
+  @@map("home_offering_products")
+}
+
+model HomeProfessionalService {
+  professionalId String
+  professional   HomeProfessional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+  offeringId     String
+  offering       HomeOffering     @relation(fields: [offeringId], references: [id], onDelete: Cascade)
+
+  @@id([professionalId, offeringId])
+  @@index([offeringId])
+  @@map("home_professional_services")
+}
+
+model HomeServiceArea {
+  id             String       @id @default(uuid())
+  providerId     String
+  provider       HomeProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  kind           HomeAreaKind
+  value          String       @db.VarChar(120)
+  radiusKm       Float?
+  excluded       Boolean      @default(false)
+  surchargePaise Int          @default(0)
+  minOrderPaise  Int          @default(0)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(6)
+
+  @@unique([providerId, kind, value])
+  @@index([kind, value])
+  @@map("home_service_areas")
+}
+
+model HomeSchedule {
+  id             String           @id @default(uuid())
+  professionalId String
+  professional   HomeProfessional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+  dayOfWeek      Int
+  startTime      String           @db.VarChar(5)
+  endTime        String           @db.VarChar(5)
+
+  @@unique([professionalId, dayOfWeek])
+  @@map("home_schedules")
+}
+
+// The one shared reservation ledger per PERSON (whichever provider they work for). The migration adds
+// an exclusion constraint: two unreleased rows of one person can never overlap.
+model ProfessionalCommitment {
+  id           String                     @id @default(uuid())
+  userId       String
+  user         User                       @relation("ProfessionalCommitments", fields: [userId], references: [id], onDelete: Restrict)
+  kind         ProfessionalCommitmentKind
+  startAt      DateTime                   @db.Timestamptz(6)
+  endAt        DateTime                   @db.Timestamptz(6)
+  // The visit itself (inside the blocked window) and where it happens, for travel checks.
+  serviceStart DateTime?                  @db.Timestamptz(6)
+  serviceEnd   DateTime?                  @db.Timestamptz(6)
+  lat          Float?
+  lng          Float?
+  postalCode   String?                    @db.VarChar(10)
+  bookingId    String?
+  booking      HomeBooking?               @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  note         String?                    @db.VarChar(200)
+  expiresAt    DateTime?                  @db.Timestamptz(6)
+  releasedAt   DateTime?                  @db.Timestamptz(6)
+  createdAt    DateTime                   @default(now()) @db.Timestamptz(6)
+
+  @@index([userId, startAt])
+  @@index([bookingId])
+  @@index([kind, expiresAt])
+  @@map("professional_commitments")
+}
+
+model HomeAddress {
+  id           String    @id @default(uuid())
+  userId       String?
+  user         User?     @relation("HomeAddresses", fields: [userId], references: [id], onDelete: Cascade)
+  label        String    @default("HOME") @db.VarChar(20)
+  house        String    @db.VarChar(120)
+  building     String?   @db.VarChar(160)
+  street       String?   @db.VarChar(200)
+  locality     String    @db.VarChar(120)
+  landmark     String?   @db.VarChar(160)
+  city         String    @db.VarChar(80)
+  state        String    @db.VarChar(80)
+  postalCode   String    @db.VarChar(10)
+  lat          Float?
+  lng          Float?
+  accessNotes  String?   @db.VarChar(300)
+  contactName  String?   @db.VarChar(120)
+  contactPhone String?   @db.VarChar(20)
+  archivedAt   DateTime? @db.Timestamptz(6)
+  createdAt    DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime  @updatedAt @db.Timestamptz(6)
+
+  bookings HomeBooking[]
+
+  @@index([userId, archivedAt])
+  @@map("home_addresses")
+}
+
+model HomeBooking {
+  id                      String              @id @default(uuid())
+  code                    String              @unique @db.VarChar(16)
+  customerId              String?
+  customer                User?               @relation("HomeBookingCustomer", fields: [customerId], references: [id], onDelete: Restrict)
+  guestName               String?             @db.VarChar(120)
+  guestPhone              String?             @db.VarChar(20)
+  guestPhoneVerifiedAt    DateTime?           @db.Timestamptz(6)
+  guestAccessHash         String?             @unique @db.VarChar(64)
+  groupKey                String?             @db.VarChar(40)
+  providerId              String
+  provider                HomeProvider        @relation(fields: [providerId], references: [id], onDelete: Restrict)
+  addressId               String
+  address                 HomeAddress         @relation(fields: [addressId], references: [id], onDelete: Restrict)
+  mode                    HomeBookingMode
+  preference              HomePreference
+  preferredProfessionalId String?
+  allowAlternatives       Boolean             @default(false)
+  status                  HomeBookingStatus
+  paymentStatus           HomePaymentStatus   @default(NOT_DUE)
+  complaintStatus         HomeComplaintStatus @default(NONE)
+  refundStatus            HomeRefundStatus    @default(NONE)
+  paymentMethod           HomePaymentMethod
+  serviceStart            DateTime            @db.Timestamptz(6)
+  serviceEnd              DateTime            @db.Timestamptz(6)
+  etaFrom                 DateTime?           @db.Timestamptz(6)
+  etaTo                   DateTime?           @db.Timestamptz(6)
+  etaConfidence           String?             @db.VarChar(10)
+  etaBasis                Json?
+  totalPaise              Int
+  priceSnapshot           Json
+  termsSnapshot           Json
+  notes                   String?             @db.VarChar(500)
+  productPreference       String              @default("PROFESSIONAL") @db.VarChar(20)
+  forChild                Boolean             @default(false)
+  guardianConfirmed       Boolean             @default(false)
+  delayMinutes            Int                 @default(0)
+  travelStartedAt         DateTime?           @db.Timestamptz(6)
+  arrivedAt               DateTime?           @db.Timestamptz(6)
+  startedAt               DateTime?           @db.Timestamptz(6)
+  completedAt             DateTime?           @db.Timestamptz(6)
+  cancelledAt             DateTime?           @db.Timestamptz(6)
+  cancelReason            String?             @db.VarChar(500)
+  rescheduleTo            DateTime?           @db.Timestamptz(6)
+  replacementProposedId   String?
+  dispatchDeadline        DateTime?           @db.Timestamptz(6)
+  idempotencyKey          String              @unique @db.VarChar(80)
+  recurringPlanId         String?
+  recurringPlan           HomeRecurringPlan?  @relation(fields: [recurringPlanId], references: [id], onDelete: SetNull)
+  campaignId              String?
+  campaign                HomeCampaign?       @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  promotionId             String?
+  shareHash               String?             @unique @db.VarChar(64)
+  createdAt               DateTime            @default(now()) @db.Timestamptz(6)
+  updatedAt               DateTime            @updatedAt @db.Timestamptz(6)
+
+  items       HomeBookingItem[]
+  events      HomeBookingEvent[]
+  invitations HomeInvitation[]
+  assignments HomeAssignment[]
+  commitments ProfessionalCommitment[]
+  codes       HomeServiceCode[]
+  tracking    HomeTrackingSession[]
+  payments    HomePaymentRecord[]
+  earnings    HomeEarning[]
+  adjustments HomePriceAdjustment[]
+  hygiene     HomeHygieneRecord[]
+  review      HomeReview?
+  feedback    HomeProfessionalFeedback?
+  incidents   HomeIncident[]
+  tickets     HomeTicket[]
+  productUses HomeProductUse[]
+  fees        HomePlatformFee[]
+  refunds     HomeRefundRecord[]
+
+  @@index([customerId, createdAt])
+  @@index([providerId, status, serviceStart])
+  @@index([status, serviceStart])
+  @@index([status, dispatchDeadline])
+  @@index([groupKey])
+  @@map("home_bookings")
+}
+
+model HomeBookingItem {
+  id              String        @id @default(uuid())
+  bookingId       String
+  booking         HomeBooking   @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  offeringId      String?
+  offering        HomeOffering? @relation(fields: [offeringId], references: [id], onDelete: Restrict)
+  serviceDefId    String
+  serviceName     String        @db.VarChar(120)
+  variantCode     String?       @db.VarChar(40)
+  personName      String?       @db.VarChar(80)
+  quantity        Int           @default(1)
+  unitPaise       Int
+  lineTotalPaise  Int
+  durationMinutes Int
+  addedLater      Boolean       @default(false)
+
+  @@index([bookingId])
+  @@map("home_booking_items")
+}
+
+// Append-only: a trigger rejects UPDATE and DELETE.
+model HomeBookingEvent {
+  id          String      @id @default(uuid())
+  bookingId   String
+  booking     HomeBooking @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  kind        String      @db.VarChar(40)
+  fromStatus  String?     @db.VarChar(40)
+  toStatus    String?     @db.VarChar(40)
+  actorUserId String?
+  actorParty  String      @db.VarChar(20)
+  note        String?     @db.VarChar(1000)
+  metadata    Json?
+  createdAt   DateTime    @default(now()) @db.Timestamptz(6)
+
+  @@index([bookingId, createdAt])
+  @@map("home_booking_events")
+}
+
+model HomeInvitation {
+  id             String               @id @default(uuid())
+  bookingId      String
+  booking        HomeBooking          @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  professionalId String
+  professional   HomeProfessional     @relation(fields: [professionalId], references: [id], onDelete: Restrict)
+  round          Int                  @default(1)
+  status         HomeInvitationStatus @default(PENDING)
+  reason         String               @db.VarChar(200)
+  expiresAt      DateTime             @db.Timestamptz(6)
+  respondedAt    DateTime?            @db.Timestamptz(6)
+  declineNote    String?              @db.VarChar(300)
+  createdAt      DateTime             @default(now()) @db.Timestamptz(6)
+
+  @@unique([bookingId, professionalId, round])
+  @@index([professionalId, status])
+  @@index([status, expiresAt])
+  @@map("home_invitations")
+}
+
+// A partial unique index keeps at most ONE active assignment per booking.
+model HomeAssignment {
+  id               String               @id @default(uuid())
+  bookingId        String
+  booking          HomeBooking          @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  professionalId   String
+  professional     HomeProfessional     @relation(fields: [professionalId], references: [id], onDelete: Restrict)
+  status           HomeAssignmentStatus @default(ACTIVE)
+  assignedByUserId String?
+  assignedAt       DateTime             @default(now()) @db.Timestamptz(6)
+  releasedAt       DateTime?            @db.Timestamptz(6)
+  releaseReason    String?              @db.VarChar(300)
+
+  @@index([bookingId, status])
+  @@index([professionalId, status])
+  @@map("home_assignments")
+}
+
+model HomeServiceCode {
+  id        String          @id @default(uuid())
+  bookingId String
+  booking   HomeBooking     @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  purpose   HomeCodePurpose
+  codeHash  String          @db.VarChar(64)
+  attempts  Int             @default(0)
+  expiresAt DateTime        @db.Timestamptz(6)
+  usedAt    DateTime?       @db.Timestamptz(6)
+  revokedAt DateTime?       @db.Timestamptz(6)
+  createdAt DateTime        @default(now()) @db.Timestamptz(6)
+
+  @@index([bookingId, purpose])
+  @@map("home_service_codes")
+}
+
+
+// Only the LAST point is kept, and it is erased when the session ends.
+model HomeTrackingSession {
+  id                 String      @id @default(uuid())
+  bookingId          String
+  booking            HomeBooking @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  professionalUserId String
+  consentAt          DateTime    @db.Timestamptz(6)
+  lastLat            Float?
+  lastLng            Float?
+  lastAccuracyM      Float?
+  lastAt             DateTime?   @db.Timestamptz(6)
+  endedAt            DateTime?   @db.Timestamptz(6)
+  endReason          String?     @db.VarChar(60)
+  createdAt          DateTime    @default(now()) @db.Timestamptz(6)
+
+  @@index([bookingId])
+  @@map("home_tracking_sessions")
+}
+
+model HomePaymentRecord {
+  id                  String            @id @default(uuid())
+  bookingId           String
+  booking             HomeBooking       @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  method              HomePaymentMethod
+  amountPaise         Int
+  tipPaise            Int               @default(0)
+  collectedBy         String            @db.VarChar(160)
+  reference           String?           @db.VarChar(80)
+  recordedByUserId    String
+  customerConfirmedAt DateTime?         @db.Timestamptz(6)
+  disputedAt          DateTime?         @db.Timestamptz(6)
+  disputeNote         String?           @db.VarChar(500)
+  voidedAt            DateTime?         @db.Timestamptz(6)
+  idempotencyKey      String            @unique @db.VarChar(80)
+  createdAt           DateTime          @default(now()) @db.Timestamptz(6)
+
+  @@index([bookingId])
+  @@map("home_payment_records")
+}
+
+model HomeEarning {
+  id               String      @id @default(uuid())
+  bookingId        String      @unique
+  booking          HomeBooking @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  providerId       String
+  professionalId   String
+  servicePaise     Int
+  travelPaise      Int
+  productPaise     Int
+  discountPaise    Int
+  tipPaise         Int         @default(0)
+  platformFeePaise Int         @default(0)
+  staffPayoutPaise Int         @default(0)
+  productCostPaise Int         @default(0)
+  createdAt        DateTime    @default(now()) @db.Timestamptz(6)
+
+  @@index([providerId, createdAt])
+  @@index([professionalId, createdAt])
+  @@map("home_earnings")
+}
+
+model HomePriceAdjustment {
+  id                String               @id @default(uuid())
+  bookingId         String
+  booking           HomeBooking          @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  description       String               @db.VarChar(200)
+  offeringId        String?
+  amountPaise       Int
+  minutes           Int                  @default(0)
+  status            HomeAdjustmentStatus @default(PENDING)
+  requestedByUserId String
+  decidedAt         DateTime?            @db.Timestamptz(6)
+  createdAt         DateTime             @default(now()) @db.Timestamptz(6)
+
+  @@index([bookingId])
+  @@map("home_price_adjustments")
+}
+
+model HomeProductUse {
+  id             String            @id @default(uuid())
+  bookingId      String
+  booking        HomeBooking       @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  professionalId String
+  professional   HomeProfessional  @relation(fields: [professionalId], references: [id], onDelete: Restrict)
+  productId      String?
+  product        InventoryProduct? @relation(fields: [productId], references: [id], onDelete: Restrict)
+  productName    String            @db.VarChar(160)
+  quantity       Decimal           @db.Decimal(12, 3)
+  unit           String            @db.VarChar(20)
+  movementId     String?           @unique
+  createdAt      DateTime          @default(now()) @db.Timestamptz(6)
+
+  @@index([bookingId])
+  @@map("home_product_uses")
+}
+
+model HomeVerification {
+  id               String                 @id @default(uuid())
+  professionalId   String
+  professional     HomeProfessional       @relation(fields: [professionalId], references: [id], onDelete: Restrict)
+  scope            HomeVerificationScope
+  // For SERVICE_QUALIFICATION: the home category code it covers.
+  subject          String                 @default("") @db.VarChar(60)
+  status           HomeVerificationStatus @default(PENDING)
+  evidenceNote     String?                @db.VarChar(1000)
+  evidenceKey      String?                @db.VarChar(300)
+  evidenceType     String?                @db.VarChar(60)
+  submittedAt      DateTime               @default(now()) @db.Timestamptz(6)
+  verifiedByUserId String?
+  verifiedAt       DateTime?              @db.Timestamptz(6)
+  reviewNote       String?                @db.VarChar(1000)
+  expiresAt        DateTime?              @db.Timestamptz(6)
+  updatedAt        DateTime               @updatedAt @db.Timestamptz(6)
+
+  @@unique([professionalId, scope, subject])
+  @@index([status, submittedAt])
+  @@map("home_verifications")
+}
+
+model HomeHygieneRecord {
+  id               String      @id @default(uuid())
+  bookingId        String
+  booking          HomeBooking @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  stage            String      @db.VarChar(10)
+  answers          Json
+  complete         Boolean
+  recordedByUserId String
+  createdAt        DateTime    @default(now()) @db.Timestamptz(6)
+
+  @@unique([bookingId, stage])
+  @@map("home_hygiene_records")
+}
+
+model HomeReview {
+  id                String           @id @default(uuid())
+  bookingId         String           @unique
+  booking           HomeBooking      @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  professionalId    String
+  professional      HomeProfessional @relation(fields: [professionalId], references: [id], onDelete: Restrict)
+  providerId        String
+  customerId        String?
+  overall           Int
+  quality           Int
+  behaviour         Int
+  punctuality       Int
+  hygiene           Int
+  transparency      Int
+  comment           String?          @db.VarChar(1000)
+  response          String?          @db.VarChar(1000)
+  status            String           @default("PUBLISHED") @db.VarChar(20)
+  reportReason      String?          @db.VarChar(300)
+  moderatedByUserId String?
+  moderationNote    String?          @db.VarChar(500)
+  createdAt         DateTime         @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime         @updatedAt @db.Timestamptz(6)
+
+  @@index([professionalId, status])
+  @@index([providerId, status])
+  @@map("home_reviews")
+}
+
+// Private feedback from the professional about a visit; never shown to other customers.
+model HomeProfessionalFeedback {
+  bookingId       String      @id
+  booking         HomeBooking @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  byUserId        String
+  communication   Int
+  addressAccuracy Int
+  conditions      Int
+  payment         Int
+  safetyConcern   Boolean     @default(false)
+  note            String?     @db.VarChar(500)
+  createdAt       DateTime    @default(now()) @db.Timestamptz(6)
+
+  @@map("home_professional_feedback")
+}
+
+model HomeIncident {
+  id              String       @id @default(uuid())
+  bookingId       String?
+  booking         HomeBooking? @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  reporterUserId  String?
+  reporterParty   String       @db.VarChar(20)
+  kind            String       @db.VarChar(40)
+  description     String       @db.VarChar(2000)
+  severity        String       @default("HIGH") @db.VarChar(10)
+  status          String       @default("OPEN") @db.VarChar(20)
+  handledByUserId String?
+  resolution      String?      @db.VarChar(2000)
+  createdAt       DateTime     @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime     @updatedAt @db.Timestamptz(6)
+
+  @@index([status, createdAt])
+  @@map("home_incidents")
+}
+
+model HomeTicket {
+  id               String              @id @default(uuid())
+  number           Int                 @unique @default(autoincrement())
+  bookingId        String
+  booking          HomeBooking         @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  category         String              @db.VarChar(40)
+  priority         String              @default("NORMAL") @db.VarChar(10)
+  status           String              @default("OPEN") @db.VarChar(20)
+  openedByUserId   String?
+  openedByParty    String              @db.VarChar(20)
+  assignedToUserId String?
+  escalatedAt      DateTime?           @db.Timestamptz(6)
+  resolution       String?             @db.VarChar(2000)
+  resolvedAt       DateTime?           @db.Timestamptz(6)
+  createdAt        DateTime            @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime            @updatedAt @db.Timestamptz(6)
+  messages         HomeTicketMessage[]
+
+  @@index([status, createdAt])
+  @@index([bookingId])
+  @@map("home_tickets")
+}
+
+model HomeTicketMessage {
+  id             String     @id @default(uuid())
+  ticketId       String
+  ticket         HomeTicket @relation(fields: [ticketId], references: [id], onDelete: Restrict)
+  authorUserId   String?
+  authorParty    String     @db.VarChar(20)
+  internal       Boolean    @default(false)
+  body           String     @db.VarChar(2000)
+  attachmentKey  String?    @db.VarChar(300)
+  attachmentType String?    @db.VarChar(60)
+  createdAt      DateTime   @default(now()) @db.Timestamptz(6)
+
+  @@index([ticketId, createdAt])
+  @@map("home_ticket_messages")
+}
+
+model HomeRefundRecord {
+  id               String      @id @default(uuid())
+  bookingId        String
+  booking          HomeBooking @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  kind             String      @db.VarChar(20)
+  amountPaise      Int
+  reason           String      @db.VarChar(500)
+  approvedByUserId String
+  settledAt        DateTime?   @db.Timestamptz(6)
+  createdAt        DateTime    @default(now()) @db.Timestamptz(6)
+
+  @@index([bookingId])
+  @@map("home_refund_records")
+}
+
+model HomeFavorite {
+  userId         String
+  professionalId String
+  professional   HomeProfessional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+  createdAt      DateTime         @default(now()) @db.Timestamptz(6)
+
+  @@id([userId, professionalId])
+  @@map("home_favorites")
+}
+
+// Either side may stop being matched with the other. Private to the blocker and FastQue safety staff.
+model HomeBlock {
+  blockerUserId String
+  blockedUserId String
+  createdAt     DateTime @default(now()) @db.Timestamptz(6)
+
+  @@id([blockerUserId, blockedUserId])
+  @@index([blockedUserId])
+  @@map("home_blocks")
+}
+
+model HomePromotion {
+  id             String        @id @default(uuid())
+  providerId     String?
+  provider       HomeProvider? @relation(fields: [providerId], references: [id], onDelete: Restrict)
+  code           String        @unique @db.VarChar(30)
+  title          String        @db.VarChar(120)
+  percentOff     Int?
+  amountOffPaise Int?
+  minOrderPaise  Int           @default(0)
+  maxUses        Int?
+  startsAt       DateTime      @db.Timestamptz(6)
+  endsAt         DateTime      @db.Timestamptz(6)
+  active         Boolean       @default(true)
+  createdAt      DateTime      @default(now()) @db.Timestamptz(6)
+
+  @@index([active, endsAt])
+  @@map("home_promotions")
+}
+
+model HomePackage {
+  id          String       @id @default(uuid())
+  providerId  String
+  provider    HomeProvider @relation(fields: [providerId], references: [id], onDelete: Restrict)
+  title       String       @db.VarChar(120)
+  description String?      @db.VarChar(1000)
+  audience    String       @default("GENERAL") @db.VarChar(20)
+  offeringIds String[]
+  pricePaise  Int
+  active      Boolean      @default(true)
+  createdAt   DateTime     @default(now()) @db.Timestamptz(6)
+
+  @@index([active])
+  @@map("home_packages")
+}
+
+// Architecture only: nothing here can be activated while HOME_MEMBERSHIPS_ENABLED is off.
+model HomeMembershipPlan {
+  id           String           @id @default(uuid())
+  name         String           @db.VarChar(120)
+  pricePaise   Int
+  periodMonths Int              @default(1)
+  benefits     Json
+  active       Boolean          @default(false)
+  createdAt    DateTime         @default(now()) @db.Timestamptz(6)
+  memberships  HomeMembership[]
+
+  @@map("home_membership_plans")
+}
+
+model HomeMembership {
+  id               String             @id @default(uuid())
+  planId           String
+  plan             HomeMembershipPlan @relation(fields: [planId], references: [id], onDelete: Restrict)
+  userId           String
+  startsAt         DateTime           @db.Timestamptz(6)
+  endsAt           DateTime           @db.Timestamptz(6)
+  status           String             @default("ACTIVE") @db.VarChar(20)
+  offlineReference String?            @db.VarChar(80)
+  createdAt        DateTime           @default(now()) @db.Timestamptz(6)
+
+  @@index([userId, endsAt])
+  @@map("home_memberships")
+}
+
+model HomeRecurringPlan {
+  id             String            @id @default(uuid())
+  customerId     String
+  professionalId String
+  professional   HomeProfessional  @relation(fields: [professionalId], references: [id], onDelete: Restrict)
+  addressId      String
+  items          Json
+  intervalDays   Int
+  nextStart      DateTime          @db.Timestamptz(6)
+  paymentMethod  HomePaymentMethod
+  status         String            @default("ACTIVE") @db.VarChar(20)
+  lastOutcome    String?           @db.VarChar(300)
+  createdAt      DateTime          @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime          @updatedAt @db.Timestamptz(6)
+  bookings       HomeBooking[]
+
+  @@index([customerId])
+  @@index([status, nextStart])
+  @@map("home_recurring_plans")
+}
+
+model HomeSociety {
+  id         String         @id @default(uuid())
+  name       String         @db.VarChar(160)
+  locality   String         @db.VarChar(120)
+  city       String         @db.VarChar(80)
+  postalCode String         @db.VarChar(10)
+  lat        Float?
+  lng        Float?
+  active     Boolean        @default(true)
+  createdAt  DateTime       @default(now()) @db.Timestamptz(6)
+  campaigns  HomeCampaign[]
+
+  @@index([city, postalCode])
+  @@map("home_societies")
+}
+
+model HomeCampaign {
+  id              String                    @id @default(uuid())
+  societyId       String
+  society         HomeSociety               @relation(fields: [societyId], references: [id], onDelete: Restrict)
+  providerId      String
+  provider        HomeProvider              @relation(fields: [providerId], references: [id], onDelete: Restrict)
+  title           String                    @db.VarChar(160)
+  offeringId      String
+  minParticipants Int
+  maxParticipants Int
+  discountPct     Int
+  startsAt        DateTime                  @db.Timestamptz(6)
+  endsAt          DateTime                  @db.Timestamptz(6)
+  joinBy          DateTime                  @db.Timestamptz(6)
+  // OPEN, CONFIRMED (minimum met), BELOW_MINIMUM (each customer must approve the full price), CANCELLED
+  status          String                    @default("OPEN") @db.VarChar(20)
+  createdByUserId String
+  createdAt       DateTime                  @default(now()) @db.Timestamptz(6)
+  participants    HomeCampaignParticipant[]
+  bookings        HomeBooking[]
+
+  @@index([status, startsAt])
+  @@index([societyId])
+  @@map("home_campaigns")
+}
+
+model HomeCampaignParticipant {
+  id         String       @id @default(uuid())
+  campaignId String
+  campaign   HomeCampaign @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+  userId     String
+  addressId  String
+  // JOINED, PRICE_APPROVED, PRICE_DECLINED, BOOKED, LEFT
+  status     String       @default("JOINED") @db.VarChar(20)
+  bookingId  String?
+  createdAt  DateTime     @default(now()) @db.Timestamptz(6)
+
+  @@unique([campaignId, userId])
+  @@map("home_campaign_participants")
+}
+
+model HomeFeeRule {
+  id              String            @id @default(uuid())
+  kind            String            @db.VarChar(20)
+  providerKind    HomeProviderKind?
+  providerId      String?
+  provider        HomeProvider?     @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  percentBps      Int               @default(0)
+  fixedPaise      Int               @default(0)
+  active          Boolean           @default(false)
+  note            String?           @db.VarChar(300)
+  updatedByUserId String?
+  createdAt       DateTime          @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime          @updatedAt @db.Timestamptz(6)
+
+  @@map("home_fee_rules")
+}
+
+model HomePlatformFee {
+  id           String          @id @default(uuid())
+  bookingId    String          @unique
+  booking      HomeBooking     @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  providerId   String
+  provider     HomeProvider    @relation(fields: [providerId], references: [id], onDelete: Restrict)
+  ruleSnapshot Json
+  amountPaise  Int
+  settlementId String?
+  settlement   HomeSettlement? @relation(fields: [settlementId], references: [id], onDelete: SetNull)
+  createdAt    DateTime        @default(now()) @db.Timestamptz(6)
+
+  @@index([providerId, settlementId])
+  @@map("home_platform_fees")
+}
+
+model HomeSettlement {
+  id              String            @id @default(uuid())
+  providerId      String
+  provider        HomeProvider      @relation(fields: [providerId], references: [id], onDelete: Restrict)
+  amountPaise     Int
+  status          String            @default("DUE") @db.VarChar(20)
+  reference       String?           @db.VarChar(80)
+  note            String?           @db.VarChar(300)
+  createdByUserId String
+  collectedAt     DateTime?         @db.Timestamptz(6)
+  createdAt       DateTime          @default(now()) @db.Timestamptz(6)
+  fees            HomePlatformFee[]
+
+  @@index([providerId, status])
+  @@map("home_settlements")
+}
+
+model HomeSetting {
+  key             String   @id @db.VarChar(60)
+  value           Json
+  updatedByUserId String?
+  updatedAt       DateTime @updatedAt @db.Timestamptz(6)
+
+  @@map("home_settings")
+}
+
+// Append-only admin/provider audit.
+model HomeAudit {
+  id          String   @id @default(uuid())
+  actorUserId String?
+  actorParty  String   @db.VarChar(20)
+  action      String   @db.VarChar(60)
+  entityType  String   @db.VarChar(40)
+  entityId    String   @db.VarChar(80)
+  note        String?  @db.VarChar(1000)
+  metadata    Json?
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("home_audits")
+}
+
+// Field-sales tracking for FastQue Home (who helped onboard whom, with the person's consent).
+model HomeFieldLead {
+  id             String    @id @default(uuid())
+  employeeUserId String
+  kind           String    @db.VarChar(20)
+  name           String    @db.VarChar(160)
+  phone          String?   @db.VarChar(20)
+  city           String    @db.VarChar(80)
+  locality       String?   @db.VarChar(120)
+  consentAt      DateTime? @db.Timestamptz(6)
+  providerId     String?
+  societyId      String?
+  stage          String    @default("IDENTIFIED") @db.VarChar(30)
+  nextStep       String?   @db.VarChar(300)
+  nextAt         DateTime? @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @db.Timestamptz(6)
+
+  @@index([employeeUserId, stage])
+  @@map("home_field_leads")
+}
+
+// Planned vs actual times of real completed visits; used for ETA improvement only.
+model HomeVisitMetric {
+  bookingId       String   @id
+  professionalId  String
+  serviceDefId    String
+  city            String   @db.VarChar(80)
+  hourOfDay       Int
+  plannedMinutes  Int
+  actualMinutes   Int
+  plannedTravel   Int?
+  actualTravel    Int?
+  etaErrorMinutes Int?
+  createdAt       DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([professionalId, serviceDefId])
+  @@index([serviceDefId])
+  @@map("home_visit_metrics")
 }
 
 // =============================================================================================

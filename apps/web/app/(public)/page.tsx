@@ -14,7 +14,7 @@ import { HeroSearchField } from "../../components/landing/HeroSearchField";
 import { PlayStoreQr } from "../../components/layout/PlayStoreQr";
 import { SearchIcon, PlayIcon } from "../../components/landing/icons";
 import { EditorialImage } from "../../components/editorial/EditorialImage";
-import { workMarketplaceLinksEnabled } from "../../lib/dashboard-flags";
+import { homeServicesLinksEnabled, workMarketplaceLinksEnabled } from "../../lib/dashboard-flags";
 import styles from "../../components/landing/landing.module.css";
 
 const TITLE = "Find a barbershop, salon or spa near you";
@@ -112,6 +112,7 @@ const HOME_FAQS = [
 
 export default async function HomePage() {
   const workLinks = workMarketplaceLinksEnabled();
+  const homeLinks = homeServicesLinksEnabled();
   const [cities, featured, liveStats] = await Promise.all([
     fetchDiscoveryOrNull<CityDto[]>(DISCOVERY_PATHS.cities, DISCOVERY_REVALIDATE_SECONDS).catch(() => null),
     fetchDiscoveryOrNull<PaginatedResult<SalonListItemDto>>(
@@ -144,6 +145,13 @@ export default async function HomePage() {
               Reserve a chair for later, or join a live queue now and follow your place before
               you leave.
             </p>
+
+            {homeLinks && (
+              <nav className={styles.placeSwitch} aria-label="Where do you want the service?">
+                <Link href="/search" aria-current="page">At Salon</Link>
+                <Link href="/home-services">At Home <span className={styles.glowShopNew}>New</span></Link>
+              </nav>
+            )}
 
             {/* Reference A's CTA pair — shown at the wide tier alongside the booking card. */}
             <div className={styles.heroCtaRow}>

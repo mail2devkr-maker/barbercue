@@ -2757,6 +2757,10 @@ const enNotificationTypeLabels: NotificationTypeLabels = {
   'work.payout.sent': 'Payout sent',
   'work.payout.failed': 'Payout failed — we will retry',
   'work.dispute.updated': 'Dispute update',
+  'home.booking.update': 'FastQue Home booking update',
+  'home.professional.update': 'FastQue Home visit update',
+  'home.provider.update': 'FastQue Home provider update',
+
   'commerce.order.updated': 'Your FastQue order was updated',
   'commerce.return.updated': 'Your return was updated',
   'commerce.ticket.updated': 'Support replied about your order',
@@ -2798,6 +2802,10 @@ const hiNotificationTypeLabels: NotificationTypeLabels = {
   'work.payout.sent': 'भुगतान भेजा गया',
   'work.payout.failed': 'भुगतान विफल — हम फिर कोशिश करेंगे',
   'work.dispute.updated': 'विवाद अपडेट',
+  'home.booking.update': 'FastQue Home बुकिंग अपडेट',
+  'home.professional.update': 'FastQue Home काम का अपडेट',
+  'home.provider.update': 'FastQue Home सैलून अपडेट',
+
   'commerce.order.updated': 'आपका FastQue ऑर्डर अपडेट हुआ',
   'commerce.return.updated': 'आपकी वापसी अपडेट हुई',
   'commerce.ticket.updated': 'आपके ऑर्डर पर सहायता का जवाब आया',

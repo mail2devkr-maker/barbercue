@@ -1473,6 +1473,11 @@ export const NOTIFICATION_TYPES = [
   "work.payout.sent",
   "work.payout.failed",
   "work.dispute.updated",
+  // FastQue Home (docs/home/) - customer, professional and provider events.
+  "home.booking.update",
+  "home.professional.update",
+  "home.provider.update",
+
   // Marketplace orders: FastQue deliveries (commerce.ts) and salon pickups (shop.ts).
   "commerce.order.updated",
   "commerce.return.updated",

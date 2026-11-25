@@ -15,6 +15,12 @@ export function workMarketplaceLinksEnabled(env: string | undefined = process.en
   return env === "true";
 }
 
+/** FastQue Home entry points on the website (landing page, customer and owner menus, /home-services).
+ *  Keep OFF until the backend runs with FASTQUE_HOME_ENABLED=true. The admin section is always listed. */
+export function homeServicesLinksEnabled(env: string | undefined = process.env.NEXT_PUBLIC_FASTQUE_HOME_ENABLED): boolean {
+  return env === "true";
+}
+
 /** FastQue Commerce in the admin sidebar. Keep OFF until the backend runs with
  *  FASTQUE_DIRECT_COMMERCE_ENABLED=true (the API answers 404 until then). */
 export function directCommerceLinksEnabled(env: string | undefined = process.env.NEXT_PUBLIC_FASTQUE_DIRECT_COMMERCE_ENABLED): boolean {

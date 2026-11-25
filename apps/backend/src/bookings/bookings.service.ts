@@ -398,7 +398,7 @@ export class BookingsService {
         input.salonId,
         slotStart,
         slotEnd,
-        { bufferMinutes },
+        { bufferMinutes, serviceIds: input.serviceIds },
       );
       if (!isSlotBookable(slotCapacity, overlapping)) {
         throw new AppException(
@@ -716,7 +716,7 @@ export class BookingsService {
           salonId,
           slotStart,
           slotEnd,
-          { bufferMinutes },
+          { bufferMinutes, serviceIds: input.serviceIds },
         );
         if (!isSlotBookable(slotCapacity, overlapping)) {
           throw new AppException(
@@ -1366,7 +1366,11 @@ export class BookingsService {
         booking.salonId,
         newSlotStart,
         newSlotEnd,
-        { excludeBookingId: bookingId, bufferMinutes },
+        {
+          excludeBookingId: bookingId,
+          bufferMinutes,
+          serviceIds: effectiveServices.map((s) => s.serviceId),
+        },
       );
       if (!isSlotBookable(slotCapacity, overlapping)) {
         throw new AppException(

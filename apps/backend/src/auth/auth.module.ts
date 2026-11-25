@@ -94,6 +94,8 @@ import { NotificationsModule } from '../notifications/notifications.module';
     TotpService,
     CryptoService,
     EMAIL_SENDER,
+    // FastQue Home: guest phone verification uses the same OTP service, provider and budgets.
+    OtpService,
   ],
 })
 export class AuthModule {}

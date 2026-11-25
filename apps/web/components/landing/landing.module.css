@@ -2008,3 +2008,10 @@
   outline: 2px solid #fff;
   outline-offset: 3px;
 }
+
+/* FastQue Home "At Salon | At Home" - rendered only when NEXT_PUBLIC_FASTQUE_HOME_ENABLED=true */
+.placeSwitch { display: inline-flex; gap: 4px; padding: 4px; margin: 4px 0 14px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.28); background: rgba(20, 10, 22, 0.55); }
+.placeSwitch a { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 20px; border-radius: 999px; color: #fff; font-weight: 800; text-decoration: none; }
+.placeSwitch a[aria-current] { background: rgba(255, 255, 255, 0.16); }
+.placeSwitch a:last-child { background: var(--bc-brand-gradient); }
+.placeSwitch a:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
