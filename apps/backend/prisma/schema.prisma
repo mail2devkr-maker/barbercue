@@ -6112,6 +6112,7 @@ model HomeVisitMetric {
   @@index([professionalId, serviceDefId])
   @@index([serviceDefId])
   @@map("home_visit_metrics")
+}
 
 // =============================================================================================
 // FastQue Direct Commerce (docs/commerce/ARCHITECTURE.md). Additive only: the salon marketplace
