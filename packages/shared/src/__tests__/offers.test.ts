@@ -1,4 +1,6 @@
 import {
+  describeOfferSchedule,
+  offerScheduleApplies,
   createOfferSchema,
   offerListQuerySchema,
   offerPreviewSchema,
@@ -18,6 +20,40 @@ const validOffer = {
   validTo: "2026-10-20T00:00:00.000Z",
   serviceIds: [serviceA],
 };
+
+describe("offer booking rules", () => {
+  it("accepts minimum spend, a percentage cap and Happy Hours", () => {
+    expect(
+      createOfferSchema.parse({
+        ...validOffer,
+        minimumBookingAmount: 500,
+        maximumDiscountAmount: 150,
+        applicableDays: [1, 2, 3, 4, 5],
+        dailyStartTime: "14:00",
+        dailyEndTime: "17:00",
+      }),
+    ).toMatchObject({ applicableDays: [1, 2, 3, 4, 5], dailyStartTime: "14:00" });
+    expect(createOfferSchema.parse(validOffer).applicableDays).toEqual([]);
+  });
+
+  it("rejects half a time window, a backwards window, a cap on a flat offer and duplicate days", () => {
+    expect(createOfferSchema.safeParse({ ...validOffer, dailyStartTime: "14:00" }).success).toBe(false);
+    expect(createOfferSchema.safeParse({ ...validOffer, dailyStartTime: "17:00", dailyEndTime: "14:00" }).success).toBe(false);
+    expect(createOfferSchema.safeParse({ ...validOffer, dailyStartTime: "25:00", dailyEndTime: "26:00" }).success).toBe(false);
+    expect(createOfferSchema.safeParse({ ...validOffer, discountType: "FLAT", discountValue: 50, maximumDiscountAmount: 40 }).success).toBe(false);
+    expect(createOfferSchema.safeParse({ ...validOffer, applicableDays: [1, 1] }).success).toBe(false);
+  });
+
+  it("applies the schedule start-inclusive, end-exclusive, on the chosen days", () => {
+    const schedule = { applicableDays: [1, 2, 3, 4, 5], dailyStartTime: "14:00", dailyEndTime: "17:00" };
+    expect(offerScheduleApplies(schedule, 2, 14 * 60)).toBe(true);
+    expect(offerScheduleApplies(schedule, 2, 17 * 60)).toBe(false);
+    expect(offerScheduleApplies(schedule, 6, 15 * 60)).toBe(false);
+    expect(offerScheduleApplies({ applicableDays: [], dailyStartTime: null, dailyEndTime: null }, 0, 0)).toBe(true);
+    expect(describeOfferSchedule(schedule)).toBe("Mon–Fri, 14:00–17:00");
+    expect(describeOfferSchedule({ applicableDays: [0, 6], dailyStartTime: null, dailyEndTime: null })).toBe("Sun, Sat");
+  });
+});
 
 describe("offers shared contracts", () => {
   it("accepts a valid provider-free draft and defaults the per-customer cap", () => {
