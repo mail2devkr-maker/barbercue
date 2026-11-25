@@ -210,11 +210,12 @@ export interface OfferDto {
   maxRedemptions: number | null;
   perCustomerLimit: number;
   serviceIds: string[];
-  minimumBookingAmount: number | null;
-  maximumDiscountAmount: number | null;
-  applicableDays: number[];
-  dailyStartTime: string | null;
-  dailyEndTime: string | null;
+  // Booking rules; optional so DTOs from before booking rules (and older app builds) stay valid.
+  minimumBookingAmount?: number | null;
+  maximumDiscountAmount?: number | null;
+  applicableDays?: number[];
+  dailyStartTime?: string | null;
+  dailyEndTime?: string | null;
   redemptionCount: number;
   createdAt: string;
   updatedAt: string;

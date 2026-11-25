@@ -812,16 +812,12 @@ export class OffersService {
         'This offer is not active.',
         HttpStatus.CONFLICT,
       );
-    // Validity is judged at the appointment time (an offer for next week can't be booked for
-    // today), and an offer that has already ended can't be booked at all.
-    if (
-      now >= offer.validTo ||
-      appointmentAt < offer.validFrom ||
-      appointmentAt >= offer.validTo
-    )
+    // Validity window is judged at booking time, exactly as before booking rules existed; only
+    // the optional Happy Hours days/times below are judged at the appointment.
+    if (now < offer.validFrom || now >= offer.validTo)
       this.fail(
         OfferErrorCode.EXPIRED,
-        'This offer is not valid for the selected time.',
+        'This offer is not currently valid.',
         HttpStatus.CONFLICT,
       );
     if (offerHasSchedule(offer)) {

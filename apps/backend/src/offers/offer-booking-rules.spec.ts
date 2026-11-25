@@ -75,15 +75,17 @@ async function check(
 }
 
 describe('offer booking rules', () => {
-  it('judges validity at the appointment time, not at booking time', async () => {
+  it('keeps the validity window judged at booking time, as before booking rules', async () => {
     const nextMonthOnly = offer({
       validFrom: new Date('2026-11-01T00:00:00Z'),
     });
-    await expect(
-      check(nextMonthOnly, new Date('2026-10-28T09:30:00Z')),
-    ).rejects.toMatchObject({ code: OfferErrorCode.EXPIRED });
+    // Not yet valid today, even for an appointment inside the window.
     await expect(
       check(nextMonthOnly, new Date('2026-11-03T09:30:00Z')),
+    ).rejects.toMatchObject({ code: OfferErrorCode.EXPIRED });
+    // Valid today: an appointment after validTo still gets it (unchanged behaviour).
+    await expect(
+      check(offer({}), new Date('2026-12-05T09:30:00Z')),
     ).resolves.toMatchObject({ discountAmountPaise: 10000 });
   });
 
