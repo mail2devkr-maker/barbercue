@@ -15,6 +15,12 @@ export function workMarketplaceLinksEnabled(env: string | undefined = process.en
   return env === "true";
 }
 
+/** FastQue Home entry points on the website (landing page, customer and owner menus, /home-services).
+ *  Keep OFF until the backend runs with FASTQUE_HOME_ENABLED=true. The admin section is always listed. */
+export function homeServicesLinksEnabled(env: string | undefined = process.env.NEXT_PUBLIC_FASTQUE_HOME_ENABLED): boolean {
+  return env === "true";
+}
+
 /** Map tiles. Defaults to OpenStreetMap's public tiles (fine for development; set a commercial
  *  provider for production traffic — OSM's tile policy forbids heavy use). */
 export const MAP_TILE_URL = process.env.NEXT_PUBLIC_MAP_TILE_URL ?? "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";

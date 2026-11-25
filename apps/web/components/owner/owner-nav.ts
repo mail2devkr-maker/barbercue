@@ -1,5 +1,6 @@
 import type { CapabilityMap, FeatureKey } from "../../lib/capabilities";
 import { isUsable } from "../../lib/capabilities";
+import { homeServicesLinksEnabled } from "../../lib/dashboard-flags";
 import type { IconName } from "./icons";
 
 // The ONE definition of the owner/staff dashboard's navigation. The sidebar, the icon rail, the
@@ -50,6 +51,11 @@ export const NAV_ITEMS: ReadonlyArray<NavItem> = [
   { id: "bookings", label: "Bookings", icon: "calendar", group: "OPERATIONS", audience: "owner", path: "bookings", keywords: ["appointments", "cancel"] },
   { id: "calendar", label: "Calendar", icon: "calendarGrid", group: "OPERATIONS", audience: "owner", path: "schedule", keywords: ["schedule", "day"] },
   { id: "customers", label: "Customers", icon: "users", group: "OPERATIONS", audience: "owner", path: "customers", keywords: ["clients", "dues"] },
+
+  // FastQue Home: listed once the website switch is on (the page itself always opens for existing bookings).
+  ...(homeServicesLinksEnabled()
+    ? [{ id: "home-services", label: "Home Services", icon: "home", group: "OPERATIONS", audience: "owner", path: "home-services", keywords: ["doorstep", "home visit", "at home"] } satisfies NavItem]
+    : []),
 
   { id: "staff", label: "Staff / Barbers", icon: "team", group: "TEAM", audience: "owner", path: "staff", keywords: ["barbers", "invite", "access"] },
   { id: "staff-schedule", label: "Staff Schedule", icon: "clock", group: "TEAM", audience: "owner", path: "team", query: "tab=schedule", keywords: ["working hours", "shifts"] },

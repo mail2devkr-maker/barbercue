@@ -4,7 +4,7 @@ import { useState, type FormEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCustomerPrefs } from "../../lib/customer-preferences";
-import { giftCardsEnabled } from "../../lib/dashboard-flags";
+import { giftCardsEnabled, homeServicesLinksEnabled } from "../../lib/dashboard-flags";
 import { DashIcon, type IconName } from "./icons";
 import styles from "./dashboard-shell.module.css";
 
@@ -20,6 +20,7 @@ export const PRIMARY_NAV: NavItem[] = [
   { href: "/account", label: "Dashboard", icon: "home" },
   { href: "/account/discover", label: "Discover Salons", icon: "search" },
   { href: "/account/bookings", label: "My Appointments", icon: "calendar" },
+  ...(homeServicesLinksEnabled() ? [{ href: "/account/home-services", label: "Home Services", icon: "home" } satisfies NavItem] : []),
   { href: "/account/shop", label: "Marketplace", icon: "sparkle" },
   { href: "/account/favorites", label: "My Favourites", icon: "heart" },
   { href: "/account/rewards", label: "Rewards & Gifts", icon: "gift", also: ["/account/credits"] },
@@ -41,6 +42,7 @@ const MOBILE_NAV: NavItem[] = [
 ];
 
 const MORE_NAV: NavItem[] = [
+  ...(homeServicesLinksEnabled() ? [{ href: "/account/home-services", label: "Home Services", icon: "home" } satisfies NavItem] : []),
   { href: "/account/shop", label: "Marketplace", icon: "sparkle" },
   { href: "/account/rewards", label: "Rewards & Gifts", icon: "gift" },
   { href: "/account/reviews", label: "My Reviews", icon: "star" },

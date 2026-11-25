@@ -1,0 +1,27 @@
+/** The FastQue Home admin sub-tabs (spec section 36), shared by the sidebar and the page. */
+export const ADMIN_HOME_TABS = [
+  { id: "overview", label: "Overview" },
+  { id: "catalog", label: "Home-Service Catalog" },
+  { id: "salons", label: "Salon Providers" },
+  { id: "independents", label: "Independent Professionals" },
+  { id: "verification", label: "Professional Verification" },
+  { id: "active", label: "Active Bookings" },
+  { id: "scheduled", label: "Scheduled Bookings" },
+  { id: "dispatch", label: "Dispatch Center" },
+  { id: "live", label: "Live Operations" },
+  { id: "areas", label: "Service Areas" },
+  { id: "pricing", label: "Pricing" },
+  { id: "promotions", label: "Promotions" },
+  { id: "societies", label: "Society Campaigns" },
+  { id: "packages", label: "Packages & Memberships" },
+  { id: "quality", label: "Quality & Hygiene" },
+  { id: "incidents", label: "Safety Incidents" },
+  { id: "complaints", label: "Customer Complaints" },
+  { id: "payments", label: "Payments & Settlements" },
+  { id: "commissions", label: "Commissions" },
+  { id: "training", label: "Training" },
+  { id: "insights", label: "AI Insights" },
+  { id: "analytics", label: "Analytics & Reports" },
+  { id: "settings", label: "Settings" },
+] as const;
+export type AdminHomeTab = (typeof ADMIN_HOME_TABS)[number]["id"];
