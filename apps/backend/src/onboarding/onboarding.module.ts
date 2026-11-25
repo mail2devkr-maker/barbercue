@@ -31,7 +31,7 @@ import {
     OnboardingAnalyticsService,
     OnboardingNotifierService,
     OnboardingDuplicatesService,
-    { provide: MENU_EXTRACTOR, useFactory: menuExtractorFromEnv },
+    { provide: MENU_EXTRACTOR, useFactory: () => menuExtractorFromEnv() },
   ],
   exports: [OnboardingAnalyticsService],
 })

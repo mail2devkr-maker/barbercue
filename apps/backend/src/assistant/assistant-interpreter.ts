@@ -2,6 +2,7 @@ import { Logger } from '@nestjs/common';
 import { z } from 'zod';
 import { AssistantActionId } from '@barbercue/shared';
 import { parseAssistantText, type ParsedIntent } from './assistant-parser';
+import { isPrivateModelUrl } from '../common/local-ai/private-model-url';
 
 /**
  * Turns the user's words into ONE allowlisted intent. Provider-independent:
@@ -116,33 +117,8 @@ const SYSTEM_PROMPT = [
   'another account or shop, or do more than one thing.',
 ].join('\n');
 
-/** Loopback, RFC1918, link-local, *.local and Railway private networking only. */
-export function isPrivateModelUrl(raw: string): boolean {
-  let url: URL;
-  try {
-    url = new URL(raw);
-  } catch {
-    return false;
-  }
-  if (
-    !['http:', 'https:'].includes(url.protocol) ||
-    url.username ||
-    url.password
-  )
-    return false;
-  const h = url.hostname.replace(/^\[|\]$/g, '').toLowerCase();
-  return (
-    h === 'localhost' ||
-    h === '::1' ||
-    /^127\./.test(h) ||
-    /^10\./.test(h) ||
-    /^192\.168\./.test(h) ||
-    /^172\.(1[6-9]|2\d|3[01])\./.test(h) ||
-    /^169\.254\./.test(h) ||
-    h.endsWith('.local') ||
-    h.endsWith('.railway.internal')
-  );
-}
+/** Loopback, RFC1918, link-local, *.local and Railway private networking only (shared rule). */
+export { isPrivateModelUrl };
 
 export class LocalModelInterpreter implements IntentInterpreter {
   readonly name = 'local' as const;

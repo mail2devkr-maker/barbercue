@@ -1,5 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { GoogleGenAI } from '@google/genai';
+import {
+  LocalVisionClient,
+  LocalVisionUnsupportedInputError,
+  localVisionFromEnv,
+} from '../../common/local-ai/local-vision.client';
+import { toVisionJpeg } from '../../common/local-ai/vision-image';
 
 /** One service row read from a menu photo. Every value the menu does not state is null. */
 export interface ExtractedMenuItem {
@@ -155,10 +161,69 @@ export class GeminiMenuExtractor implements MenuExtractor {
   }
 }
 
-export function menuExtractorFromEnv(): MenuExtractor {
-  // A paid provider call, and this key may exist for other features, so it needs its own switch.
-  const key = process.env.GEMINI_API_KEY?.trim();
-  return key && process.env.ONBOARDING_MENU_EXTRACTION_ENABLED === 'true'
-    ? new GeminiMenuExtractor(key)
-    : new UnconfiguredMenuExtractor();
+/** The self-hosted OpenAI-compatible vision model on FastQue's private network (LOCAL_VISION_URL). */
+export class LocalMenuExtractor implements MenuExtractor {
+  readonly provider: string;
+  readonly isConfigured = true;
+  private readonly logger = new Logger(LocalMenuExtractor.name);
+
+  constructor(private readonly client: LocalVisionClient) {
+    this.provider = `local:${client.model}`.slice(0, 40); // provider column is VarChar(40)
+  }
+
+  async extract(image: Buffer, mimeType: string): Promise<ExtractedMenuItem[]> {
+    let json: string;
+    try {
+      // Menu photos are archived as JPEG already; re-encoding bounds size and vision tokens.
+      const jpeg = await toVisionJpeg(image).catch(() => {
+        throw new LocalVisionUnsupportedInputError(
+          `Unreadable image (${mimeType})`,
+        );
+      });
+      ({ json } = await this.client.completeJson({
+        prompt: PROMPT,
+        images: [{ mimeType: 'image/jpeg', data: jpeg }],
+      }));
+    } catch (err) {
+      this.logger.warn(
+        `Menu extraction request failed: ${err instanceof Error ? err.message : 'unknown'}`,
+      );
+      throw new MenuExtractorFailedError('Provider request failed');
+    }
+    try {
+      return parseExtractorJson(json);
+    } catch {
+      throw new MenuExtractorFailedError('Provider returned unreadable output');
+    }
+  }
+}
+
+/**
+ * ONBOARDING_MENU_EXTRACTION_ENABLED=true is the feature switch (a provider call, possibly paid).
+ * ONBOARDING_MENU_EXTRACTION_PROVIDER picks the provider explicitly:
+ *   gemini (default, the historical behaviour) - needs GEMINI_API_KEY
+ *   local  - the self-hosted model at LOCAL_VISION_URL (private hosts only)
+ *   none   - off
+ * Anything missing or unknown fails closed to "not configured"; there is no silent fallback
+ * from one provider to the other.
+ */
+export function menuExtractorFromEnv(
+  env: NodeJS.ProcessEnv = process.env,
+): MenuExtractor {
+  if (env.ONBOARDING_MENU_EXTRACTION_ENABLED !== 'true')
+    return new UnconfiguredMenuExtractor();
+  const provider = (
+    env.ONBOARDING_MENU_EXTRACTION_PROVIDER?.trim() || 'gemini'
+  ).toLowerCase();
+  if (provider === 'gemini') {
+    const key = env.GEMINI_API_KEY?.trim();
+    return key ? new GeminiMenuExtractor(key) : new UnconfiguredMenuExtractor();
+  }
+  if (provider === 'local') {
+    const client = localVisionFromEnv(env);
+    return client
+      ? new LocalMenuExtractor(client)
+      : new UnconfiguredMenuExtractor();
+  }
+  return new UnconfiguredMenuExtractor();
 }
