@@ -1,7 +1,7 @@
 import { Role } from "@barbercue/shared";
 import type { IconName } from "../../owner/icons";
 import { canOpenAdminPath } from "../../../lib/admin-route-access";
-import { directCommerceLinksEnabled, workMarketplaceLinksEnabled } from "../../../lib/dashboard-flags";
+import { directCommerceLinksEnabled, homeServicesLinksEnabled, workMarketplaceLinksEnabled } from "../../../lib/dashboard-flags";
 import { ADMIN_HOME_TABS } from "../../home/admin-home-tabs";
 
 // The ONE definition of the admin app's navigation (sidebar, icon rail and the "planned" pages all
@@ -50,7 +50,7 @@ export const ADMIN_NAV_GROUPS: ReadonlyArray<{ id: AdminNavGroupId; label: strin
   { id: "CUSTOMERS", label: "Customers", icon: "users" },
   { id: "SALES", label: "Regional Sales", icon: "trend" },
   { id: "OPERATIONS", label: "Operations", icon: "queue" },
-  { id: "HOME_SERVICES", label: "FastQue Home", icon: "home" },
+  ...(homeServicesLinksEnabled() ? [{ id: "HOME_SERVICES" as const, label: "FastQue Home", icon: "home" as const }] : []),
   { id: "INVENTORY", label: "Inventory", icon: "tag" },
   ...(directCommerceLinksEnabled() ? [{ id: "COMMERCE" as const, label: "FastQue Commerce", icon: "store" as const }] : []),
   { id: "FINANCE", label: "Finance", icon: "card" },
@@ -133,10 +133,12 @@ export const ADMIN_NAV_ITEMS: ReadonlyArray<AdminNavItem> = [
     : planned("OPERATIONS", "work-marketplace", "FastQue Work", "Switched off: set WORK_MARKETPLACE_ENABLED on the backend and NEXT_PUBLIC_WORK_MARKETPLACE_ENABLED on the website."),
   planned("OPERATIONS", "chair-utilization", "Chair Utilization", "Phase 3 utilisation model (chairs × operating hours × sessions)."),
 
-  // FastQue Home (docs/home/). Always listed: administrators resolve existing bookings even while the switches are off.
-  ...ADMIN_HOME_TABS.map(
+  // FastQue Home (docs/home/): listed only once the website flag is on, like Commerce and Work.
+  ...(homeServicesLinksEnabled()
+    ? ADMIN_HOME_TABS.map(
     (tab): AdminNavItem => ({ id: `home-${tab.id}`, label: tab.label, group: "HOME_SERVICES", href: "/dashboard/admin/home", query: tab.id === "overview" ? undefined : `tab=${tab.id}`, status: "live" }),
-  ),
+      )
+    : []),
 
   { id: "chart-builder", label: "Chart Builder", group: "ANALYTICS", href: CHARTS, status: "live" },
   planned("ANALYTICS", "saved-reports", "Saved Reports", "Server-side saved chart preferences (stored per browser today)."),
