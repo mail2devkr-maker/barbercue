@@ -57,15 +57,42 @@ export function flag(name: CommerceFlag): boolean {
   return process.env[name] === 'true';
 }
 
+/**
+ * Admin-only set-up mode: with FASTQUE_DIRECT_COMMERCE_ADMIN_ONLY=true (and the main switch on) the
+ * admin API works so the team can enter sellers, warehouses, zones and stock, while every customer
+ * route, the public config and the 20-second outbox stay off exactly as if commerce were disabled.
+ */
+export function commerceAdminOnly(): boolean {
+  return (
+    flag('FASTQUE_DIRECT_COMMERCE_ENABLED') &&
+    process.env.FASTQUE_DIRECT_COMMERCE_ADMIN_ONLY === 'true'
+  );
+}
+
+/** Commerce is open to customers: main switch on and not in admin-only set-up mode. */
+export function commercePublic(): boolean {
+  return flag('FASTQUE_DIRECT_COMMERCE_ENABLED') && !commerceAdminOnly();
+}
+
 export const TX_OPTIONS = {
   isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
   timeout: 15000,
   maxWait: 10000,
 };
 
-/** Every commerce route answers 404 until FASTQUE_DIRECT_COMMERCE_ENABLED=true. */
+/** Customer and public commerce routes answer 404 until commerce is on and not admin-only. */
 @Injectable()
 export class CommerceEnabledGuard implements CanActivate {
+  canActivate(): boolean {
+    if (!commercePublic())
+      throw fail('COMMERCE_DISABLED', 'Not available.', HttpStatus.NOT_FOUND);
+    return true;
+  }
+}
+
+/** Admin commerce routes need only the main switch (they also work in admin-only set-up mode). */
+@Injectable()
+export class CommerceAdminEnabledGuard implements CanActivate {
   canActivate(): boolean {
     if (!flag('FASTQUE_DIRECT_COMMERCE_ENABLED'))
       throw fail('COMMERCE_DISABLED', 'Not available.', HttpStatus.NOT_FOUND);

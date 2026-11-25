@@ -65,6 +65,7 @@ import { CommerceOpsService, toXlsx } from './commerce-ops.service';
 import { CommerceOrdersService } from './commerce-orders.service';
 import {
   COMMERCE_STAFF_ROLES,
+  CommerceAdminEnabledGuard,
   CommerceEnabledGuard,
   CommercePermissionGuard,
   CommercePermit,
@@ -318,7 +319,7 @@ export class CommerceCustomerExtrasController {
 /** Back-office extras. Every route needs an explicit permission, checked on the server. */
 @Controller(`${ADMIN_PATHS.admin}/${P.admin}`)
 @Roles(...COMMERCE_STAFF_ROLES)
-@UseGuards(CommerceEnabledGuard, CommercePermissionGuard)
+@UseGuards(CommerceAdminEnabledGuard, CommercePermissionGuard)
 @CommercePermit('view')
 export class CommerceAdminExtrasController {
   constructor(

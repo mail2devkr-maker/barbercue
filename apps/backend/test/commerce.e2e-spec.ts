@@ -244,6 +244,21 @@ maybe('FastQue direct commerce (real AppModule, disposable PostgreSQL)', () => {
     expect((await api('get', 'commerce/config')).body).toMatchObject({ enabled: true, multiSellerCart: false });
   });
 
+  it('admin-only set-up mode: the admin API works, customers and the outbox see commerce as off', async () => {
+    process.env.FASTQUE_DIRECT_COMMERCE_ADMIN_ONLY = 'true';
+    try {
+      expect((await api('get', 'commerce/config').expect(200)).body).toMatchObject({ enabled: false });
+      await api('get', 'commerce/home').expect(404);
+      await api('get', 'customer/commerce/orders', 'customer').expect(404);
+      await admin('get', 'overview').expect(200);
+      await api('get', 'shop/home').expect(200);
+      expect(await app.get(CommerceOutboxService).deliver()).toBe(0);
+    } finally {
+      delete process.env.FASTQUE_DIRECT_COMMERCE_ADMIN_ONLY;
+    }
+    expect((await api('get', 'commerce/config')).body).toMatchObject({ enabled: true });
+  });
+
   it('keeps FastQue a real seller and refuses other roles, ungranted admins and salon owners', async () => {
     const seller = await prisma.commerceSeller.findUniqueOrThrow({ where: { code: 'FASTQUE' } });
     expect(seller).toMatchObject({ type: 'FASTQUE', salonId: null });

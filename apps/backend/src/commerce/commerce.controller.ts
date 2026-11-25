@@ -78,6 +78,7 @@ import {
 import { CommerceStockService } from './commerce-stock.service';
 import {
   COMMERCE_STAFF_ROLES,
+  CommerceAdminEnabledGuard,
   CommerceEnabledGuard,
   CommercePermissionGuard,
   CommercePermit,
@@ -350,7 +351,7 @@ type Body<T extends z.ZodTypeAny> = z.infer<T>;
 /** FastQue Commerce admin. Every route needs an explicit permission, checked on the server. */
 @Controller(`${ADMIN_PATHS.admin}/${P.admin}`)
 @Roles(...COMMERCE_STAFF_ROLES)
-@UseGuards(CommerceEnabledGuard, CommercePermissionGuard)
+@UseGuards(CommerceAdminEnabledGuard, CommercePermissionGuard)
 @CommercePermit('view')
 export class CommerceAdminController {
   constructor(
