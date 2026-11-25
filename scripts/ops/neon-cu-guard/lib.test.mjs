@@ -1,11 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  autoProjectName, pickStandby, cleanupPlan, decide, describeDbUrl, hoursUntilNextWindowEnd, inSwitchWindow, istDay, istMinutes, newDatabaseName, prismaUrl, usageOf,
+  autoProjectName, pickStandby, cleanupPlan, decide, describeDbUrl, hoursUntilNextWindowEnd, hoursUntilNextWindowStart, inSwitchWindow, istDay, istMinutes, newDatabaseName, prismaUrl, usageOf,
 } from "./lib.mjs";
 
 const at = (iso) => new Date(iso);
-// 02:00 IST = 20:30 UTC (previous day); 04:30 IST = 23:00 UTC.
+// 00:00 IST = 18:30 UTC (previous day); 05:30 IST = 00:00 UTC.
 const IN_WINDOW = at("2026-11-20T21:00:00Z"); // 02:30 IST 21 Nov
 const DAYTIME = at("2026-11-20T06:30:00Z"); // 12:00 IST
 
@@ -13,18 +13,20 @@ function usage(cuHours, { name = "P", burnPerDay = 6, hoursToReset = 200 } = {})
   return { id: name, name, cuHours, pct: cuHours / 100, burnPerHour: burnPerDay / 24, resetAt: "2026-12-01T00:00:00.000Z", hoursToReset };
 }
 
-test("IST clock and the 02:00-04:30 start window", () => {
+test("IST clock and the 00:00-05:30 start window", () => {
   assert.equal(istMinutes(at("2026-11-20T20:30:00Z")), 120);
-  assert.equal(inSwitchWindow(at("2026-11-20T20:29:00Z")), false);
-  assert.equal(inSwitchWindow(at("2026-11-20T20:30:00Z")), true);
-  assert.equal(inSwitchWindow(at("2026-11-20T22:59:00Z")), true);
-  assert.equal(inSwitchWindow(at("2026-11-20T23:00:00Z")), false);
+  assert.equal(inSwitchWindow(at("2026-11-20T18:29:00Z")), false); // 23:59 IST
+  assert.equal(inSwitchWindow(at("2026-11-20T18:30:00Z")), true); // 00:00 IST
+  assert.equal(inSwitchWindow(at("2026-11-20T23:59:00Z")), true); // 05:29 IST
+  assert.equal(inSwitchWindow(at("2026-11-21T00:00:00Z")), false); // 05:30 IST
+  assert.equal(hoursUntilNextWindowStart(at("2026-11-20T06:30:00Z")), 12); // 12:00 IST -> 00:00
+  assert.equal(hoursUntilNextWindowStart(IN_WINDOW), 0);
   assert.equal(istDay(at("2026-11-20T20:30:00Z")), "2026-11-21");
 });
 
 test("horizon: next window end is tomorrow when already switching now", () => {
-  assert.equal(hoursUntilNextWindowEnd(at("2026-11-20T22:00:00Z")), 25);
-  assert.equal(hoursUntilNextWindowEnd(at("2026-11-20T06:30:00Z")), 16.5);
+  assert.equal(hoursUntilNextWindowEnd(at("2026-11-20T22:00:00Z")), 26); // 03:30 IST -> tomorrow 05:30
+  assert.equal(hoursUntilNextWindowEnd(at("2026-11-20T06:30:00Z")), 17.5); // 12:00 IST -> 05:30
 });
 
 test("usageOf reads Neon compute_time_seconds as CU-hours and the burn rate", () => {
@@ -66,7 +68,7 @@ test("a half-used standby is replaced by a NEW project; a short-lived one is use
   assert.equal(n.target, "new");
   assert.equal(decide({ active: usage(95), other: usage(55), now: IN_WINDOW, autoswitch: true, allowNewProject: false }).action, "blocked");
   assert.equal(decide({ active: usage(95), other: null, now: IN_WINDOW, autoswitch: true }).target, "new");
-  assert.equal(decide({ active: usage(95), other: usage(55), now: DAYTIME, autoswitch: true }).action, "wait-window");
+  assert.equal(decide({ active: usage(95, { burnPerDay: 1 }), other: usage(55), now: DAYTIME, autoswitch: true }).action, "wait-window");
   const d = decide({ active: usage(95), other: usage(40, { hoursToReset: 300 }), now: IN_WINDOW, autoswitch: true });
   assert.equal(d.action, "switch");
   assert.equal(d.target, "existing");
@@ -100,4 +102,16 @@ test("standby choice and auto project names", () => {
   assert.equal(pickStandby([usage(60, { name: "A" }), usage(3, { name: "B" }), usage(40, { name: "C" })]).name, "B");
   assert.equal(pickStandby([]), null);
   assert.equal(autoProjectName(at("2026-11-20T21:00:00Z")), "FastQue Prod Auto 2026-11-21");
+});
+
+test("URGENT: outside the window, switch at once when the allowance would run out before the next night", () => {
+  // 12:00 IST, 96 CU-h used, burning 6/day: 2 CU-h left = 8 h < 12 h to midnight + 6 h margin.
+  const d = decide({ active: usage(96), other: usage(2), now: DAYTIME, autoswitch: true });
+  assert.equal(d.action, "switch");
+  assert.equal(d.urgent, true);
+  // Over 90% but plenty of time (slow burn): still waits for the night window.
+  const w = decide({ active: usage(91, { burnPerDay: 1 }), other: usage(2), now: DAYTIME, autoswitch: true });
+  assert.equal(w.action, "wait-window");
+  // Urgent but auto-switch OFF: never switches.
+  assert.equal(decide({ active: usage(96), other: usage(2), now: DAYTIME, autoswitch: false }).action, "blocked");
 });

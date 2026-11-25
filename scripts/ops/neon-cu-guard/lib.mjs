@@ -1,14 +1,21 @@
 // Pure decision logic for the Neon CU guard (no network, no secrets) - unit-tested in lib.test.mjs.
 // Owner directive 15 Nov 2026: watch Neon compute (CU-hours) every day and, when the live project
 // passes 90% of its monthly allowance, move production to the other FastQue project between
-// 02:00 and 05:00 IST - safely, unattended.
+// 00:00 and 06:00 IST - safely, unattended. Owner (24 Nov): window widened to 00:00-06:00 IST because
+// GitHub runs scheduled jobs hours late and skips most of them; and if the allowance would run out
+// before the next window could be used, switch at once (urgent) instead of waiting.
 
 export const QUOTA_CU_HOURS = 100; // Neon Free plan, per project per billing period
 export const SWITCH_AT = 0.9; // owner threshold
 export const TARGET_MAX_START = 0.5; // never switch onto a project that is already half used
 export const IST_OFFSET_MIN = 330;
-export const WINDOW_START_MIN = 2 * 60; // 02:00 IST
-export const WINDOW_LAST_START_MIN = 4 * 60 + 30; // a switch must START by 04:30 IST to end before 05:00
+export const WINDOW_START_MIN = 0; // 00:00 IST
+export const WINDOW_LAST_START_MIN = 5 * 60 + 30; // a switch must START by 05:30 IST to end before 06:00
+// GitHub may skip a whole night of scheduled runs: plan as if the next usable window is a day later.
+export const MISSED_NIGHT_HOURS = 24;
+// Outside the window, switch immediately when the allowance would run out within this many hours
+// of the next window opening (late or skipped runs would otherwise let production stop).
+export const URGENT_MARGIN_HOURS = 6;
 export const GUARD_DB_PREFIX = "fq_guard_";
 export const AUTO_PROJECT_PREFIX = "FastQue Prod Auto "; // projects the guard itself created
 export const MAX_PROJECTS = 100; // Neon Free plan
@@ -29,7 +36,14 @@ export function inSwitchWindow(now) {
   return m >= WINDOW_START_MIN && m < WINDOW_LAST_START_MIN;
 }
 
-/** Hours from `now` until the end of the NEXT day's switch window (tomorrow 04:30 IST or later). */
+/** Hours from `now` until the next window START (00:00 IST); 0 while inside the window. */
+export function hoursUntilNextWindowStart(now) {
+  if (inSwitchWindow(now)) return 0;
+  const m = istMinutes(now);
+  return ((WINDOW_START_MIN - m + 1440) % 1440) / 60;
+}
+
+/** Hours from `now` until the end of the NEXT day's switch window (tomorrow 05:30 IST or later). */
 export function hoursUntilNextWindowEnd(now) {
   const m = istMinutes(now);
   let minutes = WINDOW_LAST_START_MIN - m;
@@ -88,8 +102,9 @@ export function autoProjectName(now) {
  */
 export function decide({ active, other, now, autoswitch, quota = QUOTA_CU_HOURS, allowNewProject = true }) {
   const reasons = [];
-  const horizon = hoursUntilNextWindowEnd(now);
+  const horizon = hoursUntilNextWindowEnd(now) + MISSED_NIGHT_HOURS;
   const projectedNextWindow = active.cuHours + active.burnPerHour * horizon;
+  const hoursToRunOut = active.burnPerHour > 0 ? (quota * 0.98 - active.cuHours) / active.burnPerHour : Infinity;
   const projectedAtReset = active.cuHours + active.burnPerHour * active.hoursToReset;
   const overThreshold = active.pct >= SWITCH_AT;
   const wouldRunOut = projectedNextWindow >= quota * 0.98;
@@ -119,15 +134,17 @@ export function decide({ active, other, now, autoswitch, quota = QUOTA_CU_HOURS,
   if (target === "existing" && otherAtReset >= quota * SWITCH_AT) {
     reasons.push(`WARNING: at this burn rate ${other.name} also passes ${SWITCH_AT * 100}% before its reset (projected ${otherAtReset.toFixed(1)} CU-h) - cut usage or upgrade the Neon plan`);
   }
-  if (!inSwitchWindow(now)) {
-    reasons.push("outside 02:00-04:30 IST - will switch in the next window");
+  const urgent = !inSwitchWindow(now) && hoursToRunOut <= hoursUntilNextWindowStart(now) + URGENT_MARGIN_HOURS;
+  if (!inSwitchWindow(now) && !urgent) {
+    reasons.push("outside 00:00-05:30 IST - will switch in the next window");
     return { action: "wait-window", target, reasons, projectedNextWindow, projectedAtReset };
   }
+  if (urgent) reasons.push(`URGENT: the allowance would run out in about ${Math.max(0, hoursToRunOut).toFixed(1)} h, before the next window can be used - switching now, outside the night window`);
   if (!autoswitch) {
     reasons.push("auto-switch is OFF (repository variable NEON_GUARD_AUTOSWITCH != on) - alert only");
     return { action: "blocked", target, reasons, projectedNextWindow, projectedAtReset };
   }
-  return { action: "switch", target, reasons, projectedNextWindow, projectedAtReset };
+  return { action: "switch", target, urgent, reasons, projectedNextWindow, projectedAtReset };
 }
 
 /** New target database name, e.g. fq_guard_202611152045 (UTC). */

@@ -1,6 +1,7 @@
 "use client";
 
 import { AUTH_PATHS } from "@barbercue/shared";
+import { checkMaintenance } from "./maintenance";
 
 // Keep browser API calls same-origin. Next.js proxies /api/v1/* to the backend in both local and
 // Railway deployments, which makes the httpOnly refresh cookie first-party to the web origin.
@@ -82,8 +83,11 @@ function networkOfflineError(): ApiError {
 }
 async function fetchOrOffline(path: string, options: RequestInit): Promise<Response> {
   try {
-    return await rawFetch(path, options);
-  } catch {
+    const res = await rawFetch(path, options);
+    await checkMaintenance(res);
+    return res;
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
     throw networkOfflineError();
   }
 }

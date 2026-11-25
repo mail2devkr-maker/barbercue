@@ -31,6 +31,7 @@ import { OfflineBanner } from './components/OfflineBanner';
 import { StartupIntro, StartupIntroErrorBoundary } from './components/StartupIntro';
 import AuthStack from './navigation/AuthStack';
 import { BrandedShell } from './components/TopBrandBar';
+import { MaintenanceOverlay } from './components/MaintenanceOverlay';
 import RootNavigator from './navigation/RootNavigator';
 import OwnerNavigator from './navigation/OwnerNavigator';
 import StaffNavigator from './navigation/StaffNavigator';
@@ -182,6 +183,7 @@ export default function App() {
             <>
               <PushNotificationCoordinator />
               <Root />
+              <MaintenanceOverlay />
               <ThemedStatusBar />
             </>
           )}
