@@ -8,6 +8,7 @@ import { apiFetch, ApiError } from "../../lib/api";
 import { useAuth } from "../../lib/auth-context";
 import { useWishlist } from "../../lib/shop/store";
 import { fqBag, lineOf, setFqPin, useCommerceConfig, useFqPin } from "../../lib/commerce/store";
+import { BagSync, FastQueProductExtras, Stars } from "./FastQueExtras";
 import { Packshot, rupees, toggleWish } from "../shop/ShopParts";
 import s from "../shop/shop.module.css";
 import c from "./commerce.module.css";
@@ -26,6 +27,8 @@ export function SellerTabs() {
     { href: "/shop/browse?availableOnly=true", label: "💈 Shop from salons", on: path.startsWith("/shop/browse") },
   ];
   return (
+    <>
+    <BagSync />
     <nav className={c.tabs} aria-label="Choose who to buy from">
       {tabs.map((t) => (
         <Link key={t.href} href={t.href} className={`${c.tab} ${t.on ? c.tabOn : ""}`} aria-current={t.on ? "page" : undefined}>
@@ -33,6 +36,7 @@ export function SellerTabs() {
         </Link>
       ))}
     </nav>
+    </>
   );
 }
 
@@ -72,6 +76,7 @@ export function FastQueCard({ p }: { p: CommerceProductDto }) {
               </>
             ) : null}
           </div>
+          {p.rating && <Stars average={p.rating.average} count={p.rating.count} />}
           <SoldByFastQue cod={p.codEligible} />
           <span className={`${s.dot} ${p.availability === "IN_STOCK" ? s.dotOk : p.availability === "LOW_STOCK" ? s.dotWarn : ""}`} style={{ fontSize: "0.75rem" }}>{AVAIL[p.availability]}</span>
         </div>
@@ -193,6 +198,7 @@ export function FastQueOffer({ productId }: { productId: string }) {
         {added && <Link href="/shop/bag" className={s.more}>Added ✓ View bag →</Link>}
       </div>
       <p className={s.cardMeta}>{offer.returnable ? `Returns within ${offer.returnWindowDays} days of delivery.` : "This product cannot be returned."}</p>
+      <FastQueProductExtras key={offer.listingId} offer={offer} />
     </section>
   );
 }

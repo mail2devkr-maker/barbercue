@@ -1,25 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { COMMERCE_PERMISSIONS, COMMERCE_STATUS_LABEL, type CommerceOrderDto, type CommerceOrderStatus, type CommercePermission } from "@barbercue/shared";
 import { apiFetch, apiFetchBlob, ApiError } from "../../../lib/api";
-import { newIdempotencyKey } from "../../../lib/idempotency";
 import ui from "../../owner/owner.module.css";
 import css from "../inventory/admin-inventory.module.css";
 import c from "./admin-commerce.module.css";
-
-const API = "admin/commerce";
-type Row = Record<string, unknown> & { id: string };
-type Page = { items: Row[]; total: number; page: number; pageSize: number };
-const inr = (v: unknown) => (v == null ? "—" : `₹${new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2 }).format(Number(v))}`);
-const day = (v: unknown) => (v ? new Date(String(v)).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "2-digit" }) : "—");
-const err = (e: unknown) => (e instanceof ApiError ? e.message : "Something went wrong. Try again.");
-const get = (o: unknown, path: string): unknown => path.split(".").reduce<unknown>((x, k) => (x && typeof x === "object" ? (x as Record<string, unknown>)[k] : undefined), o);
-const str = (o: unknown, path: string) => {
-  const v = get(o, path);
-  return v == null ? "" : String(v);
-};
+import { ALL, API, Busy, Card, Crud, Form, List, Stats, Table, day, err, inr, productLabel, send, str, useLoad, useOptions, type Field, type Row } from "./parts";
+import { BulkOrders, Forecasts, MoreReports, MoreSettings, Offers, OrderFiles, Pickups, ProductDetail, Requests, Settlements, StockTools, SupplierReturns, Support, downloadXlsx, printPo } from "./AdminCommerceExtras";
 
 const TABS: ReadonlyArray<readonly [string, string, CommercePermission]> = [
   ["overview", "Overview", "view"],
@@ -32,6 +21,7 @@ const TABS: ReadonlyArray<readonly [string, string, CommercePermission]> = [
   ["shipping", "Shipping", "orders"],
   ["cod", "COD", "finance"],
   ["returns", "Returns", "support"],
+  ["support", "Support & Reviews", "support"],
   ["promotions", "Promotions", "view"],
   ["serviceability", "Serviceability", "view"],
   ["reports", "Reports", "view"],
@@ -40,150 +30,6 @@ const TABS: ReadonlyArray<readonly [string, string, CommercePermission]> = [
   ["settings", "Settings", "settings"],
 ];
 
-function useLoad<T>(path: string | null) {
-  const [data, setData] = useState<T | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const load = useCallback(() => {
-    if (!path) return;
-    apiFetch<T>(`${API}/${path}`)
-      .then((d) => {
-        setData(d);
-        setError(null);
-      })
-      .catch((e) => setError(err(e)));
-  }, [path]);
-  useEffect(() => load(), [load]);
-  return { data, error, load };
-}
-async function send(path: string, body: unknown, method: "POST" | "PUT" = "POST", keyed = false) {
-  return apiFetch(`${API}/${path}`, { method, headers: keyed ? { "Idempotency-Key": newIdempotencyKey() } : {}, body: JSON.stringify(body) });
-}
-
-// ---------- Small building blocks ----------
-
-interface Field {
-  key: string;
-  label: string;
-  type?: "text" | "number" | "date" | "checkbox" | "select" | "list";
-  options?: ReadonlyArray<readonly [string, string]>;
-  optional?: boolean;
-  hint?: string;
-}
-/** One form renderer for every admin form; empty optional fields are sent as null. */
-function Form({ fields, initial, submit, label, onDone }: { fields: Field[]; initial?: Record<string, unknown>; submit: (v: Record<string, unknown>) => Promise<unknown>; label: string; onDone: () => void }) {
-  const [v, setV] = useState<Record<string, unknown>>(() => Object.fromEntries(fields.map((f) => [f.key, initial?.[f.key] ?? (f.type === "checkbox" ? false : f.type === "select" ? (f.options?.[0]?.[0] ?? "") : "")])));
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  async function go(e: FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    setError(null);
-    try {
-      const body: Record<string, unknown> = {};
-      for (const f of fields) {
-        const x = v[f.key];
-        if (f.type === "checkbox") body[f.key] = !!x;
-        else if (f.type === "list") body[f.key] = String(x ?? "").split(/[\s,]+/).filter(Boolean);
-        else if (x === "" || x == null) {
-          if (f.optional) body[f.key] = null;
-        } else if (f.type === "number") body[f.key] = Number(x);
-        else body[f.key] = String(x);
-      }
-      await submit(body);
-      onDone();
-    } catch (ex) {
-      setError(err(ex));
-      setBusy(false);
-    }
-  }
-  return (
-    <form className={c.form} onSubmit={(e) => void go(e)}>
-      {fields.map((f) => (
-        <label key={f.key} className={f.type === "checkbox" ? c.check : c.field}>
-          {f.type === "checkbox" ? (
-            <>
-              <input type="checkbox" checked={!!v[f.key]} onChange={(e) => setV({ ...v, [f.key]: e.target.checked })} /> {f.label}
-            </>
-          ) : (
-            <>
-              {f.label}
-              {f.type === "select" ? (
-                <select value={String(v[f.key] ?? "")} onChange={(e) => setV({ ...v, [f.key]: e.target.value })}>
-                  {f.options?.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-                </select>
-              ) : (
-                <input type={f.type === "number" || f.type === "date" ? f.type : "text"} step="any" required={!f.optional && f.type !== "list"} value={Array.isArray(v[f.key]) ? (v[f.key] as string[]).join(", ") : String(v[f.key] ?? "")} onChange={(e) => setV({ ...v, [f.key]: e.target.value })} />
-              )}
-              {f.hint && <small>{f.hint}</small>}
-            </>
-          )}
-        </label>
-      ))}
-      {error && <p className={c.error} role="alert">{error}</p>}
-      <div className={ui.rowWrap}>
-        <button type="submit" className={css.verify} disabled={busy}>{busy ? "Saving…" : label}</button>
-        <button type="button" className={css.tab} onClick={onDone}>Close</button>
-      </div>
-    </form>
-  );
-}
-
-function Table({ head, rows, empty }: { head: string[]; rows: ReactNode[][]; empty: string }) {
-  if (!rows.length) return <p className={ui.hint}>{empty}</p>;
-  return (
-    <div className={c.tableWrap}>
-      <table className={c.table}>
-        <thead><tr>{head.map((h) => <th key={h}>{h}</th>)}</tr></thead>
-        <tbody>{rows.map((r, i) => <tr key={i}>{r.map((x, j) => <td key={j}>{x}</td>)}</tr>)}</tbody>
-      </table>
-    </div>
-  );
-}
-function Card({ title, action, children }: { title: string; action?: ReactNode; children: ReactNode }) {
-  return (
-    <section className={ui.card} aria-label={title}>
-      <div className={ui.cardHead}><h2 className={ui.cardTitle}>{title}</h2>{action}</div>
-      {children}
-    </section>
-  );
-}
-function Stats({ items }: { items: Array<[string, ReactNode]> }) {
-  return <div className={css.summaryGrid}>{items.map(([l, v]) => <div key={l} className={css.stat}><span className={css.statValue}>{v}</span><span className={css.statLabel}>{l}</span></div>)}</div>;
-}
-function Busy({ error }: { error: string | null }) {
-  return error ? <p className={c.error} role="alert">{error}</p> : <div className={`${ui.skeleton} ${css.skeletonSmall}`} />;
-}
-/** A paged list with search and an optional status filter. */
-function List({ title, path, statuses, head, row, empty, action, reloadKey }: { title: string; path: string; statuses?: ReadonlyArray<readonly [string, string]>; head: string[]; row: (r: Row, reload: () => void) => ReactNode[]; empty: string; action?: ReactNode; reloadKey?: number }) {
-  const [q, setQ] = useState("");
-  const [typed, setTyped] = useState("");
-  const [status, setStatus] = useState(statuses?.[0]?.[0] ?? "");
-  const [page, setPage] = useState(1);
-  const { data, error, load } = useLoad<Page>(`${path}?page=${page}&limit=25${q ? `&q=${encodeURIComponent(q)}` : ""}${status ? `&status=${status}` : ""}`);
-  useEffect(() => {
-    if (reloadKey) load();
-  }, [reloadKey, load]);
-  const pages = data ? Math.ceil(data.total / data.pageSize) : 0;
-  return (
-    <Card title={title} action={action}>
-      <form className={ui.rowWrap} onSubmit={(e) => { e.preventDefault(); setPage(1); setQ(typed.trim()); }}>
-        <input className={c.input} aria-label={`Search ${title}`} placeholder="Search" value={typed} onChange={(e) => setTyped(e.target.value)} />
-        {statuses && <select className={c.input} aria-label="Status" value={status} onChange={(e) => { setPage(1); setStatus(e.target.value); }}>{statuses.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>}
-        <button type="submit" className={css.tab}>Search</button>
-      </form>
-      {!data ? <Busy error={error} /> : <Table head={head} rows={data.items.map((r) => row(r, load))} empty={empty} />}
-      {pages > 1 && (
-        <div className={ui.rowWrap}>
-          <button type="button" className={css.tab} disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous</button>
-          <span className={ui.hint}>Page {page} of {pages}</span>
-          <button type="button" className={css.tab} disabled={page >= pages} onClick={() => setPage(page + 1)}>Next</button>
-        </div>
-      )}
-    </Card>
-  );
-}
-const ALL = ["", "All"] as const;
-
 // ---------- Page ----------
 
 export function AdminCommerce() {
@@ -191,6 +37,7 @@ export function AdminCommerce() {
   const router = useRouter();
   const path = usePathname();
   const { data, error } = useLoad<{ permissions: CommercePermission[] }>("me");
+  const [ordered, setOrdered] = useState(0);
   const can = (p: CommercePermission) => !!data?.permissions.includes(p);
   const tabs = TABS.filter((t) => can(t[2]));
   const wanted = params.get("tab") ?? "overview";
@@ -217,20 +64,21 @@ export function AdminCommerce() {
           </div>
           {!tab && <p className={c.error}>You do not have permission to open this tab.</p>}
           {tab === "overview" && <Overview />}
-          {tab === "reports" && <Overview detailed exportable={can("orders")} />}
+          {tab === "reports" && <><Overview detailed exportable={can("orders")} /><MoreReports /></>}
           {tab === "products" && <Products canEdit={can("catalog")} />}
           {tab === "inventory" && <Inventory canEdit={can("warehouse")} />}
           {tab === "warehouses" && <Warehouses canEdit={can("warehouse")} />}
           {tab === "suppliers" && <Suppliers canPay={can("finance")} />}
-          {tab === "procurement" && <Procurement can={can} />}
-          {(tab === "orders" || tab === "shipping") && <Orders key={tab} shipping={tab === "shipping"} />}
-          {tab === "cod" && <Cod />}
+          {tab === "procurement" && <><Requests can={can} onOrdered={() => setOrdered((x) => x + 1)} /><Procurement key={ordered} can={can} /><SupplierReturns can={can} /></>}
+          {(tab === "orders" || tab === "shipping") && <Orders key={tab} shipping={tab === "shipping"} can={can} />}
+          {tab === "cod" && <><Cod /><Settlements /></>}
           {tab === "returns" && <Returns canRefund={can("finance")} />}
-          {tab === "promotions" && <Promotions canEdit={can("catalog")} />}
+          {tab === "promotions" && <><Offers canEdit={can("catalog")} /><Promotions canEdit={can("catalog")} /></>}
           {tab === "serviceability" && <Zones canEdit={can("delivery")} />}
-          {tab === "insights" && <Insights />}
+          {tab === "support" && <Support />}
+          {tab === "insights" && <><Insights /><Forecasts can={can} /></>}
           {tab === "quality" && <Quality canEdit={can("settings")} />}
-          {tab === "settings" && <Settings />}
+          {tab === "settings" && <><Settings /><MoreSettings /></>}
         </>
       )}
     </main>
@@ -281,6 +129,7 @@ function Overview({ detailed, exportable }: { detailed?: boolean; exportable?: b
             <input className={c.input} type="date" aria-label="From" value={from} onChange={(e) => setFrom(e.target.value)} />
             <input className={c.input} type="date" aria-label="To" value={to} onChange={(e) => setTo(e.target.value)} />
             {exportable && <button type="button" className={css.tab} onClick={() => void download()}>Export CSV</button>}
+            {exportable && <button type="button" className={css.tab} onClick={() => void downloadXlsx()}>Export Excel (30 days)</button>}
           </div>
         }
       >
@@ -350,6 +199,8 @@ const LISTING_FIELDS: Field[] = [
   { key: "mrp", label: "MRP ₹" },
   { key: "price", label: "Selling price ₹" },
   { key: "promoPrice", label: "Promotional price ₹", optional: true },
+  { key: "promoStartsAt", label: "Promotion starts", type: "datetime", optional: true },
+  { key: "promoEndsAt", label: "Promotion ends", type: "datetime", optional: true },
   { key: "status", label: "Status", type: "select", options: [["DRAFT", "Draft"], ["ACTIVE", "On sale"], ["PAUSED", "Paused"]] },
   { key: "maxPerOrder", label: "Max per order", type: "number" },
   { key: "weightGrams", label: "Weight (g)", type: "number" },
@@ -363,6 +214,7 @@ const LISTING_FIELDS: Field[] = [
 ];
 function Products({ canEdit }: { canEdit: boolean }) {
   const [edit, setEdit] = useState<Row | null>(null);
+  const [detail, setDetail] = useState<Row | null>(null);
   const [adding, setAdding] = useState(false);
   const [q, setQ] = useState("");
   const [found, setFound] = useState<Row[]>([]);
@@ -405,6 +257,7 @@ function Products({ canEdit }: { canEdit: boolean }) {
           )}
         </Card>
       )}
+      {detail && <ProductDetail key={detail.id} listing={detail} onDone={() => setDetail(null)} />}
       {edit && <Card title={`Edit ${str(edit, "globalProduct.name")}`}><Form key={edit.id} fields={LISTING_FIELDS} initial={edit} submit={save(str(edit, "globalProductId"), edit.id)} label="Save" onDone={done} /></Card>}
       <List
         title="FastQue products"
@@ -421,7 +274,7 @@ function Products({ canEdit }: { canEdit: boolean }) {
           str(r, "available"),
           r.marginPercent ? `${str(r, "marginPercent")}%` : "—",
           str(r, "status"),
-          canEdit ? <button key="e" type="button" className={css.tab} onClick={() => setEdit(r)}>Edit</button> : null,
+          canEdit ? <span key="e" className={ui.rowWrap}><button type="button" className={css.tab} onClick={() => setEdit(r)}>Edit</button><button type="button" className={css.tab} onClick={() => setDetail(r)}>Details</button></span> : null,
         ]}
       />
     </>
@@ -430,19 +283,9 @@ function Products({ canEdit }: { canEdit: boolean }) {
 
 // ---------- Inventory & warehouses ----------
 
-function useOptions(path: string, label: (r: Row) => string) {
-  const [o, setO] = useState<Array<readonly [string, string]>>([]);
-  useEffect(() => {
-    apiFetch<Row[] | Page>(`${API}/${path}`)
-      .then((d) => setO((Array.isArray(d) ? d : d.items).map((r) => [r.id, label(r)] as const)))
-      .catch(() => undefined);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- label is a pure formatter
-  }, [path]);
-  return o;
-}
-const productLabel = (r: Row) => `${str(r, "globalProduct.name")} · ${str(r, "sku")}`;
 function Inventory({ canEdit }: { canEdit: boolean }) {
   const [open, setOpen] = useState<"add" | null>(null);
+  const [found, setFound] = useState<string | null>(null);
   const [adjust, setAdjust] = useState<Row | null>(null);
   const [moves, setMoves] = useState<Row[] | null>(null);
   const [n, setN] = useState(0);
@@ -455,10 +298,13 @@ function Inventory({ canEdit }: { canEdit: boolean }) {
   };
   return (
     <>
+      {canEdit && <StockTools onFound={(id) => { setFound(id); setOpen("add"); }} />}
       {open === "add" && (
         <Card title="Add stock">
           {!products.length || !warehouses.length ? <p className={ui.hint}>Add a product and a warehouse first.</p> : (
             <Form
+              key={found ?? ""}
+              initial={found ? { listingId: found, warehouseId: warehouses[0][0] } : undefined}
               fields={[
                 { key: "listingId", label: "Product", type: "select", options: products },
                 { key: "warehouseId", label: "Warehouse", type: "select", options: warehouses },
@@ -502,7 +348,7 @@ function Inventory({ canEdit }: { canEdit: boolean }) {
         path="batches"
         reloadKey={n}
         statuses={[ALL, ["NEAR_EXPIRY", "Expiring in 90 days"], ["QUARANTINE", "In quarantine"]]}
-        action={canEdit ? <button type="button" className={css.verify} onClick={() => setOpen("add")}>Add stock</button> : null}
+        action={canEdit ? <button type="button" className={css.verify} onClick={() => { setFound(null); setOpen("add"); }}>Add stock</button> : null}
         head={["Product", "Batch", "Warehouse", "Expires", "On hand", "Reserved", "Quarantine", "Damaged", "Expired", "Cost", ""]}
         empty="No stock yet."
         row={(r) => [
@@ -528,29 +374,6 @@ function Inventory({ canEdit }: { canEdit: boolean }) {
   );
 }
 
-/** A plain list whose rows open one form (warehouses, zones, coupons, suppliers). */
-function Crud({ title, path, fields, head, row, empty, canEdit, initial, extra }: { title: string; path: string; fields: Field[]; head: string[]; row: (r: Row) => ReactNode[]; empty: string; canEdit: boolean; initial?: Record<string, unknown>; extra?: (r: Row, reload: () => void) => ReactNode }) {
-  const { data, error, load } = useLoad<Row[]>(path);
-  const [edit, setEdit] = useState<Row | "new" | null>(null);
-  const done = () => {
-    setEdit(null);
-    load();
-  };
-  return (
-    <>
-      {edit && (
-        <Card title={edit === "new" ? `New: ${title}` : "Edit"}>
-          <Form key={edit === "new" ? "new" : edit.id} fields={fields} initial={edit === "new" ? initial : edit} submit={(v) => send(edit === "new" ? path : `${path}/${edit.id}`, v, edit === "new" ? "POST" : "PUT")} label="Save" onDone={done} />
-        </Card>
-      )}
-      <Card title={title} action={canEdit ? <button type="button" className={css.verify} onClick={() => setEdit("new")}>Add</button> : null}>
-        {!data ? <Busy error={error} /> : (
-          <Table head={[...head, ""]} empty={empty} rows={data.map((r) => [...row(r), <span key="x" className={ui.rowWrap}>{canEdit && <button type="button" className={css.tab} onClick={() => setEdit(r)}>Edit</button>}{extra?.(r, load)}</span>])} />
-        )}
-      </Card>
-    </>
-  );
-}
 function Warehouses({ canEdit }: { canEdit: boolean }) {
   return (
     <Crud
@@ -721,6 +544,7 @@ function Procurement({ can }: { can: (p: CommercePermission) => boolean }) {
           inr(r.total),
           str(r, "status"),
           <span key="a" className={ui.rowWrap}>
+            <button type="button" className={css.tab} onClick={() => void printPo(r.id).catch((e) => setError(err(e)))}>Print</button>
             {r.status === "DRAFT" && can("finance") && <button type="button" className={css.verify} onClick={() => void act(r.id, "APPROVE", reload)}>Approve</button>}
             {r.status === "APPROVED" && <button type="button" className={css.verify} onClick={() => void act(r.id, "ORDER", reload)}>Mark ordered</button>}
             {["ORDERED", "PARTIALLY_RECEIVED"].includes(str(r, "status")) && can("warehouse") && <button type="button" className={css.verify} onClick={() => setReceive(r)}>Receive</button>}
@@ -734,13 +558,13 @@ function Procurement({ can }: { can: (p: CommercePermission) => boolean }) {
 
 // ---------- Orders, COD, returns ----------
 
-function Orders({ shipping }: { shipping: boolean }) {
+function Orders({ shipping, can }: { shipping: boolean; can: (p: CommercePermission) => boolean }) {
   const [id, setId] = useState<string | null>(null);
   const [n, setN] = useState(0);
   const list: CommerceOrderStatus[] = shipping ? ["PACKED", "SHIPPED", "OUT_FOR_DELIVERY", "DELIVERY_FAILED", "RETURN_TO_ORIGIN"] : (Object.keys(COMMERCE_STATUS_LABEL) as CommerceOrderStatus[]);
   return (
     <>
-      {id && <OrderPanel key={id} id={id} onClose={() => setId(null)} onChanged={() => setN((x) => x + 1)} />}
+      {id && <OrderPanel key={id} id={id} canProof={can("delivery")} onClose={() => setId(null)} onChanged={() => setN((x) => x + 1)} />}
       <List
         title={shipping ? "Shipping and delivery" : "Orders"}
         path="orders"
@@ -750,10 +574,11 @@ function Orders({ shipping }: { shipping: boolean }) {
         empty="No orders here."
         row={(r) => [str(r, "orderNumber"), new Date(str(r, "placedAt")).toLocaleString("en-IN"), `${str(r, "contactName")} · ${str(r, "contactPhone")}`, `${str(r, "shippingAddress.city")} ${str(r, "shippingAddress.pincode")}`, inr(r.total), COMMERCE_STATUS_LABEL[r.status as CommerceOrderStatus], str(r, "paymentStatus"), <button key="o" type="button" className={css.tab} onClick={() => setId(r.id)}>Open</button>]}
       />
+      {shipping ? can("delivery") && <Pickups /> : <BulkOrders onChanged={() => setN((x) => x + 1)} />}
     </>
   );
 }
-function OrderPanel({ id, onClose, onChanged }: { id: string; onClose: () => void; onChanged: () => void }) {
+function OrderPanel({ id, canProof, onClose, onChanged }: { id: string; canProof: boolean; onClose: () => void; onChanged: () => void }) {
   const { data: o, error, load } = useLoad<CommerceOrderDto>(`orders/${id}`);
   const [ship, setShip] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
@@ -795,6 +620,7 @@ function OrderPanel({ id, onClose, onChanged }: { id: string; onClose: () => voi
           onDone={done}
         />
       )}
+      <OrderFiles orderId={id} canAdd={canProof && ["OUT_FOR_DELIVERY", "DELIVERED"].includes(o.status)} />
       <h3>History</h3>
       <Table head={["When", "Status", "Note"]} rows={o.events.map((e) => [new Date(e.at).toLocaleString("en-IN"), e.label, e.note ?? ""])} empty="" />
     </Card>

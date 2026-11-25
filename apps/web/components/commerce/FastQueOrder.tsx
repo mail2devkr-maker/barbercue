@@ -9,6 +9,7 @@ import { useAuth } from "../../lib/auth-context";
 import { rememberFqOrder, useCommerceConfig, useFqOrders } from "../../lib/commerce/store";
 import { rupees } from "../shop/ShopParts";
 import { errText } from "./CommerceParts";
+import { OrderExtras, SavedAddresses } from "./FastQueExtras";
 import s from "../shop/shop.module.css";
 import c from "./commerce.module.css";
 
@@ -69,6 +70,7 @@ export function FastQueOrder({ orderNumber }: { orderNumber: string }) {
   const steps = COMMERCE_TIMELINE.filter((x) => !ended || reached.has(x));
   const canReturn = cfg.returns && order.status === "DELIVERED" && order.items.some((i) => i.returnableQuantity > 0 && i.returnableUntil && new Date(i.returnableUntil) > new Date());
   const a = order.shippingAddress;
+  const couponPart = Number(order.discountTotal) - (order.promotions ?? []).reduce((n, p) => n + Number(p.amount), 0);
   return (
     <main style={{ paddingTop: 20 }} aria-labelledby="o-title">
       {params.get("new") && <p className={`${s.alert} ${s.alertOk}`} role="status">Order placed. Pay {rupees(order.total)} in cash when it arrives.</p>}
@@ -115,11 +117,15 @@ export function FastQueOrder({ orderNumber }: { orderNumber: string }) {
           ))}
           <div className={s.totals} style={{ marginTop: 12 }}>
             <div><span>Products</span><span>{rupees(order.subtotal)}</span></div>
-            {Number(order.discountTotal) > 0 && <div><span>Discount {order.couponCode}</span><span>−{rupees(order.discountTotal)}</span></div>}
+            {order.promotions?.map((p) => <div key={p.name}><span>{p.name}</span><span>−{rupees(p.amount)}</span></div>)}
+            {couponPart > 0 && <div><span>Coupon {order.couponCode}</span><span>−{rupees(couponPart)}</span></div>}
             <div><span>Delivery</span><span>{Number(order.deliveryCharge) ? rupees(order.deliveryCharge) : "Free"}</span></div>
             <div><span>GST included</span><span>{rupees(order.taxIncluded)}</span></div>
             <div className={s.totalBig}><span>Total</span><span>{rupees(order.total)}</span></div>
             {Number(order.amountDue) > 0 && <div><span>Pay on delivery</span><span>{rupees(order.amountDue)}</span></div>}
+          </div>
+          <div className={c.noPrint} style={{ display: "grid", gap: 12, marginTop: 14 }}>
+            <OrderExtras key={order.status + order.returns.length} base={base} suffix={suffix} order={order} />
           </div>
         </aside>
       </div>
@@ -180,6 +186,7 @@ export function FastQueOrders() {
           </div>
         </div>
       ))}
+      <SavedAddresses />
       {guest.map((l) => (
         <div key={l.orderNumber} style={{ padding: "10px 0" }}><Link href={`/shop/delivery/${l.orderNumber}`}>{l.orderNumber}</Link></div>
       ))}

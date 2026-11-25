@@ -2,8 +2,10 @@
 .form > div, .form > p { grid-column: 1 / -1; }
 .field { display: grid; gap: 4px; font-size: 0.82rem; font-weight: 600; }
 .field small { font-weight: 400; color: var(--bc-muted); }
-.field input, .field select, .input { min-height: 40px; padding: 8px 10px; border: 1px solid var(--bc-border); border-radius: 10px; background: transparent; color: inherit; font: inherit; min-width: 0; }
+.field input, .field select, .field textarea, .input { min-height: 40px; padding: 8px 10px; border: 1px solid var(--bc-border); border-radius: 10px; background: transparent; color: inherit; font: inherit; min-width: 0; }
 .field option, .input option { color: #1c1a17; background: #fff; }
+.internal { padding: 8px 10px; border-left: 3px solid #d08a00; }
+.photo { width: 96px; height: 96px; object-fit: cover; border-radius: 10px; }
 .check { display: flex; gap: 8px; align-items: center; font-size: 0.85rem; min-height: 40px; }
 .tableWrap { overflow-x: auto; margin: 10px 0; }
 .table { width: 100%; border-collapse: collapse; font-size: 0.84rem; }

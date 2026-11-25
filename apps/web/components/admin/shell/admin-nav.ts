@@ -80,6 +80,7 @@ const COMMERCE_TABS: ReadonlyArray<readonly [string, string]> = [
   ["shipping", "Shipping & Delivery"],
   ["cod", "COD Management"],
   ["returns", "Returns & Replacements"],
+  ["support", "Support & Reviews"],
   ["promotions", "Promotions"],
   ["serviceability", "Delivery Serviceability"],
   ["reports", "Analytics & Reports"],
@@ -149,7 +150,6 @@ export const ADMIN_NAV_ITEMS: ReadonlyArray<AdminNavItem> = [
   ...(directCommerceLinksEnabled()
     ? [
         ...COMMERCE_TABS.map(([id, label]): AdminNavItem => ({ id: `commerce-${id}`, label, group: "COMMERCE", href: COMMERCE, ...(id === "overview" ? {} : { query: `tab=${id}` }), status: "live" })),
-        planned("COMMERCE", "commerce-support", "Customer Support", "Commerce categories and order links on the support-ticket system."),
       ]
     : []),
 

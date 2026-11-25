@@ -7,6 +7,7 @@ import type { CommerceHomeDto, CommercePageDto, CommerceProductDto } from "@barb
 import { apiFetch } from "../../lib/api";
 import { useCommerceConfig } from "../../lib/commerce/store";
 import { errText, FastQueGrid, PinCheck } from "./CommerceParts";
+import { Banners, PersonalRails } from "./FastQueExtras";
 import s from "../shop/shop.module.css";
 import c from "./commerce.module.css";
 
@@ -86,6 +87,7 @@ export function FastQueStore() {
       </section>
       {home && !query && (
         <>
+          <Banners />
           {home.categories.length > 0 && (
             <section className={s.section} aria-label="Shop by category">
               <div className={s.chips}>
@@ -104,6 +106,7 @@ export function FastQueStore() {
           <Rail eyebrow="From recent orders" title="Best sellers" items={home.bestSellers} />
           <Rail eyebrow="Below MRP" title="Offers" items={home.offers} />
           <Rail eyebrow="Just added" title="New arrivals" items={home.newArrivals} />
+          <PersonalRails />
         </>
       )}
       <section className={s.section} aria-label="All FastQue products">

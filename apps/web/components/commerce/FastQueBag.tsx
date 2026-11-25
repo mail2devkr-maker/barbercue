@@ -11,6 +11,7 @@ import { fqBag, rememberFqOrder, setFqPin, useCommerceConfig, useFqBag, useFqPin
 import { ShopBag } from "../shop/ShopCheckout";
 import { Packshot, rupees } from "../shop/ShopParts";
 import { errText, PinCheck } from "./CommerceParts";
+import { countPage } from "./FastQueExtras";
 import s from "../shop/shop.module.css";
 import c from "./commerce.module.css";
 
@@ -54,11 +55,13 @@ function useSalonQuotes(lines: BagLine[]) {
   return { quotes, refresh };
 }
 
+const couponPart = (q: CommerceQuoteDto) => Number(q.discountTotal) - (q.promotions ?? []).reduce((n, p) => n + Number(p.amount), 0);
 function Totals({ q }: { q: CommerceQuoteDto }) {
   return (
     <div className={s.totals}>
       <div><span>Products</span><span>{rupees(q.subtotal)}</span></div>
-      {Number(q.discountTotal) > 0 && <div><span>Coupon {q.couponCode}</span><span className={s.off}>−{rupees(q.discountTotal)}</span></div>}
+      {q.promotions?.map((p) => <div key={p.name}><span>{p.name}</span><span className={s.off}>−{rupees(p.amount)}</span></div>)}
+      {couponPart(q) > 0 && <div><span>Coupon {q.couponCode}</span><span className={s.off}>−{rupees(couponPart(q))}</span></div>}
       <div><span>Delivery</span><span>{q.deliveryCharge == null ? "Enter PIN" : Number(q.deliveryCharge) === 0 ? "Free" : rupees(q.deliveryCharge)}</span></div>
       <div><span>GST included</span><span>{rupees(q.taxIncluded)}</span></div>
       <div className={s.totalBig}><span>Pay on delivery</span><span>{rupees(q.total)}</span></div>
@@ -84,6 +87,7 @@ function UnifiedBag() {
   const { lines, quote, error } = useFqQuote(pin, "");
   const groups = bySalon(salons);
   const { quotes } = useSalonQuotes(salons);
+  useEffect(() => countPage("BAG_VIEW"), []);
   const mixed = groups.length > 1 || (lines.length > 0 && groups.length > 0);
   return (
     <main style={{ paddingTop: 20 }} aria-labelledby="bag-title">
@@ -191,6 +195,7 @@ export function FastQueCheckout() {
   const [coupon, setCoupon] = useState("");
   const [applied, setApplied] = useState("");
   const [saveAddress, setSaveAddress] = useState(false);
+  const [billing, setBilling] = useState<typeof BLANK | null>(null);
   const [addresses, setAddresses] = useState<SavedAddress[]>([]);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
@@ -200,6 +205,9 @@ export function FastQueCheckout() {
   const groups = cfg.multiSellerCart ? bySalon(salonLines) : [];
   const { quotes, refresh: refreshSalons } = useSalonQuotes(cfg.multiSellerCart ? salonLines : []);
 
+  useEffect(() => {
+    if (cfg.enabled) countPage("CHECKOUT_START");
+  }, [cfg.enabled]);
   useEffect(() => {
     if (cfg.enabled && isCustomer) apiFetch<SavedAddress[]>("customer/commerce/addresses").then(setAddresses).catch(() => undefined);
   }, [cfg.enabled, isCustomer]);
@@ -237,6 +245,7 @@ export function FastQueCheckout() {
                 fastque: {
                   items: lines.map((l) => ({ listingId: l.listingId, quantity: l.quantity })),
                   address,
+                  ...(billing ? { billingAddress: { ...billing, phone: billing.phone || address.phone, line2: billing.line2 || null, landmark: billing.landmark || null } } : {}),
                   instructions: instructions.trim() || null,
                   ...(quote!.couponCode ? { couponCode: quote!.couponCode } : {}),
                   expectedTotal: quote!.total,
@@ -296,6 +305,8 @@ export function FastQueCheckout() {
                 {field("state", "State", { required: true, minLength: 2, autoComplete: "address-level1" })}
                 {field("pincode", "PIN code", { required: true, inputMode: "numeric", maxLength: 6, pattern: "[1-9][0-9]{5}", autoComplete: "postal-code" })}
                 <label className={s.field}>Delivery instructions (optional)<input className={s.input} maxLength={300} value={instructions} onChange={(e) => setInstructions(e.target.value)} /></label>
+                <label className={`${s.check} ${c.wide}`}><input type="checkbox" checked={!!billing} onChange={(e) => setBilling(e.target.checked ? { ...BLANK, name: f.name } : null)} /> Bill to a different address</label>
+                {billing && (["name", "line1", "city", "state", "pincode"] as const).map((k) => <label key={k} className={s.field}>Billing {k === "line1" ? "street" : k === "pincode" ? "PIN code" : k}<input className={s.input} required minLength={2} {...(k === "pincode" ? { pattern: "[1-9][0-9]{5}", inputMode: "numeric" as const, maxLength: 6 } : {})} value={billing[k]} onChange={(e) => setBilling({ ...billing, [k]: e.target.value })} /></label>)}
                 {isCustomer && <label className={`${s.check} ${c.wide}`}><input type="checkbox" checked={saveAddress} onChange={(e) => setSaveAddress(e.target.checked)} /> Save this address</label>}
               </>
             )}

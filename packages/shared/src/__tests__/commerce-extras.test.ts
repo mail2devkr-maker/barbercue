@@ -1,4 +1,3 @@
-import { describe, expect, it } from "vitest";
 import { SETTLEMENT_COLUMNS, applyPromotions, commerceBannerSchema, forecastDemand, mapColumns, parseSheetDate, parseSheetMoney, splitPaise, type PromotionRule } from "../commerce-extras";
 
 const rule = (o: Partial<PromotionRule>): PromotionRule => ({ id: "p", name: "P", kind: "PERCENT", listingIds: ["a"], buyQty: 1, getQty: 0, value: "10", pinRules: [], startsAt: null, endsAt: null, isActive: true, ...o });

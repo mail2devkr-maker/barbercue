@@ -45,7 +45,7 @@ export function useCommerceConfig(): CommerceConfigDto {
   return cfg;
 }
 
-const KEYS = { bag: "fq.dc.bag.v1", saved: "fq.dc.saved.v1", pin: "fq.dc.pin.v1", orders: "fq.dc.orders.v1" } as const;
+const KEYS = { bag: "fq.dc.bag.v1", saved: "fq.dc.saved.v1", pin: "fq.dc.pin.v1", orders: "fq.dc.orders.v1", viewed: "fq.dc.viewed.v1" } as const;
 type Key = keyof typeof KEYS;
 const listeners = new Set<() => void>();
 const cache = new Map<Key, { raw: string | null; value: unknown }>();
@@ -93,6 +93,7 @@ function useStored<T>(key: Key, fallback: T): T {
 export const useFqBag = () => useStored<FqLine[]>("bag", NONE);
 export const useFqSaved = () => useStored<FqLine[]>("saved", NONE);
 export const useFqPin = () => useStored<string>("pin", "");
+export const useFqViewed = () => useStored<string[]>("viewed", NONE);
 export const useFqOrders = () => useStored<FqOrderLink[]>("orders", NONE);
 
 export const lineOf = (p: CommerceProductDto, quantity = 1): FqLine => ({
@@ -132,10 +133,19 @@ export const fqBag = {
     write("saved", read<FqLine[]>("saved", NONE).filter((l) => l.listingId !== line.listingId));
     fqBag.add(line);
   },
+  /** Adds lines saved on the account that this device does not have yet. */
+  merge(lines: FqLine[]) {
+    const cur = read<FqLine[]>("bag", NONE);
+    const extra = lines.filter((l) => !cur.some((x) => x.listingId === l.listingId));
+    if (extra.length) write("bag", [...cur, ...extra].slice(0, 20));
+  },
   clear() {
     write("bag", []);
   },
 };
+export function rememberViewed(listingId: string) {
+  write("viewed", [listingId, ...read<string[]>("viewed", NONE).filter((x) => x !== listingId)].slice(0, 12));
+}
 export const setFqPin = (pin: string) => write("pin", pin);
 export function rememberFqOrder(o: FqOrderLink) {
   write("orders", [o, ...read<FqOrderLink[]>("orders", NONE).filter((x) => x.orderNumber !== o.orderNumber)].slice(0, 20));

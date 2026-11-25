@@ -115,6 +115,16 @@ export const priceNow = (
     now,
   );
 
+/** Just enough to filter and rank; full rows are loaded only for the products shown. */
+const rankSelect = {
+  id: true,
+  price: true,
+  mrp: true,
+  promoPrice: true,
+  promoStartsAt: true,
+  promoEndsAt: true,
+} satisfies Prisma.CommerceListingSelect;
+
 @Injectable()
 export class CommerceCatalogService {
   constructor(
@@ -317,7 +327,7 @@ export class CommerceCatalogService {
             : {},
         ],
       },
-      include: listingInclude,
+      select: rankSelect,
       orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
       take: 5000,
     });
@@ -349,9 +359,8 @@ export class CommerceCatalogService {
       list.sort((a, b) => Number(b.stock > 0) - Number(a.stock > 0));
     const start = (q.page - 1) * q.limit;
     const page = list.slice(start, start + q.limit);
-    const extra = await this.extras(page.map((x) => x.row.id));
     return {
-      items: page.map((x) => this.toDto(x.row, x.stock, extra)),
+      items: await this.byListingIds(page.map((x) => x.row.id)),
       total: list.length,
       page: q.page,
       pageSize: q.limit,
@@ -376,38 +385,64 @@ export class CommerceCatalogService {
   async home(): Promise<CommerceHomeDto> {
     const rows = await this.prisma.commerceListing.findMany({
       where: PUBLIC_LISTING,
-      include: listingInclude,
+      select: {
+        ...rankSelect,
+        featured: true,
+        globalProduct: { select: { category: true, brand: true } },
+      },
       orderBy: { createdAt: 'desc' },
-      take: 1000,
+      take: 5000,
     });
-    const items = await this.withStock(rows);
-    const byId = new Map(items.map((i) => [i.listingId, i]));
-    const live = items.filter((i) => i.availability !== 'OUT_OF_STOCK');
-    const sold = await this.unitsSold();
+    const [available, sold] = await Promise.all([
+      this.stock.available(
+        this.prisma,
+        rows.map((r) => r.id),
+      ),
+      this.unitsSold(),
+    ]);
+    const live = rows.filter((r) => (available.get(r.id) ?? 0) > 0);
+    const off = (r: (typeof rows)[number]) =>
+      Math.round((1 - paise(priceNow(r)) / paise(r.mrp.toFixed(2))) * 100);
+    const known = new Set(rows.map((r) => r.id));
+    const first = (list: Array<{ id: string }>) =>
+      list.slice(0, 8).map((r) => r.id);
+    const featured = first(rows.filter((r) => r.featured));
+    const best = [...sold]
+      .filter(([id]) => known.has(id))
+      .sort((x, y) => y[1] - x[1])
+      .slice(0, 8)
+      .map(([id]) => id);
+    const fresh = first(live);
+    const offers = first(
+      live
+        .map((r) => ({ id: r.id, off: off(r) }))
+        .filter((r) => r.off > 0)
+        .sort((x, y) => y.off - x.off),
+    );
+    const items = new Map(
+      (
+        await this.byListingIds([
+          ...new Set([...featured, ...best, ...fresh, ...offers]),
+        ])
+      ).map((p) => [p.listingId, p]),
+    );
+    const pick = (ids: string[]) => ids.flatMap((id) => items.get(id) ?? []);
     const count = (key: 'category' | 'brand') => {
       const m = new Map<string, number>();
-      for (const i of items)
-        if (i[key]) m.set(i[key], (m.get(i[key]) ?? 0) + 1);
+      for (const r of rows) {
+        const v = r.globalProduct[key];
+        if (v) m.set(v, (m.get(v) ?? 0) + 1);
+      }
       return [...m]
         .map(([name, products]) => ({ name, products }))
-        .sort((a, b) => b.products - a.products)
+        .sort((x, y) => y.products - x.products)
         .slice(0, 24);
     };
     return {
-      featured: rows
-        .filter((r) => r.featured)
-        .map((r) => byId.get(r.id)!)
-        .slice(0, 8),
-      bestSellers: [...sold]
-        .sort((a, b) => b[1] - a[1])
-        .map(([id]) => byId.get(id))
-        .filter((x): x is CommerceProductDto => !!x)
-        .slice(0, 8),
-      newArrivals: live.slice(0, 8),
-      offers: live
-        .filter((i) => i.discountPercent)
-        .sort((a, b) => b.discountPercent! - a.discountPercent!)
-        .slice(0, 8),
+      featured: pick(featured),
+      bestSellers: pick(best),
+      newArrivals: pick(fresh),
+      offers: pick(offers),
       categories: count('category'),
       brands: count('brand'),
     };
