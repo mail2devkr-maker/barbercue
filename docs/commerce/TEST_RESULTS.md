@@ -1,43 +1,54 @@
 # Test results and regression comparison
 
-Windows 11, Node 24, PostgreSQL 18 in Docker, disposable local databases. Baseline = `8965d964`, before any change,
-in the same environment. "After" = this branch.
+Windows 11, Node 24, PostgreSQL 18 in Docker, disposable local databases. Baseline = `8965d964`, before any change. "After" =
+this branch including the merge of upstream master `0d4a5e81`, so it also contains tests added upstream.
 
-| Suite | Baseline pass / fail / skip | After | Newly failing |
+| Suite | Baseline pass / fail / skip | After | Failing every time, not in the baseline |
 | --- | --- | --- | --- |
-| Shared unit | 698 / 0 / 0 | 706 / 0 / 0 | 0 |
-| Web unit | 1527 / 5 / 0 | 1527 / 5 / 0 | 0 |
-| Backend unit | 2286 / 1 / 0 | 2286 / 1 / 0 | 0 |
-| All backend e2e | 401 / 25 / 16 | 418 / 25 / 16 | 0 |
+| Shared unit | 698 / 0 / 0 | 720 / 0 / 0 | 0 |
+| Web unit | 1527 / 5 / 0 | 1532 / 5 / 0 | 0 |
+| Backend unit | 2286 / 1 / 0 | 2296 / 4 / 0 (full run) | 0: the 3 extra passed twice when run alone |
+| All backend e2e | 401 / 25 / 16 | 437 / 27 / 17 (full run) | 0: the 2 extra are intermittent, see below |
 
-Typecheck (backend, web), eslint on new and changed files, web production build with the admin flag off and on: pass.
-Migration chain: 89 applied, 66 historical table fingerprints unchanged, no drift; only `CREATE` statements on existing schema.
+Typecheck (backend, web), eslint on changed files, web production build with the admin flag on: pass. Migration chain with
+both commerce migrations: no drift in commerce tables.
+
+## Extra failures in the full run, and what was checked
+
+- Backend unit: `two-factor-otp-sender` (a timeout test), `object-storage.service` and `salon-upi` (QR decode). This branch changes none
+  of them, and local servers and a headless browser were running at the time. Run alone: 44 of 44, twice.
+- `assistant-rollout` #372: 401 instead of 200. Failed in the full run and in two runs right after it, then passed in five runs in a
+  row. It also failed once before the first commerce commit's regression. It is intermittent; its cause was not found, and it was not
+  compared with a clean master checkout.
 
 ## Failing before this work (not fixed here)
 
-- Web: 5 in `ArrivalAlertOverlay.test.jsx` (`speechSynthesis.getVoices` missing in the test browser).
-- Backend unit: 1 QR photo decode in `salon-upi.service.spec.ts`; which image fails varies, and it passes alone.
-- E2E: 25 in `owner-ops`, `queue`, `booking`, `inventory`, `salon-setup-activation`, `rbac`,
-  `customer-assistant-search`, `discovery` (outdated call signatures, missing fixtures and environment settings).
-  Because these fail on master too, queue and booking are covered here by the unchanged unit suites and the other e2e.
+- Web: 5 in `ArrivalAlertOverlay.test.jsx`.
+- Backend unit: 1 QR photo decode in `salon-upi.service.spec.ts`.
+- E2E: 25 in `owner-ops`, `queue`, `booking`, `inventory`, `salon-setup-activation`, `rbac`, `customer-assistant-search`, `discovery`.
 
-## Notes on reruns
+## Commerce e2e (34 tests, all pass)
 
-- A first backend unit run failed 8 extra tests because it inherited a too-short `JWT_ACCESS_SECRET` from the e2e shell.
-  With the baseline's environment all pass.
-- One `assistant-rollout` e2e returned 401 once in a full run; it passed alone twice and in a second full run.
+`commerce.e2e-spec.ts` (17): flags, isolation, checkout, FEFO, concurrency, state machine, COD, returns, coupons, procurement, mixed
+checkout, reports, data quality, addresses.
 
-## Commerce e2e (17)
+`commerce-extras.e2e-spec.ts` (17): every new route hidden while off; owners, customers and ungranted admins refused; reviews; support and
+internal notes; offers and refunds of offers; details, banners, return rules; photos; stock import; settlement import; bulk steps
+and Excel; warehouse limits; blind counts; requests, quotations and supplier returns; pickups; bag, recommendations, counters;
+forecasts and cost protection; alerts and invoices. Concurrent double submits are tested for reviews, imports, settlements,
+counts, purchase orders and pickups.
 
-Flag behaviour; seller and role isolation; test-data and cost hiding; PIN serviceability; guest COD order, FEFO, snapshots,
-private link, cancel; 6 concurrent buyers of the last unit; 4 concurrent retries; price change, limits, COD cap; expired stock;
-state machine, single dispatch, failed delivery, return to origin; COD ledger and second-person sign-off; returns, refund,
-replacement; coupons and below-cost guard; purchase orders, transfer, ledger = balance; mixed FastQue + two salons with
-compensation and race; reports and cost protection; data quality; address privacy.
+## Browser check (headless Edge, production build)
 
-## Browser check (guest and admin, desktop; 375 px for customer pages)
+Storefront, product, bag, checkout, order help, saved addresses, all 17 admin tabs, stock count, scan panel, reply suggestion, bulk
+steps, offers, details, and the four print documents. 1280/1440 px and 375 px: no sideways scroll. No script errors. One notification
+request got a 500 from a reset connection between the web server and the backend; it did not repeat. No unlabelled field, unnamed
+button or image without alt text in the main area of these pages. Screenshots: `screenshots/` (demo data).
 
-Storefront, offer comparison with total to door, three-seller bag, unsupported PIN blocked, mixed guest checkout, tracking,
-admin dispatch to Delivered, stock 20 to 19, cash still "not collected", all 16 admin tabs.
+## Load
 
-Not done: load or performance measurement, security scan beyond the tests above, screen-reader testing, Android/iOS app screens.
+Catalogue service, 3,005 listings, 10 callers at once on a laptop: list 475 ms (1,563 ms before the fix in this branch), search 409,
+home 714 (cached publicly for 60 s), product 72, PIN check 5 (medians). Measured in-process because the API is rate limited per
+client. Checkout was tested for correctness under concurrency, not for throughput.
+
+Not done: load test on production hardware, external penetration test, screen-reader testing, camera scan on a real phone, mobile apps.
