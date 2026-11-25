@@ -1342,7 +1342,7 @@ ALTER TABLE "home_bookings" ADD CONSTRAINT "home_bookings_time_check" CHECK ("se
 ALTER TABLE "home_bookings" ADD CONSTRAINT "home_bookings_customer_check" CHECK ("customerId" IS NOT NULL OR ("guestPhone" IS NOT NULL AND "guestAccessHash" IS NOT NULL));
 ALTER TABLE "home_payment_records" ADD CONSTRAINT "home_payment_records_amount_check" CHECK ("amountPaise" > 0 AND "tipPaise" >= 0);
 ALTER TABLE "home_reviews" ADD CONSTRAINT "home_reviews_range_check" CHECK (
-  "overall" BETWEEN 1 AND 5 AND "quality" BETWEEN 1 AND 5 AND "behaviour" BETWEEN 1 AND 5 AND "punctuality" BETWEEN 1 AND 5 AND "hygiene" BETWEEN 1 AND 5 AND "transparency" BETWEEN 1 AND 5);
+  "overall" >= 1 AND "overall" <= 5 AND "quality" >= 1 AND "quality" <= 5 AND "behaviour" >= 1 AND "behaviour" <= 5 AND "punctuality" >= 1 AND "punctuality" <= 5 AND "hygiene" >= 1 AND "hygiene" <= 5 AND "transparency" >= 1 AND "transparency" <= 5);
 ALTER TABLE "professional_commitments" ADD CONSTRAINT "professional_commitments_range_check" CHECK ("endAt" > "startAt");
 
 -- One person can never hold two overlapping unreleased commitments, in any provider.
