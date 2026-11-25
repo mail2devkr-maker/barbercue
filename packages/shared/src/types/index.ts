@@ -1473,6 +1473,12 @@ export const NOTIFICATION_TYPES = [
   "work.payout.sent",
   "work.payout.failed",
   "work.dispute.updated",
+  // Marketplace orders: FastQue deliveries (commerce.ts) and salon pickups (shop.ts).
+  "commerce.order.updated",
+  "commerce.return.updated",
+  "commerce.ticket.updated",
+  "commerce.stock.alert",
+  "shop.order.updated",
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
