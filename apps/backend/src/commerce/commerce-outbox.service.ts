@@ -7,7 +7,7 @@ import {
 } from '@barbercue/shared';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { flag, type Tx } from './commerce-support';
+import { commercePublic, type Tx } from './commerce-support';
 
 const MAX_ATTEMPTS = 6;
 
@@ -45,7 +45,9 @@ export class CommerceOutboxService {
 
   @Cron('*/20 * * * * *')
   async deliver(): Promise<number> {
-    if (!flag('FASTQUE_DIRECT_COMMERCE_ENABLED') || this.running) return 0;
+    // Off in admin-only set-up mode: no customer orders exist, and a query every 20 s would keep
+    // the database compute awake around the clock.
+    if (!commercePublic() || this.running) return 0;
     this.running = true;
     try {
       await this.collectSalonOrderEvents();

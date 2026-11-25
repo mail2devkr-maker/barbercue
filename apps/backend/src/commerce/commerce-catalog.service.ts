@@ -17,6 +17,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CommerceStockService } from './commerce-stock.service';
 import {
   FASTQUE_SELLER_CODE,
+  commercePublic,
   flag,
   money,
   notFound,
@@ -134,7 +135,8 @@ export class CommerceCatalogService {
 
   /** Always answers, so the website can hide everything when the feature is off. */
   async config(): Promise<CommerceConfigDto> {
-    const enabled = flag('FASTQUE_DIRECT_COMMERCE_ENABLED');
+    // Admin-only set-up mode reports "off" so the website shows customers nothing.
+    const enabled = commercePublic();
     const s = enabled
       ? await this.prisma.commerceSeller.findUnique({
           where: { code: FASTQUE_SELLER_CODE },
