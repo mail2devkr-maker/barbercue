@@ -43,6 +43,8 @@ import { ShopModule } from './shop/shop.module';
 import { OnboardingModule } from './onboarding/onboarding.module';
 import { CrmModule } from './crm/crm.module';
 import { WorkModule } from './work/work.module';
+import { HomeModule } from './home/home.module';
+import { ProfessionalCommitmentsModule } from './common/professional-commitments/professional-commitments.module';
 
 @Module({
   imports: [
@@ -52,6 +54,7 @@ import { WorkModule } from './work/work.module';
     ScheduleModule.forRoot(),
     ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 60 }]),
     PrismaModule,
+    ProfessionalCommitmentsModule,
     SalonAccessModule,
     HealthModule,
     AuthModule,
@@ -100,6 +103,8 @@ import { WorkModule } from './work/work.module';
     VerificationModule,
     // FastQue Work marketplace (work/* routes; off unless WORK_MARKETPLACE_ENABLED=true).
     WorkModule,
+    // FastQue Home (home/*, admin/home/*, dashboard/salons/:id/home/*; off unless FASTQUE_HOME_ENABLED=true).
+    HomeModule,
     // Feature modules (staff/chair roster CRUD, payments, admin) are added in later phases per
     // PROJECT_STRUCTURE.md.
   ],
