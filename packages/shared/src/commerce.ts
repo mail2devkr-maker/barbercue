@@ -524,6 +524,8 @@ export interface CommerceProductDto {
   codEligible: boolean;
   returnable: boolean;
   returnWindowDays: number;
+  /** Published reviews of real purchases; absent until there is one. */
+  rating?: { average: number; count: number };
 }
 export interface CommercePageDto<T> {
   items: T[];
@@ -554,6 +556,8 @@ export interface CommerceQuoteDto {
   subtotal: string;
   savings: string;
   discountTotal: string;
+  /** Automatic offers, already inside discountTotal. */
+  promotions?: Array<{ name: string; amount: string }>;
   couponCode: string | null;
   couponMessage: string | null;
   deliveryCharge: string | null;
@@ -581,6 +585,7 @@ export interface CommerceOrderDto {
   items: Array<{ id: string; productId: string; name: string; brand: string | null; variant: string | null; sku: string; hsnCode: string | null; gstRatePercent: string | null; quantity: number; mrp: string; unitPrice: string; lineTotal: string; returnableUntil: string | null; returnableQuantity: number }>;
   subtotal: string;
   discountTotal: string;
+  promotions?: Array<{ name: string; amount: string }>;
   couponCode: string | null;
   deliveryCharge: string;
   taxIncluded: string;

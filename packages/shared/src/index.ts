@@ -24,6 +24,7 @@ export * from './product-catalog';
 export * from './inventory-upload';
 export * from './shop';
 export * from './commerce';
+export * from './commerce-extras';
 export * from './finance';
 export * from './service-usage';
 export * from './inventory-forecast';

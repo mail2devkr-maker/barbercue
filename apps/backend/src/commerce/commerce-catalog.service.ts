@@ -61,6 +61,33 @@ export const PUBLIC_LISTING: Prisma.CommerceListingWhereInput = {
     isTestData: false,
   },
 };
+/** Category rule and product rule together: the stricter one applies. */
+export type ReturnRules = Map<
+  string,
+  { returnable: boolean; windowDays: number }
+>;
+export async function returnRules(db: Db): Promise<ReturnRules> {
+  const rows = await db.commerceReturnPolicy.findMany();
+  return new Map(rows.map((r) => [r.category.toLowerCase(), r]));
+}
+export const returnRule = (
+  l: {
+    returnable: boolean;
+    returnWindowDays: number;
+    globalProduct: { category: string | null };
+  },
+  rules: ReturnRules,
+) => {
+  const p = rules.get(l.globalProduct.category?.toLowerCase() ?? '');
+  return {
+    returnable: l.returnable && (p?.returnable ?? true),
+    returnWindowDays: Math.min(
+      l.returnWindowDays,
+      p?.windowDays ?? l.returnWindowDays,
+    ),
+  };
+};
+
 export const isSellable = (l: ListingRow) =>
   l.status === 'ACTIVE' &&
   l.seller.isActive &&
@@ -125,7 +152,14 @@ export class CommerceCatalogService {
     };
   }
 
-  toDto(l: ListingRow, available: number): CommerceProductDto {
+  toDto(
+    l: ListingRow,
+    available: number,
+    extra?: {
+      rules: ReturnRules;
+      ratings: Map<string, { average: number; count: number }>;
+    },
+  ): CommerceProductDto {
     const price = priceNow(l);
     const mrp = l.mrp.toFixed(2);
     const availability: CommerceAvailability =
@@ -154,9 +188,65 @@ export class CommerceCatalogService {
       availableQuantity: Math.min(available, l.maxPerOrder),
       maxPerOrder: l.maxPerOrder,
       codEligible: l.codEligible,
-      returnable: l.returnable,
-      returnWindowDays: l.returnWindowDays,
+      ...returnRule(l, extra?.rules ?? new Map<string, never>()),
+      ...(extra?.ratings.has(l.id) ? { rating: extra.ratings.get(l.id)! } : {}),
     };
+  }
+
+  private async extras(ids: string[]) {
+    const rules = await returnRules(this.prisma);
+    const rows = await this.prisma.commerceReview.groupBy({
+      by: ['listingId'],
+      where: { listingId: { in: ids }, status: 'PUBLISHED' },
+      _avg: { rating: true },
+      _count: true,
+    });
+    return {
+      rules,
+      ratings: new Map(
+        rows.map((r) => [
+          r.listingId,
+          {
+            average: Math.round((r._avg.rating ?? 0) * 10) / 10,
+            count: r._count,
+          },
+        ]),
+      ),
+    };
+  }
+
+  /** Public products by id, in the order asked for. */
+  async byListingIds(ids: string[]): Promise<CommerceProductDto[]> {
+    if (!ids.length) return [];
+    const rows = await this.prisma.commerceListing.findMany({
+      where: { AND: [PUBLIC_LISTING, { id: { in: ids } }] },
+      include: listingInclude,
+    });
+    const items = await this.withStock(rows);
+    return ids.flatMap((id) => items.find((i) => i.listingId === id) ?? []);
+  }
+  async inCategories(
+    categories: string[],
+    exclude: string[],
+  ): Promise<CommerceProductDto[]> {
+    if (!categories.length) return [];
+    const rows = await this.prisma.commerceListing.findMany({
+      where: {
+        AND: [
+          PUBLIC_LISTING,
+          {
+            id: { notIn: exclude },
+            globalProduct: { category: { in: categories } },
+          },
+        ],
+      },
+      include: listingInclude,
+      orderBy: { createdAt: 'desc' },
+      take: 24,
+    });
+    return (await this.withStock(rows))
+      .filter((i) => i.availability !== 'OUT_OF_STOCK')
+      .slice(0, 8);
   }
 
   private async withStock(rows: ListingRow[]): Promise<CommerceProductDto[]> {
@@ -164,7 +254,8 @@ export class CommerceCatalogService {
       this.prisma,
       rows.map((r) => r.id),
     );
-    return rows.map((r) => this.toDto(r, available.get(r.id) ?? 0));
+    const extra = await this.extras(rows.map((r) => r.id));
+    return rows.map((r) => this.toDto(r, available.get(r.id) ?? 0, extra));
   }
 
   async search(
@@ -257,10 +348,10 @@ export class CommerceCatalogService {
     else if (q.sort === 'relevance')
       list.sort((a, b) => Number(b.stock > 0) - Number(a.stock > 0));
     const start = (q.page - 1) * q.limit;
+    const page = list.slice(start, start + q.limit);
+    const extra = await this.extras(page.map((x) => x.row.id));
     return {
-      items: list
-        .slice(start, start + q.limit)
-        .map((x) => this.toDto(x.row, x.stock)),
+      items: page.map((x) => this.toDto(x.row, x.stock, extra)),
       total: list.length,
       page: q.page,
       pageSize: q.limit,

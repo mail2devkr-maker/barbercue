@@ -2759,6 +2759,8 @@ const enNotificationTypeLabels: NotificationTypeLabels = {
   'work.dispute.updated': 'Dispute update',
   'commerce.order.updated': 'Your FastQue order was updated',
   'commerce.return.updated': 'Your return was updated',
+  'commerce.ticket.updated': 'Support replied about your order',
+  'commerce.stock.alert': 'FastQue stock needs attention',
   'shop.order.updated': 'Marketplace order update',
 };
 
@@ -2798,6 +2800,8 @@ const hiNotificationTypeLabels: NotificationTypeLabels = {
   'work.dispute.updated': 'विवाद अपडेट',
   'commerce.order.updated': 'आपका FastQue ऑर्डर अपडेट हुआ',
   'commerce.return.updated': 'आपकी वापसी अपडेट हुई',
+  'commerce.ticket.updated': 'आपके ऑर्डर पर सहायता का जवाब आया',
+  'commerce.stock.alert': 'FastQue स्टॉक पर ध्यान दें',
   'shop.order.updated': 'मार्केटप्लेस ऑर्डर अपडेट',
 };
 

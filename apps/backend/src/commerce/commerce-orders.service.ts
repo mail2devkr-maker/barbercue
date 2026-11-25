@@ -6,11 +6,13 @@ import {
   COMMERCE_RETURN_TRANSITIONS,
   COMMERCE_STATUS_LABEL,
   allowedCommerceTransitions,
+  applyPromotions,
   canCommerceTransition,
   couponDiscount,
   paise,
   rupeesOf,
   taxInside,
+  type AppliedPromotion,
   type CommerceActor,
   type CommerceAddressInput,
   type CommerceCheckoutInput,
@@ -32,6 +34,8 @@ import {
   isSellable,
   listingInclude,
   priceNow,
+  returnRule,
+  returnRules,
 } from './commerce-catalog.service';
 import { CommerceOutboxService } from './commerce-outbox.service';
 import { CommerceStockService } from './commerce-stock.service';
@@ -92,6 +96,10 @@ function orderToken(orderId: string): string {
 const number = (prefix: string) =>
   `${prefix}-${randomBytes(5).toString('hex').toUpperCase()}`;
 
+/** The offer snapshot stored on an order. */
+const promotionsOf = (v: Prisma.JsonValue): AppliedPromotion[] =>
+  Array.isArray(v) ? (v as unknown as AppliedPromotion[]) : [];
+
 export function toCommerceOrderDto(
   o: CommerceOrderRow,
   viewer: CommerceActor,
@@ -145,6 +153,10 @@ export function toCommerceOrderDto(
     }),
     subtotal: money(o.subtotal),
     discountTotal: money(o.discountTotal),
+    promotions: promotionsOf(o.promotions).map((p) => ({
+      name: p.name,
+      amount: rupeesOf(p.amountPaise),
+    })),
     couponCode: o.couponCode,
     deliveryCharge: money(o.deliveryCharge),
     taxIncluded: money(o.taxIncluded),
@@ -212,6 +224,7 @@ export class CommerceOrdersService {
     CommerceQuoteDto & {
       zone: Awaited<ReturnType<CommerceCatalogService['zoneFor']>>;
       couponId: string | null;
+      applied: AppliedPromotion[];
     }
   > {
     const merged = new Map<string, number>();
@@ -295,6 +308,28 @@ export class CommerceOrdersService {
       if (!zone.codEligible)
         blocking.push('Cash on Delivery is not available for your PIN code.');
     }
+    const promoRows = await db.commercePromotion.findMany({
+      where: {
+        isActive: true,
+        listingIds: { hasSome: lines.map((l) => l.listingId) },
+      },
+      take: 200,
+    });
+    const applied = applyPromotions(
+      promoRows.map((p) => ({ ...p, value: p.value.toFixed(2) })),
+      lines.map((l) => ({
+        listingId: l.listingId,
+        quantity: l.quantity,
+        unitPaise: paise(l.unitPrice),
+      })),
+      input.pincode,
+      new Date(),
+    );
+    const offDue = (id: string) =>
+      applied.reduce((x, a) => x + (a.perListing[id] ?? 0), 0);
+    const promo = applied.reduce((x, a) => x + a.amountPaise, 0);
+    // What is left after offers; coupons and their minimum work on this.
+    const goods = subtotal - promo;
     const coupon = input.couponCode
       ? await this.applyCoupon(
           db,
@@ -302,14 +337,14 @@ export class CommerceOrdersService {
           lines.map((l) => ({
             brand: l.brand,
             category: l.row.globalProduct.category,
-            total: paise(l.lineTotal),
+            total: paise(l.lineTotal) - offDue(l.listingId),
           })),
-          subtotal,
+          goods,
           delivery ?? 0,
           input.phone,
         )
       : null;
-    const discount = coupon?.discount ?? 0;
+    const discount = promo + (coupon?.discount ?? 0);
     if (
       zone?.maxCodAmount &&
       subtotal - discount + (delivery ?? 0) >
@@ -318,13 +353,11 @@ export class CommerceOrdersService {
       blocking.push(
         `Cash on Delivery is limited to ₹${money(zone.maxCodAmount)} for your area.`,
       );
-    const goodsDiscount = coupon?.freeDelivery ? 0 : discount;
+    const goodsDiscount = coupon?.freeDelivery ? 0 : (coupon?.discount ?? 0);
     const tax = lines.reduce((n, l) => {
-      const total = paise(l.lineTotal);
+      const total = paise(l.lineTotal) - offDue(l.listingId);
       const net =
-        subtotal > 0
-          ? total - Math.round((goodsDiscount * total) / subtotal)
-          : 0;
+        goods > 0 ? total - Math.round((goodsDiscount * total) / goods) : 0;
       return (
         n + taxInside(net, Number(l.row.globalProduct.gstRatePercent ?? 0))
       );
@@ -337,6 +370,10 @@ export class CommerceOrdersService {
       subtotal: rupeesOf(subtotal),
       savings: rupeesOf(Math.max(0, savings)),
       discountTotal: rupeesOf(discount),
+      promotions: applied.map((a) => ({
+        name: a.name,
+        amount: rupeesOf(a.amountPaise),
+      })),
       couponCode: coupon?.code ?? null,
       couponMessage: coupon?.message ?? null,
       deliveryCharge: delivery == null ? null : rupeesOf(delivery),
@@ -346,15 +383,17 @@ export class CommerceOrdersService {
       blocking: [...new Set(blocking)],
       zone,
       couponId: coupon?.id ?? null,
+      applied,
     };
   }
 
   publicQuote = async (
     input: CommerceQuoteInput,
   ): Promise<CommerceQuoteDto> => {
-    const { zone, couponId, ...dto } = await this.quote(input);
+    const { zone, couponId, applied, ...dto } = await this.quote(input);
     void zone;
     void couponId;
+    void applied;
     return dto;
   };
 
@@ -777,6 +816,7 @@ export class CommerceOrdersService {
           })
         ).map((l) => [l.id, l]),
       );
+      const rules = await returnRules(tx);
       const seller = rows.get(q.lines[0].listingId)!.seller;
       const order = await tx.commerceOrder.create({
         data: {
@@ -799,6 +839,11 @@ export class CommerceOrdersService {
           taxIncluded: q.taxIncluded,
           total: q.total,
           couponCode: q.couponCode,
+          ...(q.applied.length
+            ? {
+                promotions: q.applied as unknown as Prisma.InputJsonArray,
+              }
+            : {}),
           minDays: zone.minDays,
           maxDays: zone.maxDays,
           events: {
@@ -841,8 +886,7 @@ export class CommerceOrdersService {
               (n, a) => n.add(a.unitCost.mul(a.quantity)),
               new Prisma.Decimal(0),
             ),
-            returnable: row.returnable,
-            returnWindowDays: row.returnWindowDays,
+            ...returnRule(row, rules),
             allocations: {
               create: alloc.map((a) => ({
                 batchId: a.batchId,
@@ -1369,12 +1413,29 @@ export class CommerceOrdersService {
           (n, i) => n + paise(i.orderItem.unitPrice.toFixed(2)) * i.quantity,
           0,
         );
-        // Each product carries its share of the order's discount.
+        // Each product carries its own offers and its share of any coupon.
+        const offers = promotionsOf(o.promotions);
+        const offTotal = offers.reduce((n, p) => n + p.amountPaise, 0);
+        const offAsked = Math.round(
+          r.items.reduce(
+            (n, i) =>
+              n +
+              (offers.reduce(
+                (x, p) => x + (p.perListing[i.orderItem.listingId] ?? 0),
+                0,
+              ) *
+                i.quantity) /
+                i.orderItem.quantity,
+            0,
+          ),
+        );
+        const couponPart = paise(o.discountTotal.toFixed(2)) - offTotal;
+        const net = asked - offAsked;
         const value = Math.max(
           0,
-          asked -
-            (goods
-              ? Math.round((paise(o.discountTotal.toFixed(2)) * asked) / goods)
+          net -
+            (goods > offTotal
+              ? Math.round((couponPart * net) / (goods - offTotal))
               : 0),
         );
         const t = await this.codTotals(tx, o.id);

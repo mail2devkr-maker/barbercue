@@ -56,6 +56,8 @@ const TYPE_CATEGORY: Record<NotificationType, NotificationCategory> = {
   'work.dispute.updated': NotificationCategory.BOOKING_UPDATES,
   'commerce.order.updated': NotificationCategory.BOOKING_UPDATES,
   'commerce.return.updated': NotificationCategory.BOOKING_UPDATES,
+  'commerce.ticket.updated': NotificationCategory.BOOKING_UPDATES,
+  'commerce.stock.alert': NotificationCategory.BOOKING_UPDATES,
   'shop.order.updated': NotificationCategory.BOOKING_UPDATES,
 };
 

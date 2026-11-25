@@ -335,6 +335,47 @@ export class CommerceStockService {
     }
   }
 
+  /** Units going back to the supplier leave from one stock condition, through the ledger. */
+  async leaveToSupplier(
+    tx: Tx,
+    batchId: string,
+    source: 'ON_HAND' | 'DAMAGED' | 'QUARANTINED' | 'EXPIRED',
+    quantity: number,
+    reference: string,
+    actorUserId: string,
+    idempotencyKey: string,
+  ): Promise<void> {
+    await this.lock(tx, [batchId]);
+    const b = await tx.commerceBatch.findUnique({ where: { id: batchId } });
+    if (!b) throw notFound('The batch');
+    const have =
+      source === 'ON_HAND'
+        ? b.onHand - b.reserved
+        : source === 'DAMAGED'
+          ? b.damaged
+          : source === 'QUARANTINED'
+            ? b.quarantined
+            : b.expired;
+    if (quantity > have)
+      throw conflict(
+        'COMMERCE_QUANTITY',
+        `Only ${have} unit(s) can be returned from this batch.`,
+      );
+    await this.move(
+      tx,
+      batchId,
+      'ADJUSTMENT',
+      source === 'ON_HAND'
+        ? { onHand: -quantity }
+        : source === 'DAMAGED'
+          ? { damaged: -quantity }
+          : source === 'QUARANTINED'
+            ? { quarantined: -quantity }
+            : { expired: -quantity },
+      { reference, note: 'Returned to supplier', actorUserId, idempotencyKey },
+    );
+  }
+
   async stockIn(
     tx: Tx,
     input: CommerceStockInInput,

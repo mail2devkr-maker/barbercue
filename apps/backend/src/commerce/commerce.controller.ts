@@ -70,6 +70,7 @@ import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { PrismaService } from '../prisma/prisma.service';
 import { CommerceAdminService } from './commerce-admin.service';
 import { CommerceCatalogService } from './commerce-catalog.service';
+import { CommerceOpsService } from './commerce-ops.service';
 import {
   CommerceOrdersService,
   toCommerceOrderDto,
@@ -356,6 +357,7 @@ export class CommerceAdminController {
     private readonly admin: CommerceAdminService,
     private readonly orders: CommerceOrdersService,
     private readonly stock: CommerceStockService,
+    private readonly ops: CommerceOpsService,
     private readonly prisma: PrismaService,
   ) {}
   private async can(
@@ -463,21 +465,24 @@ export class CommerceAdminController {
   }
   @Post('warehouses')
   @CommercePermit('warehouse')
-  createWarehouse(
+  async createWarehouse(
     @CurrentUser() user: AuthenticatedUser,
     @Body(pipe(commerceWarehouseSchema))
     body: Body<typeof commerceWarehouseSchema>,
   ) {
+    // Someone limited to certain warehouses cannot add another one.
+    await this.ops.assertWarehouse(user, 'new');
     return this.admin.saveWarehouse(null, body, user.id);
   }
   @Put('warehouses/:id')
   @CommercePermit('warehouse')
-  updateWarehouse(
+  async updateWarehouse(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) id: string,
     @Body(pipe(commerceWarehouseSchema))
     body: Body<typeof commerceWarehouseSchema>,
   ) {
+    await this.ops.assertWarehouse(user, id);
     return this.admin.saveWarehouse(id, body, user.id);
   }
   @Get('batches')
@@ -485,11 +490,19 @@ export class CommerceAdminController {
     @CurrentUser() user: AuthenticatedUser,
     @Query(pipe(commerceListQuerySchema)) q: CommerceListQuery,
   ) {
-    return this.admin.batches(q, await this.can(user, 'procurement'));
+    return this.admin.batches(
+      q,
+      await this.can(user, 'procurement'),
+      await this.ops.scope(user),
+    );
   }
   @Get('batches/:id/movements')
   @CommercePermit('warehouse')
-  movements(@Param('id', ParseUUIDPipe) id: string) {
+  async movements(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    await this.ops.assertBatch(user, id);
     return this.admin.movements(id);
   }
   @Post('stock')
@@ -499,6 +512,7 @@ export class CommerceAdminController {
     @Headers('Idempotency-Key') key: string | undefined,
     @Body(pipe(commerceStockInSchema)) body: CommerceStockInInput,
   ) {
+    await this.ops.assertWarehouse(user, body.warehouseId);
     const b = await this.admin.openingStock(
       body,
       user.id,
@@ -515,6 +529,7 @@ export class CommerceAdminController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body(pipe(commerceStockAdjustSchema)) body: CommerceStockAdjustInput,
   ) {
+    await this.ops.assertBatch(user, id);
     const { unitCost, supplierId, ...b } = await this.stock.adjust(
       id,
       body,
@@ -529,13 +544,15 @@ export class CommerceAdminController {
   @Post('batches/:id/transfer')
   @HttpCode(HttpStatus.NO_CONTENT)
   @CommercePermit('warehouse')
-  transfer(
+  async transfer(
     @CurrentUser() user: AuthenticatedUser,
     @Headers('Idempotency-Key') key: string | undefined,
     @Param('id', ParseUUIDPipe) id: string,
     @Body(pipe(commerceTransferSchema))
     body: Body<typeof commerceTransferSchema>,
   ) {
+    await this.ops.assertBatch(user, id);
+    await this.ops.assertWarehouse(user, body.toWarehouseId);
     return this.stock.transfer(
       id,
       body.toWarehouseId,
@@ -775,6 +792,12 @@ export class CommerceAdminController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body(pipe(commerceReceiptSchema)) body: CommerceReceiptInput,
   ) {
+    const head = await this.prisma.commercePurchaseOrder.findUnique({
+      where: { id },
+      select: { warehouseId: true },
+    });
+    if (!head) throw notFound('The purchase order');
+    await this.ops.assertWarehouse(user, head.warehouseId);
     const po = await this.admin.receive(
       id,
       body,

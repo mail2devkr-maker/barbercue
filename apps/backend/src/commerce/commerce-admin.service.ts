@@ -203,6 +203,11 @@ export class CommerceAdminService {
             OR: [
               { sku: { contains: q.q, mode: 'insensitive' } },
               {
+                globalProduct: {
+                  barcodes: { some: { code: { contains: q.q } } },
+                },
+              },
+              {
                 globalProduct: { name: { contains: q.q, mode: 'insensitive' } },
               },
               {
@@ -379,9 +384,14 @@ export class CommerceAdminService {
     );
     return row;
   }
-  async batches(q: CommerceListQuery, showCost: boolean) {
+  async batches(
+    q: CommerceListQuery,
+    showCost: boolean,
+    warehouseIds: string[] | null = null,
+  ) {
     const soon = new Date(indiaToday().getTime() + 90 * 86400_000);
     const where: Prisma.CommerceBatchWhereInput = {
+      ...(warehouseIds ? { warehouseId: { in: warehouseIds } } : {}),
       ...(q.q
         ? {
             OR: [
@@ -689,6 +699,15 @@ export class CommerceAdminService {
       orderBy: { name: 'asc' },
       take: 500,
     });
+    const credits = new Map(
+      (
+        await this.prisma.commerceSupplierReturn.groupBy({
+          by: ['supplierId'],
+          where: { status: 'CREDITED' },
+          _sum: { creditAmount: true },
+        })
+      ).map((c) => [c.supplierId, paise(money(c._sum.creditAmount))]),
+    );
     return rows.map(({ payments, orders, ...s }) => {
       const items = orders.flatMap((o) => o.items);
       const billed = items.reduce(
@@ -708,7 +727,8 @@ export class CommerceAdminService {
         ...s,
         billed: rupeesOf(billed),
         paid: rupeesOf(paid),
-        outstanding: rupeesOf(billed - paid),
+        credited: rupeesOf(credits.get(s.id) ?? 0),
+        outstanding: rupeesOf(billed - paid - (credits.get(s.id) ?? 0)),
         fulfilmentRate: ordered
           ? ((accepted / ordered) * 100).toFixed(1)
           : null,
