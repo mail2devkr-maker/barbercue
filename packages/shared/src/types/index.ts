@@ -1473,6 +1473,10 @@ export const NOTIFICATION_TYPES = [
   "work.payout.sent",
   "work.payout.failed",
   "work.dispute.updated",
+  // FastQue Home (docs/home/) - customer, professional and provider events.
+  "home.booking.update",
+  "home.professional.update",
+  "home.provider.update",
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 

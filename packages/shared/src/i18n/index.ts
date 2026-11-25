@@ -2757,6 +2757,9 @@ const enNotificationTypeLabels: NotificationTypeLabels = {
   'work.payout.sent': 'Payout sent',
   'work.payout.failed': 'Payout failed — we will retry',
   'work.dispute.updated': 'Dispute update',
+  'home.booking.update': 'FastQue Home booking update',
+  'home.professional.update': 'FastQue Home visit update',
+  'home.provider.update': 'FastQue Home provider update',
 };
 
 const hiNotificationTypeLabels: NotificationTypeLabels = {
@@ -2793,6 +2796,9 @@ const hiNotificationTypeLabels: NotificationTypeLabels = {
   'work.payout.sent': 'भुगतान भेजा गया',
   'work.payout.failed': 'भुगतान विफल — हम फिर कोशिश करेंगे',
   'work.dispute.updated': 'विवाद अपडेट',
+  'home.booking.update': 'FastQue Home बुकिंग अपडेट',
+  'home.professional.update': 'FastQue Home काम का अपडेट',
+  'home.provider.update': 'FastQue Home सैलून अपडेट',
 };
 
 export const NOTIFICATION_TYPE_LABELS: Readonly<Record<Language, NotificationTypeLabels>> = {

@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'crypto';
+import { ProfessionalCommitmentsService } from '../common/professional-commitments/professional-commitments.service';
 import { PrivateObjectStorageService } from '../storage/private-object-storage.service';
 import {
   HttpStatus,
@@ -95,6 +96,7 @@ export class WorkAssignmentsService implements OnModuleInit {
     private readonly notifications: NotificationsService,
     private readonly files: PrivateObjectStorageService,
     @Optional() private readonly deadlines?: DbDeadlineSchedulerService,
+    @Optional() private readonly homeVisits?: ProfessionalCommitmentsService,
   ) {}
 
   onModuleInit(): void {
@@ -214,6 +216,19 @@ export class WorkAssignmentsService implements OnModuleInit {
         HttpStatus.CONFLICT,
         { assignmentId: overlap.id },
       );
+
+    // FastQue Home: the same person cannot hold an on-site gig and a home visit at once.
+    if (this.homeVisits && job.locationType !== 'REMOTE') {
+      await this.homeVisits.lockProfessional(tx, userId);
+      if (
+        await this.homeVisits.userBusyUntil(tx, userId, job.startsAt, job.endsAt)
+      )
+        throw workError(
+          WorkErrorCode.SCHEDULE_CONFLICT,
+          'You already have a home visit booked at this time.',
+          HttpStatus.CONFLICT,
+        );
+    }
 
     const taken = new Set(liveSlots.map((s) => s.slotNumber));
     let slot = 1;

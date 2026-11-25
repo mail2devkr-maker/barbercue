@@ -633,6 +633,15 @@ export class AvailabilityService {
       }),
     ];
 
+    // Staff out on confirmed FastQue Home visits cannot be booked in the shop for that time.
+    const homeAway = await this.reservations.homeAwayForDay(
+      this.prisma,
+      salonId,
+      new Date(openAt.getTime() - padMs),
+      new Date(closeAt.getTime() + padMs),
+      serviceIds,
+    );
+
     const slots: AvailabilitySlotDto[] = [];
     for (
       let slotStart = openAt;
@@ -678,9 +687,12 @@ export class AvailabilityService {
                 checkStart,
                 checkEnd,
               ),
-          ));
+          ) ||
+          homeAway.staffAway(staffId, checkStart, checkEnd));
       const consumed =
-        overlappingBookings.length + overlappingWalkInSessions.length;
+        overlappingBookings.length +
+        overlappingWalkInSessions.length +
+        homeAway.poolUnits(checkStart, checkEnd);
       const available = isSlotBookable(slotCapacity, consumed) && !staffTaken;
       slots.push({
         slotStart: slotStart.toISOString(),

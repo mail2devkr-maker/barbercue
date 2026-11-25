@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import {
   BookingStatus,
@@ -6,6 +6,7 @@ import {
   ServiceSessionStatus,
   type StaffAvailabilityState,
 } from '@barbercue/shared';
+import { ProfessionalCommitmentsService } from '../common/professional-commitments/professional-commitments.service';
 import type { Db } from './availability.service';
 
 /**
@@ -86,6 +87,11 @@ export function bufferMs(options?: ReservationBufferOption): number {
 
 @Injectable()
 export class ReservationService {
+  // FastQue Home: absent in unit tests and harmless when nobody has home visits (no rows, same answers).
+  constructor(
+    @Optional() private readonly homeVisits?: ProfessionalCommitmentsService,
+  ) {}
+
   /** The Prisma where-fragment for "this booking can ever consume capacity" — callers still AND
    * this with their own salonId/staffId/interval filters. Exported as a method (not a bare
    * constant) so every call site goes through this one file, keeping the rule impossible to
@@ -151,7 +157,11 @@ export class ReservationService {
     salonId: string,
     start: Date,
     end: Date,
-    options?: { excludeBookingId?: string } & ReservationBufferOption,
+    options?: {
+      excludeBookingId?: string;
+      /** Services being booked, so only QUALIFIED staff who are away on home visits cost capacity. */
+      serviceIds?: string[];
+    } & ReservationBufferOption,
   ): Promise<number> {
     // With a buffer, widening the candidate by the buffer on both sides is the same as widening
     // every other reservation by it (see ReservationBufferOption).
@@ -229,7 +239,16 @@ export class ReservationService {
         windowEnd,
       );
     }).length;
-    return bookingCount + overlappingWalkIns + overlappingAssigned;
+    const away = this.homeVisits
+      ? await this.homeVisits.poolUnitsAway(
+          db,
+          salonId,
+          windowStart,
+          windowEnd,
+          options?.serviceIds ?? [],
+        )
+      : 0;
+    return bookingCount + overlappingWalkIns + overlappingAssigned + away;
   }
 
   /**
@@ -249,6 +268,8 @@ export class ReservationService {
     options?: {
       excludeBookingId?: string;
       excludeQueueEntryId?: string;
+      /** Home dispatch checks its own ledger itself. */
+      ignoreHome?: boolean;
     } & ReservationBufferOption,
   ): Promise<StaffReservationCheck> {
     const pad = bufferMs(options);
@@ -356,7 +377,32 @@ export class ReservationService {
         };
       }
     }
+    if (this.homeVisits && !options?.ignoreHome) {
+      const until = await this.homeVisits.staffBusyUntil(
+        db,
+        staffId,
+        windowStart,
+        windowEnd,
+      );
+      if (until)
+        return { free: false, reason: 'BOOKING_RESERVATION', busyUntil: until };
+    }
     return { free: true, reason: null, busyUntil: null };
+  }
+
+  /** FastQue Home absences for one day grid; a no-op answer when there are none. */
+  async homeAwayForDay(
+    db: Db,
+    salonId: string,
+    start: Date,
+    end: Date,
+    serviceIds: string[],
+  ): Promise<{
+    staffAway: (staffId: string, from: Date, to: Date) => boolean;
+    poolUnits: (from: Date, to: Date) => number;
+  }> {
+    if (!this.homeVisits) return { staffAway: () => false, poolUnits: () => 0 };
+    return this.homeVisits.dayGrid(db, salonId, start, end, serviceIds);
   }
 
   /** This staff member's next reservation strictly after `after` — used for display
