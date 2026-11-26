@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   BOOKING_PATHS,
@@ -37,6 +37,7 @@ import {
 } from "../../lib/public-offers";
 import { apiFetch, ApiError } from "../../lib/api";
 import { viTrack } from "../../lib/visitor-intel/tracker";
+import { trackMetaPixel } from "../../lib/meta-pixel";
 import { newIdempotencyKey } from "../../lib/idempotency";
 import { useAuth } from "../../lib/auth-context";
 import { Button } from "../ui/Button";
@@ -154,6 +155,7 @@ export function BookingFlow({
   const [selectedStaffId, setSelectedStaffId] = useState<string | null | undefined>(initialStaffId);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<AvailabilitySlotDto | null>(null);
+  const checkoutReported = useRef(false);
   const [googleSubmitting, setGoogleSubmitting] = useState(false);
 
   const [staffOptions, setStaffOptions] = useState<StaffOptionDto[]>([]);
@@ -359,6 +361,7 @@ export function BookingFlow({
       setConfirmedBooking(booking);
       // Only the id is sent; the value is read from the booking on the server.
       viTrack("booking_confirmed", { module: "SALON_BOOKING", entityType: "booking", entityId: booking.id, salonId });
+      if (booking.status === "CONFIRMED" && booking.id) trackMetaPixel("Schedule", booking.id);
       setCreditsToRedeem(0);
       // Redemption never fails/rejects — the server always clamps and the booking always succeeds
       // (see BookingsService.create) — so a successful response can still mean some or all of the
@@ -426,6 +429,7 @@ export function BookingFlow({
   // create-fails-with-SLOT_FULL path (that already stays on the picker, unaffected) — only the
   // "start a genuinely new booking attempt" gap.
   function handleBookAnother() {
+    checkoutReported.current = false;
     setConfirmedBooking(null);
     setCancelResult(null);
     setSubmitError(null);
@@ -625,15 +629,18 @@ export function BookingFlow({
         currency={currency}
         countryCode={countryCode}
         onlineBookingDiscountPercent={onlineBookingDiscountPercent}
+        onContinue={() => document.getElementById("booking-professional")?.focus()}
       />
 
       {selectedServiceIds.length > 0 && (
-        <StaffStep
-          options={staffOptions}
-          selectedStaffId={selectedStaffId}
-          onSelect={handleSelectStaff}
-          loading={staffLoading}
-        />
+        <div id="booking-professional" tabIndex={-1}>
+          <StaffStep
+            options={staffOptions}
+            selectedStaffId={selectedStaffId}
+            onSelect={handleSelectStaff}
+            loading={staffLoading}
+          />
+        </div>
       )}
 
       {selectedServiceIds.length > 0 && selectedStaffId !== undefined && (
@@ -649,7 +656,13 @@ export function BookingFlow({
         <SlotStep
           slots={slots}
           selectedSlot={selectedSlot}
-          onSelect={setSelectedSlot}
+          onSelect={(slot) => {
+            setSelectedSlot(slot);
+            if (slot && !checkoutReported.current) {
+              checkoutReported.current = true;
+              trackMetaPixel("InitiateCheckout");
+            }
+          }}
           loading={slotsLoading}
           salonTimezone={salonTimezone}
         />

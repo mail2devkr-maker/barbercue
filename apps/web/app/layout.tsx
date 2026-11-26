@@ -14,6 +14,7 @@ import { MaintenanceOverlay } from "../components/layout/MaintenanceOverlay";
 import { Suspense } from "react";
 import { VisitorIntelTracker } from "../components/analytics/VisitorIntelTracker";
 import { ConsentBanner } from "../components/privacy/ConsentBanner";
+import { MetaPixel } from "../components/analytics/MetaPixel";
 
 const SITE_DESCRIPTION =
   "Find salons, barbershops, beauty parlours and spas near you in India. Compare services and prices, book an appointment or join the live queue online with FastQue.";
@@ -68,6 +69,7 @@ export default function RootLayout({
       </head>
       <body>
         <UniqueVisitorTracker />
+        <MetaPixel />
         <AuthProvider>
           <SiteHeader />
           {children}
