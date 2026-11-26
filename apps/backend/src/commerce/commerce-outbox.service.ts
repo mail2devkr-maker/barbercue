@@ -115,8 +115,7 @@ export class CommerceOutboxService {
       const pending = await this.prisma.commerceOutbox.count({
         where: { status: 'PENDING' },
       });
-      if (pending === 0 && recentEvents === 0)
-        disarmCommerceOutbox(seqAtStart);
+      if (pending === 0 && recentEvents === 0) disarmCommerceOutbox(seqAtStart);
       return sent;
     } catch (error) {
       this.log.warn(
