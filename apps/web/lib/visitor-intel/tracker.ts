@@ -3,6 +3,7 @@
 import { VI_PATHS, type ViCollectInput, type ViEventInput, type ViEventType, type ViModule } from "@barbercue/shared";
 import { getAccessToken } from "../api";
 import { readConsent } from "./consent";
+import { visitorIntelEnabled } from "../dashboard-flags";
 
 /**
  * FastQue first-party tracker (docs/visitor-intelligence/README.md (TRACKING)).
@@ -181,7 +182,7 @@ export interface ViTrackData {
 
 /** Queue one event. Safe to call anywhere on the client; a no-op without analytics consent. */
 export function viTrack(type: ViEventType, data: ViTrackData = {}): void {
-  if (typeof window === "undefined") return;
+  if (typeof window === "undefined" || !visitorIntelEnabled()) return;
   const consent = readConsent();
   if (!consent?.analytics) return;
   const path = (data.path ?? window.location.pathname).slice(0, 300);

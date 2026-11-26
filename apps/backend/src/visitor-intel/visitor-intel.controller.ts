@@ -174,12 +174,14 @@ export class VisitorIntelController {
   async consent(
     @Body(new ZodValidationPipe(viConsentSchema)) body: ViConsentInput,
   ) {
-    await this.ingest.recordConsent(body);
+    if (ViConfigService.envEnabled()) await this.ingest.recordConsent(body);
   }
 
   @Public()
   @Get(`${VI_PATHS.config}/public`)
   async publicConfig() {
+    if (!ViConfigService.envEnabled())
+      return { trackingEnabled: false, samplingRate: 0 };
     const s = await this.config.get();
     return {
       trackingEnabled: ViConfigService.envEnabled() && s.trackingEnabled,

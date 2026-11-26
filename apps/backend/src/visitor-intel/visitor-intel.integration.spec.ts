@@ -11,6 +11,7 @@ import {
   type ViFilters,
 } from '@barbercue/shared';
 
+process.env.VI_TRACKING_ENABLED = 'true';
 const url = process.env.VI_TEST_DATABASE_URL;
 if (url) process.env.DATABASE_URL = url;
 

@@ -5,12 +5,17 @@ import { usePathname, useSearchParams } from "next/navigation";
 import type { ViEventType, ViModule } from "@barbercue/shared";
 import { VI_CONSENT_EVENT } from "../../lib/visitor-intel/consent";
 import { viTrack } from "../../lib/visitor-intel/tracker";
+import { visitorIntelEnabled } from "../../lib/dashboard-flags";
 
 /**
  * Automatic first-party events: one page_view per route, visible engagement time per page, and a count of
  * uncaught page errors (no message text, no stack, no user input). Everything is consent-gated inside viTrack.
  */
 export function VisitorIntelTracker() {
+  return visitorIntelEnabled() ? <VisitorIntelTrackerInner /> : null;
+}
+
+function VisitorIntelTrackerInner() {
   const pathname = usePathname();
   const search = useSearchParams();
   const visibleSince = useRef<number | null>(null);

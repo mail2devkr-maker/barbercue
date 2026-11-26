@@ -13,9 +13,12 @@ export class ViConfigService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  /** Server kill switch: VI_TRACKING_ENABLED=false stops all ingestion regardless of the admin setting. */
+  /**
+   * Server switch, off by default: only VI_TRACKING_ENABLED=true allows ingestion and the scheduled
+   * jobs. Off, nothing touches the database, so an idle site lets the database compute sleep.
+   */
   static envEnabled(): boolean {
-    return process.env.VI_TRACKING_ENABLED !== 'false';
+    return process.env.VI_TRACKING_ENABLED === 'true';
   }
 
   async get(): Promise<ViTrackingSettings> {

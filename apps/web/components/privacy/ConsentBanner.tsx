@@ -6,12 +6,17 @@ import { usePathname } from "next/navigation";
 import { openCookiePreferences, readConsent, saveConsent, VI_OPEN_PREFERENCES_EVENT } from "../../lib/visitor-intel/consent";
 import { isTrackablePath, visitorId } from "../../lib/visitor-intel/tracker";
 import styles from "./consent-banner.module.css";
+import { visitorIntelEnabled } from "../../lib/dashboard-flags";
 
 /**
  * Cookie choice (DPDP-aligned: specific, informed, as easy to refuse as to accept). Shown once per policy
  * version on public pages; "Cookie preferences" in the footer reopens it at any time.
  */
 export function ConsentBanner() {
+  return visitorIntelEnabled() ? <ConsentBannerInner /> : null;
+}
+
+function ConsentBannerInner() {
   const pathname = usePathname() ?? "/";
   const [open, setOpen] = useState(false);
   const [custom, setCustom] = useState(false);
@@ -89,6 +94,7 @@ export function ConsentBanner() {
 }
 
 export function CookiePreferencesLink() {
+  if (!visitorIntelEnabled()) return null;
   return (
     <button type="button" className={styles.footerLink} onClick={() => openCookiePreferences()}>
       Cookie preferences

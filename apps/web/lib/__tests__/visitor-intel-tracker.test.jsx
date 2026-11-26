@@ -5,6 +5,7 @@ function memStore() {
   return { getItem: (k) => (map.has(k) ? map.get(k) : null), setItem: (k, v) => map.set(k, String(v)), removeItem: (k) => map.delete(k), clear: () => map.clear() };
 }
 
+process.env.NEXT_PUBLIC_VISITOR_INTEL_ENABLED = "true";
 const sent = [];
 beforeAll(() => {
   let n = 0;
