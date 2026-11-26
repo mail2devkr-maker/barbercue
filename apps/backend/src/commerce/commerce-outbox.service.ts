@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
+import { Interval } from '@nestjs/schedule';
 import { Prisma } from '@prisma/client';
 import {
   SHOP_ORDER_STATUS_LABEL,
@@ -8,6 +8,12 @@ import {
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { commercePublic, type Tx } from './commerce-support';
+import {
+  armCommerceOutbox,
+  commerceOutboxArmed,
+  commerceOutboxSeq,
+  disarmCommerceOutbox,
+} from './commerce-outbox-signal';
 
 const MAX_ATTEMPTS = 6;
 
@@ -41,16 +47,25 @@ export class CommerceOutboxService {
       data: [{ ...row, userId: row.userId }],
       skipDuplicates: true,
     });
+    armCommerceOutbox();
   }
 
-  @Cron('*/20 * * * * *')
+  /**
+   * Every 20 s, but only while armed: an idle site makes no query at all, so the database compute
+   * can sleep. Off entirely in admin-only set-up mode.
+   */
+  @Interval(20_000)
+  async sweep(): Promise<void> {
+    if (!commerceOutboxArmed()) return;
+    await this.deliver();
+  }
+
   async deliver(): Promise<number> {
-    // Off in admin-only set-up mode: no customer orders exist, and a query every 20 s would keep
-    // the database compute awake around the clock.
     if (!commercePublic() || this.running) return 0;
     this.running = true;
+    const seqAtStart = commerceOutboxSeq();
     try {
-      await this.collectSalonOrderEvents();
+      const recentEvents = await this.collectSalonOrderEvents();
       const due = await this.prisma.commerceOutbox.findMany({
         where: { status: 'PENDING', nextAttemptAt: { lte: new Date() } },
         orderBy: { createdAt: 'asc' },
@@ -95,6 +110,13 @@ export class CommerceOutboxService {
           });
         }
       }
+      // Stay armed while a row waits for a retry or a recent salon order event may still need
+      // collecting; otherwise stop querying until new work arms the sweep again.
+      const pending = await this.prisma.commerceOutbox.count({
+        where: { status: 'PENDING' },
+      });
+      if (pending === 0 && recentEvents === 0)
+        disarmCommerceOutbox(seqAtStart);
       return sent;
     } catch (error) {
       this.log.warn(
@@ -110,7 +132,7 @@ export class CommerceOutboxService {
    * Salon marketplace orders never notified anyone. Rather than change that service, its own status
    * history is read: the salon owner hears about new and cancelled orders, the customer about the rest.
    */
-  private async collectSalonOrderEvents(): Promise<void> {
+  private async collectSalonOrderEvents(): Promise<number> {
     const events = await this.prisma.shopOrderEvent.findMany({
       where: { createdAt: { gte: new Date(Date.now() - 30 * 60_000) } },
       include: {
@@ -138,6 +160,7 @@ export class CommerceOutboxService {
         })
       ).map((k) => k.dedupeKey),
     );
+    let added = 0;
     for (const e of events) {
       const payload = {
         orderNumber: e.order.orderNumber,
@@ -145,7 +168,8 @@ export class CommerceOutboxService {
         status: SHOP_ORDER_STATUS_LABEL[e.toStatus],
       };
       const byCustomer = e.actorKind === 'CUSTOMER' || e.actorKind === 'GUEST';
-      if (!byCustomer && !known.has(`shop:${e.id}:c`))
+      if (!byCustomer && !known.has(`shop:${e.id}:c`)) {
+        added += 1;
         await this.add(this.prisma, {
           dedupeKey: `shop:${e.id}:c`,
           userId: e.order.customerUserId,
@@ -153,10 +177,12 @@ export class CommerceOutboxService {
           payload,
           deepLink: `shop/orders/${e.order.orderNumber}`,
         });
+      }
       if (
         (byCustomer || e.toStatus === 'EXPIRED') &&
         !known.has(`shop:${e.id}:s`)
-      )
+      ) {
+        added += 1;
         await this.add(this.prisma, {
           dedupeKey: `shop:${e.id}:s`,
           userId: e.order.salon.ownerUserId,
@@ -164,6 +190,8 @@ export class CommerceOutboxService {
           payload,
           deepLink: `dashboard/salons/${e.order.salonId}/sell`,
         });
+      }
     }
+    return added;
   }
 }
