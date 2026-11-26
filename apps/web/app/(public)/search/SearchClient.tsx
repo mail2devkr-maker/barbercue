@@ -30,6 +30,7 @@ import { useFavorites } from "../../../lib/favorites";
 import { roundBounds } from "../../../lib/map-cluster";
 import { withViewerDistance } from "../../../lib/viewer-distance";
 import type { MapBounds } from "../../../components/customer-dashboard/SalonMap";
+import { trackMetaPixel } from "../../../lib/meta-pixel";
 import styles from "./search.module.css";
 
 // Map View is opt-in (customer dashboard). Leaflet and its CSS load only when the map is shown.
@@ -106,6 +107,7 @@ export default function SearchClient({
   const [salonCities, setSalonCities] = useState<CityDto[] | null>(initialCities ?? null);
   const [results, setResults] = useState<SalonListItemDto[]>(initialResults ?? []);
   const [loading, setLoading] = useState(initialResults === undefined);
+  const lastReportedSearch = useRef<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
   const [locating, setLocating] = useState(false);
@@ -328,6 +330,11 @@ export default function SearchClient({
         if (!cancelled && data) {
           setResults(data.items);
           setHasMore(data.nextCursor !== null);
+          const query = params.toString();
+          if (query !== lastReportedSearch.current) {
+            lastReportedSearch.current = query;
+            if (query) trackMetaPixel("Search");
+          }
         }
       })
       .catch(() => {

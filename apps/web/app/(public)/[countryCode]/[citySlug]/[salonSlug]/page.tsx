@@ -18,6 +18,7 @@ import { EditorialImage } from "../../../../../components/editorial/EditorialIma
 import { PublicSalonStatus } from "../../../../../components/discovery/PublicSalonStatus";
 import { ActivityTicker } from "../../../../../components/discovery/ActivityTicker";
 import { SalonDetailActions } from "../../../../../components/customer-dashboard/SalonDetailActions";
+import { MetaSalonView } from "../../../../../components/analytics/MetaPixel";
 import styles from "./profile.module.css";
 
 interface SalonPageParams {
@@ -119,6 +120,7 @@ export default async function SalonPage({
 
   return (
     <main className={styles.page}>
+      <MetaSalonView key={salonPath(salon)} />
       <JsonLd data={breadcrumbJsonLd(breadcrumbItems, SITE_URL)} />
       <JsonLd data={buildSalonJsonLd(salon, absoluteUrl(salonPath(salon)), city, locality?.name ?? null)} />
 
