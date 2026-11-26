@@ -1,7 +1,7 @@
 import { Role } from "@barbercue/shared";
 import type { IconName } from "../../owner/icons";
 import { canOpenAdminPath } from "../../../lib/admin-route-access";
-import { directCommerceLinksEnabled, homeServicesLinksEnabled, visitorIntelEnabled, workMarketplaceLinksEnabled } from "../../../lib/dashboard-flags";
+import { directCommerceLinksEnabled, growthAiLinksEnabled, homeServicesLinksEnabled, visitorIntelEnabled, workMarketplaceLinksEnabled } from "../../../lib/dashboard-flags";
 import { ADMIN_HOME_TABS } from "../../home/admin-home-tabs";
 
 // The ONE definition of the admin app's navigation (sidebar, icon rail and the "planned" pages all
@@ -22,6 +22,7 @@ export type AdminNavGroupId =
   | "HOME_SERVICES"
   | "INVENTORY"
   | "COMMERCE"
+  | "GROWTH_AI"
   | "FINANCE"
   | "ANALYTICS"
   | "VISITOR_INTEL"
@@ -54,6 +55,7 @@ export const ADMIN_NAV_GROUPS: ReadonlyArray<{ id: AdminNavGroupId; label: strin
   ...(homeServicesLinksEnabled() ? [{ id: "HOME_SERVICES" as const, label: "FastQue Home", icon: "home" as const }] : []),
   { id: "INVENTORY", label: "Inventory", icon: "tag" },
   ...(directCommerceLinksEnabled() ? [{ id: "COMMERCE" as const, label: "FastQue Commerce", icon: "store" as const }] : []),
+  ...(growthAiLinksEnabled() ? [{ id: "GROWTH_AI" as const, label: "Growth AI", icon: "trend" as const }] : []),
   { id: "FINANCE", label: "Finance", icon: "card" },
   { id: "ANALYTICS", label: "Analytics", icon: "chart" },
   ...(visitorIntelEnabled() ? [{ id: "VISITOR_INTEL" as const, label: "Visitor Intelligence", icon: "eye" as const }] : []),
@@ -91,6 +93,7 @@ export const VISITOR_INTEL_TABS: ReadonlyArray<readonly [string, string]> = [
 ];
 
 const COMMERCE = "/dashboard/admin/commerce";
+const GROWTH = "/dashboard/admin/growth";
 const COMMERCE_TABS: ReadonlyArray<readonly [string, string]> = [
   ["overview", "Overview"],
   ["products", "Products & Pricing"],
@@ -180,6 +183,16 @@ export const ADMIN_NAV_ITEMS: ReadonlyArray<AdminNavItem> = [
   ...(directCommerceLinksEnabled()
     ? [
         ...COMMERCE_TABS.map(([id, label]): AdminNavItem => ({ id: `commerce-${id}`, label, group: "COMMERCE", href: COMMERCE, ...(id === "overview" ? {} : { query: `tab=${id}` }), status: "live" })),
+      ]
+    : []),
+
+  // Growth AI → Customer Acquisition appears only once it is switched on for this website build.
+  ...(growthAiLinksEnabled()
+    ? [
+        { id: "growth-acquisition", label: "Customer Acquisition", group: "GROWTH_AI" as const, href: GROWTH, status: "live" as const },
+        { id: "growth-research", label: "Keyword Research", group: "GROWTH_AI" as const, href: GROWTH, query: "tab=research", status: "live" as const },
+        { id: "growth-proposals", label: "Campaign Proposals", group: "GROWTH_AI" as const, href: GROWTH, query: "tab=proposals", status: "live" as const },
+        { id: "growth-settings", label: "Settings & Cost", group: "GROWTH_AI" as const, href: GROWTH, query: "tab=settings", status: "live" as const },
       ]
     : []),
 

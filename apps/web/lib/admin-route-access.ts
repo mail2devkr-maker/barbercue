@@ -43,6 +43,8 @@ export function canOpenAdminPath(roles: Role[], pathname: string): boolean {
   }
   // FastQue Commerce: every internal admin may open it; each tab needs a permission the server checks.
   if (pathname.startsWith("/dashboard/admin/commerce")) return true;
+  // Growth AI: every internal admin may open it; the server answers 403 unless they hold a Growth role.
+  if (pathname.startsWith("/dashboard/admin/growth")) return true;
   if (pathname.startsWith("/dashboard/admin/inventory")) {
     return superAdmin || coFounder || roles.includes(Role.PLATFORM_VIEWER);
   }

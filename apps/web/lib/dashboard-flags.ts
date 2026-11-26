@@ -32,6 +32,12 @@ export function directCommerceLinksEnabled(env: string | undefined = process.env
   return env === "true";
 }
 
+/** Growth AI → Customer Acquisition in the admin sidebar. Keep OFF until the backend runs with
+ *  GROWTH_AI_ENABLED=true (the API answers 404 until then). */
+export function growthAiLinksEnabled(env: string | undefined = process.env.NEXT_PUBLIC_GROWTH_AI_ENABLED): boolean {
+  return env === "true";
+}
+
 /** Map tiles. Defaults to OpenStreetMap's public tiles (fine for development; set a commercial
  *  provider for production traffic — OSM's tile policy forbids heavy use). */
 export const MAP_TILE_URL = process.env.NEXT_PUBLIC_MAP_TILE_URL ?? "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";

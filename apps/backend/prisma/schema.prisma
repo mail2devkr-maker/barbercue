@@ -7060,7 +7060,7 @@ model CommercePickup {
   @@map("commerce_pickups")
 }
 
-// =============================================================================================
+// ======================================================================================
 // FastQue Visitor Intelligence (docs/visitor-intelligence/). Additive only: no existing table changes.
 // Like FastQue Commerce, user/salon/employee/expense ids are stored WITHOUT foreign keys so account
 // deletion and finance edits never have to touch analytics rows; services validate ids on write.
@@ -7585,4 +7585,167 @@ model ViOpportunityAssignment {
 
   @@index([city, createdAt])
   @@map("vi_opportunity_assignments")
+}
+
+// ---------------------------------------------------------------------------------------------
+// FastQue Growth AI — customer acquisition, advisory mode (docs/growth-ai/README.md).
+// New tables only. No relation fields on existing models: user, city and salon ids are stored as
+// plain ids (like visitor-intelligence links), so no existing model changes. Off unless
+// GROWTH_AI_ENABLED=true. Nothing here spends money, publishes or sends anything.
+// ---------------------------------------------------------------------------------------------
+
+model GrowthStaffRole {
+  userId          String   @id
+  role            String   @db.VarChar(30)
+  grantedByUserId String
+  createdAt       DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @db.Timestamptz(6)
+
+  @@map("growth_staff_roles")
+}
+
+/// Single row (id = 1): the emergency pause.
+model GrowthControl {
+  id             Int       @id
+  paused         Boolean   @default(false)
+  pausedReason   String?   @db.VarChar(300)
+  pausedByUserId String?
+  pausedAt       DateTime? @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @db.Timestamptz(6)
+
+  @@map("growth_controls")
+}
+
+/// Salons left out of matching (test shops, salons that asked not to be promoted).
+model GrowthSalonExclusion {
+  salonId         String   @id
+  reason          String   @db.VarChar(200)
+  createdByUserId String
+  createdAt       DateTime @default(now()) @db.Timestamptz(6)
+
+  @@map("growth_salon_exclusions")
+}
+
+model GrowthKeywordRun {
+  id                String               @id @default(uuid()) @db.Uuid
+  provider          String               @db.VarChar(20)
+  isMock            Boolean
+  cityId            String
+  locationLabel     String               @db.VarChar(160)
+  geoTargetConstant String?              @db.VarChar(40)
+  language          String               @db.VarChar(40)
+  serviceKey        String               @db.VarChar(30)
+  seeds             Json                 @db.JsonB
+  currencyCode      String               @default("INR") @db.VarChar(3)
+  dailyBudgetPaise  Int
+  status            String               @db.VarChar(20)
+  error             String?              @db.VarChar(500)
+  requestedByUserId String
+  createdAt         DateTime             @default(now()) @db.Timestamptz(6)
+  ideas             GrowthKeywordIdea[]
+  proposals         GrowthProposal[]
+
+  @@index([createdAt])
+  @@map("growth_keyword_runs")
+}
+
+model GrowthKeywordIdea {
+  id                 String           @id @default(uuid()) @db.Uuid
+  runId              String           @db.Uuid
+  run                GrowthKeywordRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  keyword            String           @db.VarChar(120)
+  avgMonthlySearches Int?
+  monthlyVolumes     Json             @db.JsonB
+  competition        String           @db.VarChar(10)
+  competitionIndex   Int?
+  lowBidMicros       BigInt?
+  highBidMicros      BigInt?
+  isMock             Boolean
+
+  @@unique([runId, keyword])
+  @@map("growth_keyword_ideas")
+}
+
+model GrowthProposal {
+  id               String                 @id @default(uuid()) @db.Uuid
+  name             String                 @db.VarChar(120)
+  status           String                 @db.VarChar(20)
+  channel          String                 @db.VarChar(20)
+  keywordRunId     String                 @db.Uuid
+  keywordRun       GrowthKeywordRun       @relation(fields: [keywordRunId], references: [id], onDelete: Restrict)
+  cityId           String
+  serviceKey       String                 @db.VarChar(30)
+  keywords         Json                   @db.JsonB
+  salons           Json                   @db.JsonB
+  dailyBudgetPaise Int
+  durationDays     Int
+  startsOn         DateTime               @db.Date
+  endsOn           DateTime               @db.Date
+  preview          Json                   @db.JsonB
+  assumptions      Json                   @db.JsonB
+  risks            Json                   @db.JsonB
+  usesMockData     Boolean
+  adCopy           Json?                  @db.JsonB
+  adCopySource     String?                @db.VarChar(20)
+  previewHash      String                 @db.Char(64)
+  createdByUserId  String
+  approvedByUserId String?
+  approvedAt       DateTime?              @db.Timestamptz(6)
+  approvalNote     String?                @db.VarChar(500)
+  approvedHash     String?                @db.Char(64)
+  createdAt        DateTime               @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime               @updatedAt @db.Timestamptz(6)
+  events           GrowthProposalEvent[]
+  measurements     GrowthMeasurement[]
+
+  @@index([status, createdAt])
+  @@map("growth_proposals")
+}
+
+/// Append-only (a trigger rejects UPDATE and DELETE).
+model GrowthProposalEvent {
+  id          String         @id @default(uuid()) @db.Uuid
+  proposalId  String         @db.Uuid
+  proposal    GrowthProposal @relation(fields: [proposalId], references: [id], onDelete: Restrict)
+  fromStatus  String?        @db.VarChar(20)
+  toStatus    String         @db.VarChar(20)
+  action      String         @db.VarChar(20)
+  actorUserId String
+  note        String?        @db.VarChar(500)
+  previewHash String         @db.Char(64)
+  createdAt   DateTime       @default(now()) @db.Timestamptz(6)
+
+  @@index([proposalId, createdAt])
+  @@map("growth_proposal_events")
+}
+
+/// Append-only snapshots of first-party measurement (the agent's memory is built from these).
+model GrowthMeasurement {
+  id               String         @id @default(uuid()) @db.Uuid
+  proposalId       String         @db.Uuid
+  proposal         GrowthProposal @relation(fields: [proposalId], references: [id], onDelete: Restrict)
+  result           Json           @db.JsonB
+  recordedByUserId String
+  createdAt        DateTime       @default(now()) @db.Timestamptz(6)
+
+  @@index([proposalId, createdAt])
+  @@map("growth_measurements")
+}
+
+/// Every model call: tokens and cost (micro-USD = tokens × USD per million tokens).
+model GrowthAiUsage {
+  id           String   @id @default(uuid()) @db.Uuid
+  feature      String   @db.VarChar(40)
+  provider     String   @db.VarChar(20)
+  model        String   @db.VarChar(80)
+  inputTokens  Int
+  outputTokens Int
+  costMicroUsd BigInt
+  ok           Boolean
+  error        String?  @db.VarChar(300)
+  actorUserId  String
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([createdAt])
+  @@map("growth_ai_usage")
 }
