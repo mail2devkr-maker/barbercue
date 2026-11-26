@@ -128,7 +128,8 @@ export default function AdminOnboardingReviewPage() {
   if (!app) return <main className={styles.page}><p className={styles.empty} aria-busy="true">Loading application…</p></main>;
 
   const menus = app.media.filter((m) => m.category === "MENU");
-  const photos = app.media.filter((m) => m.category !== "MENU");
+  const photos = app.media.filter((m) => m.category !== "MENU" && m.category !== "CONSENT_EVIDENCE");
+  const consentEvidence = app.media.filter((m) => m.category === "CONSENT_EVIDENCE");
   const reviewable = REVIEWABLE.includes(app.status);
   const decide = app.canDecide;
   const latestInvite = app.invitations[0];
@@ -386,13 +387,27 @@ export default function AdminOnboardingReviewPage() {
             </div>
           </section>
 
+          {consentEvidence.length > 0 && (
+            <section className={local.card}>
+              <h2>Owner consent evidence ({consentEvidence.length})</h2>
+              <div className={local.thumbs}>
+                {consentEvidence.map((media) => (
+                  <div key={media.id} className={local.thumb}>
+                    <PrivateImage path={media.filePath} alt="Owner consent evidence" />
+                    <small>{media.uploadedBy} · {when(media.createdAt)}</small>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
           <section className={local.card}>
-            <h2>Salon photos ({photos.length})</h2>
+            <h2>Onboarding photos ({photos.length})</h2>
             {photos.length === 0 && <p className={styles.empty}>{app.photoExceptionReason ? `Photo requirement waived: ${app.photoExceptionReason}` : "No photos uploaded."}</p>}
             <div className={local.thumbs}>
               {photos.map((m) => (
                 <div key={m.id} className={local.thumb}>
-                  {superAdmin && app.salonId && (
+                  {superAdmin && app.salonId && m.category !== "BARBER_PORTRAIT" && (
                     <input
                       type="checkbox"
                       aria-label={`Approve ${m.category} photo for public display`}
@@ -401,7 +416,7 @@ export default function AdminOnboardingReviewPage() {
                     />
                   )}
                   <PrivateImage path={m.filePath} alt={`${m.category} photo`} />
-                  <small>{m.category.toLowerCase()} · {m.uploadedBy} · {when(m.createdAt)}</small>
+                  <small>{m.category === "BARBER_PORTRAIT" ? "Barber portrait (private)" : m.category.toLowerCase()} · {m.uploadedBy} · {when(m.createdAt)}</small>
                   {m.capture?.latitude != null && m.capture.longitude != null && (
                     <small>
                       Camera {when(m.capture.capturedAt)} ·{" "}
