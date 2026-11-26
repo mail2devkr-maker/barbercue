@@ -201,6 +201,7 @@ export const joinQueueSchema = z.object({
 });
 export type JoinQueueInput = z.infer<typeof joinQueueSchema>;
 
+/** Most add-ons one visit may carry (a guard against accidental taps, not a business rule). */
 export const MAX_QUEUE_ADD_ONS = 5;
 export const MAX_WALK_IN_SERVICES = MAX_QUEUE_ADD_ONS + 1;
 
@@ -252,7 +253,6 @@ export const addQueueEntryAddOnSchema = z.object({
 });
 export type AddQueueEntryAddOnInput = z.infer<typeof addQueueEntryAddOnSchema>;
 
-/** Most add-ons one visit may carry (a guard against accidental taps, not a business rule). */
 /** Owner-selectable buffer kept after every service (minutes). */
 export const SERVICE_BUFFER_MIN_MINUTES = 0;
 export const SERVICE_BUFFER_MAX_MINUTES = 30;
