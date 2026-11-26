@@ -84,6 +84,28 @@ export class RealtimeGateway implements OnGatewayConnection {
     return { ok: true };
   }
 
+  /**
+   * Visitor Intelligence live dashboard: internal admin roles only. The room only ever receives a
+   * revision number ("something changed, refetch"), never visitor data; the REST endpoint enforces scope.
+   */
+  @SubscribeMessage('join:visitor-intel')
+  async handleJoinVisitorIntel(
+    @ConnectedSocket() client: Socket,
+  ): Promise<{ ok: boolean }> {
+    const user = (client.data as { user?: AuthenticatedUser }).user;
+    const allowed = [
+      'PLATFORM_ADMIN',
+      'CO_FOUNDER',
+      'PLATFORM_VIEWER',
+      'SALES_ADMIN',
+      'HR_ADMIN',
+    ];
+    if (!user || !user.roles.some((r) => allowed.includes(r)))
+      return { ok: false };
+    await client.join('vi:live');
+    return { ok: true };
+  }
+
   emitQueueUpdated(salonId: string): void {
     this.deadlineScheduler?.signal('queue');
     this.deadlineScheduler?.signal('booking');

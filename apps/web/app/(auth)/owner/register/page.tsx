@@ -9,6 +9,7 @@ import authStyles from "../../../../components/auth/customer-auth.module.css";
 import { ApiError } from "../../../../lib/api";
 import { useAuth } from "../../../../lib/auth-context";
 import { OwnerPhoneOtpPanel } from "../../../../components/auth/OwnerPhoneOtpPanel";
+import { viTrack } from "../../../../lib/visitor-intel/tracker";
 
 export default function OwnerRegisterPage() {
   const router = useRouter();
@@ -23,6 +24,10 @@ export default function OwnerRegisterPage() {
   // An already-authenticated customer can begin onboarding immediately; an existing owner can
   // also use the same route to register an additional shop. Never ask either one to create a
   // duplicate account.
+  useEffect(() => {
+    viTrack("partner_registration_start", { module: "PARTNER" });
+  }, []);
+
   useEffect(() => {
     if (status === "authenticated") router.replace("/dashboard/register-shop");
   }, [router, status]);
@@ -43,6 +48,7 @@ export default function OwnerRegisterPage() {
     setSubmitting(true);
     try {
       await ownerSignup(parsed.data);
+      viTrack("sign_up", { module: "PARTNER" });
       router.replace("/dashboard/register-shop");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not create your account. Please try again.");

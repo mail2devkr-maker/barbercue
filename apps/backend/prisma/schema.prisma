@@ -7059,3 +7059,530 @@ model CommercePickup {
   @@index([status, pickupOn])
   @@map("commerce_pickups")
 }
+
+// =============================================================================================
+// FastQue Visitor Intelligence (docs/visitor-intelligence/). Additive only: no existing table changes.
+// Like FastQue Commerce, user/salon/employee/expense ids are stored WITHOUT foreign keys so account
+// deletion and finance edits never have to touch analytics rows; services validate ids on write.
+// No raw IP address, raw user agent, email or phone is ever stored in these tables.
+// =============================================================================================
+
+enum ViGeoSource {
+  CDN_HEADER
+  OFFLINE_DB
+  BROWSER_PERMISSION
+  USER_SELECTED
+  NONE
+}
+
+enum ViCampaignStatus {
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+
+enum ViConversionType {
+  REGISTRATION
+  BOOKING
+  QUEUE_JOIN
+  HOME_BOOKING
+  PURCHASE
+  PARTNER_REGISTRATION
+}
+
+enum ViInsightStatus {
+  NEW
+  ACCEPTED
+  REJECTED
+  DISMISSED
+}
+
+enum ViSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum ViStaffRoleKind {
+  MARKETING_HEAD
+  SALES_HEAD
+  OPERATIONS_HEAD
+  SUPPORT
+}
+
+enum ViPrivacyRequestType {
+  ACCESS
+  DELETE
+}
+
+enum ViPrivacyRequestStatus {
+  OPEN
+  COMPLETED
+  REJECTED
+}
+
+/// One pseudonymous browser. visitorKey = SHA-256(pepper + browser UUID); the UUID itself is not stored.
+model ViVisitor {
+  id               String    @id @default(uuid()) @db.Uuid
+  visitorKey       String    @unique @db.Char(64)
+  guestNumber      Int       @unique @default(autoincrement())
+  /// Linked after login only when analytics consent was given (no fingerprinting, no third-party matching).
+  userId           String?
+  linkedAt         DateTime? @db.Timestamptz(6)
+  firstSeenAt      DateTime  @default(now()) @db.Timestamptz(6)
+  lastSeenAt       DateTime  @default(now()) @db.Timestamptz(6)
+  sessionCount     Int       @default(0)
+  pageViews        Int       @default(0)
+  searches         Int       @default(0)
+  salonViews       Int       @default(0)
+  productViews     Int       @default(0)
+  bookingAttempts  Int       @default(0)
+  bookings         Int       @default(0)
+  purchases        Int       @default(0)
+  revenuePaise     BigInt    @default(0)
+  engagedMs        BigInt    @default(0)
+  firstChannel     String?   @db.VarChar(30)
+  firstSource      String?   @db.VarChar(120)
+  firstCampaign    String?   @db.VarChar(160)
+  firstCampaignId  String?   @db.Uuid
+  lastChannel      String?   @db.VarChar(30)
+  lastSource       String?   @db.VarChar(120)
+  lastCampaign     String?   @db.VarChar(160)
+  lastCampaignId   String?   @db.Uuid
+  country          String?   @db.VarChar(80)
+  state            String?   @db.VarChar(80)
+  city             String?   @db.VarChar(80)
+  deviceCategory   String?   @db.VarChar(10)
+  topServices      Json?
+  priceMinInr      Int?
+  priceMaxInr      Int?
+  consentAnalytics Boolean   @default(false)
+  consentMarketing Boolean   @default(false)
+  isBot            Boolean   @default(false)
+
+  sessions ViSession[]
+
+  @@index([lastSeenAt])
+  @@index([firstSeenAt])
+  @@index([userId])
+  @@index([city, lastSeenAt])
+  @@map("vi_visitors")
+}
+
+model ViSession {
+  id               String      @id @default(uuid()) @db.Uuid
+  clientSessionId  String      @unique @db.Uuid
+  visitorId        String      @db.Uuid
+  visitor          ViVisitor   @relation(fields: [visitorId], references: [id], onDelete: Cascade)
+  userId           String?
+  startedAt        DateTime    @db.Timestamptz(6)
+  lastActivityAt   DateTime    @db.Timestamptz(6)
+  engagedMs        Int         @default(0)
+  pageViews        Int         @default(0)
+  eventCount       Int         @default(0)
+  entryPath        String?     @db.VarChar(300)
+  currentPath      String?     @db.VarChar(300)
+  previousPath     String?     @db.VarChar(300)
+  referrerDomain   String?     @db.VarChar(120)
+  channel          String      @default("UNKNOWN") @db.VarChar(30)
+  utmSource        String?     @db.VarChar(120)
+  utmMedium        String?     @db.VarChar(120)
+  utmCampaign      String?     @db.VarChar(160)
+  utmContent       String?     @db.VarChar(160)
+  utmTerm          String?     @db.VarChar(160)
+  campaignId       String?     @db.Uuid
+  clickIdType      String?     @db.VarChar(10)
+  deviceCategory   String      @default("unknown") @db.VarChar(10)
+  browser          String?     @db.VarChar(30)
+  os               String?     @db.VarChar(30)
+  country          String?     @db.VarChar(80)
+  state            String?     @db.VarChar(80)
+  city             String?     @db.VarChar(80)
+  locality         String?     @db.VarChar(120)
+  geoSource        ViGeoSource @default(NONE)
+  isNewVisitor     Boolean     @default(true)
+  searched         Boolean     @default(false)
+  viewedSalon      Boolean     @default(false)
+  bookingStarted   Boolean     @default(false)
+  bookingConfirmed Boolean     @default(false)
+  bookingFailed    Boolean     @default(false)
+  addedToCart      Boolean     @default(false)
+  checkoutStarted  Boolean     @default(false)
+  purchased        Boolean     @default(false)
+  registered       Boolean     @default(false)
+  revenuePaise     BigInt      @default(0)
+  searchTerms      String[]    @default([])
+  salonsViewed     Int         @default(0)
+  productsViewed   Int         @default(0)
+  isBot            Boolean     @default(false)
+
+  @@index([lastActivityAt])
+  @@index([startedAt])
+  @@index([visitorId, startedAt])
+  @@index([city, startedAt])
+  @@index([channel, startedAt])
+  @@index([campaignId, startedAt])
+  @@map("vi_sessions")
+}
+
+/// Standard event schema. Page views are events of type page_view (one table, one index set).
+model ViEvent {
+  id             String      @id @default(uuid()) @db.Uuid
+  clientEventId  String      @unique @db.Uuid
+  visitorId      String      @db.Uuid
+  sessionId      String      @db.Uuid
+  userId         String?
+  type           String      @db.VarChar(40)
+  occurredAt     DateTime    @db.Timestamptz(6)
+  receivedAt     DateTime    @default(now()) @db.Timestamptz(6)
+  module         String?     @db.VarChar(30)
+  path           String      @db.VarChar(300)
+  entityType     String?     @db.VarChar(40)
+  entityId       String?     @db.VarChar(80)
+  salonId        String?     @db.VarChar(80)
+  country        String?     @db.VarChar(80)
+  state          String?     @db.VarChar(80)
+  city           String?     @db.VarChar(80)
+  geoSource      ViGeoSource @default(NONE)
+  channel        String?     @db.VarChar(30)
+  campaignId     String?     @db.Uuid
+  deviceCategory String?     @db.VarChar(10)
+  consentStatus  String      @default("analytics") @db.VarChar(20)
+  metadata       Json?
+
+  @@index([occurredAt])
+  @@index([type, occurredAt])
+  @@index([sessionId, occurredAt])
+  @@index([visitorId, occurredAt])
+  @@index([salonId, type, occurredAt])
+  @@index([city, type, occurredAt])
+  @@map("vi_events")
+}
+
+model ViSearchEvent {
+  id              String   @id @default(uuid()) @db.Uuid
+  eventId         String   @unique @db.Uuid
+  visitorId       String   @db.Uuid
+  sessionId       String   @db.Uuid
+  occurredAt      DateTime @db.Timestamptz(6)
+  kind            String   @db.VarChar(20)
+  rawQuery        String   @db.VarChar(120)
+  normalizedQuery String   @db.VarChar(120)
+  category        String?  @db.VarChar(60)
+  locationText    String?  @db.VarChar(120)
+  country         String?  @db.VarChar(80)
+  state           String?  @db.VarChar(80)
+  city            String?  @db.VarChar(80)
+  filters         Json?
+  priceMinInr     Int?
+  priceMaxInr     Int?
+  resultCount     Int?
+  zeroResult      Boolean  @default(false)
+  ledToSalonView  Boolean  @default(false)
+  ledToBooking    Boolean  @default(false)
+  ledToPurchase   Boolean  @default(false)
+
+  @@index([occurredAt])
+  @@index([normalizedQuery, occurredAt])
+  @@index([category, occurredAt])
+  @@index([city, occurredAt])
+  @@index([sessionId, occurredAt])
+  @@map("vi_search_events")
+}
+
+/// Verified outcomes. valuePaise always comes from the booking/order row, never from the browser.
+model ViConversion {
+  id              String           @id @default(uuid()) @db.Uuid
+  type            ViConversionType
+  entityId        String           @db.VarChar(80)
+  visitorId       String?          @db.Uuid
+  sessionId       String?          @db.Uuid
+  userId          String?
+  salonId         String?          @db.VarChar(80)
+  city            String?          @db.VarChar(80)
+  valuePaise      BigInt           @default(0)
+  occurredAt      DateTime         @db.Timestamptz(6)
+  firstChannel    String?          @db.VarChar(30)
+  lastChannel     String?          @db.VarChar(30)
+  firstCampaignId String?          @db.Uuid
+  lastCampaignId  String?          @db.Uuid
+  module          String?          @db.VarChar(30)
+  createdAt       DateTime         @default(now()) @db.Timestamptz(6)
+
+  @@unique([type, entityId])
+  @@index([occurredAt])
+  @@index([lastCampaignId, occurredAt])
+  @@index([firstCampaignId, occurredAt])
+  @@index([salonId, occurredAt])
+  @@map("vi_conversions")
+}
+
+model ViConsentRecord {
+  id              String   @id @default(uuid()) @db.Uuid
+  visitorKey      String   @db.Char(64)
+  analytics       Boolean
+  marketing       Boolean
+  preciseLocation Boolean?
+  policyVersion   String   @db.VarChar(20)
+  source          String   @db.VarChar(20)
+  createdAt       DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([visitorKey, createdAt])
+  @@map("vi_consent_records")
+}
+
+model ViCampaign {
+  id                  String           @id @default(uuid()) @db.Uuid
+  code                String           @unique @db.VarChar(40)
+  name                String           @db.VarChar(120)
+  kind                String           @db.VarChar(20)
+  status              ViCampaignStatus @default(ACTIVE)
+  landingPath         String           @default("/") @db.VarChar(300)
+  utmSource           String?          @db.VarChar(120)
+  utmMedium           String?          @db.VarChar(120)
+  utmCampaign         String?          @db.VarChar(160)
+  utmContent          String?          @db.VarChar(160)
+  utmTerm             String?          @db.VarChar(160)
+  salonId             String?          @db.VarChar(80)
+  employeeProfileId   String?          @db.Uuid
+  city                String?          @db.VarChar(80)
+  budgetPaise         BigInt?
+  startsAt            DateTime?        @db.Timestamptz(6)
+  endsAt              DateTime?        @db.Timestamptz(6)
+  googleAdsCampaignId String?          @db.VarChar(60)
+  metaCampaignId      String?          @db.VarChar(60)
+  notes               String?          @db.VarChar(500)
+  createdByUserId     String
+  createdAt           DateTime         @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime         @updatedAt @db.Timestamptz(6)
+
+  expenseLinks ViCampaignExpenseLink[]
+
+  @@index([status, createdAt])
+  @@index([kind])
+  @@map("vi_campaigns")
+}
+
+/// Campaign spend lives in the Finance module (finance_expenses); this only links an expense to a campaign.
+model ViCampaignExpenseLink {
+  id               String     @id @default(uuid()) @db.Uuid
+  campaignId       String     @db.Uuid
+  campaign         ViCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  financeExpenseId String     @db.Uuid
+  linkedByUserId   String
+  createdAt        DateTime   @default(now()) @db.Timestamptz(6)
+
+  @@unique([campaignId, financeExpenseId])
+  @@index([financeExpenseId])
+  @@map("vi_campaign_expense_links")
+}
+
+model ViSegment {
+  id                  String    @id @default(uuid()) @db.Uuid
+  name                String    @db.VarChar(120)
+  description         String?   @db.VarChar(500)
+  rule                Json
+  isSystem            Boolean   @default(false)
+  frequencyCapPerWeek Int       @default(2)
+  memberCount         Int?
+  consentedCount      Int?
+  lastComputedAt      DateTime? @db.Timestamptz(6)
+  createdByUserId     String?
+  createdAt           DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime  @updatedAt @db.Timestamptz(6)
+
+  @@map("vi_segments")
+}
+
+/// Marketing opt-in/out per registered user and channel, plus suppression (never contact again).
+model ViMarketingPreference {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String
+  channel    String   @db.VarChar(20)
+  optedIn    Boolean
+  suppressed Boolean  @default(false)
+  reason     String?  @db.VarChar(200)
+  updatedAt  DateTime @updatedAt @db.Timestamptz(6)
+  createdAt  DateTime @default(now()) @db.Timestamptz(6)
+
+  @@unique([userId, channel])
+  @@map("vi_marketing_preferences")
+}
+
+model ViInsight {
+  id              String          @id @default(uuid()) @db.Uuid
+  dedupeKey       String          @unique @db.VarChar(160)
+  kind            String          @db.VarChar(40)
+  title           String          @db.VarChar(200)
+  summary         String          @db.VarChar(2000)
+  supportingData  Json
+  periodFrom      DateTime        @db.Timestamptz(6)
+  periodTo        DateTime        @db.Timestamptz(6)
+  impact          String          @db.VarChar(300)
+  confidencePct   Int
+  priority        String          @db.VarChar(10)
+  action          String          @db.VarChar(500)
+  department      String          @db.VarChar(30)
+  source          String          @default("RULE") @db.VarChar(20)
+  status          ViInsightStatus @default(NEW)
+  decisionNote    String?         @db.VarChar(300)
+  decidedByUserId String?
+  decidedAt       DateTime?       @db.Timestamptz(6)
+  crmTaskId       String?         @db.Uuid
+  createdAt       DateTime        @default(now()) @db.Timestamptz(6)
+
+  @@index([status, createdAt])
+  @@index([kind, createdAt])
+  @@map("vi_insights")
+}
+
+model ViAlertRule {
+  id               String     @id @default(uuid()) @db.Uuid
+  kind             String     @db.VarChar(40)
+  name             String     @db.VarChar(120)
+  threshold        Float
+  windowMinutes    Int        @default(60)
+  severity         ViSeverity @default(WARNING)
+  channels         String[]   @default(["IN_APP"])
+  recipientUserIds String[]   @default([])
+  cooldownMinutes  Int        @default(240)
+  enabled          Boolean    @default(true)
+  lastFiredAt      DateTime?  @db.Timestamptz(6)
+  createdByUserId  String?
+  createdAt        DateTime   @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime   @updatedAt @db.Timestamptz(6)
+
+  events ViAlertEvent[]
+
+  @@map("vi_alert_rules")
+}
+
+model ViAlertEvent {
+  id                   String       @id @default(uuid()) @db.Uuid
+  ruleId               String?      @db.Uuid
+  rule                 ViAlertRule? @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+  kind                 String       @db.VarChar(40)
+  severity             ViSeverity
+  message              String       @db.VarChar(500)
+  data                 Json?
+  firedAt              DateTime     @default(now()) @db.Timestamptz(6)
+  acknowledgedAt       DateTime?    @db.Timestamptz(6)
+  acknowledgedByUserId String?
+
+  @@index([firedAt])
+  @@index([acknowledgedAt, firedAt])
+  @@map("vi_alert_events")
+}
+
+/// Precomputed daily rollups (IST calendar day). dimType "all" + dimValue "" is the platform total.
+model ViDailyMetric {
+  day      DateTime @db.Date
+  metric   String   @db.VarChar(40)
+  dimType  String   @db.VarChar(20)
+  dimValue String   @db.VarChar(120)
+  value    Float
+
+  @@id([day, metric, dimType, dimValue])
+  @@index([metric, dimType, day])
+  @@map("vi_daily_metrics")
+}
+
+model ViIntegrationSetting {
+  provider        String    @id @db.VarChar(20)
+  enabled         Boolean   @default(false)
+  config          Json      @default("{}")
+  /// AES-256-GCM (CryptoService) JSON of the secret fields. Never returned by any API.
+  secretsCipher   String?
+  lastSyncAt      DateTime? @db.Timestamptz(6)
+  lastStatus      String?   @db.VarChar(20)
+  lastError       String?   @db.VarChar(500)
+  updatedByUserId String?
+  updatedAt       DateTime  @updatedAt @db.Timestamptz(6)
+
+  @@map("vi_integration_settings")
+}
+
+/// Rows pulled from Search Console / Google Ads / Meta (aggregates only, no personal data).
+model ViExternalMetric {
+  id       String   @id @default(uuid()) @db.Uuid
+  provider String   @db.VarChar(20)
+  day      DateTime @db.Date
+  kind     String   @db.VarChar(20)
+  key      String   @db.VarChar(300)
+  dims     Json?
+  metrics  Json
+
+  @@unique([provider, day, kind, key])
+  @@index([provider, kind, day])
+  @@map("vi_external_metrics")
+}
+
+model ViConfig {
+  id              Int      @id @default(1)
+  settings        Json
+  updatedByUserId String?
+  updatedAt       DateTime @updatedAt @db.Timestamptz(6)
+
+  @@map("vi_config")
+}
+
+model ViStaffRole {
+  id              String          @id @default(uuid()) @db.Uuid
+  userId          String
+  role            ViStaffRoleKind
+  grantedByUserId String
+  createdAt       DateTime        @default(now()) @db.Timestamptz(6)
+
+  @@unique([userId, role])
+  @@map("vi_staff_roles")
+}
+
+model ViReportSchedule {
+  id               String    @id @default(uuid()) @db.Uuid
+  reportType       String    @db.VarChar(20)
+  format           String    @db.VarChar(5)
+  frequency        String    @db.VarChar(10)
+  period           String    @default("7d") @db.VarChar(10)
+  recipientUserIds String[]
+  nextRunAt        DateTime  @db.Timestamptz(6)
+  lastRunAt        DateTime? @db.Timestamptz(6)
+  lastStatus       String?   @db.VarChar(200)
+  enabled          Boolean   @default(true)
+  createdByUserId  String
+  createdAt        DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@index([enabled, nextRunAt])
+  @@map("vi_report_schedules")
+}
+
+model ViPrivacyRequest {
+  id                String                 @id @default(uuid()) @db.Uuid
+  type              ViPrivacyRequestType
+  visitorKey        String?                @db.Char(64)
+  userId            String?
+  status            ViPrivacyRequestStatus @default(OPEN)
+  note              String?                @db.VarChar(300)
+  result            Json?
+  requestedByUserId String
+  completedAt       DateTime?              @db.Timestamptz(6)
+  createdAt         DateTime               @default(now()) @db.Timestamptz(6)
+
+  @@index([status, createdAt])
+  @@map("vi_privacy_requests")
+}
+
+model ViOpportunityAssignment {
+  id                 String   @id @default(uuid()) @db.Uuid
+  city               String   @db.VarChar(80)
+  state              String?  @db.VarChar(80)
+  level              String   @db.VarChar(10)
+  score              Int
+  metrics            Json
+  crmTaskId          String   @db.Uuid
+  assigneeEmployeeId String   @db.Uuid
+  createdByUserId    String
+  createdAt          DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([city, createdAt])
+  @@map("vi_opportunity_assignments")
+}
