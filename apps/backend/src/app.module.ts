@@ -41,6 +41,7 @@ import { InventoryModule } from './inventory/inventory.module';
 import { FinanceModule } from './finance/finance.module';
 import { ShopModule } from './shop/shop.module';
 import { CommerceModule } from './commerce/commerce.module';
+import { GrowthModule } from './growth/growth.module';
 import { OnboardingModule } from './onboarding/onboarding.module';
 import { CrmModule } from './crm/crm.module';
 import { WorkModule } from './work/work.module';
@@ -84,6 +85,7 @@ import { ProfessionalCommitmentsModule } from './common/professional-commitments
     ShopModule,
     // FastQue Direct Commerce (off unless FASTQUE_DIRECT_COMMERCE_ENABLED=true).
     CommerceModule,
+    GrowthModule,
     SalonsModule,
     RealtimeModule,
     PremiumModule,
