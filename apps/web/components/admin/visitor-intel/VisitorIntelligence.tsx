@@ -63,12 +63,11 @@ export function VisitorIntelligence() {
   const [liveRevision, setLiveRevision] = useState(0);
   // The admin shell's date picker drives this page too: changing it switches to that custom range.
   const { range } = useAdminFilters();
-  const firstRange = useRef(true);
+  const initialRange = useRef(`${range.from}|${range.to}`);
   useEffect(() => {
-    if (firstRange.current) {
-      firstRange.current = false;
-      return;
-    }
+    // Only react to a change the admin makes in the shell picker (never to the value present on mount).
+    if (`${range.from}|${range.to}` === initialRange.current) return;
+    initialRange.current = "";
     const t = window.setTimeout(() => setFiltersState((f) => ({ ...f, period: "custom", from: range.from, to: range.to })), 0);
     return () => window.clearTimeout(t);
   }, [range.from, range.to]);

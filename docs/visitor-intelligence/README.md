@@ -268,6 +268,8 @@ gives country/city headers.
 Tests: `packages/shared` 43 VI unit tests; backend `visitor-intel.unit.spec.ts` + `visitor-intel.integration.spec.ts`
 (real Postgres, set `VI_TEST_DATABASE_URL`; includes a 2,000-event performance smoke: ~1.7–2.5 s locally);
 web `lib/__tests__/visitor-intel-tracker.test.jsx`; existing admin-shell test updated for the new nav group.
+Full suites on this branch: backend 2,327 passed / 9 skipped; web 1,545 passed, 5 failed — all 5 in
+`components/bookings/__tests__/ArrivalAlertOverlay.test.jsx`, which fails identically on clean upstream master (pre-existing).
 
 ## Known limitations / future work
 
