@@ -15,6 +15,7 @@ import { AllExceptionsFilter } from '../src/common/filters/all-exceptions.filter
 import { PrismaService } from '../src/prisma/prisma.service';
 import { TokenService } from '../src/auth/services/token.service';
 import { CommerceOutboxService } from '../src/commerce/commerce-outbox.service';
+import { commerceOutboxArmed } from '../src/commerce/commerce-outbox-signal';
 import { CommerceStockService } from '../src/commerce/commerce-stock.service';
 
 process.env.JWT_ACCESS_SECRET ??= 'commerce-e2e-only-jwt-secret';
@@ -624,6 +625,23 @@ maybe('FastQue direct commerce (real AppModule, disposable PostgreSQL)', () => {
     await app.get(CommerceOutboxService).deliver();
     expect(await prisma.notification.count({ where: { userId: ids.owner, type: 'shop.order.updated' } })).toBeGreaterThanOrEqual(2);
   }, 40000);
+
+  it('outbox sweep stops querying once nothing is pending, and new work wakes it', async () => {
+    const outbox = app.get(CommerceOutboxService);
+    for (let i = 0; i < 3 && commerceOutboxArmed(); i += 1) await outbox.deliver();
+    await prisma.commerceOutbox.updateMany({ where: { status: 'PENDING' }, data: { status: 'FAILED' } });
+    await outbox.deliver();
+    expect(commerceOutboxArmed()).toBe(false);
+    const spy = jest.spyOn(prisma.commerceOutbox, 'findMany');
+    await outbox.sweep();
+    expect(spy).not.toHaveBeenCalled();
+    await outbox.add(prisma, { dedupeKey: `wake:${randomUUID()}`, userId: ids.customer, type: 'commerce.order.updated' });
+    expect(commerceOutboxArmed()).toBe(true);
+    await outbox.sweep();
+    expect(spy).toHaveBeenCalled();
+    spy.mockRestore();
+    expect(commerceOutboxArmed()).toBe(false);
+  }, 30000);
 
   it('reports FastQue and salon sales separately, protects cost, and explains every insight', async () => {
     const full = await admin('get', 'overview').expect(200);
