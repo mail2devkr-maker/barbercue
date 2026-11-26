@@ -123,6 +123,7 @@ let timer: number | null = null;
 let ctx: Context | null = null;
 let sessionId: string | null = null;
 let listening = false;
+let lastPageView: { key: string; at: number } | null = null;
 
 function flush(useBeacon = false): void {
   if (timer) {
@@ -186,6 +187,12 @@ export function viTrack(type: ViEventType, data: ViTrackData = {}): void {
   const path = (data.path ?? window.location.pathname).slice(0, 300);
   if (!isTrackablePath(path)) return;
   const now = Date.now();
+  // One page_view per page: ignore an identical repeat within 1.5 s (React dev double effects, rapid re-renders).
+  if (type === "page_view") {
+    const key = `${path}`;
+    if (lastPageView && lastPageView.key === key && now - lastPageView.at < 1500) return;
+    lastPageView = { key, at: now };
+  }
   const s = session(now);
   if (s.isNew || !ctx || sessionId !== s.id) {
     sessionId = s.id;

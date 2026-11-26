@@ -42,10 +42,11 @@ const COUNTED_EXPENSE = [
 ] as const;
 
 export function siteUrl(): string {
-  return (process.env.WEB_PUBLIC_URL ?? 'https://fastque.com').replace(
-    /\/+$/,
-    '',
-  );
+  return (
+    process.env.WEB_PUBLIC_URL ??
+    process.env.WEB_BASE_URL ??
+    'https://fastque.com'
+  ).replace(/\/+$/, '');
 }
 
 /** Campaign links, QR codes, ROI, and one-click CRM tasks (docs/visitor-intelligence/CAMPAIGNS.md). */

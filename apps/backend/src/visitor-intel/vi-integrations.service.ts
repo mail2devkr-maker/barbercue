@@ -261,10 +261,11 @@ export class ViIntegrationsService {
     if (!ctx.marketing) return; // Meta only with marketing consent.
     const meta = await this.active('META');
     if (!meta) return;
-    const site = (process.env.WEB_PUBLIC_URL ?? 'https://fastque.com').replace(
-      /\/+$/,
-      '',
-    );
+    const site = (
+      process.env.WEB_PUBLIC_URL ??
+      process.env.WEB_BASE_URL ??
+      'https://fastque.com'
+    ).replace(/\/+$/, '');
     const data = events
       .filter(
         (e) =>

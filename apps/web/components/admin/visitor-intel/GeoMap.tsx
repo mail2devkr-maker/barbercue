@@ -31,7 +31,7 @@ export function GeoMap({ points, onSelect }: { points: GeoPoint[]; onSelect?: (k
     void import("leaflet").then((mod) => {
       if (cancelled || !el.current || map.current) return;
       L.current = mod;
-      map.current = mod.map(el.current, { zoomControl: true, attributionControl: true }).setView([22.5, 79], 4);
+      map.current = mod.map(el.current, { zoomControl: true, attributionControl: true, scrollWheelZoom: false }).setView([22.5, 79], 4);
       mod.tileLayer(MAP_TILE_URL, { attribution: MAP_TILE_ATTRIBUTION, maxZoom: 12 }).addTo(map.current);
       layer.current = mod.layerGroup().addTo(map.current);
       setReady(true);
@@ -57,7 +57,16 @@ export function GeoMap({ points, onSelect }: { points: GeoPoint[]; onSelect?: (k
         .on("click", () => onSelect?.(p.key))
         .addTo(group);
     }
-    if (points.length) map.current.fitBounds(mod.latLngBounds(points.map((p) => [p.lat, p.lng] as [number, number])).pad(0.3), { maxZoom: 7 });
+    const m = map.current;
+    const fit = () => {
+      m.invalidateSize();
+      if (points.length) m.fitBounds(mod.latLngBounds(points.map((p) => [p.lat, p.lng] as [number, number])).pad(0.3), { maxZoom: 7 });
+    };
+    fit();
+    // The container may still be settling (fonts, sidebar, hidden tab): refit whenever its size changes.
+    const ro = new ResizeObserver(() => fit());
+    if (el.current) ro.observe(el.current);
+    return () => ro.disconnect();
   }, [points, ready, onSelect]);
 
   return <div ref={el} className={s.map} role="region" aria-label="Map of visitor demand by city (city centres only)" />;

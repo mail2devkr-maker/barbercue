@@ -657,7 +657,7 @@ export function GeoTab() {
     },
     [level, filters, setFilters],
   );
-  const crumbs = [["country", "World"], ["state", filters.country ?? "Country"], ["city", filters.state ?? "State"], ["locality", filters.city ?? "City"]] as const;
+  const crumbs = [["country", "Countries"], ["state", filters.country ? `States in ${filters.country}` : "States"], ["city", filters.state ? `Cities in ${filters.state}` : "Cities"], ["locality", filters.city ? `Localities in ${filters.city}` : "Localities"]] as const;
   return (
     <>
       <div className={s.row} style={{ marginBottom: 12 }}>

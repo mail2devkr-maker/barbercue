@@ -1464,8 +1464,9 @@ export class ViAnalyticsService {
             optional: !!st.optional,
             sessions: counts[i],
             conversionFromPrevPct: base == null ? null : pct(counts[i], base),
+            // Optional steps are informational: skipping them is not a drop-off.
             dropOffPct:
-              base == null || !base
+              base == null || !base || st.optional
                 ? null
                 : Math.round((1 - counts[i] / base) * 1000) / 10,
             medianSecondsFromPrev: median(gaps[i]),

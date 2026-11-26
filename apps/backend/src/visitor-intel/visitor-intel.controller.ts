@@ -204,6 +204,7 @@ export class VisitorIntelController {
       scope: a.scope,
       staffRoles: a.staffRoles,
       activityWindowMinutes: s.activityWindowMinutes,
+      demoVisitors: (await this.maintenance.demoStatus()).demoVisitors,
       trackingEnabled: s.trackingEnabled && ViConfigService.envEnabled(),
     };
   }

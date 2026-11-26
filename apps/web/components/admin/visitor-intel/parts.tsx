@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import type { ViKpi } from "@barbercue/shared";
 import { PALETTE, fmtNum } from "./vi-api";
 import s from "./vi.module.css";
@@ -321,7 +322,8 @@ export function Drawer({ title, onClose, children }: { title: string; onClose: (
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
-  return (
+  // Portal to <body> so the drawer sits above the admin rail (the page uses an isolated stacking context).
+  return createPortal(
     <>
       <div className={s.drawerBackdrop} onClick={onClose} />
       <aside className={s.drawer} role="dialog" aria-modal="true" aria-label={title}>
@@ -333,7 +335,8 @@ export function Drawer({ title, onClose, children }: { title: string; onClose: (
         </div>
         {children}
       </aside>
-    </>
+    </>,
+    document.body,
   );
 }
 

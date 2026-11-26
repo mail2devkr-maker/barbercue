@@ -608,6 +608,8 @@ export interface ViMeDto {
   staffRoles: ViStaffRole[];
   activityWindowMinutes: number;
   trackingEnabled: boolean;
+  /** Synthetic dev-only demo visitors currently loaded (shown as a warning on every tab). */
+  demoVisitors: number;
 }
 
 // ---------- Admin input schemas ----------

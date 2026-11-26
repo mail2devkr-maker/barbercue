@@ -891,9 +891,12 @@ export class ViIngestService implements OnModuleDestroy {
   }
 
   private async verifyOrder(id: string, userId: string | null, now: Date) {
-    const o = await this.prisma.commerceOrder.findFirst({
+    const o = await this.prisma.commerceOrder
+      .findFirst({
         // The browser knows the order number; a UUID id is accepted too.
-        where: /^[0-9a-f-]{36}$/i.test(id) ? { id } : { orderNumber: id.slice(0, 20) },
+        where: /^[0-9a-f-]{36}$/i.test(id)
+          ? { id }
+          : { orderNumber: id.slice(0, 20) },
         select: { id: true, customerUserId: true, placedAt: true, total: true },
       })
       .catch(() => null);

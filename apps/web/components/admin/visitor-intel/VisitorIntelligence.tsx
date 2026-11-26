@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   VI_CHANNELS,
@@ -16,6 +16,7 @@ import {
 } from "@barbercue/shared";
 import { getRealtimeSocket } from "../../../lib/realtime";
 import { VISITOR_INTEL_TABS } from "../shell/admin-nav";
+import { useAdminFilters } from "../shell/admin-filters";
 import { ErrorBox, Skeleton } from "./parts";
 import { filtersQuery, useVi, viPath } from "./vi-api";
 import { ConversionsTab, GeoTab, HistoryTab, JourneyTab, LiveTab, OverviewTab, SearchTab, SourcesTab } from "./tabs-analytics";
@@ -60,6 +61,17 @@ export function VisitorIntelligence() {
   const me = useVi<ViMeDto>(viPath(VI_PATHS.me), "me");
   const [filters, setFiltersState] = useState<Partial<ViFilters>>({ period: "7d" });
   const [liveRevision, setLiveRevision] = useState(0);
+  // The admin shell's date picker drives this page too: changing it switches to that custom range.
+  const { range } = useAdminFilters();
+  const firstRange = useRef(true);
+  useEffect(() => {
+    if (firstRange.current) {
+      firstRange.current = false;
+      return;
+    }
+    const t = window.setTimeout(() => setFiltersState((f) => ({ ...f, period: "custom", from: range.from, to: range.to })), 0);
+    return () => window.clearTimeout(t);
+  }, [range.from, range.to]);
   const [connected, setConnected] = useState(false);
 
   // Live push: the server emits "something changed" (no data) on vi:live; panels refetch. Polling is the fallback.
@@ -127,6 +139,7 @@ export function VisitorIntelligence() {
           ))}
         </nav>
 
+        {ctx.me.demoVisitors > 0 && <div className={s.banner}>⚠ DEMO DATA: {ctx.me.demoVisitors} synthetic visitors (development only) are included in every figure. Remove them in Tracking Settings.</div>}
         {scopeNote && <div className={s.banner}>{scopeNote}</div>}
         {showFilters && tab !== "live" && <FilterBar />}
         {!tab && <ErrorBox message="Your role has no Visitor Intelligence access." />}
