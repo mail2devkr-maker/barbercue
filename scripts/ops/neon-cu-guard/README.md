@@ -77,3 +77,22 @@ node --test scripts/ops/neon-cu-guard/lib.test.mjs   # decision logic (also run 
 ```
 
 `GUARD_NOW=2026-11-20T21:00:00Z` overrides the clock, for testing only.
+
+## Running on Railway (primary since 26 Nov 2026)
+
+GitHub runs scheduled workflows late and drops many of them (on 25-26 Nov only 1 of ~25 night checks
+ran), so the auto checks run as a Railway cron job in the FastQue project:
+
+- Service `neon-cu-guard`: built from `scripts/ops/neon-cu-guard/Dockerfile` (Node 22 + PostgreSQL 18
+  client tools), cron `*/15 * * * *` (UTC) from `railway.json`. Each run takes about a minute and exits;
+  the script itself enforces the 00:00-06:00 IST switch window and the daytime urgent rule.
+  It only calls the Neon and Railway APIs unless it switches, so it does not wake the database.
+- Variables on that service:
+  - secrets, set by the owner: `NEON_API_KEY`, `RAILWAY_TOKEN` (the same values as the GitHub secrets),
+    and `GITHUB_TOKEN`, a fine-grained token for this repository with Issues read/write only (for the
+    tracking issue and alerts);
+  - `NEON_GUARD_AUTOSWITCH=on`, `GITHUB_REPOSITORY=mail2devkr-maker/barbercue`.
+- Once it runs, set the repository variable `NEON_GUARD_RUNNER=railway`. The scheduled auto checks in the
+  GitHub workflow then stop, so two runners can never switch at the same time. The 09:00 IST daily
+  report and manual runs (report / rehearse) stay on GitHub. To fall back to GitHub, delete that
+  variable (and remove the Railway cron schedule).

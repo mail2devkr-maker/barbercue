@@ -42,8 +42,16 @@ jobs:
     steps:
       - name: Secrets present?
         id: secrets
+        env:
+          RUNNER_ELSEWHERE: ${{ vars.NEON_GUARD_RUNNER == 'railway' && github.event_name == 'schedule' && github.event.schedule != '30 3 * * *' }}
         run: |
-          if [ -z "$NEON_API_KEY" ] || [ -z "$RAILWAY_TOKEN" ]; then
+          # Once the Railway cron job runs the guard (repository variable NEON_GUARD_RUNNER=railway), the
+          # scheduled auto checks here stop, so two runners never switch at the same time. The 09:00
+          # daily report and manual runs stay here.
+          if [ "$RUNNER_ELSEWHERE" = "true" ]; then
+            echo "Auto checks run on Railway (NEON_GUARD_RUNNER=railway). Nothing to do here."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          elif [ -z "$NEON_API_KEY" ] || [ -z "$RAILWAY_TOKEN" ]; then
             echo "::warning::NEON_API_KEY / RAILWAY_TOKEN are not set yet - see scripts/ops/neon-cu-guard/README.md. Nothing to do."
             echo "ready=false" >> "$GITHUB_OUTPUT"
           else
