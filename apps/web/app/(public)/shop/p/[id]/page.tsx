@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import type { ShopProductDetailDto } from "@barbercue/shared";
 import { ShopProduct } from "../../../../../components/shop/ShopProduct";
+import { ViTrackEvent } from "../../../../../components/analytics/VisitorIntelTracker";
 import { fetchDiscoveryOrNull } from "../../../../../lib/discovery-api";
 import { SITE_URL } from "../../../../../lib/seo";
 
@@ -56,6 +57,7 @@ export default async function ShopProductPage({ params }: { params: Promise<{ id
   return (
     <>
       {jsonLd && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }} />}
+      <ViTrackEvent type="product_view" entityType="product" entityId={id} module="MARKETPLACE" />
       <ShopProduct initial={product} />
     </>
   );

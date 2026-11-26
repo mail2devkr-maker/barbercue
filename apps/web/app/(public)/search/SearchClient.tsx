@@ -26,6 +26,7 @@ import { ShopNameSearchField } from "../../../components/discovery/ShopNameSearc
 import { ShopServiceSearchField } from "../../../components/discovery/ShopServiceSearchField";
 import { Button } from "../../../components/ui/Button";
 import { apiFetch } from "../../../lib/api";
+import { viTrack, viTrackSearchFromParams } from "../../../lib/visitor-intel/tracker";
 import { useFavorites } from "../../../lib/favorites";
 import { roundBounds } from "../../../lib/map-cluster";
 import { withViewerDistance } from "../../../lib/viewer-distance";
@@ -209,6 +210,8 @@ export default function SearchClient({
     navigator.geolocation.getCurrentPosition(
       (position) => {
         setLocating(false);
+        // Explicit Near Me permission: the server resolves the nearest city and keeps no coordinates.
+        viTrack("near_me", { props: { lat: position.coords.latitude, lng: position.coords.longitude, accuracyM: Math.round(position.coords.accuracy) } });
         onSuccess(position.coords.latitude, position.coords.longitude);
       },
       (err) => {
@@ -328,6 +331,7 @@ export default function SearchClient({
         if (!cancelled && data) {
           setResults(data.items);
           setHasMore(data.nextCursor !== null);
+          if (!favoritesGate) viTrackSearchFromParams(searchParams, data.items.length);
         }
       })
       .catch(() => {

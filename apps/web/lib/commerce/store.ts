@@ -3,6 +3,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import type { CommerceConfigDto, CommerceProductDto } from "@barbercue/shared";
 import { apiFetch } from "../api";
+import { viTrack } from "../visitor-intel/tracker";
 
 // FastQue Direct Commerce on this device: whether it is switched on (asked from the server once), the
 // FastQue bag, saved-for-later, the delivery PIN and guest order links. Prices and stock are always
@@ -110,6 +111,7 @@ export const lineOf = (p: CommerceProductDto, quantity = 1): FqLine => ({
 
 export const fqBag = {
   add(line: FqLine) {
+    viTrack("add_to_cart", { module: "MARKETPLACE", entityType: "product", entityId: line.productId, props: { productId: line.productId, quantity: line.quantity } });
     const cur = read<FqLine[]>("bag", NONE);
     write(
       "bag",

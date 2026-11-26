@@ -36,6 +36,7 @@ import {
   validUntilText,
 } from "../../lib/public-offers";
 import { apiFetch, ApiError } from "../../lib/api";
+import { viTrack } from "../../lib/visitor-intel/tracker";
 import { newIdempotencyKey } from "../../lib/idempotency";
 import { useAuth } from "../../lib/auth-context";
 import { Button } from "../ui/Button";
@@ -334,6 +335,7 @@ export function BookingFlow({
     if (!isCustomerSession || selectedServiceIds.length === 0 || !selectedSlot) return;
     setSubmitting(true);
     setSubmitError(null);
+    viTrack("booking_start", { module: "SALON_BOOKING", salonId, props: { quantity: selectedServiceIds.length } });
     const tokenStore = sessionTokenStore();
     const attributionToken = campaignKey ? recallCampaign(tokenStore, campaignKey) : null;
     try {
@@ -355,6 +357,8 @@ export function BookingFlow({
       if (campaignKey) forgetCampaign(tokenStore, campaignKey);
       void refreshCurrentAvailability().catch(() => undefined);
       setConfirmedBooking(booking);
+      // Only the id is sent; the value is read from the booking on the server.
+      viTrack("booking_confirmed", { module: "SALON_BOOKING", entityType: "booking", entityId: booking.id, salonId });
       setCreditsToRedeem(0);
       // Redemption never fails/rejects — the server always clamps and the booking always succeeds
       // (see BookingsService.create) — so a successful response can still mean some or all of the
@@ -388,6 +392,7 @@ export function BookingFlow({
       // A failed create (e.g. SLOT_FULL) never reaches the redemption step at all — the whole
       // transaction rolls back — so the wallet balance is genuinely untouched and doesn't need
       // re-fetching here.
+      viTrack("booking_failed", { module: "SALON_BOOKING", salonId, props: { reason: err instanceof ApiError && (err.code === "SLOT_FULL" || err.code === "STAFF_SLOT_UNAVAILABLE") ? "no_slots" : err instanceof ApiError ? err.code.slice(0, 40).toLowerCase() : "network" } });
       if (err instanceof ApiError && isOfferError(err.code)) setOfferRefused(true);
       setSubmitError(err instanceof ApiError ? customerOfferErrorText(err.code, err.message) : "Could not create the booking. Please try again.");
     } finally {

@@ -12,6 +12,7 @@ import { ShopBag } from "../shop/ShopCheckout";
 import { Packshot, rupees } from "../shop/ShopParts";
 import { errText, PinCheck } from "./CommerceParts";
 import { countPage } from "./FastQueExtras";
+import { viTrack } from "../../lib/visitor-intel/tracker";
 import s from "../shop/shop.module.css";
 import c from "./commerce.module.css";
 
@@ -231,6 +232,7 @@ export function FastQueCheckout() {
     setBusy(true);
     setProblem(null);
     keyRef.current ??= newIdempotencyKey();
+    viTrack("checkout_start", { module: "MARKETPLACE", props: { quantity: lines.length + groups.length } });
     const address = { name: f.name.trim(), phone: f.phone.trim(), line1: f.line1.trim(), line2: f.line2.trim() || null, landmark: f.landmark.trim() || null, city: f.city.trim(), state: f.state.trim(), pincode: f.pincode };
     try {
       const r = await apiFetch<CommerceCheckoutResultDto>(isCustomer ? "customer/commerce/checkout" : "commerce/checkout", {
@@ -256,6 +258,8 @@ export function FastQueCheckout() {
         }),
       });
       const placedAt = new Date().toISOString();
+      // Only the order number is sent; the server reads the real total from the order.
+      if (r.fastque) viTrack("purchase", { module: "MARKETPLACE", entityType: "order", entityId: r.fastque.orderNumber });
       if (r.fastque) rememberFqOrder({ orderNumber: r.fastque.orderNumber, token: r.fastque.accessToken, placedAt });
       r.salons.forEach((o) => rememberGuestOrder({ orderNumber: o.orderNumber, token: o.accessToken, placedAt }));
       if (lines.length) setFqPin(f.pincode);

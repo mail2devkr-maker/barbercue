@@ -11,6 +11,9 @@ import { HideOnOwnerShell } from "../components/layout/HideOnOwnerShell";
 import { SITE_URL } from "../lib/seo";
 import { UniqueVisitorTracker } from "../components/analytics/UniqueVisitorTracker";
 import { MaintenanceOverlay } from "../components/layout/MaintenanceOverlay";
+import { Suspense } from "react";
+import { VisitorIntelTracker } from "../components/analytics/VisitorIntelTracker";
+import { ConsentBanner } from "../components/privacy/ConsentBanner";
 
 const SITE_DESCRIPTION =
   "Find salons, barbershops, beauty parlours and spas near you in India. Compare services and prices, book an appointment or join the live queue online with FastQue.";
@@ -72,6 +75,11 @@ export default function RootLayout({
             <SiteFooter />
           </HideOnOwnerShell>
         </AuthProvider>
+        {/* Visitor Intelligence: consent first, then first-party, batched tracking (docs/visitor-intelligence). */}
+        <Suspense fallback={null}>
+          <VisitorIntelTracker />
+          <ConsentBanner />
+        </Suspense>
         <MaintenanceOverlay />
       </body>
     </html>
