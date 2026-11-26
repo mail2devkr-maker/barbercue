@@ -41,4 +41,6 @@ export * from './crm';
 export * from './work-marketplace';
 export * from './home-services';
 export * from './maintenance';
+export * from './visitor-intelligence';
+
 export * from './growth-ai';

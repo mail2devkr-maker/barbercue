@@ -44,6 +44,7 @@ import { CommerceModule } from './commerce/commerce.module';
 import { GrowthModule } from './growth/growth.module';
 import { OnboardingModule } from './onboarding/onboarding.module';
 import { CrmModule } from './crm/crm.module';
+import { VisitorIntelModule } from './visitor-intel/visitor-intel.module';
 import { WorkModule } from './work/work.module';
 import { HomeModule } from './home/home.module';
 import { ProfessionalCommitmentsModule } from './common/professional-commitments/professional-commitments.module';
@@ -95,6 +96,7 @@ import { ProfessionalCommitmentsModule } from './common/professional-commitments
     // Before AdminModule so admin/onboarding/* never meets a broader admin route first.
     OnboardingModule,
     CrmModule,
+    VisitorIntelModule,
     AdminModule,
     DashboardBookingsModule,
     DashboardCustomersModule,

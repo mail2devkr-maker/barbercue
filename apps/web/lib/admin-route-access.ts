@@ -28,6 +28,9 @@ export function canOpenAdminPath(roles: Role[], pathname: string): boolean {
   if (pathname.startsWith("/dashboard/admin/analytics")) {
     return superAdmin || coFounder || roles.includes(Role.PLATFORM_VIEWER);
   }
+  // Visitor Intelligence: every internal admin role may open it; each tab and every API route checks a
+  // Visitor Intelligence capability on the server (VI_ROLE_CAPABILITIES + vi_staff_roles), which also hides tabs.
+  if (pathname.startsWith("/dashboard/admin/visitor-intelligence")) return superAdmin || coFounder || sales || roles.includes(Role.PLATFORM_VIEWER);
   // Executive Command Center: mirrors GET admin/analytics/overview (PLATFORM_ADMIN, CO_FOUNDER, PLATFORM_VIEWER).
   if (pathname.startsWith("/dashboard/admin/command-center")) {
     return superAdmin || coFounder || roles.includes(Role.PLATFORM_VIEWER);

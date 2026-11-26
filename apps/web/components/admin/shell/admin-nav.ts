@@ -1,7 +1,7 @@
 import { Role } from "@barbercue/shared";
 import type { IconName } from "../../owner/icons";
 import { canOpenAdminPath } from "../../../lib/admin-route-access";
-import { directCommerceLinksEnabled, growthAiLinksEnabled, homeServicesLinksEnabled, workMarketplaceLinksEnabled } from "../../../lib/dashboard-flags";
+import { directCommerceLinksEnabled, growthAiLinksEnabled, homeServicesLinksEnabled, visitorIntelEnabled, workMarketplaceLinksEnabled } from "../../../lib/dashboard-flags";
 import { ADMIN_HOME_TABS } from "../../home/admin-home-tabs";
 
 // The ONE definition of the admin app's navigation (sidebar, icon rail and the "planned" pages all
@@ -25,6 +25,7 @@ export type AdminNavGroupId =
   | "GROWTH_AI"
   | "FINANCE"
   | "ANALYTICS"
+  | "VISITOR_INTEL"
   | "ALERTS"
   | "REPORTS"
   | "SETTINGS";
@@ -57,6 +58,7 @@ export const ADMIN_NAV_GROUPS: ReadonlyArray<{ id: AdminNavGroupId; label: strin
   ...(growthAiLinksEnabled() ? [{ id: "GROWTH_AI" as const, label: "Growth AI", icon: "trend" as const }] : []),
   { id: "FINANCE", label: "Finance", icon: "card" },
   { id: "ANALYTICS", label: "Analytics", icon: "chart" },
+  ...(visitorIntelEnabled() ? [{ id: "VISITOR_INTEL" as const, label: "Visitor Intelligence", icon: "eye" as const }] : []),
   { id: "ALERTS", label: "Alerts", icon: "alert" },
   { id: "REPORTS", label: "Reports", icon: "receipt" },
   { id: "SETTINGS", label: "Settings", icon: "settings" },
@@ -72,6 +74,23 @@ const planned = (group: AdminNavGroupId, id: string, label: string, needs: strin
   status: "planned",
   needs,
 });
+
+// FastQue Visitor Intelligence (docs/visitor-intelligence/): one page, one tab per sub-item.
+const VISITOR_INTEL = "/dashboard/admin/visitor-intelligence";
+export const VISITOR_INTEL_TABS: ReadonlyArray<readonly [string, string]> = [
+  ["overview", "Overview"],
+  ["live", "Live Visitors"],
+  ["history", "Visitor History"],
+  ["geo", "Geographic Analytics"],
+  ["search", "Search Intelligence"],
+  ["journey", "Customer Journey"],
+  ["sources", "Traffic Sources"],
+  ["conversions", "Conversion Analytics"],
+  ["marketing", "Marketing Performance"],
+  ["ai", "AI Insights"],
+  ["reports", "Reports"],
+  ["settings", "Tracking Settings"],
+];
 
 const COMMERCE = "/dashboard/admin/commerce";
 const GROWTH = "/dashboard/admin/growth";
@@ -144,6 +163,7 @@ export const ADMIN_NAV_ITEMS: ReadonlyArray<AdminNavItem> = [
     : []),
 
   { id: "chart-builder", label: "Chart Builder", group: "ANALYTICS", href: CHARTS, status: "live" },
+  ...(visitorIntelEnabled() ? VISITOR_INTEL_TABS : []).map(([id, label]): AdminNavItem => ({ id: `vi-${id}`, label, group: "VISITOR_INTEL", href: VISITOR_INTEL, ...(id === "overview" ? {} : { query: `tab=${id}` }), status: "live" })),
   planned("ANALYTICS", "saved-reports", "Saved Reports", "Server-side saved chart preferences (stored per browser today)."),
 
   { id: "inventory-overview", label: "Inventory Statistics", group: "INVENTORY", href: "/dashboard/admin/inventory", status: "live" },

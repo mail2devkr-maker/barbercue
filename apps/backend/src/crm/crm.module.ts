@@ -24,5 +24,7 @@ import { CrmTicketsService } from './crm-tickets.service';
     CrmAnnouncementsService,
     CrmSchedulerService,
   ],
+  // Visitor Intelligence creates market-opportunity tasks through the CRM's own access rules.
+  exports: [CrmAccessService, CrmActivityService],
 })
 export class CrmModule {}

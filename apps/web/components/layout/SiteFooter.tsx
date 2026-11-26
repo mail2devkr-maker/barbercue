@@ -2,6 +2,7 @@ import Link from "next/link";
 import { BrandLockup } from "../ui/BrandLockup";
 import { FASTQUE_GOOGLE_PLAY_URL, PlayStoreQr } from "./PlayStoreQr";
 import styles from "../landing/landing.module.css";
+import { CookiePreferencesLink } from "../privacy/ConsentBanner";
 
 // Only render live social links when the owner has provided an exact official profile URL.
 // Never invent a profile or link to a generic Instagram/Facebook search page.
@@ -85,6 +86,7 @@ export function SiteFooter() {
             <Link href="/hr-policy">HR Policy</Link>
             <Link href="/login">Customer login</Link>
             <Link href="/privacy-policy">Privacy policy</Link>
+            <CookiePreferencesLink />
             <Link href="/account-deletion">Account deletion</Link>
           </div>
         </nav>

@@ -11,6 +11,9 @@ import { HideOnOwnerShell } from "../components/layout/HideOnOwnerShell";
 import { SITE_URL } from "../lib/seo";
 import { UniqueVisitorTracker } from "../components/analytics/UniqueVisitorTracker";
 import { MaintenanceOverlay } from "../components/layout/MaintenanceOverlay";
+import { Suspense } from "react";
+import { VisitorIntelTracker } from "../components/analytics/VisitorIntelTracker";
+import { ConsentBanner } from "../components/privacy/ConsentBanner";
 import { MetaPixel } from "../components/analytics/MetaPixel";
 
 const SITE_DESCRIPTION =
@@ -74,6 +77,11 @@ export default function RootLayout({
             <SiteFooter />
           </HideOnOwnerShell>
         </AuthProvider>
+        {/* Visitor Intelligence: consent first, then first-party, batched tracking (docs/visitor-intelligence). */}
+        <Suspense fallback={null}>
+          <VisitorIntelTracker />
+          <ConsentBanner />
+        </Suspense>
         <MaintenanceOverlay />
       </body>
     </html>

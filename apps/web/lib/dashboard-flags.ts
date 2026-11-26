@@ -17,6 +17,11 @@ export function workMarketplaceLinksEnabled(env: string | undefined = process.en
 
 /** FastQue Home entry points on the website (landing page, customer and owner menus, /home-services).
  *  Keep OFF until the backend runs with FASTQUE_HOME_ENABLED=true. The admin section is always listed. */
+/** Visitor Intelligence (tracking, cookie banner, admin section): off until NEXT_PUBLIC_VISITOR_INTEL_ENABLED=true. */
+export function visitorIntelEnabled(env: string | undefined = process.env.NEXT_PUBLIC_VISITOR_INTEL_ENABLED): boolean {
+  return env === "true";
+}
+
 export function homeServicesLinksEnabled(env: string | undefined = process.env.NEXT_PUBLIC_FASTQUE_HOME_ENABLED): boolean {
   return env === "true";
 }
