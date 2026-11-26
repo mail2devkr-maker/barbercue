@@ -22,6 +22,7 @@ import {
 import { AppException } from '../common/exceptions/app.exception';
 import { PrismaService } from '../prisma/prisma.service';
 import { availableUnits, reservedUnits } from './shop-stock';
+import { armCommerceOutbox } from '../commerce/commerce-outbox-signal';
 
 type Actor = 'SELLER' | 'CUSTOMER' | 'SYSTEM' | 'ADMIN';
 
@@ -384,6 +385,7 @@ export class ShopOrderService {
           maxWait: 10000,
         },
       );
+      armCommerceOutbox(); // after commit: the outbox sweep tells the salon about the new order
       return {
         order: toOrderDto(order, 'CUSTOMER'),
         accessToken: orderAccessToken(order.id),
@@ -645,6 +647,7 @@ export class ShopOrderService {
         maxWait: 10000,
       },
     );
+    armCommerceOutbox(); // after commit: the outbox sweep collects the status event
     const row = await this.prisma.shopOrder.findUniqueOrThrow({
       where: { id: updated },
       include: orderInclude,
