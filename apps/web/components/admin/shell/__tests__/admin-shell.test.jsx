@@ -27,7 +27,8 @@ describe('admin navigation', () => {
   it('has unique ids and covers the 13 blueprint sections plus Inventory and Finance (FastQue Home only when switched on)', () => {
     const ids = ADMIN_NAV_ITEMS.map((i) => i.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ADMIN_NAV_GROUPS).toHaveLength(15);
+    // 15 + Visitor Intelligence.
+    expect(ADMIN_NAV_GROUPS).toHaveLength(16);
     expect(ADMIN_NAV_GROUPS.map((g) => g.id)).not.toContain('HOME_SERVICES');
     for (const group of ADMIN_NAV_GROUPS) {
       expect(ADMIN_NAV_ITEMS.some((i) => i.group === group.id)).toBe(true);
