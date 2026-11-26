@@ -330,7 +330,7 @@ async function trackingIssue() {
 }
 async function post(text, { mention = false } = {}) {
   const repo = process.env.GITHUB_REPOSITORY;
-  const body = (mention ? `@${repo.split("/")[0]} ` : "") + text + `\n\n<sub>run: ${process.env.GITHUB_SERVER_URL}/${repo}/actions/runs/${process.env.GITHUB_RUN_ID} · mode ${MODE}</sub>`;
+  const body = (mention ? `@${repo.split("/")[0]} ` : "") + text + `\n\n<sub>${process.env.GITHUB_RUN_ID ? `run: ${process.env.GITHUB_SERVER_URL}/${repo}/actions/runs/${process.env.GITHUB_RUN_ID}` : "runner: Railway cron"} · mode ${MODE}</sub>`;
   log("REPORT:\n" + text);
   if (!process.env.GITHUB_TOKEN || !repo) return;
   try {
