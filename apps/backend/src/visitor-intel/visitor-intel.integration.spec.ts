@@ -397,5 +397,5 @@ const q = (period: ViFilters['period'] = 'today') => ({
     const t = Date.now();
     await analytics.overview(q('30d'), platform);
     console.log(`visitor-intel perf: overview (30d) in ${Date.now() - t} ms`);
-  });
+  }, 30000);
 });
