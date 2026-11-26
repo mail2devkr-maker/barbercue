@@ -105,6 +105,7 @@ export const VI_FUNNELS: Record<
         label: 'Results shown',
         types: ['search_results', 'search'],
         where: 'results',
+        optional: true,
       },
       { key: 'salon', label: 'Salon profile', types: ['salon_view'] },
       {
@@ -136,7 +137,12 @@ export const VI_FUNNELS: Record<
         types: ['booking_payment'],
         optional: true,
       },
-      { key: 'confirmed', label: 'Confirmed', types: ['booking_confirmed'] },
+      {
+        key: 'confirmed',
+        label: 'Confirmed',
+        types: ['booking_confirmed'],
+        where: 'verified:BOOKING',
+      },
     ],
   },
   LIVE_QUEUE: {
@@ -149,7 +155,12 @@ export const VI_FUNNELS: Record<
         types: ['salon_view', 'page_view'],
         where: 'queuePath',
       },
-      { key: 'join', label: 'Queue joined', types: ['queue_join'] },
+      {
+        key: 'join',
+        label: 'Queue joined',
+        types: ['queue_join'],
+        where: 'verified:QUEUE_JOIN',
+      },
     ],
   },
   HOME_SERVICES: {
@@ -183,7 +194,12 @@ export const VI_FUNNELS: Record<
       { key: 'view', label: 'Product viewed', types: ['product_view'] },
       { key: 'cart', label: 'Added to cart', types: ['add_to_cart'] },
       { key: 'checkout', label: 'Checkout started', types: ['checkout_start'] },
-      { key: 'purchase', label: 'Purchased', types: ['purchase'] },
+      {
+        key: 'purchase',
+        label: 'Purchased',
+        types: ['purchase'],
+        where: 'verified:PURCHASE',
+      },
     ],
   },
   PARTNER: {
@@ -268,6 +284,11 @@ function stepCondition(step: { types: string[]; where?: string }): Prisma.Sql {
     case 'staffingSearch':
       return Prisma.sql`e.type = 'search' AND e.metadata->>'searchKind' = 'STAFFING'`;
     default:
+      // Outcome steps count only when the server verified them (vi_conversions), never on a browser claim.
+      if (step.where?.startsWith('verified:')) {
+        const type = step.where.slice('verified:'.length);
+        return Prisma.sql`e.type IN (${types}) AND EXISTS (SELECT 1 FROM vi_conversions vc WHERE vc."sessionId" = e."sessionId" AND vc.type::text = ${type})`;
+      }
       return Prisma.sql`e.type IN (${types})`;
   }
 }
