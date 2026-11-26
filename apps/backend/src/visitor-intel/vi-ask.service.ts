@@ -14,7 +14,7 @@ import { VI_LLM_GUARD, viLlm } from './vi-ai';
 import type { ViQuery } from './vi-common';
 
 /**
- * Ask FastQue AI (docs/visitor-intelligence/AI.md §Ask). A question is mapped to ONE whitelisted, read-only
+ * Ask FastQue AI (docs/visitor-intelligence/README.md (AI) §Ask). A question is mapped to ONE whitelisted, read-only
  * tool (by rules first, by the optional LLM only if rules fail). The tool runs with the caller's own role
  * and scope through the same services the dashboards use. No model ever writes or runs SQL.
  */

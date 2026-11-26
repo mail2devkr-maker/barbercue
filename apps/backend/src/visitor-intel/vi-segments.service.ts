@@ -69,7 +69,7 @@ export const VI_SYSTEM_SEGMENTS: Array<{
 ];
 
 /**
- * First-party audience segments (docs/visitor-intelligence/SEGMENTS.md). Only visitors who gave marketing
+ * First-party audience segments (docs/visitor-intelligence/README.md (SEGMENTS)). Only visitors who gave marketing
  * consent are ever "reachable", registered users must not have opted out or be suppressed for the channel,
  * and FastQue never adds contact details it does not already legitimately hold.
  */

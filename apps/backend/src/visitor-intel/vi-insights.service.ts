@@ -44,7 +44,7 @@ const q = (period: ViFilters['period'], now = new Date()): ViQuery => ({
 });
 
 /**
- * FastQue Intelligence Agent (docs/visitor-intelligence/AI.md). Statistics and explicit rules produce every
+ * FastQue Intelligence Agent (docs/visitor-intelligence/README.md (AI)). Statistics and explicit rules produce every
  * recommendation; an LLM (if enabled) only rewrites the daily/weekly summary from the aggregate numbers.
  * Recommendations never act on their own: accepting one records the decision, and a CRM task is created
  * only when a person asks for it. Ad spend and campaign launches always stay with humans.

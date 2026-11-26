@@ -2,7 +2,7 @@ import { Logger } from '@nestjs/common';
 import type { ViGeoSource } from '@barbercue/shared';
 
 /**
- * Approximate visitor location (docs/visitor-intelligence/GEO.md). Order of preference:
+ * Approximate visitor location (docs/visitor-intelligence/README.md (GEO)). Order of preference:
  *   1. CDN geo headers (Cloudflare `cf-ipcountry`/`cf-ipcity`/`cf-region`, Vercel `x-vercel-ip-*`,
  *      or a generic `x-geo-*` set by any reverse proxy). Free, no IP leaves our infrastructure.
  *   2. An OPTIONAL offline database (DB-IP Lite / GeoLite2 .mmdb) when VI_GEOIP_MMDB_PATH is set and

@@ -1,5 +1,5 @@
 -- FastQue Visitor Intelligence. Additive only: new enums, tables and indexes. No existing table, column or row is changed.
--- Rollback: DROP the vi_* tables and Vi* enums (docs/visitor-intelligence/DEPLOYMENT.md).
+-- Rollback: DROP the vi_* tables and Vi* enums (docs/visitor-intelligence/README.md (DEPLOYMENT)).
 
 -- CreateEnum
 CREATE TYPE "ViGeoSource" AS ENUM ('CDN_HEADER', 'OFFLINE_DB', 'BROWSER_PERMISSION', 'USER_SELECTED', 'NONE');

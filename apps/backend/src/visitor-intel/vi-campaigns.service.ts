@@ -49,7 +49,7 @@ export function siteUrl(): string {
   ).replace(/\/+$/, '');
 }
 
-/** Campaign links, QR codes, ROI, and one-click CRM tasks (docs/visitor-intelligence/CAMPAIGNS.md). */
+/** Campaign links, QR codes, ROI, and one-click CRM tasks (docs/visitor-intelligence/README.md (CAMPAIGNS)). */
 @Injectable()
 export class ViCampaignsService {
   constructor(

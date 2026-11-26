@@ -15,7 +15,7 @@ import { CryptoService } from '../auth/services/crypto.service';
 import { viBadRequest } from './vi-common';
 
 /**
- * External analytics/ad platforms (docs/visitor-intelligence/INTEGRATIONS.md). Everything is OFF unless
+ * External analytics/ad platforms (docs/visitor-intelligence/README.md (INTEGRATIONS)). Everything is OFF unless
  *   1. VI_INTEGRATIONS_ENABLED=true on the server (global kill switch, default off), and
  *   2. the provider is enabled on the Tracking Settings page with its credentials saved.
  * Secrets are AES-256-GCM encrypted with the existing CryptoService key (TOTP_ENCRYPTION_KEY) and are

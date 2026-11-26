@@ -35,7 +35,7 @@ export interface ViActor {
 }
 
 /**
- * Who may see what (docs/visitor-intelligence/RBAC.md). Roles are the intersection of the session's
+ * Who may see what (docs/visitor-intelligence/README.md (RBAC)). Roles are the intersection of the session's
  * (audience-scoped) token roles and what the database says the user still holds, so a revoked role
  * stops working immediately and a customer-audience session can never gain admin rights here.
  */

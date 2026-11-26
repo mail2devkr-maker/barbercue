@@ -75,7 +75,7 @@ interface SessionDelta {
 }
 
 /**
- * First-party event ingestion (docs/visitor-intelligence/ARCHITECTURE.md §Ingestion).
+ * First-party event ingestion (docs/visitor-intelligence/README.md (ARCHITECTURE) §Ingestion).
  * The HTTP handler validates and enqueues, then returns 202 immediately; a single worker per
  * instance drains the queue every 500 ms in arrival order. Every event carries a client UUID, so
  * retries and duplicate beacons are dropped. Money is never taken from the browser: bookings and

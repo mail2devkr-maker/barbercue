@@ -3,7 +3,7 @@
 import { VI_CONSENT_POLICY_VERSION, VI_CONSENT_STORAGE_KEY, VI_PATHS } from "@barbercue/shared";
 
 /**
- * Cookie / tracking consent (docs/visitor-intelligence/PRIVACY.md). Nothing non-essential is collected until
+ * Cookie / tracking consent (docs/visitor-intelligence/README.md (PRIVACY)). Nothing non-essential is collected until
  * the visitor chooses. The choice is stored in this browser only and sent (with a pseudonymous id, no IP)
  * so FastQue can show it was given. Withdrawing is as easy as giving: "Cookie preferences" in the footer.
  */

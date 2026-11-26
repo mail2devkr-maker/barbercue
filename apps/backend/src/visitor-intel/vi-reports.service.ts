@@ -32,7 +32,7 @@ const REPORT_CAPS: Record<ViReportType, string> = {
   insights: 'insights',
 };
 
-/** Exports and scheduled reports (docs/visitor-intelligence/REPORTS.md). Aggregates only; no contact details. */
+/** Exports and scheduled reports (docs/visitor-intelligence/README.md (REPORTS)). Aggregates only; no contact details. */
 @Injectable()
 export class ViReportsService {
   private readonly logger = new Logger(ViReportsService.name);

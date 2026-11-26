@@ -111,7 +111,7 @@ const selfPreferenceSchema = z.object({
 });
 
 /**
- * FastQue Visitor Intelligence API (docs/visitor-intelligence/API.md). Every authenticated route checks a
+ * FastQue Visitor Intelligence API (docs/visitor-intelligence/README.md (API)). Every authenticated route checks a
  * Visitor Intelligence capability through ViAccessService (backend-enforced RBAC + scope); the web app only
  * mirrors it. Ingestion routes are public, consent-gated, rate-limited and never store raw IPs.
  */

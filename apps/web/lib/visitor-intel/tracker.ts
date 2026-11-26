@@ -5,7 +5,7 @@ import { getAccessToken } from "../api";
 import { readConsent } from "./consent";
 
 /**
- * FastQue first-party tracker (docs/visitor-intelligence/TRACKING.md).
+ * FastQue first-party tracker (docs/visitor-intelligence/README.md (TRACKING)).
  *  - Does nothing until the visitor allows analytics cookies.
  *  - Events are queued in memory and sent in small batches (every 4 s, at 20 events, or when the tab is
  *    hidden) with fetch keepalive, so it never blocks rendering or navigation.

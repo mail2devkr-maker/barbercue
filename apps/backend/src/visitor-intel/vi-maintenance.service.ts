@@ -22,7 +22,7 @@ import {
 export const VI_DEMO_KEY_PREFIX = 'demo';
 
 /**
- * Background upkeep (docs/visitor-intelligence/OPERATIONS.md):
+ * Background upkeep (docs/visitor-intelligence/README.md (OPERATIONS)):
  *  - nightly daily rollups into vi_daily_metrics (kept for years, after raw data is pruned),
  *  - retention clean-up in small batches, using the configured retention periods,
  *  - privacy access / deletion requests,

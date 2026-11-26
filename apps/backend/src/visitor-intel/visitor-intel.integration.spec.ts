@@ -343,6 +343,29 @@ const q = (period: ViFilters['period'] = 'today') => ({
     ).toBe(0);
   });
 
+  it('retention removes raw rows older than the configured window and keeps recent ones', async () => {
+    const vid = randomUUID();
+    const sid = randomUUID();
+    await ingest.process(
+      env(batch(vid, sid, [ev('page_view'), ev('page_view', { path: '/x' })])),
+    );
+    const session = await prisma.viSession.findUniqueOrThrow({
+      where: { clientSessionId: sid },
+    });
+    await prisma.viEvent.updateMany({
+      where: { sessionId: session.id, path: '/x' },
+      data: { occurredAt: new Date(Date.now() - 400 * 86_400_000) },
+    });
+    const before = await prisma.viEvent.count({
+      where: { sessionId: session.id },
+    });
+    const removed = await maintenance.retention();
+    expect(removed.events).toBeGreaterThanOrEqual(1);
+    expect(
+      await prisma.viEvent.count({ where: { sessionId: session.id } }),
+    ).toBe(before - 1);
+  });
+
   it('ingests 2,000 events in batches quickly (performance smoke)', async () => {
     const started = Date.now();
     for (let i = 0; i < 40; i++) {
