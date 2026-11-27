@@ -5,7 +5,7 @@ import { ADMIN_PATHS, UserStatus, type AdminEmployeeDto } from "@barbercue/share
 import { QRCodeCanvas } from "qrcode.react";
 import { ApiError, apiFetch } from "../../../../../lib/api";
 import styles from "../admin.module.css";
-import { buildEmployeeIdCardDraftPdf, formatEmployeeJoiningDate, OFFICIAL_SITE_QR_URL } from "./employee-id-card";
+import { buildEmployeeIdCardDraftPdf, OFFICIAL_SITE_QR_URL } from "./employee-id-card";
 
 /** HR/Co-Founder/Platform Admin-only official ID-card generator for registered active employees. */
 export default function EmployeeIdCardGenerator() {
@@ -13,6 +13,7 @@ export default function EmployeeIdCardGenerator() {
   const [employeeId, setEmployeeId] = useState("");
   const [territory, setTerritory] = useState("");
   const [designation, setDesignation] = useState("Field Executive");
+  const [joiningDate, setJoiningDate] = useState("");
   const [photo, setPhoto] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -42,6 +43,7 @@ export default function EmployeeIdCardGenerator() {
     setEmployeeId(id);
     setTerritory(employee?.territory ?? "");
     setDesignation("Field Executive");
+    setJoiningDate(employee ? toIstDateInput(employee.joinedAt) : "");
     setStatus(null);
   }
 
@@ -80,7 +82,8 @@ export default function EmployeeIdCardGenerator() {
       const bytes = await buildEmployeeIdCardDraftPdf({
         employeeCode: latest.employeeCode,
         fullName: latest.fullName,
-        joinedAt: latest.joinedAt,
+        // The card prints the date chosen in the form; it starts from the employee record.
+        joinedAt: joiningDate ? joiningDate + "T12:00:00+05:30" : latest.joinedAt,
         territory: territory.trim().slice(0, 160),
         designation: designation.trim().slice(0, 100) || "Field Executive",
         photo,
@@ -143,8 +146,14 @@ export default function EmployeeIdCardGenerator() {
             <input value={territory} onChange={(event) => setTerritory(event.target.value)} maxLength={160} placeholder="Delhi - NCR" />
           </label>
           <label>
-            <span>Joining date (from employee record)</span>
-            <input readOnly value={selected ? formatEmployeeJoiningDate(selected.joinedAt) : ""} />
+            <span>Joining date (printed on the card)</span>
+            <input
+              type="date"
+              value={joiningDate}
+              onChange={(event) => setJoiningDate(event.target.value)}
+              disabled={!selected}
+              aria-label="Joining date"
+            />
           </label>
         </div>
         <label className={styles.offerUpload}>
@@ -173,4 +182,11 @@ export default function EmployeeIdCardGenerator() {
       </div>
     </section>
   );
+}
+
+/** YYYY-MM-DD of an ISO timestamp in India time, for a date input. */
+function toIstDateInput(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
 }
