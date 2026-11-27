@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Neon CU guard - runs in GitHub Actions (.github/workflows/neon-cu-guard.yml); no local machine needed.
 // Modes (GUARD_MODE): auto (default: report once a day, switch when needed), report, rehearse.
-// Never prints a password or connection string (all are masked with ::add-mask:: first).
+// Never prints a password or connection string (on GitHub they are also masked with ::add-mask::).
 // Safety rules: the source database is never written; the target is always a NEW EMPTY database;
 // any failure before the Railway variables change -> redeploy on the unchanged source;
 // any failure after -> restore the previous variables and redeploy; every outcome is reported.
@@ -34,7 +34,10 @@ const NOW = process.env.GUARD_NOW ? new Date(process.env.GUARD_NOW) : new Date()
 
 const log = (...a) => console.log(new Date().toISOString(), ...a);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// ::add-mask:: is a GitHub Actions command. Anywhere else (Railway cron) it would print the
+// secret in plain text into the logs, so it is written only inside GitHub Actions.
 function mask(secret) {
+  if (process.env.GITHUB_ACTIONS !== "true") return;
   if (secret) process.stdout.write(`::add-mask::${secret}\n`);
   try {
     const u = new URL(secret);
