@@ -22,7 +22,7 @@ import { Screen, SectionHeader, Card, Button, EmptyState, Skeleton, InlineError 
 import {
   scope,
   ServiceRow,
-  AddServiceForm,
+  AddServiceForm, ImportServicesSheet,
   ChairRow,
   AddChairForm,
   AddStaffForm,
@@ -157,6 +157,7 @@ export default function OwnerShopScreen() {
         )}
       </Card>
       <AddServiceForm salonId={selectedSalonId} categories={serviceCategories} onAdded={() => void load()} />
+      <ImportServicesSheet salonId={selectedSalonId} existingNames={services.map((s) => s.name)} onAdded={() => void load()} />
       <Button title={showCategories ? (language === Language.HI ? 'श्रेणियाँ छिपाएँ' : 'Hide categories') : (language === Language.HI ? 'सेवा श्रेणियाँ प्रबंधित करें' : 'Manage service categories')} variant="outline" onPress={() => setShowCategories(!showCategories)} style={sectionStyles.addButton} />
       {showCategories && <Card style={sectionStyles.card}><ServiceCategoryManager salonId={selectedSalonId} onChanged={() => void load()} /></Card>}
 

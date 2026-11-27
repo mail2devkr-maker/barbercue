@@ -29,6 +29,8 @@ import { useLanguage } from '../../lib/language-context';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 import { Button, InlineError, SafeImage } from '../ui';
 import { UpiRoutingStatus } from './UpiRoutingStatus';
+import { canPickServiceSheet, pickServiceSheet, shareServiceSheetTemplate } from '../../lib/service-sheet-picker';
+import type { SheetServiceRow } from '../../lib/service-sheet-import';
 import { useThemedStyles, useThemeTokens, type ThemeTokens } from '../../lib/theme-mode';
 
 /**
@@ -813,6 +815,9 @@ const makeStyles = ({ color, surface }: ThemeTokens) => StyleSheet.create({
   actionRow: { flexDirection: 'row', gap: space[2], marginTop: space[1] },
   actionButton: { flex: 1 },
   addButton: { marginBottom: space[2] },
+  importTitle: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: color.ink, marginBottom: space[2] },
+  importNote: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, color: color.ink, marginBottom: space[1] },
+  importSkip: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, color: color.muted, marginBottom: space[1] },
   hint: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted, marginBottom: space[3] },
 
   hoursEditRow: { flexDirection: 'row', alignItems: 'center', gap: space[2], paddingVertical: space[2], borderBottomWidth: 1, borderBottomColor: color.border },
@@ -846,4 +851,97 @@ const makeStyles = ({ color, surface }: ThemeTokens) => StyleSheet.create({
 /** The shared shop-setup stylesheet for the theme in force (used by the Shop and Onboarding screens). */
 export function useSectionStyles() {
   return useThemedStyles(makeStyles);
+}
+
+/**
+ * Owner bulk add from an Excel / CSV file (website parity with the employee onboarding import).
+ * The file is read on the phone; nothing is uploaded. The owner sees every row first, and only
+ * rows with a name, price and duration are added, one normal "add service" call each.
+ */
+export function ImportServicesSheet({ salonId, existingNames = [], onAdded }: { salonId: string; existingNames?: string[]; onAdded: () => void }) {
+  const styles = useThemedStyles(makeStyles);
+  const [available] = useState(() => canPickServiceSheet());
+  const [rows, setRows] = useState<SheetServiceRow[] | null>(null);
+  const [fileName, setFileName] = useState('');
+  const [notes, setNotes] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  if (!available) return null;
+
+  const existing = new Set(existingNames.map((n) => n.trim().toLowerCase()));
+  const usable = (rows ?? []).filter((r) => r.basePrice != null && r.durationMinutes && !existing.has(r.serviceName.trim().toLowerCase()));
+
+  async function pick() {
+    setError(null);
+    setDone(null);
+    try {
+      const result = await pickServiceSheet();
+      if (!result) return;
+      if (!result.rows.length) {
+        setError(result.notes.join(' ') || `No services found in ${result.fileName}.`);
+        return;
+      }
+      setRows(result.rows);
+      setNotes(result.notes);
+      setFileName(result.fileName);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not read the file.');
+    }
+  }
+
+  async function addAll() {
+    setSaving(true);
+    setError(null);
+    let added = 0;
+    const failed: string[] = [];
+    for (const r of usable) {
+      try {
+        await apiFetch(scope(salonId, DASHBOARD_PATHS.services), {
+          method: 'POST',
+          body: JSON.stringify({ name: r.serviceName, price: r.basePrice, durationMinutes: r.durationMinutes, ...(r.category ? { category: r.category } : {}) }),
+        });
+        added += 1;
+      } catch (err) {
+        failed.push(`${r.serviceName}${err instanceof ApiError ? ` (${err.message})` : ''}`);
+      }
+    }
+    setSaving(false);
+    setRows(null);
+    setDone(`${added} service(s) added from ${fileName}.${failed.length ? ` Not added: ${failed.join(', ')}.` : ''}`);
+    if (added) onAdded();
+  }
+
+  if (!rows) {
+    return (
+      <View>
+        {error && <InlineError message={error} />}
+        {done && <Text style={styles.importNote}>{done}</Text>}
+        <Button title="Import services from Excel / CSV" variant="outline" onPress={() => void pick()} style={styles.addButton} />
+        <Pressable accessibilityRole="button" onPress={() => void shareServiceSheetTemplate().catch(() => undefined)}>
+          <Text style={styles.rowAction}>Share template</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.editPanel}>
+      <Text style={styles.importTitle}>{fileName}: {rows.length} row(s)</Text>
+      {notes.map((n, i) => <Text key={i} style={styles.importNote}>{n}</Text>)}
+      {rows.map((r, i) => {
+        const dup = existing.has(r.serviceName.trim().toLowerCase());
+        const reason = dup ? 'already added' : r.basePrice == null ? 'no price' : !r.durationMinutes ? 'no duration' : null;
+        return (
+          <Text key={i} style={reason ? styles.importSkip : styles.importNote}>
+            {reason ? '✕' : '✓'} {r.serviceName} · {r.basePrice != null ? `₹${r.basePrice}` : '—'} · {r.durationMinutes ? `${r.durationMinutes} min` : '—'}{reason ? ` (${reason}, skipped)` : ''}
+          </Text>
+        );
+      })}
+      <View style={styles.actionRow}>
+        <Button title={`Add ${usable.length}`} onPress={() => void addAll()} loading={saving} disabled={!usable.length} style={styles.actionButton} />
+        <Button title="Cancel" variant="outline" onPress={() => setRows(null)} style={styles.actionButton} />
+      </View>
+    </View>
+  );
 }
