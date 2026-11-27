@@ -48,6 +48,7 @@ import {
 import { CityTypeahead } from "../locations/CityTypeahead";
 import { lookupPincode } from "../../lib/pincode";
 import { PrivateImage } from "./PrivateImage";
+import { readServiceSheet, SERVICE_SHEET_TEMPLATE_CSV } from "../../lib/service-sheet-import";
 import base from "../../app/employee/employee.module.css";
 import styles from "../../app/employee/onboarding/onboarding.module.css";
 
@@ -437,6 +438,50 @@ export function OnboardingWizard({ applicationId }: Props) {
     </label>
   );
 
+  // Excel / CSV service list, read in this browser only. Rows stay unconfirmed until checked.
+  const importSheet = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setError(null);
+    setNotice(null);
+    try {
+      const result = await readServiceSheet(file);
+      if (!result.rows.length) {
+        setError(result.notes.join(" ") || "No services found in " + file.name + ".");
+        return;
+      }
+      const existing = new Set(rows.map((r) => r.serviceName.trim().toLowerCase()));
+      const fresh = result.rows.filter((r) => !existing.has(r.serviceName.trim().toLowerCase()));
+      const skipped = result.rows.length - fresh.length;
+      setRows((current) => [
+        ...current,
+        ...fresh.map((r) => newServiceRow({ ...r, sourceType: "MANUAL", confirmedByEmployee: false })),
+      ]);
+      setServicesDirty(true);
+      setNotice(
+        [
+          `${fresh.length} service(s) imported from ${file.name}. Check each row and tick “Confirmed”.`,
+          skipped ? `${skipped} already in the list were skipped.` : "",
+          ...result.notes,
+        ].filter(Boolean).join(" "),
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not read " + file.name + ".");
+    }
+  };
+
+  const downloadSheetTemplate = () => {
+    const url = URL.createObjectURL(new Blob(["﻿" + SERVICE_SHEET_TEMPLATE_CSV], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "fastque-services-template.csv";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 5_000);
+  };
+
   const updateRow = (key: string, patch: Partial<ServiceRow>) => {
     setRows((current) => current.map((r) => (r.key === key ? { ...r, ...patch } : r)));
     setServicesDirty(true);
@@ -807,7 +852,23 @@ export function OnboardingWizard({ applicationId }: Props) {
                 </button>
               )}
             </div>
-            {rows.length === 0 && <p className={base.empty}>No services yet. Add them by hand or read a menu photo.</p>}
+            {!readOnly && (
+              <div className={styles.uploadButtons} style={{ marginBottom: 10 }}>
+                <label className={styles.uploadLabel}>
+                  Import Excel / CSV
+                  <input
+                    type="file"
+                    accept=".xlsx,.csv,.tsv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
+                    disabled={!!busy}
+                    onChange={(e) => void importSheet(e)}
+                  />
+                </label>
+                <button type="button" className={base.smallButtonMuted} onClick={downloadSheetTemplate}>
+                  Download template
+                </button>
+              </div>
+            )}
+            {rows.length === 0 && <p className={base.empty}>No services yet. Add them by hand, import an Excel / CSV file, or read a menu photo.</p>}
             <div className={styles.serviceList}>
               {rows.map((row) => {
                 const unsure = (field: string) => (row.uncertainFields ?? []).includes(field) && !row.confirmedByEmployee;
