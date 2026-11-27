@@ -88,6 +88,8 @@ export default function EmployeeDashboardScreen() {
 
       <AssistantEntry onPress={() => navigation.navigate('Assistant')} />
 
+      <PremiumButton title="Salon Onboarding" onPress={() => navigation.navigate('EmployeeOnboardingList')} style={styles.onboarding} />
+
       {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
 
       {loading && !dashboard ? (
@@ -173,6 +175,7 @@ function Metric({ label, value }: { label: string; value: number }) {
 
 const makeStyles = ({ fastQue }: ThemeTokens) => StyleSheet.create({
   content: { paddingHorizontal: space[4] },
+  onboarding: { marginVertical: space[3] },
   topRow: { flexDirection: 'row', alignItems: 'flex-start', gap: space[2] },
   heading: { flex: 1 },
   signOut: { minHeight: 44, justifyContent: 'center', paddingHorizontal: space[2] },

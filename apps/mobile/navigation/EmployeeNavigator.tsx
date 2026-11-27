@@ -1,12 +1,16 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import EmployeeDashboardScreen from '../screens/employee/EmployeeDashboardScreen';
 import AssistantScreen from '../screens/AssistantScreen';
+import EmployeeOnboardingListScreen from '../screens/employee/EmployeeOnboardingListScreen';
+import EmployeeOnboardingWizardScreen from '../screens/employee/EmployeeOnboardingWizardScreen';
 import { useStackOptions } from './screenOptions';
 import { useLanguage } from '../lib/language-context';
 
 export type EmployeeStackParamList = {
   EmployeeDashboard: undefined;
   Assistant: undefined;
+  EmployeeOnboardingList: undefined;
+  EmployeeOnboardingWizard: { applicationId: string };
 };
 
 const Stack = createNativeStackNavigator<EmployeeStackParamList>();
@@ -23,6 +27,8 @@ export default function EmployeeNavigator() {
         options={{ title: t.employeeDashboardNavTitle }}
       />
       <Stack.Screen name="Assistant" component={AssistantScreen} options={{ title: 'FastQue Assistant' }} />
+      <Stack.Screen name="EmployeeOnboardingList" component={EmployeeOnboardingListScreen} options={{ title: 'Salon Onboarding' }} />
+      <Stack.Screen name="EmployeeOnboardingWizard" component={EmployeeOnboardingWizardScreen} options={{ title: 'Onboarding' }} />
     </Stack.Navigator>
   );
 }

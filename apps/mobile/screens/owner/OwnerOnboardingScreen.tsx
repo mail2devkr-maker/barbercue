@@ -25,7 +25,7 @@ import { Screen, SectionHeader, Card, Button, EmptyState, Skeleton, InlineError 
 import {
   scope,
   ServiceRow,
-  AddServiceForm,
+  AddServiceForm, ImportServicesSheet,
   ChairRow,
   AddChairForm,
   AddStaffForm,
@@ -263,6 +263,7 @@ export default function OwnerOnboardingScreen({ salonId }: { salonId: string }) 
             )}
           </Card>
           <AddServiceForm salonId={salonId} onAdded={() => void load()} />
+          <ImportServicesSheet salonId={salonId} existingNames={services.map((s) => s.name)} onAdded={() => void load()} />
           <Button
             title={showCatalog ? t.hideServiceSuggestions : t.browseServiceSuggestions}
             variant="outline"
