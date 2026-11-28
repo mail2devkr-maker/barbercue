@@ -11,9 +11,10 @@ function Icon({ children, size = 20 }: { children: ReactNode; size?: number }) {
 
 export type IconName =
   | "home" | "search" | "calendar" | "heart" | "gift" | "star" | "invoice" | "settings"
-  | "queue" | "trophy" | "pin" | "clock" | "crown" | "sparkle" | "more" | "user" | "directions" | "history";
+  | "queue" | "trophy" | "pin" | "clock" | "crown" | "sparkle" | "more" | "user" | "directions" | "history" | "chat";
 
 const PATHS: Record<IconName, ReactNode> = {
+  chat: <path d="M4 5.5h16v10H9l-4 3.5v-3.5H4z" />,
   home: <><path d="M3 10.5 12 3l9 7.5" /><path d="M5 9.5V21h14V9.5" /><path d="M10 21v-6h4v6" /></>,
   search: <><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></>,
   calendar: <><rect x="3.5" y="5" width="17" height="15.5" rx="2.5" /><path d="M3.5 10h17M8 3v4M16 3v4" /></>,

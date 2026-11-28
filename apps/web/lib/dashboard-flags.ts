@@ -22,6 +22,11 @@ export function visitorIntelEnabled(env: string | undefined = process.env.NEXT_P
   return env === "true";
 }
 
+/** FastQue Connect (booking chat) entry points. Keep OFF until the backend runs with FASTQUE_CONNECT_ENABLED=true. */
+export function connectLinksEnabledFlag(env: string | undefined = process.env.NEXT_PUBLIC_FASTQUE_CONNECT_ENABLED): boolean {
+  return env === "true";
+}
+
 export function homeServicesLinksEnabled(env: string | undefined = process.env.NEXT_PUBLIC_FASTQUE_HOME_ENABLED): boolean {
   return env === "true";
 }

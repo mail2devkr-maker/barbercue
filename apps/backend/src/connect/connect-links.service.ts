@@ -260,7 +260,12 @@ export class ConnectLinksService {
   /** Customer pressed "Chat with Salon": verify the booking is theirs, then ensure. */
   async ensureForCustomer(
     customerId: string,
-    link: { bookingId?: string; queueEntryId?: string; homeBookingId?: string },
+    link: {
+      bookingId?: string;
+      queueEntryId?: string;
+      homeBookingId?: string;
+      homeBookingCode?: string;
+    },
   ): Promise<ConnectConversation> {
     let conv: ConnectConversation | null = null;
     if (link.bookingId) {
@@ -275,9 +280,11 @@ export class ConnectLinksService {
         select: { id: true },
       });
       if (q) conv = await this.ensureForQueueEntry(q.id);
-    } else if (link.homeBookingId) {
+    } else if (link.homeBookingId || link.homeBookingCode) {
       const h = await this.prisma.homeBooking.findFirst({
-        where: { id: link.homeBookingId, customerId },
+        where: link.homeBookingId
+          ? { id: link.homeBookingId, customerId }
+          : { code: link.homeBookingCode, customerId },
         select: { id: true },
       });
       if (h) conv = await this.ensureForHomeBooking(h.id);

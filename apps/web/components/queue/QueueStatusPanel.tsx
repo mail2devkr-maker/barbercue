@@ -1,5 +1,6 @@
 "use client";
 
+import { ChatWithSalonButton } from "../connect/ChatWithSalonButton";
 import { useEffect, useRef, useState } from "react";
 import { QUEUE_ENTRIES_PATH, queuePhaseOf, type QueueEntryDetailDto } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../lib/api";
@@ -210,6 +211,7 @@ export function QueueStatusPanel({
           {statusLabel(entry)}
         </span>
       </div>
+      {!guestAccessToken && <ChatWithSalonButton queueEntryId={entry.id} label="Chat with Salon" />}
       {entry.status === "WAITING" && entry.estimatedWaitRangeMinutes && (
         <p className={styles.ticketDetail}>
           Estimated wait:{" "}

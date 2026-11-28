@@ -81,6 +81,7 @@ const PATHS: Record<string, ReactNode> = {
       <path d="M14 14h2.5v2.5H14zM19 14v2.5M14 19.5h6.5" />
     </>
   ),
+  chat: <path d="M4 5.5h16v10H9l-4 3.5v-3.5H4z" />,
   bell: <path d="M6 16.5V11a6 6 0 1 1 12 0v5.5l1.5 2h-15zM10 20.5a2 2 0 0 0 4 0" />,
   help: (
     <>

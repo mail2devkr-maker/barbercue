@@ -1,5 +1,6 @@
 "use client";
 
+import { ChatWithSalonButton } from "../connect/ChatWithSalonButton";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -50,6 +51,7 @@ export function HomeTracking({ code }: { code: string }) {
         <div className={s.between}><h1 className={s.title}>{label(b.status)}</h1><span className={s.badge}>Home service</span></div>
         <span className={s.meta}>{b.code} · {when(b.serviceStart)}</span>
         <KindBadge kind={b.provider.kind} label={b.provider.label} />
+        {!guest && <ChatWithSalonButton homeBookingCode={b.code} className={`${s.ghost} ${s.small}`} label="Chat with your professional" />}
         {b.eta && live && <p>{t("eta")}: <b>{b.mode === "INSTANT" || b.status === "ON_THE_WAY" ? etaText(b.eta.from, b.eta.to) : `${time(b.eta.from)} – ${time(b.eta.to)}`}</b>{b.eta.approximate ? ` · ${t("approx")}` : ""}<br /><span className={s.meta}>Updated {time(b.eta.updatedAt)}{b.delayMinutes ? ` · running about ${b.delayMinutes} min late` : ""}</span></p>}
         {b.professional && (
           <div className={s.row}>

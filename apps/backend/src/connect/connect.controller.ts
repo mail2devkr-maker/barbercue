@@ -80,10 +80,11 @@ const ensureSchema = z
     bookingId: z.string().uuid().optional(),
     queueEntryId: z.string().uuid().optional(),
     homeBookingId: z.string().uuid().optional(),
+    homeBookingCode: z.string().regex(/^[A-Z0-9-]{4,16}$/).optional(),
   })
   .refine(
     (x) =>
-      [x.bookingId, x.queueEntryId, x.homeBookingId].filter(Boolean).length ===
+      [x.bookingId, x.queueEntryId, x.homeBookingId, x.homeBookingCode].filter(Boolean).length ===
       1,
     { message: 'Give exactly one booking.' },
   );

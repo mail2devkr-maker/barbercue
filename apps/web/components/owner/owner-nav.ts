@@ -1,6 +1,6 @@
 import type { CapabilityMap, FeatureKey } from "../../lib/capabilities";
 import { isUsable } from "../../lib/capabilities";
-import { homeServicesLinksEnabled } from "../../lib/dashboard-flags";
+import { connectLinksEnabledFlag, homeServicesLinksEnabled } from "../../lib/dashboard-flags";
 import type { IconName } from "./icons";
 
 // The ONE definition of the owner/staff dashboard's navigation. The sidebar, the icon rail, the
@@ -51,6 +51,10 @@ export const NAV_ITEMS: ReadonlyArray<NavItem> = [
   { id: "bookings", label: "Bookings", icon: "calendar", group: "OPERATIONS", audience: "owner", path: "bookings", keywords: ["appointments", "cancel"] },
   { id: "calendar", label: "Calendar", icon: "calendarGrid", group: "OPERATIONS", audience: "owner", path: "schedule", keywords: ["schedule", "day"] },
   { id: "customers", label: "Customers", icon: "users", group: "OPERATIONS", audience: "owner", path: "customers", keywords: ["clients", "dues"] },
+  // FastQue Connect: booking chat. Staff see it too; the API only opens it for staff with a Connect grant.
+  ...(connectLinksEnabledFlag()
+    ? [{ id: "connect", label: "FastQue Connect", icon: "chat", group: "OPERATIONS", audience: "both", path: "connect", keywords: ["messages", "chat", "inbox", "whatsapp"] } satisfies NavItem]
+    : []),
 
   // FastQue Home: listed once the website switch is on (the page itself always opens for existing bookings).
   ...(homeServicesLinksEnabled()
