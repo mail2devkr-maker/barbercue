@@ -4,6 +4,7 @@ import { Fragment, useCallback, useEffect, useState } from "react";
 import {
   FINANCE_FUNDING_CLASSIFICATION_LABEL,
   FINANCE_PERSONAL_TREATMENT_LABEL,
+  FINANCE_CONTRIBUTOR_TYPE_LABEL,
   FinanceContributorType,
   FinanceFundingClassification,
   FinancePaymentMethod,
@@ -62,7 +63,7 @@ export function FinanceFunding({ me }: { me: FinanceMeDto }) {
                 {contributors.map((c) => (
                   <tr key={c.id}>
                     <td><button type="button" className={css.rowButton} onClick={() => setLedgerFor(c.id)}><span className={css.rowTitle}>{c.name}</span></button></td>
-                    <td>{pretty(c.type)}</td>
+                    <td>{FINANCE_CONTRIBUTOR_TYPE_LABEL[c.type] ?? pretty(c.type)}</td>
                     <td>{c.userEmail ?? <span className={ui.mutedCell}>Not a platform user</span>}</td>
                     <td>{c.isActive ? <Badge tone="ok">Active</Badge> : <Badge>Inactive</Badge>}</td>
                     <td className={ui.rowWrap}>
@@ -139,7 +140,7 @@ function ContributorForm({ initial, onClose, onSaved }: { initial: FinanceContri
         <Field label="Name *" htmlFor="cf-name"><input id="cf-name" className={ui.input} value={f.name} maxLength={120} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
         <Field label="Type *" htmlFor="cf-type">
           <select id="cf-type" className={ui.select} value={f.type} onChange={(e) => setF({ ...f, type: e.target.value as FinanceContributorDto["type"] })}>
-            {Object.values(FinanceContributorType).map((t) => <option key={t} value={t}>{pretty(t)}</option>)}
+            {Object.values(FinanceContributorType).map((t) => <option key={t} value={t}>{FINANCE_CONTRIBUTOR_TYPE_LABEL[t]}</option>)}
           </select>
         </Field>
         <Field label="FastQue login email (optional)" htmlFor="cf-user" hint="Links an existing platform user, so they see their own ledger and claims. One contributor per user.">

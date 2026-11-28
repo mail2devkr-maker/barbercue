@@ -4088,6 +4088,7 @@ enum FinanceExpenseStatus {
 
 enum FinanceContributorType {
   FOUNDER
+  CO_FOUNDER
   DIRECTOR
   INVESTOR
   CITY_PARTNER

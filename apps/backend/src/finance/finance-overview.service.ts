@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import {
   averageMoney,
   computeRunway,
+  FINANCE_FOUNDER_CONTRIBUTOR_TYPES,
   FINANCE_EXPENSE_TYPE_LABEL,
   financeExpenseType,
   type FinanceBreakdownRowDto,
@@ -32,6 +33,21 @@ export function monthStart(day: string, offset = 0): string {
   const [y, m] = day.split('-').map(Number);
   const d = new Date(Date.UTC(y, m - 1 + offset, 1));
   return d.toISOString().slice(0, 10);
+}
+/** The same-length period that ends the day before `from` (both inclusive, "YYYY-MM-DD"). */
+export function previousPeriod(
+  from: string,
+  to: string,
+): { from: string; to: string } {
+  const day = 86_400_000;
+  const start = new Date(`${from}T00:00:00.000Z`).getTime();
+  const end = new Date(`${to}T00:00:00.000Z`).getTime();
+  const length = Math.max(0, Math.round((end - start) / day));
+  const prevTo = start - day;
+  return {
+    from: new Date(prevTo - length * day).toISOString().slice(0, 10),
+    to: new Date(prevTo).toISOString().slice(0, 10),
+  };
 }
 /** Last day of that month. */
 export function monthEnd(day: string, offset = 0): string {
@@ -106,8 +122,12 @@ export class FinanceOverviewService {
     };
     const recognised: Prisma.FinanceExpenseWhereInput = {
       ...expenseFilter,
-      status: { in: [...RECOGNISED] },
+      status: query.paymentStatus
+        ? query.paymentStatus
+        : { in: [...RECOGNISED] },
     };
+    const prev = previousPeriod(from, to);
+    const prevRange = { gte: dateOnly(prev.from), lte: dateOnly(prev.to) };
     const fundingFilter: Prisma.FinanceFundingWhereInput = {
       voidedAt: null,
       ...(query.contributorId ? { contributorId: query.contributorId } : {}),
@@ -129,6 +149,9 @@ export class FinanceOverviewService {
       companyPayments,
       payouts,
       monthlyIncurred,
+      prevIncurred,
+      vendorBills,
+      pendingExpenseCount,
     ] = await Promise.all([
       this.prisma.financeExpense.aggregate({
         where: recognised,
@@ -247,6 +270,25 @@ export class FinanceOverviewService {
         },
         select: { amount: true, expenseDate: true },
       }),
+      this.prisma.financeExpense.aggregate({
+        where: { ...recognised, expenseDate: prevRange },
+        _sum: { amount: true },
+      }),
+      this.prisma.financeExpense.findMany({
+        where: {
+          ...expenseFilter,
+          vendorId: { not: null },
+          status: { in: ['APPROVED', 'PARTIALLY_PAID'] },
+        },
+        select: {
+          amount: true,
+          vendor: { select: { id: true, name: true } },
+          payments: { where: { voidedAt: null }, select: { amount: true } },
+        },
+      }),
+      this.prisma.financeExpense.count({
+        where: { ...expenseFilter, status: { in: [...PENDING] } },
+      }),
     ]);
 
     // Funding (never revenue).
@@ -260,7 +302,7 @@ export class FinanceOverviewService {
     for (const f of fundingRows) {
       if (f.kind !== 'CONTRIBUTION') continue;
       totalFunds = totalFunds.plus(f.amount);
-      if (f.contributor.type === 'FOUNDER' || f.contributor.type === 'DIRECTOR')
+      if (FINANCE_FOUNDER_CONTRIBUTOR_TYPES.includes(f.contributor.type))
         founderFunds = founderFunds.plus(f.amount);
       const day = isoDay(f.date);
       if (day >= from && day <= to)
@@ -333,7 +375,15 @@ export class FinanceOverviewService {
       string,
       { label: string; amount: Prisma.Decimal; count: number }
     >();
+    let claimsInReview = 0;
+    let claimsApprovedUnpaid = 0;
     for (const p of reimbursablePayments) {
+      for (const c of p.reimbursements) {
+        if (c.status === 'SUBMITTED' || c.status === 'UNDER_REVIEW')
+          claimsInReview += 1;
+        else if (c.status === 'APPROVED' || c.status === 'PARTIALLY_REIMBURSED')
+          claimsApprovedUnpaid += 1;
+      }
       const r = reimbursableOwed(p);
       owed = owed.plus(r.owed);
       awaiting = awaiting.plus(r.awaitingReview);
@@ -352,7 +402,7 @@ export class FinanceOverviewService {
     const series = new Map(
       months.map((m) => [
         m,
-        { incurred: ZERO, cashOut: ZERO, fundingIn: ZERO },
+        { incurred: ZERO, cashOut: ZERO, fundingIn: ZERO, repaid: ZERO },
       ]),
     );
     for (const e of monthlyIncurred) {
@@ -364,9 +414,11 @@ export class FinanceOverviewService {
       if (row) row.cashOut = row.cashOut.plus(p.amount);
     }
     for (const f of fundingRows) {
-      if (f.kind !== 'CONTRIBUTION') continue;
       const row = series.get(isoDay(f.date).slice(0, 7));
-      if (row) row.fundingIn = row.fundingIn.plus(f.amount);
+      if (!row) continue;
+      if (f.kind === 'CONTRIBUTION')
+        row.fundingIn = row.fundingIn.plus(f.amount);
+      else row.repaid = row.repaid.plus(f.amount);
     }
     // Burn: the last complete months that have any recorded activity, at most BURN_MONTHS.
     const earliest = await this.earliestActivity();
@@ -380,27 +432,55 @@ export class FinanceOverviewService {
     const averageNetBurn = averageGrossBurn;
 
     // Period net cash flow: funding in − repayments − company payments − payouts, by transaction date.
-    const inRange = (d: Date) => {
-      const day = isoDay(d);
-      return day >= from && day <= to;
+    const flows = async (start: string, end: string) => {
+      const r = { gte: dateOnly(start), lte: dateOnly(end) };
+      const inR = (d: Date) => {
+        const day = isoDay(d);
+        return day >= start && day <= end;
+      };
+      const [companyPaid, paidOut] = await Promise.all([
+        this.prisma.financeExpensePayment.aggregate({
+          where: { voidedAt: null, payerType: 'COMPANY_ACCOUNT', paidOn: r },
+          _sum: { amount: true },
+        }),
+        this.prisma.financeReimbursementPayout.aggregate({
+          where: { voidedAt: null, paidOn: r },
+          _sum: { amount: true },
+        }),
+      ]);
+      let fundingIn = ZERO;
+      let repaid = ZERO;
+      for (const f of fundingRows) {
+        if (!inR(f.date)) continue;
+        if (f.kind === 'CONTRIBUTION') fundingIn = fundingIn.plus(f.amount);
+        else repaid = repaid.plus(f.amount);
+      }
+      const cashOut = repaid
+        .plus(companyPaid._sum.amount ?? ZERO)
+        .plus(paidOut._sum.amount ?? ZERO);
+      return { fundingIn, cashOut, net: fundingIn.minus(cashOut) };
     };
-    const [periodCompanyPaid, periodPayouts] = await Promise.all([
-      this.prisma.financeExpensePayment.aggregate({
-        where: { voidedAt: null, payerType: 'COMPANY_ACCOUNT', paidOn: range },
-        _sum: { amount: true },
-      }),
-      this.prisma.financeReimbursementPayout.aggregate({
-        where: { voidedAt: null, paidOn: range },
-        _sum: { amount: true },
-      }),
+    const [current, before] = await Promise.all([
+      flows(from, to),
+      flows(prev.from, prev.to),
     ]);
-    const periodRepaid = fundingRows
-      .filter((f) => f.kind === 'REPAYMENT' && inRange(f.date))
-      .reduce((t, f) => t.plus(f.amount), ZERO);
-    const periodNet = periodFunding
-      .minus(periodRepaid)
-      .minus(periodCompanyPaid._sum.amount ?? ZERO)
-      .minus(periodPayouts._sum.amount ?? ZERO);
+    const periodNet = current.net;
+
+    // Vendor payables: approved expenses with a vendor, less payments recorded against them.
+    let vendorPayables = ZERO;
+    let vendorBillsUnpaid = 0;
+    const byVendor = new Map<
+      string,
+      { label: string; amount: Prisma.Decimal; count: number }
+    >();
+    for (const e of vendorBills) {
+      const paidSoFar = e.payments.reduce((t, p) => t.plus(p.amount), ZERO);
+      const due = Prisma.Decimal.max(e.amount.minus(paidSoFar), 0);
+      if (due.isZero() || !e.vendor) continue;
+      vendorPayables = vendorPayables.plus(due);
+      vendorBillsUnpaid += 1;
+      bump(byVendor, e.vendor.id, e.vendor.name, due);
+    }
 
     const incurred = recognisedAll._sum.amount ?? ZERO;
     const paid = paidOnRecognised._sum.amount ?? ZERO;
@@ -432,6 +512,10 @@ export class FinanceOverviewService {
         approvedUnpaidExpenses: money(approvedUnpaid._sum.amount),
         expensesAwaitingApproval: money(awaitingApproval._sum.amount),
         periodNetCashFlow: money(periodNet),
+        periodCashOut: money(current.cashOut),
+        vendorPayables: money(vendorPayables),
+        vendorBillsUnpaid,
+        accountCount: balances.size,
         revenueReceived: null,
         budgetUtilizationPercent: null,
       },
@@ -448,9 +532,23 @@ export class FinanceOverviewService {
           incurred: money(row.incurred),
           companyCashOut: money(row.cashOut),
           fundingIn: money(row.fundingIn),
+          repaymentsOut: money(row.repaid),
         };
       }),
       reimbursementsOwedByPerson: breakdown(owedByPerson),
+      vendorPayablesByVendor: breakdown(byVendor),
+      previous: {
+        ...prev,
+        fundingReceived: money(before.fundingIn),
+        expensesIncurred: money(prevIncurred._sum.amount),
+        cashOut: money(before.cashOut),
+        netCashFlow: money(before.net),
+      },
+      pending: {
+        expensesAwaitingApproval: pendingExpenseCount,
+        reimbursementsAwaitingReview: claimsInReview,
+        reimbursementsApprovedUnpaid: claimsApprovedUnpaid,
+      },
     };
   }
 

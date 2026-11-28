@@ -34,12 +34,21 @@ const kpis = {
   averageGrossBurn: null, averageNetBurn: null, burnMonthsUsed: 0, runway: { kind: 'INSUFFICIENT_DATA' }, pendingReimbursements: '0.00',
   reimbursementsAwaitingReview: '0.00', outstandingPayables: '2000.00', approvedUnpaidExpenses: '0.00', expensesAwaitingApproval: '799.00',
   periodNetCashFlow: '46000.00', revenueReceived: null, budgetUtilizationPercent: null,
+  periodCashOut: '4000.00', vendorPayables: '2000.00', vendorBillsUnpaid: 1, accountCount: 1,
 };
 const overview = {
   period: { from: '2026-11-01', to: '2026-11-18' }, generatedAt: '2026-11-18T10:00:00.000Z', kpis,
   byCategory: [{ key: 't', label: 'Technology & Product Development', amount: '6200.00', count: 2 }],
-  byType: [], byCity: [], byDepartment: [], byPaidBy: [], byContributorFunding: [], reimbursementsOwedByPerson: [],
-  monthly: Array.from({ length: 12 }, (_, i) => ({ month: `2026-${String(i + 1).padStart(2, '0')}`, incurred: i === 10 ? '6200.00' : '0.00', companyCashOut: '0.00', fundingIn: '0.00' })),
+  byType: [], byCity: [], byPaidBy: [], reimbursementsOwedByPerson: [],
+  byDepartment: [{ key: 'technology', label: 'Technology', amount: '6200.00', count: 2 }],
+  byContributorFunding: [{ key: 'c1', label: 'Asha Rao', amount: '50000.00', count: 1 }],
+  vendorPayablesByVendor: [{ key: 'v1', label: 'Cloud Co', amount: '2000.00', count: 1 }],
+  monthly: Array.from({ length: 12 }, (_, i) => ({
+    month: `2026-${String(i + 1).padStart(2, '0')}`, incurred: i === 10 ? '6200.00' : '0.00',
+    companyCashOut: i === 10 ? '4000.00' : '0.00', fundingIn: i === 10 ? '50000.00' : '0.00', repaymentsOut: '0.00',
+  })),
+  previous: { from: '2026-05-01', to: '2026-10-31', fundingReceived: '0.00', expensesIncurred: '0.00', cashOut: '0.00', netCashFlow: '0.00' },
+  pending: { expensesAwaitingApproval: 1, reimbursementsAwaitingReview: 0, reimbursementsApprovedUnpaid: 0 },
 };
 const category = { id: 'cat-1', name: 'Technology & Product Development', department: 'Technology', isSystem: true, isActive: true, subcategories: [{ id: 'sub-1', name: 'Cloud Hosting', isSystem: true, isActive: true }] };
 
@@ -68,9 +77,64 @@ describe('admin finance', () => {
     expect(tabs).toEqual(['Overview', 'Expenses', 'Contributions & Funding', 'Reimbursements', 'Vendors & Payments', 'Settings & Categories']);
     const text = textOf(tree.root);
     expect(text).toContain('Available cash₹1,46,000');
-    expect(text).toContain('Cash runwayInsufficient data');
-    expect(text).toContain('Revenue receivedNot connected');
+    expect(text).toContain('RunwayInsufficient data');
+    expect(text).toContain("Revenue isn't connected yet");
     expect(text).toContain('Technology & Product Development');
+    // Dashboard panels are built from the API figures only.
+    expect(text).toContain('Vendor payables₹2,000');
+    expect(text).toContain('+₹46,000');
+    expect(text).toContain('Asha Rao');
+    expect(text).toContain('1 expense awaiting approval');
+    expect(text).toContain('1 vendor bill unpaid');
+    expect(text).toContain('Cloud Co – ₹2,000');
+    expect(text).toContain('Budget alerts appear once budgets are set up.');
+    expect(text).not.toContain('NaN');
+    // A pending action opens the matching tab.
+    const action = tree.root.findAll((n) => n.type === 'button' && textOf(n).includes('vendor bill unpaid'))[0];
+    await act(async () => action.props.onClick());
+    expect(replace).toHaveBeenCalledWith('/dashboard/admin/finance?tab=vendors');
+  });
+
+  it('applies dashboard filters only when Apply is pressed', async () => {
+    apiFetch.mockImplementation(route(company));
+    let tree;
+    await act(async () => { tree = TestRenderer.create(<AdminFinance />); });
+    const overviewCalls = () => apiFetch.mock.calls.filter(([p]) => p.startsWith('admin/finance/overview'));
+    expect(overviewCalls()).toHaveLength(1);
+    await act(async () => tree.root.find((n) => n.props.id === 'fo-status').props.onChange({ target: { value: 'PAID' } }));
+    expect(overviewCalls()).toHaveLength(1);
+    const form = tree.root.find((n) => n.type === 'form' && n.props['aria-label'] === 'Dashboard filters');
+    await act(async () => form.props.onSubmit({ preventDefault() {} }));
+    expect(overviewCalls()).toHaveLength(2);
+    expect(overviewCalls()[1][0]).toContain('paymentStatus=PAID');
+    expect(apiFetch.mock.calls.some(([p]) => p.startsWith('admin/finance/expenses?') && p.includes('status=PAID'))).toBe(true);
+  });
+
+  it('offers Co-founder as a contributor type and saves it', async () => {
+    global.document = { activeElement: null, addEventListener() {}, removeEventListener() {} };
+    search = 'tab=funding';
+    const posts = [];
+    apiFetch.mockImplementation((path, opts) => {
+      if (opts?.method === 'POST' && path === 'admin/finance/contributors') {
+        posts.push(JSON.parse(opts.body));
+        return Promise.resolve({ id: 'c-new' });
+      }
+      return route(company)(path);
+    });
+    let tree;
+    await act(async () => { tree = TestRenderer.create(<AdminFinance />); });
+    const add = tree.root.findAll((n) => n.type === 'button' && textOf(n).includes('Add contributor'))[0];
+    await act(async () => add.props.onClick());
+    const select = tree.root.find((n) => n.props.id === 'cf-type');
+    const options = select.findAllByType('option').map((o) => [o.props.value, textOf(o)]);
+    expect(options).toContainEqual(['CO_FOUNDER', 'Co-founder']);
+    expect(options[1]).toEqual(['CO_FOUNDER', 'Co-founder']);
+    await act(async () => select.props.onChange({ target: { value: 'CO_FOUNDER' } }));
+    await act(async () => tree.root.find((n) => n.props.id === 'cf-name').props.onChange({ target: { value: 'Ravi Kumar' } }));
+    const save = tree.root.findAll((n) => n.type === 'button' && textOf(n) === 'Save')[0];
+    await act(async () => save.props.onClick());
+    expect(posts).toHaveLength(1);
+    expect(posts[0]).toMatchObject({ name: 'Ravi Kumar', type: 'CO_FOUNDER' });
   });
 
   it('gives other admin roles only their own expenses and claims', async () => {

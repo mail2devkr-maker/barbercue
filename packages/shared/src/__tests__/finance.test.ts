@@ -1,6 +1,11 @@
 import { Role } from '../enums';
 import {
+  FINANCE_CONTRIBUTOR_TYPE_LABEL,
   FINANCE_DEFAULT_CATEGORIES,
+  FINANCE_FOUNDER_CONTRIBUTOR_TYPES,
+  FinanceContributorType,
+  financeContributorSchema,
+  financeOverviewQuerySchema,
   averageMoney,
   computeRunway,
   expenseStatusAfterPayments,
@@ -34,6 +39,21 @@ describe('finance money (exact)', () => {
   it('formats INR with Indian digit grouping', () => {
     expect(formatInr('1234567.5')).toBe('₹12,34,567.50');
     expect(formatInr('100')).toBe('₹100');
+  });
+});
+
+describe('finance contributors', () => {
+  it('accepts a co-founder contributor and labels every type', () => {
+    expect(financeContributorSchema.safeParse({ name: 'Asha', type: 'CO_FOUNDER' }).success).toBe(true);
+    expect(financeContributorSchema.safeParse({ name: 'Asha', type: 'COFOUNDER' }).success).toBe(false);
+    expect(FINANCE_CONTRIBUTOR_TYPE_LABEL.CO_FOUNDER).toBe('Co-founder');
+    for (const t of Object.values(FinanceContributorType)) expect(FINANCE_CONTRIBUTOR_TYPE_LABEL[t]).toBeTruthy();
+    expect(FINANCE_FOUNDER_CONTRIBUTOR_TYPES).toEqual(expect.arrayContaining(['FOUNDER', 'CO_FOUNDER', 'DIRECTOR']));
+  });
+
+  it('only filters the overview by recognised payment states', () => {
+    expect(financeOverviewQuerySchema.safeParse({ paymentStatus: 'PAID' }).success).toBe(true);
+    expect(financeOverviewQuerySchema.safeParse({ paymentStatus: 'DRAFT' }).success).toBe(false);
   });
 });
 
