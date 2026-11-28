@@ -44,3 +44,4 @@ export * from './maintenance';
 export * from './visitor-intelligence';
 
 export * from './growth-ai';
+export * from './connect';

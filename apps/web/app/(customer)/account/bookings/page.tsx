@@ -27,6 +27,7 @@ import { apiFetch, apiFetchBlob, ApiError } from "../../../../lib/api";
 import { getRealtimeSocket, onReconnect } from "../../../../lib/realtime";
 import { useAssistantRefresh } from "../../../../lib/assistant-events";
 import { triggerBlobDownload } from "../../../../components/owner/format";
+import { ChatWithSalonButton } from "../../../../components/connect/ChatWithSalonButton";
 import { CancelBookingDialog } from "../../../../components/booking/CancelBookingDialog";
 import { RescheduleBookingDialog } from "../../../../components/booking/RescheduleBookingDialog";
 import { BookingActionsBar } from "../../../../components/booking/BookingActionsBar";
@@ -462,6 +463,7 @@ function Appointments() {
                   {CANCELLABLE.has(booking.status) && isCustomerBookingActionable(booking) && (
                     <button type="button" className={styles.btn} onClick={() => setCancelTarget(booking)}>Cancel</button>
                   )}
+                  <ChatWithSalonButton bookingId={booking.id} className={styles.btnGhost} />
                 </div>
                 <BookingActionsBar booking={booking} onReschedule={setRescheduleTarget} />
                 {canCheckIn(booking) && <CheckInPanel booking={booking} />}

@@ -47,6 +47,7 @@ import { CrmModule } from './crm/crm.module';
 import { VisitorIntelModule } from './visitor-intel/visitor-intel.module';
 import { WorkModule } from './work/work.module';
 import { HomeModule } from './home/home.module';
+import { ConnectModule } from './connect/connect.module';
 import { ProfessionalCommitmentsModule } from './common/professional-commitments/professional-commitments.module';
 
 @Module({
@@ -112,6 +113,7 @@ import { ProfessionalCommitmentsModule } from './common/professional-commitments
     WorkModule,
     // FastQue Home (home/*, admin/home/*, dashboard/salons/:id/home/*; off unless FASTQUE_HOME_ENABLED=true).
     HomeModule,
+    ConnectModule,
     // Feature modules (staff/chair roster CRUD, payments, admin) are added in later phases per
     // PROJECT_STRUCTURE.md.
   ],

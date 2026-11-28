@@ -61,6 +61,8 @@ export function canOpenAdminPath(roles: Role[], pathname: string): boolean {
   if (pathname.startsWith("/dashboard/admin/work")) return superAdmin || coFounder || roles.includes(Role.PLATFORM_VIEWER);
   // FastQue Home: mirrors GET admin/home/* (addresses, documents and safety reports are limited further on the server).
   if (pathname.startsWith("/dashboard/admin/home")) return superAdmin || coFounder || roles.includes(Role.PLATFORM_VIEWER);
+  // FastQue Connect: mirrors GET connect/admin/overview (PLATFORM_ADMIN, CO_FOUNDER, PLATFORM_VIEWER; writes PLATFORM_ADMIN).
+  if (pathname.startsWith("/dashboard/admin/connect")) return superAdmin || coFounder || roles.includes(Role.PLATFORM_VIEWER);
   if (pathname.startsWith("/dashboard/admin/access")) return superAdmin;
   // Salon onboarding review queue: mirrors GET admin/onboarding-applications (decisions stay PLATFORM_ADMIN / CO_FOUNDER server-side).
   if (pathname.startsWith("/dashboard/admin/onboarding-review")) {

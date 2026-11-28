@@ -2760,6 +2760,9 @@ const enNotificationTypeLabels: NotificationTypeLabels = {
   'home.booking.update': 'FastQue Home booking update',
   'home.professional.update': 'FastQue Home visit update',
   'home.provider.update': 'FastQue Home provider update',
+  'connect.message': 'New message',
+  'connect.update': 'Conversation update',
+  'connect.urgent': 'Urgent customer conversation',
 
   'commerce.order.updated': 'Your FastQue order was updated',
   'commerce.return.updated': 'Your return was updated',
@@ -2805,6 +2808,9 @@ const hiNotificationTypeLabels: NotificationTypeLabels = {
   'home.booking.update': 'FastQue Home बुकिंग अपडेट',
   'home.professional.update': 'FastQue Home काम का अपडेट',
   'home.provider.update': 'FastQue Home सैलून अपडेट',
+  'connect.message': 'नया संदेश',
+  'connect.update': 'बातचीत अपडेट',
+  'connect.urgent': 'तुरंत ध्यान देने वाली बातचीत',
 
   'commerce.order.updated': 'आपका FastQue ऑर्डर अपडेट हुआ',
   'commerce.return.updated': 'आपकी वापसी अपडेट हुई',

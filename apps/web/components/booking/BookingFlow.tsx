@@ -1,5 +1,6 @@
 "use client";
 
+import { ChatWithSalonButton } from "../connect/ChatWithSalonButton";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
@@ -553,6 +554,7 @@ export function BookingFlow({
             </p>
           )}
           <div className={styles.confirmedActions}>
+            {!cancelled && <ChatWithSalonButton bookingId={booking.id} />}
             {(booking.status === "CONFIRMED" || booking.status === "PENDING_PAYMENT") && (
               <Button type="button" variant="outline" onClick={() => setShowCancelDialog(true)}>
                 Cancel this booking
