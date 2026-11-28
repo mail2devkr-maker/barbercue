@@ -11,6 +11,8 @@ import { WORK_LIMITS } from '@barbercue/shared';
  *                                      sent by NEFT from the company account and confirmed the same way
  *   WORK_MANUAL_BANK_ACCOUNT_NAME / _ACCOUNT_NUMBER / _IFSC / _BANK_NAME
  *                                      the company account shown to employers (manual_bank only)
+ *   WORK_MANUAL_UPI_ID / _UPI_NAME     the company UPI ID (VPA) and payee name employers pay to by UPI
+ *                                      (manual_bank only; bank details, UPI, or both may be set)
  *   WORK_SANDBOX_WEBHOOK_SECRET=...    HMAC secret the sandbox provider signs webhooks with
  *   WORK_PLATFORM_FEE_BPS=1000         employer-side platform fee, basis points (default 10%)
  *
@@ -32,7 +34,7 @@ export function configuredWorkPaymentProvider(): WorkPaymentProviderName {
   // The sandbox moves no money. It must never be selectable in production, even by mistake.
   if (raw === 'sandbox' && !isProduction()) return 'sandbox';
   // Manual bank transfer needs the company account employers pay into; without it, fail closed.
-  if (raw === 'manual_bank' && manualBankAccount()) return 'manual_bank';
+  if (raw === 'manual_bank' && (manualBankAccount() || manualUpiAccount())) return 'manual_bank';
   return 'none';
 }
 
@@ -60,6 +62,19 @@ export function manualBankAccount(): ManualBankAccount | null {
     return null;
   }
   return { accountName, accountNumber, ifsc, bankName };
+}
+
+export interface ManualUpiAccount {
+  vpa: string;
+  payeeName: string;
+}
+
+/** The company UPI ID employers pay to. Null unless WORK_MANUAL_UPI_ID is a valid VPA. */
+export function manualUpiAccount(): ManualUpiAccount | null {
+  const vpa = (process.env.WORK_MANUAL_UPI_ID ?? '').trim();
+  if (!/^[a-zA-Z0-9._-]{2,256}@[a-zA-Z][a-zA-Z0-9.-]{1,63}$/.test(vpa)) return null;
+  const payeeName = (process.env.WORK_MANUAL_UPI_NAME ?? '').trim().slice(0, 60) || 'FastQue';
+  return { vpa, payeeName };
 }
 
 export function workPlatformFeeBps(): number {

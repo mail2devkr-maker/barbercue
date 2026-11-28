@@ -1041,6 +1041,11 @@ export interface WorkFundingDto {
    * once FastQue finance confirms the transfer on the bank statement.
    */
   manualBank: { accountName: string; accountNumber: string; ifsc: string; bankName: string; reference: string } | null;
+  /**
+   * Manual UPI only: the company UPI ID, the reference to quote and a upi:// link (also shown as a
+   * QR). Confirmed by FastQue finance with the UPI UTR, exactly like a bank transfer.
+   */
+  manualUpi: { vpa: string; payeeName: string; reference: string; upiUri: string } | null;
   createdAt: string;
 }
 
