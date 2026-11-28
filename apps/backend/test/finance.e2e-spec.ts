@@ -270,6 +270,31 @@ maybe('Finance (e2e, disposable database)', () => {
     expect(o.kpis.revenueReceived).toBeNull();
     expect(Number(o.kpis.expensesAwaitingApproval)).toBeGreaterThanOrEqual(799);
     expect(o.byCity.some((c: { label: string }) => c.label === 'Patna')).toBe(true);
+    // Dashboard aggregates: same-length previous period, cash-flow series and attention counts.
+    expect(o.previous.to < o.period.from).toBe(true);
+    expect(typeof o.previous.netCashFlow).toBe('string');
+    expect(o.monthly).toHaveLength(12);
+    expect(o.monthly[11]).toHaveProperty('repaymentsOut');
+    expect(Number(o.kpis.vendorPayables)).toBeGreaterThanOrEqual(0);
+    expect(o.kpis.accountCount).toBeGreaterThanOrEqual(1);
+    expect(o.pending.expensesAwaitingApproval).toBeGreaterThanOrEqual(1);
+    const paidOnly = (await as('cofounder').get('overview?paymentStatus=PAID').expect(200)).body;
+    expect(Number(paidOnly.kpis.totalExpensesIncurred)).toBeLessThanOrEqual(Number(o.kpis.totalExpensesIncurred));
+    await as('cofounder').get('overview?paymentStatus=DRAFT').expect(400);
+  });
+
+  it('records a co-founder contributor and counts their funding as founder money', async () => {
+    const before = (await as('cofounder').get('overview').expect(200)).body.kpis;
+    const co = await as('admin').post('contributors', { name: `Co-founder ${run}`, type: 'CO_FOUNDER' }).expect(201);
+    const listed = (await as('admin').get('contributors').expect(200)).body.find((c: { id: string }) => c.id === co.body.id);
+    expect(listed.type).toBe('CO_FOUNDER');
+    await as('admin').post('contributors', { name: `Bad type ${run}`, type: 'COFOUNDER' }).expect(400);
+    await as('cofounder')
+      .post('funding', { contributorId: co.body.id, kind: 'CONTRIBUTION', classification: 'UNCLASSIFIED', date: day, amount: '1000', accountId: ids.account, method: 'UPI', clientRequestId: randomUUID() })
+      .expect(201);
+    const after = (await as('cofounder').get('overview').expect(200)).body.kpis;
+    expect(Number(after.founderContributions) - Number(before.founderContributions)).toBe(1000);
+    expect(after.otherFunding).toBe(before.otherFunding);
   });
 
   it('stores receipts privately and rejects duplicates', async () => {

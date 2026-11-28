@@ -8,6 +8,7 @@ import {
   FINANCE_EXPENSE_STATUS_LABEL,
   FINANCE_EXPENSE_TYPE_LABEL,
   FINANCE_PERSONAL_TREATMENT_LABEL,
+  FINANCE_CONTRIBUTOR_TYPE_LABEL,
   FinanceContributorType,
   FinanceErrorCode,
   FinanceExpenseStatus,
@@ -505,7 +506,7 @@ function ExpenseForm({
                       <option value="me">I paid it myself — reimburse me{me.contributorId ? "" : " (your finance record is created automatically)"}</option>
                       {otherPeople.length > 0 && (
                         <optgroup label="Someone else paid — reimburse them">
-                          {otherPeople.map((c) => <option key={c.id} value={`person:${c.id}`}>{c.name} ({pretty(c.type)})</option>)}
+                          {otherPeople.map((c) => <option key={c.id} value={`person:${c.id}`}>{c.name} ({FINANCE_CONTRIBUTOR_TYPE_LABEL[c.type]})</option>)}
                         </optgroup>
                       )}
                     </>
@@ -519,7 +520,7 @@ function ExpenseForm({
                       )}
                       {otherPeople.length > 0 && (
                         <optgroup label="A person paid, not to be paid back">
-                          {otherPeople.map((c) => <option key={c.id} value={`person:${c.id}`}>{c.name} ({pretty(c.type)})</option>)}
+                          {otherPeople.map((c) => <option key={c.id} value={`person:${c.id}`}>{c.name} ({FINANCE_CONTRIBUTOR_TYPE_LABEL[c.type]})</option>)}
                         </optgroup>
                       )}
                     </>
@@ -532,7 +533,7 @@ function ExpenseForm({
                   <Field label="New person's name *" htmlFor="ef-new-name"><input id="ef-new-name" className={ui.input} value={newPerson.name} maxLength={120} onChange={(e) => setNewPerson({ ...newPerson, name: e.target.value })} /></Field>
                   <Field label="Type" htmlFor="ef-new-type">
                     <select id="ef-new-type" className={ui.select} value={newPerson.type} onChange={(e) => setNewPerson({ ...newPerson, type: e.target.value })}>
-                      {Object.values(FinanceContributorType).map((t) => <option key={t} value={t}>{pretty(t)}</option>)}
+                      {Object.values(FinanceContributorType).map((t) => <option key={t} value={t}>{FINANCE_CONTRIBUTOR_TYPE_LABEL[t]}</option>)}
                     </select>
                   </Field>
                   <div className={css.formWide}><Btn small variant="primary" disabled={addingPerson || newPerson.name.trim().length < 2} onClick={() => void addPerson()}>{addingPerson ? "Adding…" : "Add person"}</Btn></div>

@@ -123,6 +123,7 @@ export const financeExpenseType = (e: { reimbursementRequired: boolean }): Finan
 
 export const FinanceContributorType = {
   FOUNDER: "FOUNDER",
+  CO_FOUNDER: "CO_FOUNDER",
   DIRECTOR: "DIRECTOR",
   INVESTOR: "INVESTOR",
   CITY_PARTNER: "CITY_PARTNER",
@@ -130,6 +131,17 @@ export const FinanceContributorType = {
   OTHER: "OTHER",
 } as const;
 export type FinanceContributorType = (typeof FinanceContributorType)[keyof typeof FinanceContributorType];
+export const FINANCE_CONTRIBUTOR_TYPE_LABEL: Record<FinanceContributorType, string> = {
+  FOUNDER: "Founder",
+  CO_FOUNDER: "Co-founder",
+  DIRECTOR: "Director",
+  INVESTOR: "Investor",
+  CITY_PARTNER: "City partner",
+  EMPLOYEE: "Employee",
+  OTHER: "Other",
+};
+/** Contributor types counted as "founders / directors" funding on the overview. */
+export const FINANCE_FOUNDER_CONTRIBUTOR_TYPES: readonly FinanceContributorType[] = ["FOUNDER", "CO_FOUNDER", "DIRECTOR"];
 
 export const FinanceFundingKind = {
   /** Money received INTO a company account. */
@@ -696,6 +708,8 @@ export const financeOverviewQuerySchema = z.object({
   city: optionalText(60),
   department: optionalText(60),
   contributorId: z.string().uuid().optional(),
+  /** Narrow the incurred-expense figures to one payment state (approved-unpaid, partially paid, paid). */
+  paymentStatus: z.enum(["APPROVED", "PARTIALLY_PAID", "PAID"]).optional(),
 });
 export type FinanceOverviewQuery = z.infer<typeof financeOverviewQuerySchema>;
 
@@ -972,6 +986,14 @@ export interface FinanceOverviewDto {
     approvedUnpaidExpenses: string;
     expensesAwaitingApproval: string;
     periodNetCashFlow: string;
+    /** Company cash out in the period: expense payments, reimbursement payouts and funding repayments. */
+    periodCashOut: string;
+    /** Approved expenses with a vendor, minus what has been paid against them. */
+    vendorPayables: string;
+    /** Number of vendor bills (approved or partially paid expenses) with money still owed. */
+    vendorBillsUnpaid: number;
+    /** Active company accounts that make up available cash. */
+    accountCount: number;
     /** Not connected yet: FastQue revenue records are not linked to finance (Phase 5). */
     revenueReceived: null;
     /** Not set up yet: budgets are Phase 4. */
@@ -984,8 +1006,26 @@ export interface FinanceOverviewDto {
   byDepartment: FinanceBreakdownRowDto[];
   byPaidBy: FinanceBreakdownRowDto[];
   byContributorFunding: FinanceBreakdownRowDto[];
-  monthly: Array<{ month: string; incurred: string; companyCashOut: string; fundingIn: string }>;
+  /** Company cash out = expense payments + reimbursement payouts; repaymentsOut = funding paid back. */
+  monthly: Array<{ month: string; incurred: string; companyCashOut: string; fundingIn: string; repaymentsOut: string }>;
   reimbursementsOwedByPerson: FinanceBreakdownRowDto[];
+  /** Vendors with money owed on approved expenses, largest first. */
+  vendorPayablesByVendor: FinanceBreakdownRowDto[];
+  /** The same-length period immediately before `period`, for "vs. previous period" comparisons. */
+  previous: {
+    from: string;
+    to: string;
+    fundingReceived: string;
+    expensesIncurred: string;
+    cashOut: string;
+    netCashFlow: string;
+  };
+  /** Counts that need someone's attention. */
+  pending: {
+    expensesAwaitingApproval: number;
+    reimbursementsAwaitingReview: number;
+    reimbursementsApprovedUnpaid: number;
+  };
 }
 
 export interface FinanceMeDto {

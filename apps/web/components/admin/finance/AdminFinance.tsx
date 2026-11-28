@@ -39,11 +39,11 @@ export function AdminFinance() {
     <main className={ui.grid} aria-labelledby="finance-title">
       <PageHead
         eyebrow="Finance"
-        title={me && !me.roles.viewCompany ? "My expenses & claims" : "Finance"}
+        title={me && !me.roles.viewCompany ? "My expenses & claims" : "Finance dashboard"}
         sub={
           me && !me.roles.viewCompany
             ? "Record what you spent for FastQue, attach receipts and track your reimbursements."
-            : "Expenses, who paid them, funding received and money owed — every figure comes from recorded transactions."
+            : "Track expenses, contributions, reimbursements, vendor payments and cash position — every figure comes from recorded transactions."
         }
       />
       {error && <Banner tone="error">{error}</Banner>}
@@ -52,7 +52,7 @@ export function AdminFinance() {
       ) : (
         <>
           <Tabs label="Finance sections" tabs={tabs} value={tab} onChange={go} />
-          {tab === "overview" && <FinanceOverview />}
+          {tab === "overview" && <FinanceOverview onNavigate={go} />}
           {tab === "expenses" && <FinanceExpenses me={me} />}
           {tab === "funding" && <FinanceFunding me={me} />}
           {tab === "reimbursements" && <FinanceReimbursements me={me} />}
