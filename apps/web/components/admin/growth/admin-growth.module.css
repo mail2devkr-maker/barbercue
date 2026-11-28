@@ -15,7 +15,7 @@
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.02em;
-  background: var(--bc-surface-muted, #f1efe9);
+  background: var(--bc-surface-tint, #f1efe9);
   color: var(--bc-muted);
   white-space: nowrap;
 }
