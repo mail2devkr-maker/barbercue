@@ -1484,6 +1484,11 @@ export const NOTIFICATION_TYPES = [
   "commerce.ticket.updated",
   "commerce.stock.alert",
   "shop.order.updated",
+  // FastQue Connect (docs/connect/): a new chat message, a card update (action, quotation, ticket),
+  // and an urgent conversation for the salon. Push bodies carry no message text unless previews are on.
+  "connect.message",
+  "connect.update",
+  "connect.urgent",
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 

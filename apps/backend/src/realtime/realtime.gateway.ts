@@ -16,6 +16,20 @@ import { resolveCorsOrigins } from '../common/cors-origins';
 import { DbDeadlineSchedulerService } from '../common/db-deadline-scheduler/db-deadline-scheduler.service';
 
 /**
+ * In-process copy of a booking/queue emit, for features that react to those events (FastQue
+ * Connect). Ids only, published after the same committed change the socket event announces.
+ * Listeners run fire-and-forget: one failing can never affect the emit or the caller.
+ */
+export interface RealtimeDomainEvent {
+  type: string;
+  salonId: string;
+  bookingId?: string;
+  queueEntryId?: string;
+  customerId?: string | null;
+}
+type RealtimeDomainListener = (event: RealtimeDomainEvent) => void;
+
+/**
  * API.md's `/realtime` namespace. JWT verified at handshake (`client.handshake.auth.token`),
  * mirroring JwtStrategy's own re-check of the user's live status rather than trusting the token's
  * claims for the whole connection lifetime. Every connection auto-joins `customer:{userId}`.
@@ -40,6 +54,8 @@ export class RealtimeGateway implements OnGatewayConnection {
 
   @WebSocketServer()
   server!: Server;
+
+  private readonly domainListeners = new Set<RealtimeDomainListener>();
 
   constructor(
     private readonly jwtService: JwtService,
@@ -106,7 +122,38 @@ export class RealtimeGateway implements OnGatewayConnection {
     return { ok: true };
   }
 
+  /** Registers a listener for booking/queue events. Returns the unsubscribe function. */
+  onDomainEvent(listener: RealtimeDomainListener): () => void {
+    this.domainListeners.add(listener);
+    return () => this.domainListeners.delete(listener);
+  }
+
+  private publish(event: RealtimeDomainEvent): void {
+    for (const listener of this.domainListeners) {
+      try {
+        listener(event);
+      } catch (err) {
+        this.logger.warn(
+          `Domain listener failed: ${err instanceof Error ? err.message : 'unknown error'}`,
+        );
+      }
+    }
+  }
+
+  /**
+   * One user's own room (every connection of that user auto-joins it at handshake). Used by
+   * FastQue Connect, whose payloads are ids only; the client refetches over authorised REST.
+   */
+  emitToUser(
+    userId: string,
+    event: string,
+    payload: Record<string, unknown>,
+  ): void {
+    this.server?.to(`customer:${userId}`).emit(event, payload);
+  }
+
   emitQueueUpdated(salonId: string): void {
+    this.publish({ type: 'queue.updated', salonId });
     this.deadlineScheduler?.signal('queue');
     this.deadlineScheduler?.signal('booking');
     // `revision` (server clock, ms) lets a client skip a refetch it has already satisfied and never
@@ -127,9 +174,13 @@ export class RealtimeGateway implements OnGatewayConnection {
     tokenNumber: number | null,
     serviceName: string | null,
   ): void {
-    this.server
-      .to(`salon:${salonId}`)
-      .emit('queue.entry.joined', { salonId, queueEntryId, tokenNumber, serviceName });
+    this.publish({ type: 'queue.entry.joined', salonId, queueEntryId });
+    this.server.to(`salon:${salonId}`).emit('queue.entry.joined', {
+      salonId,
+      queueEntryId,
+      tokenNumber,
+      serviceName,
+    });
   }
 
   emitQueueEntryReassigned(salonId: string, queueEntryId: string): void {
@@ -143,6 +194,12 @@ export class RealtimeGateway implements OnGatewayConnection {
     queueEntryId: string,
     customerId: string | null,
   ): void {
+    this.publish({
+      type: 'queue.entry.called',
+      salonId,
+      queueEntryId,
+      customerId,
+    });
     const payload = { salonId, queueEntryId };
     this.server.to(`salon:${salonId}`).emit('queue.entry.called', payload);
     if (customerId)
@@ -176,6 +233,7 @@ export class RealtimeGateway implements OnGatewayConnection {
   // authoritative booking data via the existing owner bookings API rather than trusting a payload
   // shape here, so this event can never leak customer details by itself.
   emitBookingCreated(salonId: string, bookingId: string): void {
+    this.publish({ type: 'booking.created', salonId, bookingId });
     this.deadlineScheduler?.signal('booking');
     this.server
       .to(`salon:${salonId}`)
@@ -183,6 +241,7 @@ export class RealtimeGateway implements OnGatewayConnection {
   }
 
   emitBookingCancelled(salonId: string, bookingId: string): void {
+    this.publish({ type: 'booking.cancelled', salonId, bookingId });
     this.deadlineScheduler?.signal('booking');
     this.server
       .to(`salon:${salonId}`)
@@ -190,6 +249,7 @@ export class RealtimeGateway implements OnGatewayConnection {
   }
 
   emitBookingRescheduled(salonId: string, bookingId: string): void {
+    this.publish({ type: 'booking.rescheduled', salonId, bookingId });
     this.deadlineScheduler?.signal('booking');
     this.server
       .to(`salon:${salonId}`)
@@ -200,6 +260,7 @@ export class RealtimeGateway implements OnGatewayConnection {
   // every other booking emit, so the owner dashboard and the customer's own bookings page refetch
   // exactly like they already do for a customer-initiated cancellation.
   emitBookingNoShow(salonId: string, bookingId: string): void {
+    this.publish({ type: 'booking.no_show', salonId, bookingId });
     this.deadlineScheduler?.signal('booking');
     this.server
       .to(`salon:${salonId}`)
@@ -207,6 +268,7 @@ export class RealtimeGateway implements OnGatewayConnection {
   }
 
   emitBookingExpired(salonId: string, bookingId: string): void {
+    this.publish({ type: 'booking.expired', salonId, bookingId });
     this.deadlineScheduler?.signal('booking');
     this.server
       .to(`salon:${salonId}`)
@@ -222,6 +284,7 @@ export class RealtimeGateway implements OnGatewayConnection {
     bookingId: string,
     customerId: string | null,
   ): void {
+    this.publish({ type: 'booking.corrected', salonId, bookingId, customerId });
     this.deadlineScheduler?.signal('booking');
     const payload = { salonId, bookingId };
     this.server.to(`salon:${salonId}`).emit('booking.corrected', payload);
@@ -247,6 +310,7 @@ export class RealtimeGateway implements OnGatewayConnection {
   // update live; the affected customer's own "my active queue entry" view already stops showing it
   // on their next poll/refetch since the entry is no longer WAITING/CALLED/IN_SERVICE.
   emitQueueEntryNoShow(salonId: string, queueEntryId: string): void {
+    this.publish({ type: 'queue.entry.no_show', salonId, queueEntryId });
     this.server
       .to(`salon:${salonId}`)
       .emit('queue.entry.no_show', { salonId, queueEntryId });
@@ -254,6 +318,7 @@ export class RealtimeGateway implements OnGatewayConnection {
 
   // Same rationale as emitQueueEntryNoShow above, for the WAITING-day-rollover sweep.
   emitQueueEntryExpired(salonId: string, queueEntryId: string): void {
+    this.publish({ type: 'queue.entry.expired', salonId, queueEntryId });
     this.server
       .to(`salon:${salonId}`)
       .emit('queue.entry.expired', { salonId, queueEntryId });

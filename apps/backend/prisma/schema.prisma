@@ -714,6 +714,7 @@ model User {
   homeBookings                  HomeBooking[]            @relation("HomeBookingCustomer")
   professionalCommitments       ProfessionalCommitment[] @relation("ProfessionalCommitments")
 
+  connectConversations          ConnectConversation[]    @relation("ConnectConversationCustomer")
   @@map("users")
 }
 
@@ -1329,6 +1330,7 @@ model Salon {
   homeProvider                HomeProvider?
 
   @@unique([cityId, slug])
+  connectConversations        ConnectConversation[]
   @@map("salons")
 }
 
@@ -1735,6 +1737,7 @@ model Booking {
   @@index([salonId, createdAt])
   @@index([salonId, attributionCampaignId, createdAt])
   @@unique([salonId, id])
+  connectConversation ConnectConversation?
   @@map("bookings")
 }
 
@@ -2094,6 +2097,7 @@ model QueueEntry {
   addOns          QueueEntryAddOn[]
   addOnMinutes    Int               @default(0)
 
+  connectConversation ConnectConversation?
   @@map("queue_entries")
 }
 
@@ -5498,6 +5502,7 @@ model HomeBooking {
   @@index([status, serviceStart])
   @@index([status, dispatchDeadline])
   @@index([groupKey])
+  connectConversation ConnectConversation?
   @@map("home_bookings")
 }
 
@@ -7748,4 +7753,585 @@ model GrowthAiUsage {
 
   @@index([createdAt])
   @@map("growth_ai_usage")
+}
+
+// =====================================================================================
+// FastQue Connect (docs/connect/). Additive only: no existing column changes. Off unless
+// FASTQUE_CONNECT_ENABLED=true. Every salon-side read is scoped by salonId/homeProviderId and
+// passes through ConnectAccessService, which answers 404 to anyone who is not a participant.
+// =====================================================================================
+
+enum ConnectConversationKind {
+  SALON_BOOKING
+  LIVE_QUEUE
+  HOME_SERVICE
+}
+
+enum ConnectConversationStatus {
+  ACTIVE
+  READ_ONLY
+  CLOSED
+}
+
+enum ConnectPriority {
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum ConnectAwaiting {
+  NONE
+  CUSTOMER
+  SALON
+}
+
+enum ConnectSenderKind {
+  CUSTOMER
+  SALON
+  AI
+  SYSTEM
+}
+
+enum ConnectMessageKind {
+  TEXT
+  IMAGE
+  VOICE
+  FILE
+  LOCATION
+  ACTION
+  QUOTATION
+  SYSTEM
+}
+
+enum ConnectSentiment {
+  POSITIVE
+  NEUTRAL
+  NEGATIVE
+  ATTENTION
+}
+
+enum ConnectStaffRole {
+  MANAGER
+  RECEPTIONIST
+  STYLIST
+}
+
+enum ConnectActionKind {
+  RESCHEDULE
+  CANCEL
+  ADD_SERVICE
+  REMOVE_SERVICE
+  CHANGE_STYLIST
+  LATE_ARRIVAL
+  JOIN_QUEUE_SLOT
+  ADD_FAMILY_MEMBER
+}
+
+enum ConnectActionStatus {
+  AWAITING_CUSTOMER
+  AWAITING_SALON
+  APPLIED
+  ACKNOWLEDGED
+  DECLINED
+  CANCELLED
+  EXPIRED
+  FAILED
+}
+
+enum ConnectQuotationStatus {
+  SENT
+  ACCEPTED
+  DECLINED
+  CHANGES_REQUESTED
+  WITHDRAWN
+  EXPIRED
+}
+
+enum ConnectReportStatus {
+  OPEN
+  REVIEWED
+  ACTIONED
+  DISMISSED
+}
+
+model ConnectConversation {
+  id                 String                    @id @default(uuid()) @db.Uuid
+  kind               ConnectConversationKind
+  // Tenant. A salon conversation (and a salon-managed home visit) has salonId; an independent home
+  // professional's conversation has homeProviderId only.
+  salonId            String?
+  salon              Salon?                    @relation(fields: [salonId], references: [id], onDelete: Restrict)
+  homeProviderId     String?
+  customerId         String
+  customer           User                      @relation("ConnectConversationCustomer", fields: [customerId], references: [id], onDelete: Restrict)
+  // Exactly one booking link is set (CHECK constraint in the migration).
+  bookingId          String?                   @unique
+  booking            Booking?                  @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  queueEntryId       String?                   @unique
+  queueEntry         QueueEntry?               @relation(fields: [queueEntryId], references: [id], onDelete: Restrict)
+  homeBookingId      String?                   @unique
+  homeBooking        HomeBooking?              @relation(fields: [homeBookingId], references: [id], onDelete: Restrict)
+  // A home group booking shares one conversation; the first booking of the group owns it.
+  groupKey           String?                   @db.VarChar(40)
+  status             ConnectConversationStatus @default(ACTIVE)
+  priority           ConnectPriority           @default(NORMAL)
+  awaiting           ConnectAwaiting           @default(NONE)
+  aiHandled          Boolean                   @default(false)
+  hasOpenComplaint   Boolean                   @default(false)
+  // Blocking: the customer blocked the salon, or the salon blocked the customer. New messages from
+  // the blocked side are refused; history stays readable.
+  customerBlockedAt  DateTime?                 @db.Timestamptz(6)
+  salonBlockedAt     DateTime?                 @db.Timestamptz(6)
+  sentiment          ConnectSentiment?
+  sentimentReason    String?                   @db.VarChar(200)
+  tags               String[]
+  assignedToUserId   String?
+  assignedAt         DateTime?                 @db.Timestamptz(6)
+  // Collision prevention: who is replying right now, until when.
+  lockUserId         String?
+  lockExpiresAt      DateTime?                 @db.Timestamptz(6)
+  lastMessageSeq     Int                       @default(0)
+  lastMessageAt      DateTime?                 @db.Timestamptz(6)
+  lastSalonReplySeq  Int                       @default(0)
+  firstCustomerMsgAt DateTime?                 @db.Timestamptz(6)
+  firstSalonReplyAt  DateTime?                 @db.Timestamptz(6)
+  resolvedAt         DateTime?                 @db.Timestamptz(6)
+  readOnlyAt         DateTime?                 @db.Timestamptz(6)
+  reopenedUntil      DateTime?                 @db.Timestamptz(6)
+  summary            String?                   @db.VarChar(1200)
+  summaryAt          DateTime?                 @db.Timestamptz(6)
+  // Last queue facts announced, so a message is only sent on a meaningful change.
+  queueState         Json?
+  createdAt          DateTime                  @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime                  @updatedAt @db.Timestamptz(6)
+
+  participants ConnectParticipant[]
+  messages     ConnectMessage[]
+  notes        ConnectInternalNote[]
+  actions      ConnectBookingAction[]
+  quotations   ConnectQuotation[]
+  complaints   ConnectComplaint[]
+  reports      ConnectReport[]
+  assignments  ConnectAssignmentEvent[]
+  attachments  ConnectAttachment[]
+  locations    ConnectLocationShare[]
+  followUps    ConnectFollowUp[]
+
+  @@index([salonId, lastMessageAt])
+  @@index([homeProviderId, lastMessageAt])
+  @@index([customerId, lastMessageAt])
+  @@index([salonId, status, awaiting])
+  @@index([groupKey])
+  @@map("connect_conversations")
+}
+
+model ConnectParticipant {
+  id               String              @id @default(uuid()) @db.Uuid
+  conversationId   String              @db.Uuid
+  conversation     ConnectConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId           String
+  side             ConnectSenderKind
+  lastReadSeq      Int                 @default(0)
+  lastDeliveredSeq Int                 @default(0)
+  lastSeenAt       DateTime?           @db.Timestamptz(6)
+  muted            Boolean             @default(false)
+  archived         Boolean             @default(false)
+  createdAt        DateTime            @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime            @updatedAt @db.Timestamptz(6)
+
+  @@unique([conversationId, userId])
+  @@index([userId])
+  @@map("connect_participants")
+}
+
+model ConnectMessage {
+  id              String              @id @default(uuid()) @db.Uuid
+  conversationId  String              @db.Uuid
+  conversation    ConnectConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  seq             Int
+  senderUserId    String?
+  senderKind      ConnectSenderKind
+  kind            ConnectMessageKind  @default(TEXT)
+  body            String?             @db.VarChar(4000)
+  language        String?             @db.VarChar(12)
+  intent          String?             @db.VarChar(40)
+  replyToId       String?             @db.Uuid
+  clientMessageId String?             @db.VarChar(64)
+  aiGenerated     Boolean             @default(false)
+  // Card payload (booking action id, quotation id, location id, template key). Never AI-typed prices.
+  meta            Json?
+  editedAt        DateTime?           @db.Timestamptz(6)
+  deletedAt       DateTime?           @db.Timestamptz(6)
+  createdAt       DateTime            @default(now()) @db.Timestamptz(6)
+
+  edits       ConnectMessageEdit[]
+  reactions   ConnectReaction[]
+  attachments ConnectAttachment[]
+
+  @@unique([conversationId, seq])
+  @@unique([conversationId, senderUserId, clientMessageId])
+  @@index([conversationId, createdAt])
+  @@map("connect_messages")
+}
+
+model ConnectMessageEdit {
+  id             String         @id @default(uuid()) @db.Uuid
+  messageId      String         @db.Uuid
+  message        ConnectMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  previousBody   String?        @db.VarChar(4000)
+  editedByUserId String
+  // EDIT | DELETE
+  action         String         @db.VarChar(10)
+  createdAt      DateTime       @default(now()) @db.Timestamptz(6)
+
+  @@index([messageId])
+  @@map("connect_message_edits")
+}
+
+model ConnectAttachment {
+  id             String              @id @default(uuid()) @db.Uuid
+  conversationId String              @db.Uuid
+  conversation   ConnectConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  messageId      String?             @db.Uuid
+  message        ConnectMessage?     @relation(fields: [messageId], references: [id], onDelete: SetNull)
+  uploaderUserId String
+  storageKey     String              @db.VarChar(300)
+  mimeType       String              @db.VarChar(60)
+  sizeBytes      Int
+  sha256         String              @db.VarChar(64)
+  fileName       String?             @db.VarChar(120)
+  // NOT_SCANNED unless a malware scanner is configured (none is activated by default).
+  scanStatus     String              @default("NOT_SCANNED") @db.VarChar(16)
+  createdAt      DateTime            @default(now()) @db.Timestamptz(6)
+
+  @@index([conversationId])
+  @@index([createdAt])
+  @@map("connect_attachments")
+}
+
+model ConnectReaction {
+  id        String         @id @default(uuid()) @db.Uuid
+  messageId String         @db.Uuid
+  message   ConnectMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId    String
+  emoji     String         @db.VarChar(16)
+  createdAt DateTime       @default(now()) @db.Timestamptz(6)
+
+  @@unique([messageId, userId, emoji])
+  @@map("connect_reactions")
+}
+
+model ConnectInternalNote {
+  id             String              @id @default(uuid()) @db.Uuid
+  conversationId String              @db.Uuid
+  conversation   ConnectConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  authorUserId   String
+  body           String              @db.VarChar(2000)
+  createdAt      DateTime            @default(now()) @db.Timestamptz(6)
+
+  @@index([conversationId, createdAt])
+  @@map("connect_internal_notes")
+}
+
+model ConnectSavedReply {
+  id          String   @id @default(uuid()) @db.Uuid
+  salonId     String
+  title       String   @db.VarChar(80)
+  body        String   @db.VarChar(1000)
+  createdById String
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(6)
+
+  @@index([salonId])
+  @@map("connect_saved_replies")
+}
+
+model ConnectAssignmentEvent {
+  id             String              @id @default(uuid()) @db.Uuid
+  conversationId String              @db.Uuid
+  conversation   ConnectConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  fromUserId     String?
+  toUserId       String?
+  byUserId       String
+  createdAt      DateTime            @default(now()) @db.Timestamptz(6)
+
+  @@index([conversationId])
+  @@map("connect_assignment_events")
+}
+
+model ConnectStaffGrant {
+  id          String           @id @default(uuid()) @db.Uuid
+  salonId     String
+  userId      String
+  role        ConnectStaffRole
+  grantedById String
+  createdAt   DateTime         @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime         @updatedAt @db.Timestamptz(6)
+
+  @@unique([salonId, userId])
+  @@map("connect_staff_grants")
+}
+
+model ConnectAiInteraction {
+  id               String   @id @default(uuid()) @db.Uuid
+  salonId          String?
+  conversationId   String?  @db.Uuid
+  messageId        String?  @db.Uuid
+  feature          String   @db.VarChar(24)
+  // RULES | CACHE | LLM
+  engine           String   @db.VarChar(8)
+  provider         String?  @db.VarChar(24)
+  model            String?  @db.VarChar(80)
+  intent           String?  @db.VarChar(40)
+  confidence       Float?
+  escalated        Boolean  @default(false)
+  escalationReason String?  @db.VarChar(60)
+  injectionFlagged Boolean  @default(false)
+  inputTokens      Int      @default(0)
+  outputTokens     Int      @default(0)
+  costMicroUsd     Int      @default(0)
+  success          Boolean  @default(true)
+  error            String?  @db.VarChar(200)
+  createdAt        DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([salonId, createdAt])
+  @@index([createdAt])
+  @@map("connect_ai_interactions")
+}
+
+model ConnectTranslation {
+  id         String   @id @default(uuid()) @db.Uuid
+  // sha256(source text): the cache key, so the same text is never translated twice.
+  sourceHash String   @db.VarChar(64)
+  sourceLang String?  @db.VarChar(12)
+  targetLang String   @db.VarChar(12)
+  text       String   @db.VarChar(6000)
+  engine     String   @db.VarChar(8)
+  createdAt  DateTime @default(now()) @db.Timestamptz(6)
+
+  @@unique([sourceHash, targetLang])
+  @@map("connect_translations")
+}
+
+model ConnectConsentRecord {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String
+  salonId   String?
+  // PROMOTIONAL_MESSAGES | LOCATION_SHARING | NOTIFICATION_PREVIEWS
+  purpose   String   @db.VarChar(32)
+  granted   Boolean
+  source    String   @db.VarChar(32)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([userId, purpose, createdAt])
+  @@map("connect_consent_records")
+}
+
+model ConnectBookingAction {
+  id                 String              @id @default(uuid()) @db.Uuid
+  conversationId     String              @db.Uuid
+  conversation       ConnectConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  kind               ConnectActionKind
+  status             ConnectActionStatus
+  requestedByUserId  String?
+  requestedBy        ConnectSenderKind
+  // Options offered (from the real availability engine) and the one chosen.
+  payload            Json
+  customerApprovedAt DateTime?           @db.Timestamptz(6)
+  salonApprovedAt    DateTime?           @db.Timestamptz(6)
+  salonApprovedById  String?
+  appliedAt          DateTime?           @db.Timestamptz(6)
+  resultNote         String?             @db.VarChar(300)
+  expiresAt          DateTime            @db.Timestamptz(6)
+  createdAt          DateTime            @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime            @updatedAt @db.Timestamptz(6)
+
+  @@index([conversationId, status])
+  @@map("connect_booking_actions")
+}
+
+model ConnectQuotation {
+  id              String                 @id @default(uuid()) @db.Uuid
+  conversationId  String                 @db.Uuid
+  conversation    ConnectConversation    @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  salonId         String?
+  title           String                 @db.VarChar(120)
+  status          ConnectQuotationStatus @default(SENT)
+  currentVersion  Int                    @default(1)
+  acceptedVersion Int?
+  decidedAt       DateTime?              @db.Timestamptz(6)
+  customerNote    String?                @db.VarChar(500)
+  createdById     String
+  createdAt       DateTime               @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime               @updatedAt @db.Timestamptz(6)
+
+  versions ConnectQuotationVersion[]
+
+  @@index([conversationId])
+  @@index([salonId, createdAt])
+  @@map("connect_quotations")
+}
+
+model ConnectQuotationVersion {
+  id              String           @id @default(uuid()) @db.Uuid
+  quotationId     String           @db.Uuid
+  quotation       ConnectQuotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  version         Int
+  // [{ name, description, serviceId?, quantity, unitPaise, durationMinutes }]. Totals are computed
+  // by the server from these lines, never accepted from a client.
+  items           Json
+  subtotalPaise   Int
+  discountPaise   Int
+  taxPaise        Int
+  totalPaise      Int
+  durationMinutes Int
+  validUntil      DateTime         @db.Timestamptz(6)
+  terms           String?          @db.VarChar(1000)
+  createdById     String
+  createdAt       DateTime         @default(now()) @db.Timestamptz(6)
+
+  @@unique([quotationId, version])
+  @@map("connect_quotation_versions")
+}
+
+model ConnectComplaint {
+  id              String              @id @default(uuid()) @db.Uuid
+  conversationId  String              @db.Uuid
+  conversation    ConnectConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  supportTicketId String              @unique @db.Uuid
+  category        String              @db.VarChar(40)
+  reportedById    String
+  createdAt       DateTime            @default(now()) @db.Timestamptz(6)
+
+  @@index([conversationId])
+  @@map("connect_complaints")
+}
+
+model ConnectReport {
+  id             String              @id @default(uuid()) @db.Uuid
+  conversationId String              @db.Uuid
+  conversation   ConnectConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  messageId      String?             @db.Uuid
+  reporterUserId String
+  reason         String              @db.VarChar(40)
+  details        String?             @db.VarChar(1000)
+  status         ConnectReportStatus @default(OPEN)
+  reviewedById   String?
+  reviewedAt     DateTime?           @db.Timestamptz(6)
+  createdAt      DateTime            @default(now()) @db.Timestamptz(6)
+
+  @@index([status, createdAt])
+  @@map("connect_reports")
+}
+
+model ConnectAnalyticsEvent {
+  id             String   @id @default(uuid()) @db.Uuid
+  salonId        String?
+  homeProviderId String?
+  conversationId String?  @db.Uuid
+  type           String   @db.VarChar(40)
+  actorUserId    String?
+  valuePaise     Int?
+  seconds        Int?
+  meta           Json?
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([salonId, type, createdAt])
+  @@index([type, createdAt])
+  @@map("connect_analytics_events")
+}
+
+model ConnectAuditEvent {
+  id             String   @id @default(uuid()) @db.Uuid
+  salonId        String?
+  conversationId String?  @db.Uuid
+  actorUserId    String?
+  action         String   @db.VarChar(60)
+  purpose        String?  @db.VarChar(300)
+  meta           Json?
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([conversationId, createdAt])
+  @@index([salonId, createdAt])
+  @@index([actorUserId, createdAt])
+  @@map("connect_audit_events")
+}
+
+model ConnectSalonSettings {
+  id                      String   @id @default(uuid()) @db.Uuid
+  // One row per tenant: a salon, or an independent home provider.
+  salonId                 String?  @unique
+  homeProviderId          String?  @unique
+  // OFF | SUGGEST | AUTO
+  aiMode                  String   @default("OFF") @db.VarChar(8)
+  // Intents the salon lets AI answer by itself (only low-risk ones are accepted).
+  autoReplyIntents        String[]
+  translationEnabled      Boolean  @default(false)
+  followUpsEnabled        Boolean  @default(false)
+  // Salon-verified facts the AI may quote: [{ q, a }].
+  faq                     Json?
+  parkingInfo             String?  @db.VarChar(500)
+  directions              String?  @db.VarChar(500)
+  aftercare               String?  @db.VarChar(800)
+  aiMonthlyBudgetMicroUsd Int?
+  updatedById             String?
+  createdAt               DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt               DateTime @updatedAt @db.Timestamptz(6)
+
+  @@map("connect_salon_settings")
+}
+
+model ConnectPlatformConfig {
+  id          String   @id @default("global") @db.VarChar(20)
+  config      Json
+  updatedById String?
+  updatedAt   DateTime @updatedAt @db.Timestamptz(6)
+
+  @@map("connect_platform_config")
+}
+
+model ConnectLocationShare {
+  id             String              @id @default(uuid()) @db.Uuid
+  conversationId String              @db.Uuid
+  conversation   ConnectConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  lat            Float
+  lng            Float
+  accuracyM      Int?
+  expiresAt      DateTime            @db.Timestamptz(6)
+  revokedAt      DateTime?           @db.Timestamptz(6)
+  createdAt      DateTime            @default(now()) @db.Timestamptz(6)
+
+  @@index([conversationId, expiresAt])
+  @@map("connect_location_shares")
+}
+
+model ConnectFollowUp {
+  id             String              @id @default(uuid()) @db.Uuid
+  conversationId String              @db.Uuid
+  conversation   ConnectConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  // THANKS | FEEDBACK | AFTERCARE | REBOOK
+  kind           String              @db.VarChar(16)
+  promotional    Boolean             @default(false)
+  dueAt          DateTime            @db.Timestamptz(6)
+  sentAt         DateTime?           @db.Timestamptz(6)
+  skippedReason  String?             @db.VarChar(60)
+  createdAt      DateTime            @default(now()) @db.Timestamptz(6)
+
+  @@unique([conversationId, kind])
+  @@index([sentAt, dueAt])
+  @@map("connect_follow_ups")
+}
+
+model ConnectUserPrefs {
+  userId               String   @id
+  // Presence is private by default.
+  showOnline           Boolean  @default(false)
+  showLastActive       Boolean  @default(false)
+  // Lock-screen notifications show no message text unless the user turns this on.
+  notificationPreviews Boolean  @default(false)
+  preferredLanguage    String?  @db.VarChar(12)
+  updatedAt            DateTime @updatedAt @db.Timestamptz(6)
+
+  @@map("connect_user_prefs")
 }

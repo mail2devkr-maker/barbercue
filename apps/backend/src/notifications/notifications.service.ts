@@ -63,6 +63,10 @@ const TYPE_CATEGORY: Record<NotificationType, NotificationCategory> = {
   'commerce.ticket.updated': NotificationCategory.BOOKING_UPDATES,
   'commerce.stock.alert': NotificationCategory.BOOKING_UPDATES,
   'shop.order.updated': NotificationCategory.BOOKING_UPDATES,
+  // FastQue Connect: chat messages are about a booking, so they share its preference.
+  'connect.message': NotificationCategory.BOOKING_UPDATES,
+  'connect.update': NotificationCategory.BOOKING_UPDATES,
+  'connect.urgent': NotificationCategory.BOOKING_UPDATES,
 };
 
 // ---------- Auto-expiry (live-visit add-on mission, 17 Nov 2026) ----------
@@ -238,7 +242,9 @@ export class NotificationsService {
         SELECT a."createdAt", a."id" FROM "notifications" a WHERE a."id" = ${anchor.id}
       )`;
     }
-    const idRows = await this.prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+    const idRows = await this.prisma.$queryRaw<
+      Array<{ id: string }>
+    >(Prisma.sql`
       SELECT n."id"
       FROM "notifications" n
       WHERE n."userId" = ${userId}
@@ -249,7 +255,9 @@ export class NotificationsService {
       LIMIT ${limit + 1}
     `);
     const hasMore = idRows.length > limit;
-    const pageIds = (hasMore ? idRows.slice(0, limit) : idRows).map((r) => r.id);
+    const pageIds = (hasMore ? idRows.slice(0, limit) : idRows).map(
+      (r) => r.id,
+    );
     if (pageIds.length === 0) return { items: [], nextCursor: null };
     const rows = await this.prisma.notification.findMany({
       where: { id: { in: pageIds } },
@@ -266,7 +274,9 @@ export class NotificationsService {
 
   /** The unread badge: unread IN_APP notifications that are still current. */
   async unreadCount(userId: string): Promise<number> {
-    const rows = await this.prisma.$queryRaw<Array<{ count: number }>>(Prisma.sql`
+    const rows = await this.prisma.$queryRaw<
+      Array<{ count: number }>
+    >(Prisma.sql`
       SELECT COUNT(*)::int AS "count"
       FROM "notifications" n
       WHERE n."userId" = ${userId}
