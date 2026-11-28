@@ -11,7 +11,19 @@ import { onMaintenance } from "../../lib/maintenance";
 export function MaintenanceOverlay() {
   const [down, setDown] = useState(false);
 
-  useEffect(() => onMaintenance(() => setDown(true)), []);
+  useEffect(() => {
+    // One failed or timed-out request (a slow admin report, a cold database) is not an outage:
+    // confirm with the health check first and only cover the page when the backend really is down.
+    let checking = false;
+    return onMaintenance(() => {
+      if (checking) return;
+      checking = true;
+      void confirmBackendDown().then((isDown) => {
+        checking = false;
+        if (isDown) setDown(true);
+      });
+    });
+  }, []);
 
   useEffect(() => {
     if (!down) return;
@@ -49,4 +61,23 @@ export function MaintenanceOverlay() {
       </div>
     </div>
   );
+}
+
+async function healthOk(): Promise<boolean> {
+  try {
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), 8000);
+    const res = await fetch("/api/v1/health", { cache: "no-store", signal: ctl.signal });
+    clearTimeout(t);
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/** True only when two health checks, a few seconds apart, both fail. */
+export async function confirmBackendDown(): Promise<boolean> {
+  if (await healthOk()) return false;
+  await new Promise((r) => setTimeout(r, 3000));
+  return !(await healthOk());
 }
