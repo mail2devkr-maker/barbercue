@@ -19,7 +19,7 @@ import {
   type WorkManualPayoutConfirmInput,
 } from '@barbercue/shared';
 import { CryptoService } from '../auth/services/crypto.service';
-import { manualBankAccount } from './work-config';
+import { manualBankAccount, manualUpiAccount } from './work-config';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { WorkAuditService } from './work-audit.service';
@@ -110,6 +110,7 @@ export class WorkPaymentsService {
       providerOrderId: f.providerOrderId,
       sandbox: f.provider === 'sandbox',
       manualBank: this.manualBankFor(f),
+      manualUpi: this.manualUpiFor(f),
       createdAt: f.createdAt.toISOString(),
     };
   }
@@ -121,6 +122,31 @@ export class WorkPaymentsService {
     if (f.provider !== 'manual_bank') return null;
     const account = manualBankAccount();
     return account ? { ...account, reference: f.providerOrderId } : null;
+  }
+
+  private manualUpiFor(f: {
+    provider: string;
+    providerOrderId: string;
+    amountPaise: number;
+  }): WorkFundingDto['manualUpi'] {
+    if (f.provider !== 'manual_bank') return null;
+    const upi = manualUpiAccount();
+    if (!upi) return null;
+    const amount = (f.amountPaise / 100).toFixed(2);
+    const q = new URLSearchParams({
+      pa: upi.vpa,
+      pn: upi.payeeName,
+      am: amount,
+      cu: 'INR',
+      tn: f.providerOrderId,
+      tr: f.providerOrderId,
+    });
+    return {
+      vpa: upi.vpa,
+      payeeName: upi.payeeName,
+      reference: f.providerOrderId,
+      upiUri: `upi://pay?${q.toString().replace(/\+/g, '%20')}`,
+    };
   }
 
   /**

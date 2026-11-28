@@ -5,7 +5,7 @@ import {
   SandboxWorkPaymentProvider,
   UnconfiguredWorkPaymentProvider,
 } from './work-payment-provider';
-import { configuredWorkPaymentProvider, manualBankAccount, workMarketplaceEnabled, workPlatformFeeBps } from '../work-config';
+import { configuredWorkPaymentProvider, manualBankAccount, manualUpiAccount, workMarketplaceEnabled, workPlatformFeeBps } from '../work-config';
 import { csvRow } from '../work-payments.service';
 
 describe('SandboxWorkPaymentProvider', () => {
@@ -108,6 +108,20 @@ describe('manual bank transfer (NEFT)', () => {
     expect(manualBankAccount()).toEqual({ accountName: 'DEMO COMPANY PRIVATE LIMITED', accountNumber: '000111222333', ifsc: 'DEMO0001234', bankName: 'Demo Bank' });
     process.env.WORK_MANUAL_BANK_IFSC = 'NOT-AN-IFSC';
     expect(configuredWorkPaymentProvider()).toBe('none');
+  });
+
+  it('is also selectable with only a valid company UPI ID', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.WORK_PAYMENT_PROVIDER = 'manual_bank';
+    delete process.env.WORK_MANUAL_BANK_ACCOUNT_NAME;
+    process.env.WORK_MANUAL_UPI_ID = 'not a vpa';
+    expect(configuredWorkPaymentProvider()).toBe('none');
+    process.env.WORK_MANUAL_UPI_ID = 'demo.company@okdemo';
+    expect(configuredWorkPaymentProvider()).toBe('manual_bank');
+    expect(manualUpiAccount()).toEqual({ vpa: 'demo.company@okdemo', payeeName: 'FastQue' });
+    process.env.WORK_MANUAL_UPI_NAME = 'Demo Company';
+    expect(manualUpiAccount()?.payeeName).toBe('Demo Company');
+    expect(manualBankAccount()).toBeNull();
   });
 
   it('issues bank-remark-safe references and accepts no webhook', async () => {

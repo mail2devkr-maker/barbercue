@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { QRCodeSVG } from "qrcode.react";
 import { useParams } from "next/navigation";
 import type { WorkEmployerJobDto, WorkFundingDto } from "@barbercue/shared";
 import { RequireRole } from "../../../../../../../components/auth/RequireRole";
@@ -142,11 +143,34 @@ function EmployerJob() {
                     </button>
                   </>
                 )}
-                {funding?.status === "CREATED" && !funding.sandbox && !funding.manualBank && <p className={styles.meta}>Waiting for the payment provider to confirm…</p>}
+                {funding?.status === "CREATED" && !funding.sandbox && !funding.manualBank && !funding.manualUpi && <p className={styles.meta}>Waiting for the payment provider to confirm…</p>}
                 <button type="button" className={styles.btn} onClick={() => setEditing(true)}>
                   Edit (returns to draft)
                 </button>
               </div>
+              {funding?.status === "CREATED" && funding.manualUpi && (
+                <div className={styles.notice} role="note">
+                  <p>
+                    <strong>Pay by UPI</strong> exactly <strong>{money(funding.amountPaise)}</strong> to <strong>{funding.manualUpi.payeeName}</strong>:
+                  </p>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "center" }}>
+                    <div style={{ background: "#fff", padding: 10, borderRadius: 12, lineHeight: 0 }} data-keep-colors>
+                      <QRCodeSVG value={funding.manualUpi.upiUri} size={168} aria-label="UPI payment QR code" />
+                    </div>
+                    <dl className={styles.kv}>
+                      <dt>UPI ID</dt><dd>{funding.manualUpi.vpa}</dd>
+                      <dt>Amount</dt><dd>{money(funding.amountPaise)}</dd>
+                      <dt>Note / reference</dt><dd><strong>{funding.manualUpi.reference}</strong></dd>
+                    </dl>
+                  </div>
+                  <p>
+                    <a className={styles.btnPrimary} href={funding.manualUpi.upiUri}>Open UPI app</a>
+                  </p>
+                  <p className={styles.meta}>
+                    Scan the QR with any UPI app (or tap the button on your phone) and keep the reference in the note. Your job opens to workers once FastQue finance matches the payment, usually within one working day. FastQue never asks you to pay anyone else.
+                  </p>
+                </div>
+              )}
               {funding?.status === "CREATED" && funding.manualBank && (
                 <div className={styles.notice} role="note">
                   <p>
